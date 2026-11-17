@@ -233,11 +233,13 @@ export function buildCityLines(w: World, routes: Record<string, RouteDef>): Comp
     const route = routes[spec.id];
     if (!route) throw new Error(`no route for line ${spec.id}`);
     const def = cityLineDef(w, spec, route);
-    if (spec.departAt === undefined) return compileLine(def, i);
-    // Phase the lap so that it leaves the terminus exactly at departAt.
-    const probe = compileLine(def, i);
-    const at = Math.round(spec.departAt * DAY_TICKS) % probe.period;
-    return compileLine({ ...def, phase: (probe.period - at) % probe.period }, i);
+    const line = compileLine(def, i);
+    if (spec.departAt === undefined) return line;
+    // Phase the lap so that it leaves the terminus exactly at departAt. The phase only shifts the
+    // lap, so the compiled tables stand as they are.
+    const at = Math.round(spec.departAt * DAY_TICKS) % line.period;
+    const phase = (line.period - at) % line.period;
+    return { ...line, phase, phaseTicks: phase };
   });
 }
 
