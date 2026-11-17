@@ -206,8 +206,32 @@ export class MeshBuilder {
     if (this.anyGlow) g.setAttribute('glow', new THREE.BufferAttribute(this.glo.slice(0, n), 1));
     const idx = this.idx.subarray(0, this.ni);
     g.setIndex(new THREE.BufferAttribute(n > 65535 ? idx.slice() : new Uint16Array(idx), 1));
-    g.computeBoundingSphere();
-    g.computeBoundingBox();
+    // Bounds in one pass over the doubles: the box, and the sphere around the box. three's own
+    // pair walks the vertices three times, which was most of the cost of this call on a big chunk
+    // (and this call is the largest single piece of a streamed chunk build). The sphere is a
+    // little larger than the tightest one, which only makes culling conservative.
+    let x0 = Infinity;
+    let y0 = Infinity;
+    let z0 = Infinity;
+    let x1 = -Infinity;
+    let y1 = -Infinity;
+    let z1 = -Infinity;
+    const pos = this.pos;
+    for (let k = 0; k < n * 3; k += 3) {
+      const x = pos[k];
+      const y = pos[k + 1];
+      const z = pos[k + 2];
+      if (x < x0) x0 = x;
+      if (x > x1) x1 = x;
+      if (y < y0) y0 = y;
+      if (y > y1) y1 = y;
+      if (z < z0) z0 = z;
+      if (z > z1) z1 = z;
+    }
+    if (n === 0) x0 = y0 = z0 = x1 = y1 = z1 = 0;
+    g.boundingBox = new THREE.Box3(new THREE.Vector3(x0, y0, z0), new THREE.Vector3(x1, y1, z1));
+    const centre = new THREE.Vector3((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2);
+    g.boundingSphere = new THREE.Sphere(centre, Math.hypot(x1 - x0, y1 - y0, z1 - z0) / 2 + 1e-4);
     return g;
   }
 }

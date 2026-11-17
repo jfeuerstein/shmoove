@@ -5,14 +5,15 @@
 import { createAudio } from '../audio/index';
 import { Gestures, attachGestures } from '../input/gestures';
 import { createChalkView } from '../render/chalkView';
-import { createCityView } from '../render/cityView';
+import { chunkGrid, chunkOf, createCityView, type CityView } from '../render/cityView';
 import { createHintView } from '../render/hintView';
 import { createMarkersView } from '../render/markersView';
 import { VIEW_PARTS, createView } from '../render/view';
-import { DT, FEEL } from '../sim/constants';
+import { DT, FEEL, START_DAY_FRAC } from '../sim/constants';
 import { Game, type GameEvent } from '../sim/game/game';
 import { placePlayer } from '../sim/player';
 import { MODE_NAMES, type InputFrame, type SimEvent } from '../sim/types';
+import { districtAt } from '../sim/world';
 import { createUi } from '../ui/index';
 import type { ShellHost } from '../ui/titleShell';
 import { createAudioView } from './audioView';
@@ -21,7 +22,7 @@ import { createHaptics } from './haptics';
 import { NEW_GAME_DAY_FRAC, isFixture } from './newGame';
 import { getParams } from './params';
 import { appVersion, createPwa } from './pwa';
-import { getRoute } from './routes';
+import { getRoute, routeWindows } from './routes';
 import { createSaveGlue } from './save';
 import {
   DEFAULT_APP_SETTINGS,
@@ -50,6 +51,13 @@ const FRAME_PARTS = ['steps', 'game', 'sim', ...REDUCER_PARTS, 'route', 'saves',
 type FramePart = (typeof FRAME_PARTS)[number];
 const PART: Record<FramePart, number> = Object.fromEntries(FRAME_PARTS.map((n, i) => [n, i])) as Record<FramePart, number>;
 const VIEW_PART0 = PART[VIEW_PARTS[0]];
+/**
+ * Where each frame was, for the perf harness to cut a run into windows and check it went
+ * somewhere: route tick after the frame, skater x/z, district, streaming chunk, hitches in the
+ * frame, chunk meshes the world view finished in the frame, the frame's draw calls and triangles,
+ * ride releases (slings) in the frame, and the longest chunk-build piece of the frame (ms).
+ */
+const TRACK = ['tick', 'x', 'z', 'district', 'chunk', 'hitches', 'built', 'draws', 'tris', 'slings', 'piece'] as const;
 
 function boot(): void {
   const params = getParams();
@@ -58,13 +66,16 @@ function boot(): void {
 
   const world = buildWorld(params);
   // A fresh boot is a new game at the new-game clock; a stored save puts its own clock back below.
-  const game = new Game(world, { seed: params.seed, startDayFrac: params.t ?? NEW_GAME_DAY_FRAC });
+  // A scripted route (perf, tour) keeps the sim's own start clock: its legs were found on it.
+  const startDayFrac = params.t ?? (params.route !== null ? START_DAY_FRAC : NEW_GAME_DAY_FRAC);
+  const game = new Game(world, { seed: params.seed, startDayFrac });
   const sim = game.sim;
   // Before anything reads game state: a stored save puts progress, chalk lines and the skater back.
   const saves = createSaveGlue(game, { e2e: params.e2e });
   const gestures = new Gestures();
   attachGestures(canvas, gestures);
-  const view = createView(canvas, world, isStreamed(params) ? { worldView: createCityView } : {});
+  let cityView: CityView | null = null;
+  const view = createView(canvas, world, isStreamed(params) ? { worldView: (w) => (cityView = createCityView(w, () => view.chase.camera)) } : {});
   const chalkView = createChalkView(view.scene, world);
   const markersView = createMarkersView(view.scene, world, game);
   const hintView = createHintView(view.scene, world, view.chase.camera);
@@ -198,6 +209,11 @@ function boot(): void {
   const stepBuf = new Float64Array(STATS_CAP * MAX_CATCH_UP);
   let statFrames = 0;
   let statSteps = 0;
+  const trackBuf: Float64Array[] = TRACK.map(() => new Float64Array(STATS_CAP));
+  const grid = chunkGrid(world);
+  let frameHitches = 0;
+  let frameSlings = 0;
+  let lastBuilt = 0;
   // Time each reducer where Game.step calls it (wrapped once here; one clock read per boundary).
   for (let ri = 0; ri < game.reducers.length && ri < REDUCER_PARTS.length; ri++) {
     const r = game.reducers[ri];
@@ -238,6 +254,8 @@ function boot(): void {
     for (const e of sim.events) {
       pending.push(e);
       if (eventLog.length < 4096) eventLog.push(e.type);
+      if (e.type === 'hitch') frameHitches++;
+      else if (e.type === 'release') frameSlings++;
     }
     for (const e of game.events) pendingGame.push(e);
   };
@@ -310,8 +328,25 @@ function boot(): void {
       cur[PART.sim] = Math.max(0, cur[PART.game] - reducers);
       workBuf[statFrames] = lastWork;
       for (let i = 0; i < cur.length; i++) partBuf[i][statFrames] = cur[i];
+      const p = sim.player;
+      const built = cityView === null ? 0 : cityView.built();
+      trackBuf[0][statFrames] = routeTick;
+      trackBuf[1][statFrames] = p.x;
+      trackBuf[2][statFrames] = p.z;
+      trackBuf[3][statFrames] = districtAt(world, p.z);
+      trackBuf[4][statFrames] = chunkOf(grid, p.x, p.z);
+      trackBuf[5][statFrames] = frameHitches;
+      trackBuf[6][statFrames] = built - lastBuilt;
+      lastBuilt = built;
+      const info = view.info();
+      trackBuf[7][statFrames] = info.drawCalls;
+      trackBuf[8][statFrames] = info.triangles;
+      trackBuf[9][statFrames] = frameSlings;
+      trackBuf[10][statFrames] = cityView === null ? 0 : cityView.framePieceMs();
       statFrames++;
     }
+    frameHitches = 0;
+    frameSlings = 0;
   };
 
   const audioState = (): { running: boolean; track: number; stems: number; fullBand: boolean; wheel: number } => {
@@ -367,12 +402,17 @@ function boot(): void {
         triangles: info.triangles,
         parts,
         stepMs: Array.from(stepBuf.subarray(0, statSteps)),
+        track: Object.fromEntries(TRACK.map((n, i) => [n, Array.from(trackBuf[i].subarray(0, statFrames))])),
+        windows: routeWindows(params.route),
+        stream: cityView === null ? undefined : cityView.stats(),
       };
     },
     resetStats() {
       statFrames = 0;
       statSteps = 0;
       frames = 0;
+      frameHitches = 0;
+      frameSlings = 0;
     },
   });
 

@@ -248,10 +248,16 @@ Target: 60 fps on a mid-range phone (2021-class, e.g. Snapdragon 7-series / A13)
 | Device pixel ratio | capped at 2; post pass may be dropped by the governor |
 
 `npm run perf` measures these in headless Chrome at 4x CPU throttle and fails the gate when one is
-exceeded. It runs two checks: a route that rides the city the way a player would (carving, hopping,
-hitching, slinging, one descent from the summit to the docks), reporting frame work per part, per
-game step and for frames that carry exactly one sim step; and a tour of fixed viewpoints in every
-district by day and night, for the draw-call and triangle maxima. Further gated budgets: game step
+exceeded. It runs two checks. First, the `perfcity` route rides the city the way a player would
+(carving, hopping, hitching, slinging) in five legs of ten simulated seconds: Mercado, Terraces,
+Antenna Hill, a fast run down the Terraces spine that crosses chunk rows while the world streams,
+and the Docks. The last 7.5 s of each leg are timed as normal frames of the normal loop; the frames
+of all windows are pooled for the gated figures, and each window's mean, p95, draw calls, triangles
+and per-part breakdown are printed with its district. The run fails unless it went somewhere:
+every window travels at least 40 m, the windows see all four districts, at least two hitches fall in
+timed frames and two windows hitch and sling, one window crosses two chunk boundaries at 8 m/s or
+more while chunks are built, and there are at least 300 timed frames. Second, a tour of fixed
+viewpoints in every district by day and night, for the draw-call and triangle maxima. Further gated budgets: game step
 (sim plus every reducer) mean ≤ 0.6 ms and p95 ≤ 1.5 ms; one-step frame mean ≤ 6 ms. Headless Chrome
 rasterises in software, so GPU cost is not representative there; the frame-work figure is the
 main-thread cost only. Real-device GPU cost is on the PLAYTEST list.

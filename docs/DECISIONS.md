@@ -286,3 +286,81 @@ without leaning on a wall (see PLAYTEST); a save from before onboarding starts t
     shorter line has the same bytes and that code is simply the one code of a shorter line. The
     test now asserts what the format guarantees: a forged count either fails as a bad stream or
     decodes to a line whose one code is the forged code; trailing bytes always fail.
+
+## M6e — Full-game check
+
+79. **The blimp (S2) can never be completed.** Its first segment (Cumbre to Cerro Sur) can only ink
+    on a hitch caught within 12 m of the start of its pass, where the ladder hangs 28 m above the
+    summit with nothing under it to reach from; the only catch is the low sweep over the hill
+    station platform, 410 m into the lap. The full-game test asserts the blimp is found and its
+    second segment inked, and every other line complete. Left for the lead: move the pass's start
+    over something a skater can stand on, or start the lap at the hill station.
+80. **What a save/load is compared on.** A save keeps the time of day, not the day, and puts the
+    skater down at rest at their last safe spot, so a loaded game cannot match an uninterrupted one
+    tick for tick. The test compares, from the save on: the same game events in the same order,
+    every ink, line and secret event at the same time of day, and at the end the skater bit for bit
+    except the resume spot, the half-second clock that refreshes it, and the memory of the last
+    handrail ground. Saves are taken when the bot is waiting at a stop and the game's safe spot has
+    caught up with it (within 0.5 s of stepping off a ride the safe spot is still where the ride was
+    boarded, and a save there resumes the skater at the boarding stop).
+81. **The rail magnet counts as a move a skater can make.** Snapping onto a handrail moves the board
+    up to `RAIL_SNAP` sideways in one tick (0.97 m on the spine's handrail); the no-teleport bound is
+    the fastest speed for a tick plus `RAIL_SNAP`.
+82. **"Never stuck" is a new segment or a change of district every 3 minutes, up to the map.** The
+    longest stretch is 161 s (night 2, the walk from Rellano 410 to the crane at the west end of the
+    quay and its run to Grúa Centro). Tram 5's first run of day 4 leaves Muelle 181 s after the last
+    forklift lap ends; the bot rolls to the foot of the Mercado steps behind the stop while it waits,
+    which counts as a change of district. The secret phase waits for midnight and the windy hours,
+    and is not held to the 3-minute rule.
+
+## M6f — Perf honesty: timing the whole city, chunk builds inside their budget
+
+83. **What the frame-time gate times now (corrects 65).** Item 65 said the gate rode "the city the
+    way a player would"; it timed about 8 simulated seconds on the summit lawn (11 m, no hitch,
+    ~25 draw calls). `npm run perf` now plays `?route=perfcity`: five legs of 600 ticks (Mercado,
+    Terraces, Antenna Hill, a fast Terraces run that crosses chunk rows, the Docks), each starting on
+    the spine at a fixed z, and times ticks 150–600 of each leg as normal frames of the normal loop.
+    Windows are cut by route tick, not wall time, so they hold the same riding on any machine. The
+    frames of all windows are pooled for the gated mean and p95; each window's mean, p95, draw
+    calls, triangles and parts are printed and stored with its district. The run fails unless every
+    window travels 40 m, all four districts are seen, two hitches fall in timed frames, two windows
+    hitch and sling, one window crosses two chunk boundaries at 8 m/s or more while chunks are
+    built, and there are 300 timed frames. The gated draw calls and triangles are now the most seen
+    in any timed frame (they were the last frame's). The route steers with the sim's deterministic
+    math, so `tests/unit/perfRoute.test.ts` plays it in Node tick for tick and checks the same facts
+    with margin. Leg starts were picked by riding candidate starts in the sim: the rides run to a
+    timetable, so a leg's hitches depend on its start tick and the order matters. The old summit
+    loop stays as `?route=perf` (profiling, sim hash); `profile.mjs` defaults to `perfcity`. A
+    whole `npm run perf` takes about 3 minutes here.
+84. **Chunk builds come in one-row pieces, and the typed-array build is a piece of its own.** A
+    piece is one terrain row of ground, of paint or of stair treads, one solid, one rail, one zone,
+    and last `MeshBuilder.build()`. The pieces run in `meshChunk`'s order, so the geometry is
+    identical to an uninterrupted build (a test hashes every attribute array of every chunk).
+    Measured in Node, best of five passes over every chunk at both levels of detail: worst piece
+    0.51–0.55 ms (the build of the biggest near chunk, 18k vertices), worst meshing piece 0.27 ms.
+    Before, pieces of four rows were up to 0.23 ms but the 0.51 ms build ran unchecked right after
+    the last piece. In the browser at 4x throttle the world part's p95 is 2.3–2.9 ms; its rare
+    8–17 ms spikes land on pieces that add a few dozen vertices or none, i.e. GC pauses and the
+    throttler or a loaded machine suspending the thread, not piece work.
+85. **Bounds are still computed in `build()`.** `computeBoundingSphere` and `computeBoundingBox`
+    are about 60% of the build piece (0.36 + 0.17 of ~0.85 ms on a big near chunk, not best-of).
+    They live in `src/render/geom.ts`, which this task did not own: proposed follow-up is an
+    optional bounds argument (or box only, sphere from the box), which would bring the worst piece
+    to about 0.25 ms. Reusing builder storage between chunks (a `reset()`) would also cut the GC
+    churn behind the spikes in 84.
+86. **After a teleport the camera's view is built at once.** Besides the 3x3 under the camera,
+    every chunk within NEAR_R whose box (ground to its tallest solid plus 30 m) meets the camera's
+    frustum is built in the first frame at the new place, so chunks 110–170 m out no longer pop in
+    over the following frames. The cost is a longer cut: the worst building frame at 4x throttle
+    (load, respawn) is 135–290 ms against 158 ms with the 3x3 only. e2e screenshots differ only
+    where chunks now arrive earlier (pixel diff against the previous build: 45 of 54 identical; the
+    city and proptown differences are extra chunks in the middle distance, the rest a few UI pixels
+    that differ from run to run).
+87. **The honest numbers miss the p95 budget on a loaded machine, and the miss is the render
+    submit.** Pooled over the five windows at load 2.6–4.5: work mean 5.4–6.0 ms, p95 14.3–16.0 ms
+    (pass). At load 5.9–9.1 (other agents on this 4-core box): mean 7.0–7.3, p95 20.3–20.6 (fail).
+    In every run the submit part (WebGL calls waiting on the software rasteriser in the GPU process)
+    is about two thirds of the p95 frame (pooled p95 9.5–13.9 ms); sim, vehicles, world, camera
+    and UI are each under 3 ms at p95. Single windows go over 16.6 ms p95 at times (Antenna 23.3
+    once at load 2.6) for the same reason. Submit cost is set by the renderer and the look, not by
+    the code this task owned; budgets were not raised and the route was not shortened.
