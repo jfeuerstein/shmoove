@@ -257,6 +257,39 @@ function awning(w: World, rng: Rng, x0: number, x1: number, z0: number, z1: numb
   return true;
 }
 
+/** How far below a roof edge the top of an awning under it sits, m. */
+const EDGE_DROP: readonly [number, number] = [0.3, 0.9];
+/** Depth of an awning under an edge, m. */
+const EDGE_DEPTH: readonly [number, number] = [2.5, 3.5];
+
+/**
+ * Awnings along [z0, z1] beside a roof edge (over [x0, x1]), each EDGE_DEPTH deep with its top
+ * EDGE_DROP below the edge at `yEdge` and its underside 2.3-3.0 m above the ground beneath, as many
+ * as fit, from the uphill end down. Returns how many.
+ */
+function edgeAwnings(w: World, rng: Rng, x0: number, x1: number, z0: number, z1: number, yEdge: number): number {
+  let n = 0;
+  let z = z1;
+  while (z - EDGE_DEPTH[0] >= z0) {
+    let placed = false;
+    for (const d of [EDGE_DEPTH[1], (EDGE_DEPTH[0] + EDGE_DEPTH[1]) / 2, EDGE_DEPTH[0]]) {
+      if (z - d < z0) continue;
+      const ag = groundRange(w, x0, x1, z - d, z);
+      const lo = Math.max(ag.hi + 2.35, yEdge - EDGE_DROP[1] - 0.2);
+      const hi = Math.min(ag.lo + 2.95, yEdge - EDGE_DROP[0] - 0.2);
+      if (hi < lo) continue;
+      const yA = lo + rng.range(0, hi - lo);
+      box(w, x0, x1, z - d, z, yA, yA + 0.2, 'awning', rng.int(6), Surface.AWNING, true);
+      n++;
+      z -= d + 0.2;
+      placed = true;
+      break;
+    }
+    if (!placed) z -= 0.5;
+  }
+  return n;
+}
+
 function dressMercado(w: World, rng: Rng, firstTerrace: number): number {
   const merc = LEVELS.slice(0, firstTerrace);
   const back = (L: Level) => (x: number) => streetHeight(L, x, L.z1);
@@ -322,14 +355,18 @@ function dressMercado(w: World, rng: Rng, firstTerrace: number): number {
             }
             box(w, x0, x1, z0, z1, g.lo - 1, yTop, 'building', rng.int(8));
             paintUnder(w, x0, x1, z0, z1, Surface.PLAZA);
-            // Below the roof's side edges, where a skater rolls off it into the street or alley
-            // beside: an awning off each side wall, halfway along it.
+            // Below the roof's side edges, where a skater rolls off it into the stair street beside
+            // (most falls off a roof go that way): awnings off the side wall a step below the roof,
+            // wherever one fits over the ground there, from the uphill end down. Into an alley,
+            // between two walls, a faller can arrive with no speed left and would bounce on the
+            // spot for ever: there, one awning halfway along, out of the way of a straight drop.
             const zm = (z0 + z1) / 2;
-            for (const [a0, a1] of [
-              [x0 - SIDE_AWNING, x0 - 0.1],
-              [x1 + 0.1, x1 + SIDE_AWNING],
+            for (const [a0, a1, alley] of [
+              [x0 - SIDE_AWNING, x0 - 0.1, parts.length > 1 && bx0p !== parts[0][0]],
+              [x1 + 0.1, x1 + SIDE_AWNING, parts.length > 1 && bx1p !== parts[parts.length - 1][1]],
             ] as const) {
-              if (awning(w, rng, a0, a1, zm - 0.9, zm + 0.9)) awnings++;
+              if (!alley) awnings += edgeAwnings(w, rng, a0, a1, z0, z1, yTop);
+              else if (awning(w, rng, a0, a1, zm - 0.9, zm + 0.9)) awnings++;
             }
             // Awnings over the street below the front of the lowest row (not where stalls stand).
             const lowest = z0 === gap.zA && gap.zA > CITY.bands.mercado + 5;
