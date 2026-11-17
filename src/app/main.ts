@@ -5,9 +5,10 @@
 import { Gestures, attachGestures } from '../input/gestures';
 import { createView } from '../render/view';
 import { DT } from '../sim/constants';
-import { Sim } from '../sim/sim';
+import { Game, type GameEvent } from '../sim/game/game';
 import { buildSlice } from '../sim/slice';
 import { MODE_NAMES, type InputFrame, type SimEvent } from '../sim/types';
+import { createUi } from '../ui/index';
 import { createDebugPanel, type DebugPanel } from './debugPanel';
 import { getParams } from './params';
 import { getRoute } from './routes';
@@ -19,18 +20,22 @@ const STATS_CAP = 20000;
 function boot(): void {
   const params = getParams();
   const canvas = document.getElementById('game') as HTMLCanvasElement;
-  const ui = document.getElementById('ui') as HTMLElement;
+  const uiRoot = document.getElementById('ui') as HTMLElement;
 
   const world = buildSlice(params.seed);
-  const sim = new Sim(world, { seed: params.seed, startDayFrac: params.t ?? undefined });
+  const game = new Game(world, { seed: params.seed, startDayFrac: params.t ?? undefined });
+  const sim = game.sim;
   const gestures = new Gestures();
   attachGestures(canvas, gestures);
   const view = createView(canvas, world);
   const route = getRoute(params.route);
-  const panel: DebugPanel | null = params.debug ? createDebugPanel(ui) : null;
+  const panel: DebugPanel | null = params.debug ? createDebugPanel(uiRoot) : null;
+  // After the panel, so the UI can keep its controls clear of it.
+  const ui = createUi(uiRoot, game, null);
 
   const prev = { x: sim.player.x, y: sim.player.y, z: sim.player.z };
   const pending: SimEvent[] = [];
+  const pendingGame: GameEvent[] = [];
   const eventLog: string[] = [];
   const scripted: InputFrame = { steer: 0, hold: false, hop: false };
   let routeTick = 0;
@@ -48,19 +53,25 @@ function boot(): void {
       prev.y = sim.player.y;
       prev.z = sim.player.z;
     }
-    sim.step(input);
+    game.step(input);
     for (const e of sim.events) {
       pending.push(e);
       if (eventLog.length < 4096) eventLog.push(e.type);
     }
+    for (const e of game.events) pendingGame.push(e);
   };
 
   let workMs: number[] = [];
   let frames = 0;
   let lastWork = 0;
+  const uiFrame = { game, armed: false, simEvents: pending, gameEvents: pendingGame, dt: 0 };
   const draw = (alpha: number, dt: number): void => {
     view.render(sim, prev, alpha, dt, pending);
+    uiFrame.armed = gestures.isArmed;
+    uiFrame.dt = dt;
+    ui.update(uiFrame);
     pending.length = 0;
+    pendingGame.length = 0;
     panel?.update(sim, { ...view.info(), workMs: lastWork });
   };
 
@@ -73,16 +84,21 @@ function boot(): void {
     const t0 = performance.now();
     const dt = lastTime === 0 ? DT : Math.min(0.1, (now - lastTime) / 1000);
     lastTime = now;
-    acc += dt;
     let steps = 0;
-    while (acc >= DT && steps < MAX_CATCH_UP) {
-      step();
-      acc -= DT;
-      steps++;
+    if (ui.paused) {
+      // A screen that pauses play is open: render, but do not let time pile up.
+      acc = 0;
+    } else {
+      acc += dt;
+      while (acc >= DT && steps < MAX_CATCH_UP) {
+        step();
+        acc -= DT;
+        steps++;
+      }
+      // Drop time we could not simulate rather than spiral.
+      if (acc > DT) acc = 0;
     }
-    // Drop time we could not simulate rather than spiral.
-    if (acc > DT) acc = 0;
-    draw(acc / DT, dt);
+    draw(ui.paused ? 1 : acc / DT, dt);
     lastWork = performance.now() - t0;
     frames++;
     if (workMs.length < STATS_CAP) workMs.push(lastWork);
@@ -92,7 +108,8 @@ function boot(): void {
     ready: true,
     manual: params.e2e,
     advance(ticks) {
-      for (let i = 0; i < ticks; i++) step();
+      // While the UI pauses play, frames still render (screenshots, state) but time stands still.
+      if (!ui.paused) for (let i = 0; i < ticks; i++) step();
       draw(1, Math.max(1, ticks) * DT);
       frames++;
     },
@@ -113,6 +130,7 @@ function boot(): void {
         steer: p.steer,
         armed: gestures.isArmed,
         feelRows: panel ? document.querySelectorAll('[data-feel]').length : 0,
+        ui: ui.testState(),
       };
     },
     stats() {
