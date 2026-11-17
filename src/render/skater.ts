@@ -6,7 +6,7 @@
 import * as THREE from 'three';
 import { Mode } from '../sim/types';
 import { MeshBuilder } from './geom';
-import { INK, inkMaterial, shadowMaterial } from './look';
+import { INK, ghostMaterial, inkMaterial, shadowMaterial } from './look';
 
 interface Pose {
   /** 0 standing .. 1 deep crouch. */
@@ -169,7 +169,8 @@ function poseFor(f: SkaterFrame, frame: number): string {
   }
 }
 
-export function createSkaterView(): SkaterView {
+/** `ghost: true` draws the figure as a dotted cobalt silhouette with no shadow (chalk-line ghosts). */
+export function createSkaterView(opts: { ghost?: boolean } = {}): SkaterView {
   const cache = new Map<string, THREE.BufferGeometry>();
   const geo = (name: string, boil: number): THREE.BufferGeometry => {
     const key = `${name}:${boil}`;
@@ -182,7 +183,8 @@ export function createSkaterView(): SkaterView {
   };
   const group = new THREE.Group();
   group.name = 'skater';
-  const body = new THREE.Mesh(geo('stand', 0), inkMaterial());
+  const ghostMat = opts.ghost ? ghostMaterial() : null;
+  const body = new THREE.Mesh(geo('stand', 0), ghostMat ?? inkMaterial());
   body.frustumCulled = false;
   group.add(body);
   const shadowGeo = new THREE.PlaneGeometry(1, 1);
@@ -190,6 +192,7 @@ export function createSkaterView(): SkaterView {
   const shadowMat = shadowMaterial();
   const shadow = new THREE.Mesh(shadowGeo, shadowMat);
   shadow.renderOrder = 3;
+  shadow.visible = !opts.ghost;
   group.add(shadow);
   let lastFrame = -1;
 
@@ -214,6 +217,7 @@ export function createSkaterView(): SkaterView {
       for (const g of cache.values()) g.dispose();
       shadowGeo.dispose();
       shadowMat.dispose();
+      ghostMat?.dispose();
     },
   };
 }

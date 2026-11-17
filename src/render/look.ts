@@ -186,6 +186,32 @@ export function shadowMaterial(): THREE.ShaderMaterial {
   return m;
 }
 
+/**
+ * Ghost ink: a flat single-colour silhouette printed as dots only, so what is behind shows through
+ * the gaps. For chalk-line ghosts. Geometry needs only `position`.
+ */
+export function ghostMaterial(color: number = INK.cobalt): THREE.ShaderMaterial {
+  const m = new THREE.ShaderMaterial({
+    uniforms: { uColor: { value: rgb(color) }, uDotPx: LOOK.uDotPx },
+    vertexShader: /* glsl */ `
+      void main() {
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `,
+    fragmentShader: /* glsl */ `
+      uniform vec3 uColor;
+      uniform float uDotPx;
+      ${HALFTONE_GLSL}
+      void main() {
+        if (halftone(gl_FragCoord.xy, uDotPx * 0.85, 0.5) < 0.5) discard;
+        gl_FragColor = vec4(uColor, 1.0);
+      }
+    `,
+  });
+  m.name = 'ghost';
+  return m;
+}
+
 /** Sky dome: two-ink gradient, a hard sun or moon disc, a halftone haze band, stars at night. */
 export function createSky(): THREE.Mesh {
   const geo = new THREE.SphereGeometry(1, 20, 12);

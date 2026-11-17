@@ -40,6 +40,12 @@ export class Sim implements SimCtx {
     stepPlayer(this, input);
   }
 
+  /** Advance the clock one tick without stepping the skater (countdowns: the city moves, they wait). */
+  tickOnly(): void {
+    this.events.length = 0;
+    this.tick++;
+  }
+
   get dayFrac(): number {
     return dayFrac(this.tick);
   }
