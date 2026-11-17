@@ -18,9 +18,11 @@ import {
 import { grabPoint, makeVehicleState, pathAt, vehicleAt, type CompiledLine, type VehicleState } from '../../src/sim/lines';
 import { angleDiff, clamp } from '../../src/sim/math';
 import { placePlayer } from '../../src/sim/player';
+import { Gestures } from '../../src/input/gestures';
 import { Mode, type InputFrame, type SimEvent } from '../../src/sim/types';
 import { addRail, addZone, createWorld, fillSurfaces, finalizeWorld, Surface, type World } from '../../src/sim/world';
 import { compileLine } from '../../src/sim/lines';
+import { validateRoute } from '../e2e/lib/route.mjs';
 import { seekWhen, testLine } from './helpers';
 
 let city: City;
@@ -609,102 +611,374 @@ interface Launch {
   bails: number;
 }
 
-/**
- * A closed-loop new player that follows the hints: carves both ways when DRAG shows, flicks up at
- * FLICK UP, lines up with the stair handrail and hops onto it at its run-in for LAND ON THE RAIL,
- * then rolls down to the first stop's landing and goes for the ride the pointer is over, holding
- * still behind its bumper. Hitched, it rides quietly until DRAG... THEN LET GO, then lets go as the
- * swing carries it fastest. After that it goes for the nearest ride by the stop and holds on until
- * the segment is inked.
- */
-function firstLaunch(frac: number, maxTicks = 4 * 60 * 60): Launch {
-  resetFeel();
-  const w = city.world;
-  const game = new Game(w, { seed: 1, startDayFrac: frac, hints: true });
-  const sim = game.sim;
-  const p = sim.player;
-  const M2 = w.lines.find((l) => l.id === 'M2');
+/** The second flight's handrail (x = 3), its run-in at z = 508 on the second landing. */
+const RAIL_X = 3;
+const RUN_IN_Z = 508;
+/** Ticks the bot keeps the sling hint up (so a screenshot can see it) before it lets go. */
+const SLING_WAIT = 40;
+/** Ticks a hint is up before the bot acts on it: half a second to read it. */
+const REACT = 30;
+
+interface Want {
+  steer: number;
+  hold: boolean;
+  hop: boolean;
+}
+
+interface BotMemo {
+  carveT: number;
+  /** Ticks the sling hint has been up. */
+  slingT: number;
+  /** The hint up now and for how many ticks (a player reacts after a moment). */
+  upId: string;
+  upFor: number;
+  stop: { x: number; z: number };
+}
+
+function firstStop(): { x: number; z: number } {
+  const M2 = city.world.lines.find((l) => l.id === 'M2');
   const stop = M2 ? stopPoint(M2, FIRST_STOP) : null;
   if (!stop) throw new Error('no first stop');
-  const log: string[] = [];
-  const V: VehicleState = makeVehicleState();
-  const G = { x: 0, y: 0, z: 0 };
-  let carveT = 0;
-  let arrival = -1;
-  let bails = 0;
-  /** The second flight's handrail (x = 3), its run-in at z = 508 on the second landing. */
-  const RAIL_X = 3;
-  const RUN_IN_Z = 508;
-  for (let i = 0; i < maxTicks && !game.onboarding.complete; i++) {
-    const ob = game.onboarding;
-    let steer = 0;
-    let hold = false;
-    let hop = false;
-    if (p.mode === Mode.HITCH) {
-      const H = w.lines[p.hLine];
-      vehicleAt(H, p.hVeh, sim.tick, V);
-      const rideSpeed = Math.hypot(V.vx, V.vz);
-      hold = true;
-      // Let go when a release would be a whip.
-      if (ob.shown === 'sling' && Math.max(Math.hypot(p.vx, p.vz) * FEEL.SLING_GAIN, FEEL.SLING_MIN) >= 1.2 * rideSpeed) hold = false;
-      if (rideSpeed > 4) steer = clamp(-(1.5 * angleDiff(p.psi, p.psiRest) + 0.5 * p.omega), -1, 1);
-    } else if (!ob.done.carve) {
-      if (ob.shown === 'carve' || p.speed > 0.6) steer = carveT++ < 30 ? 0.9 : -0.9;
-    } else if (p.z > 422) {
-      // Down the stairs on the handrail's line to the third landing, then the spine.
-      const tx = p.z > 470 ? RAIL_X : 0;
-      steer = clamp(-2 * angleDiff(Math.atan2(tx - p.x, -6), p.heading), -1, 1);
-      if (ob.shown === 'hop' && p.mode === Mode.GROUND) hop = true;
-      if (ob.shown === 'grind' && p.mode === Mode.GROUND && Math.abs(p.z - (RUN_IN_Z + 2)) < 0.5) hop = true;
-    } else {
-      // The stop's landing: the ride the pointer is over, else (after the sling) the nearest ride
-      // close by, else wait at the stop with a shoulder to the wall north of it.
-      let tl = ob.target.kind === 'vehicle' ? ob.target.line : -1;
-      let tv = ob.target.veh;
-      if (ob.done.sling) {
-        let best = 15;
-        for (const M of w.lines) {
-          if (M.minChainN > 1) continue;
-          for (let k = 0; k < M.vehicles; k++) {
-            vehicleAt(M, k, sim.tick, V);
-            if (!V.active) continue;
-            grabPoint(M, V, G);
-            const d = Math.hypot(G.x - p.x, G.z - p.z);
-            if (d < best && Math.abs(G.y - p.y) < 3) {
-              best = d;
-              tl = M.index;
-              tv = k;
-            }
+  return stop;
+}
+
+const bv: VehicleState = makeVehicleState();
+const bg = { x: 0, y: 0, z: 0 };
+
+/**
+ * What a new player who follows the hints wants this tick: carve both ways when DRAG shows, flick
+ * up at FLICK UP, line up with the stair handrail and hop onto it at its run-in for LAND ON THE
+ * RAIL, roll down to the first stop's landing and go for the ride the pointer is over, holding still
+ * behind its bumper. Hitched, ride quietly; at DRAG... THEN LET GO wait a moment, then let go as the
+ * swing carries it fastest. After that go for the nearest ride by the stop and hold on until the
+ * segment is inked.
+ */
+function policy(game: Game, m: BotMemo, i: number, out: Want): void {
+  const w = game.sim.world;
+  const sim = game.sim;
+  const p = sim.player;
+  const ob = game.onboarding;
+  out.steer = 0;
+  out.hold = false;
+  out.hop = false;
+  m.slingT = ob.shown === 'sling' ? m.slingT + 1 : 0;
+  m.upFor = ob.shown === m.upId ? m.upFor + 1 : 0;
+  m.upId = ob.shown;
+  const seen = m.upFor >= REACT;
+  if (p.mode === Mode.HITCH) {
+    const H = w.lines[p.hLine];
+    vehicleAt(H, p.hVeh, sim.tick, bv);
+    const rideSpeed = Math.hypot(bv.vx, bv.vz);
+    out.hold = true;
+    // Let go when a release would be a whip.
+    if (m.slingT > SLING_WAIT && Math.max(Math.hypot(p.vx, p.vz) * FEEL.SLING_GAIN, FEEL.SLING_MIN) >= 1.2 * rideSpeed) out.hold = false;
+    if (rideSpeed > 4) out.steer = clamp(-(1.5 * angleDiff(p.psi, p.psiRest) + 0.5 * p.omega), -1, 1);
+  } else if (!ob.done.carve) {
+    if ((ob.shown === 'carve' && seen) || m.carveT > 0) out.steer = m.carveT++ < 30 ? 0.9 : -0.9;
+  } else if (p.z > 422) {
+    // Down the stairs on the handrail's line to the third landing, then the spine.
+    const tx = p.z > 470 ? RAIL_X : 0;
+    out.steer = clamp(-2 * angleDiff(Math.atan2(tx - p.x, -6), p.heading), -1, 1);
+    if (ob.shown === 'hop' && seen && p.mode === Mode.GROUND) out.hop = true;
+    if (ob.shown === 'grind' && p.mode === Mode.GROUND && Math.abs(p.z - (RUN_IN_Z + 2)) < 0.5) out.hop = true;
+  } else {
+    // The stop's landing: the ride the pointer is over, else (after the sling) the nearest ride
+    // close by, else wait at the stop with a shoulder to the wall north of it.
+    let tl = ob.target.kind === 'vehicle' ? ob.target.line : -1;
+    let tv = ob.target.veh;
+    if (ob.done.sling) {
+      let best = 15;
+      for (const M of w.lines) {
+        if (M.minChainN > 1) continue;
+        for (let k = 0; k < M.vehicles; k++) {
+          vehicleAt(M, k, sim.tick, bv);
+          if (!bv.active) continue;
+          grabPoint(M, bv, bg);
+          const d = Math.hypot(bg.x - p.x, bg.z - p.z);
+          if (d < best && Math.abs(bg.y - p.y) < 3) {
+            best = d;
+            tl = M.index;
+            tv = k;
           }
         }
       }
-      let tx = stop.x - 5;
-      let tz = stop.z + 4.5;
-      if (tl >= 0) {
-        const L = w.lines[tl];
-        vehicleAt(L, tv, sim.tick, V);
-        grabPoint(L, V, G);
-        tx = G.x - V.hx * 0.8;
-        tz = G.z - V.hz * 0.8;
-        hold = Math.hypot(G.x - p.x, G.z - p.z) < 6;
-      }
-      const dist = Math.hypot(tx - p.x, tz - p.z);
-      steer = clamp(-2 * angleDiff(Math.atan2(tx - p.x, tz - p.z), p.heading), -1, 1);
-      if (p.mode === Mode.GROUND && p.speed < 2.4 && dist > 2) steer = clamp(steer + (Math.floor(i / 12) % 2 === 0 ? 0.9 : -0.9), -1, 1);
     }
-    game.step({ steer, hold, hop });
+    let tx = m.stop.x - 5;
+    let tz = m.stop.z + 4.5;
+    if (tl >= 0) {
+      const L = w.lines[tl];
+      vehicleAt(L, tv, sim.tick, bv);
+      grabPoint(L, bv, bg);
+      tx = bg.x - bv.hx * 0.8;
+      tz = bg.z - bv.hz * 0.8;
+      out.hold = Math.hypot(bg.x - p.x, bg.z - p.z) < 6;
+    }
+    const dist = Math.hypot(tx - p.x, tz - p.z);
+    out.steer = clamp(-2 * angleDiff(Math.atan2(tx - p.x, tz - p.z), p.heading), -1, 1);
+    if (p.mode === Mode.GROUND && p.speed < 2.4 && dist > 2) out.steer = clamp(out.steer + (Math.floor(i / 12) % 2 === 0 ? 0.9 : -0.9), -1, 1);
+  }
+}
+
+/** Book-keeping shared by the bots: the event log, bails and the arrival at the first stop. */
+class Watch {
+  readonly log: string[] = [];
+  arrival = -1;
+  bails = 0;
+  constructor(
+    private readonly game: Game,
+    private readonly stop: { x: number; z: number },
+  ) {}
+  after(i: number): void {
+    const sim = this.game.sim;
+    const p = sim.player;
+    const w = sim.world;
     // Arrived: within the stop board's range of the stop, or already on a ride on its landing.
-    if (arrival < 0 && (Math.hypot(p.x - stop.x, p.z - stop.z) < 14 || (p.mode === Mode.HITCH && p.z < 422))) arrival = sim.tick;
+    if (this.arrival < 0 && (Math.hypot(p.x - this.stop.x, p.z - this.stop.z) < 14 || (p.mode === Mode.HITCH && p.z < 422))) this.arrival = sim.tick;
     for (const e of sim.events) {
-      if (e.type === 'bail') bails++;
-      if (e.type === 'hitch' || e.type === 'release') log.push(`${i} ${e.type} ${w.lines[e.line].id}`);
+      if (e.type === 'bail') this.bails++;
+      if (e.type === 'hitch' || e.type === 'release') this.log.push(`${i} ${e.type} ${w.lines[e.line].id}`);
     }
-    for (const e of game.events) {
-      if (e.type === 'hintShow' || e.type === 'hintDone') log.push(`${i} ${e.type} ${e.step}`);
-      else if (e.type === 'segmentInked' || e.type === 'onboardingComplete') log.push(`${i} ${e.type}`);
+    for (const e of this.game.events) {
+      if (e.type === 'hintShow' || e.type === 'hintDone') this.log.push(`${i} ${e.type} ${e.step}`);
+      else if (e.type === 'segmentInked' || e.type === 'onboardingComplete') this.log.push(`${i} ${e.type}`);
     }
   }
-  return { game, log, arrival, bails };
+}
+
+function newLaunchGame(frac: number): Game {
+  resetFeel();
+  return new Game(city.world, { seed: 1, startDayFrac: frac, hints: true });
+}
+
+/** The hint-following new player, driving the sim's input directly. */
+function firstLaunch(frac: number, maxTicks = 4 * 60 * 60): Launch {
+  const game = newLaunchGame(frac);
+  const stop = firstStop();
+  const memo: BotMemo = { carveT: 0, slingT: 0, upId: '', upFor: 0, stop };
+  const watch = new Watch(game, stop);
+  const want: Want = { steer: 0, hold: false, hop: false };
+  for (let i = 0; i < maxTicks && !game.onboarding.complete; i++) {
+    policy(game, memo, i, want);
+    game.step(want);
+    watch.after(i);
+  }
+  return { game, log: watch.log, arrival: watch.arrival, bails: watch.bails };
+}
+
+// ---------------------------------------------------------------------------------------------
+// The same player with one thumb on glass: touches through the real gesture recogniser, recorded
+// as the open-loop script the e2e route plays (tests/e2e/routes/city-first-launch.mjs).
+
+/**
+ * A touch script, as the e2e route stores it: ['w', ticks] wait; ['d', x, y] finger down; ['m', x, y]
+ * move; ['u'] lift; ['f', hold] swipe up (from the finger that is down, or a fresh one at the
+ * runner's default point), keeping the finger down if `hold`; ['s', step, hintsDone] the hint
+ * `step` is up with that many steps learnt (a screenshot and a check).
+ */
+type Touch = ['w', number] | ['d', number, number] | ['m', number, number] | ['u'] | ['f', boolean] | ['s', string, number];
+
+/** Where fingers go down: low on the glass, centre, clear of every button. */
+const FINGER_X = 195;
+const FINGER_Y = 700;
+/** The e2e runner's swipe: SWIPE_MOVES moves of SWIPE_STEP_PX, one per tick, from its default point. */
+const SWIPE_STEP = 60;
+const SWIPE_MOVES = 3;
+const SWIPE_AT = { x: 195, y: 844 * 0.7 };
+
+/** Plays touches into a recogniser and the game, tick by tick, exactly as the e2e runner does. */
+class Glass {
+  readonly g = new Gestures();
+  finger: { x: number; y: number } | null = null;
+  ticks = 0;
+  constructor(
+    private readonly game: Game,
+    private readonly onTick: (i: number) => void,
+  ) {}
+  advance(n: number): void {
+    for (let k = 0; k < n; k++) {
+      this.game.step(this.g.sample());
+      this.onTick(this.ticks++);
+    }
+  }
+  down(x: number, y: number): void {
+    if (this.finger) this.g.up();
+    this.finger = { x, y };
+    this.g.down(x, y);
+  }
+  move(x: number, y: number): void {
+    if (!this.finger) throw new Error('move without a finger down');
+    this.finger = { x, y };
+    this.g.move(x, y);
+  }
+  up(): void {
+    if (!this.finger) return;
+    this.finger = null;
+    this.g.up();
+  }
+  swipe(hold: boolean): void {
+    if (!this.finger) {
+      this.down(SWIPE_AT.x, SWIPE_AT.y);
+      this.advance(1);
+    }
+    for (let k = 0; k < SWIPE_MOVES; k++) {
+      const f = this.finger;
+      if (!f) throw new Error('lost the finger mid-swipe');
+      this.move(f.x, f.y - SWIPE_STEP);
+      this.advance(1);
+    }
+    if (!hold) this.up();
+  }
+}
+
+interface TouchRun extends Launch {
+  script: Touch[];
+}
+
+/**
+ * The hint-following player with a thumb: the policy above, turned into touches. Steering is a
+ * sideways drag from where the finger went down (a fresh touch first moves past the dead zone, so
+ * it never arms by accident); holding is a fresh, still touch; a hop is a swipe up. Each hint gets
+ * a marker once it has been up for SHOT_DELAY ticks (it has slid in, past any stub sliding out).
+ */
+function touchLaunch(frac: number, maxTicks = 4 * 60 * 60): TouchRun {
+  const game = newLaunchGame(frac);
+  const stop = firstStop();
+  const memo: BotMemo = { carveT: 0, slingT: 0, upId: '', upFor: 0, stop };
+  const watch = new Watch(game, stop);
+  const script: Touch[] = [];
+  const glass = new Glass(game, (i) => watch.after(i));
+  const want: Want = { steer: 0, hold: false, hop: false };
+  const range = FEEL.STEER_RANGE_PX;
+  const dead = FEEL.DRAG_DEADZONE_PX;
+  let x0 = 0;
+  let carving = false;
+  let wait = 0;
+  const flush = (): void => {
+    if (wait > 0) script.push(['w', wait]);
+    wait = 0;
+  };
+  const marked = new Set<string>();
+  let upId: string = '';
+  let upAt = 0;
+  const SHOT_DELAY = 24;
+  while (glass.ticks < maxTicks && !game.onboarding.complete) {
+    const i = glass.ticks;
+    const ob = game.onboarding;
+    // Markers: a hint that has been up a moment, the first time each.
+    if (ob.shown !== upId) {
+      upId = ob.shown;
+      upAt = i;
+    }
+    if (ob.shown !== '' && !marked.has(ob.shown) && i - upAt >= SHOT_DELAY) {
+      marked.add(ob.shown);
+      flush();
+      let n = 0;
+      for (const d of Object.values(ob.done)) if (d) n++;
+      script.push(['s', ob.shown, n]);
+    }
+    policy(game, memo, i, want);
+    const f = glass.finger;
+    if (want.hop && (!f || f.y - SWIPE_MOVES * SWIPE_STEP > 200)) {
+      flush();
+      script.push(['f', f !== null]);
+      glass.swipe(f !== null);
+      continue;
+    }
+    if (want.hold) {
+      if (f && carving) {
+        // A carving touch never arms: lift, and press again next tick.
+        flush();
+        script.push(['u']);
+        glass.up();
+      } else if (!f) {
+        flush();
+        script.push(['d', FINGER_X, FINGER_Y]);
+        glass.down(FINGER_X, FINGER_Y);
+        x0 = FINGER_X;
+        carving = false;
+      } else if (glass.g.isArmed && i % 3 === 0) {
+        const x = Math.round(x0 + want.steer * range);
+        if (Math.abs(x - f.x) >= 3) {
+          flush();
+          script.push(['m', x, f.y]);
+          glass.move(x, f.y);
+        }
+      }
+    } else if (Math.abs(want.steer) < 0.08) {
+      if (f) {
+        flush();
+        script.push(['u']);
+        glass.up();
+      }
+    } else if (!f || !carving) {
+      // A fresh steering touch: down, then straight past the dead zone so it never arms.
+      flush();
+      if (f) {
+        script.push(['u']);
+        glass.up();
+      }
+      script.push(['d', FINGER_X, FINGER_Y]);
+      glass.down(FINGER_X, FINGER_Y);
+      x0 = FINGER_X;
+      const off = Math.sign(want.steer) * Math.max(Math.abs(want.steer) * range, dead + 2);
+      const x = Math.round(x0 + off);
+      script.push(['m', x, FINGER_Y]);
+      glass.move(x, FINGER_Y);
+      carving = true;
+    } else if (i % 3 === 0) {
+      const x = Math.round(x0 + want.steer * range);
+      if (Math.abs(x - f.x) >= 3) {
+        flush();
+        script.push(['m', x, f.y]);
+        glass.move(x, f.y);
+      }
+    }
+    glass.advance(1);
+    wait++;
+  }
+  flush();
+  return { game, log: watch.log, arrival: watch.arrival, bails: watch.bails, script };
+}
+
+interface Replay {
+  game: Game;
+  log: string[];
+  /** For each marker: the hint up and steps learnt at that point, and what the marker expected. */
+  marks: { want: string; wantDone: number; shown: string; done: number }[];
+}
+
+/** Play a touch script open-loop, as the e2e runner would. */
+function replay(frac: number, script: readonly Touch[]): Replay {
+  const game = newLaunchGame(frac);
+  const watch = new Watch(game, firstStop());
+  const glass = new Glass(game, (i) => watch.after(i));
+  const marks: Replay['marks'] = [];
+  for (const t of script) {
+    switch (t[0]) {
+      case 'w':
+        glass.advance(t[1]);
+        break;
+      case 'd':
+        glass.down(t[1], t[2]);
+        break;
+      case 'm':
+        glass.move(t[1], t[2]);
+        break;
+      case 'u':
+        glass.up();
+        break;
+      case 'f':
+        glass.swipe(t[1]);
+        break;
+      case 's': {
+        let n = 0;
+        for (const d of Object.values(game.onboarding.done)) if (d) n++;
+        marks.push({ want: t[1], wantDone: t[2], shown: game.onboarding.shown, done: n });
+        break;
+      }
+    }
+  }
+  return { game, log: watch.log, marks };
 }
 
 describe('the first launch', () => {
@@ -768,3 +1042,53 @@ describe('the first launch', () => {
   });
 });
 
+
+describe('one thumb on glass', () => {
+  it('the hint-following player, through the real gesture recogniser, learns all six in order in under 4 minutes', () => {
+    const run = touchLaunch(NEW_GAME_DAY_FRAC);
+    const ev = run.log.join('\n');
+    expect(run.game.onboarding.complete, ev).toBe(true);
+    expect(logDone(run.log), ev).toEqual([...LESSON_STEPS]);
+    expect(run.bails).toBe(0);
+    // The recording replays to the same end, open-loop.
+    expect(replay(NEW_GAME_DAY_FRAC, run.script).game.sim.hash()).toBe(run.game.sim.hash());
+  });
+
+  it('the e2e route plays its touches to every hint it photographs, and to the end of the lesson', async () => {
+    const url = new URL('../e2e/routes/city-first-launch.mjs', import.meta.url).href;
+    const mod: unknown = await import(/* @vite-ignore */ url);
+    const m = mod as { default: unknown; TOUCHES: unknown };
+    expect(validateRoute(m.default)).toEqual([]);
+    expect(Array.isArray(m.TOUCHES)).toBe(true);
+    const touches = m.TOUCHES as unknown[];
+    for (const t of touches) expect(isTouch(t), JSON.stringify(t)).toBe(true);
+    const back = replay(NEW_GAME_DAY_FRAC, touches as Touch[]);
+    for (const mk of back.marks) expect({ shown: mk.shown, done: mk.done }, mk.want).toEqual({ shown: mk.want, done: mk.wantDone });
+    expect(back.marks.map((mk) => mk.want)).toEqual(['carve', 'hop', 'grind', 'hitch', 'sling', 'ink', 'map', 'lift']);
+    expect(back.game.onboarding.complete, back.log.join('\n')).toBe(true);
+  });
+});
+
+function logDone(log: string[]): string[] {
+  return log.filter((l) => l.includes(' hintDone ')).map((l) => l.split(' ')[2]);
+}
+
+function isTouch(t: unknown): boolean {
+  if (!Array.isArray(t) || t.length === 0) return false;
+  const n = (v: unknown): boolean => typeof v === 'number' && Number.isFinite(v);
+  switch (t[0]) {
+    case 'w':
+      return t.length === 2 && Number.isInteger(t[1]) && (t[1] as number) > 0;
+    case 'd':
+    case 'm':
+      return t.length === 3 && n(t[1]) && n(t[2]) && (t[1] as number) >= 0 && (t[1] as number) < 390 && (t[2] as number) >= 0 && (t[2] as number) < 844;
+    case 'u':
+      return t.length === 1;
+    case 'f':
+      return t.length === 2 && typeof t[1] === 'boolean';
+    case 's':
+      return t.length === 3 && typeof t[1] === 'string' && Number.isInteger(t[2]);
+    default:
+      return false;
+  }
+}
