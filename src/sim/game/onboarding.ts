@@ -1,50 +1,70 @@
 /**
- * Onboarding: a first launch that teaches the game by play, one hint at a time, in the order the
- * hill presents things. Nothing blocks: a hint shows while its situation holds (and a moment after,
- * so it does not flicker) and comes back the next time the situation does.
+ * Onboarding: a first launch that teaches the game by play, one hint at a time. Nothing blocks: a
+ * hint shows while its situation holds (and a moment after, so it does not flicker) and comes back
+ * the next time the situation does.
  *
- * | step  | shows when                                                         | done when                        |
- * | carve | rolling on the ground for 1 s                                      | steer past ±0.4 both ways        |
- * | hop   | rolling at a ledge, stair top or rail within 12 m ahead (after carve) | a hop                         |
- * | grind | within 8 m of a handrail's run-in, rolling or airborne (after hop)  | a grind starts                   |
- * | hitch | a catchable ride within 30 m and coming, or standing within 20 m (after carve) | a hitch            |
- * | sling | hitched for 1.5 s (after hitch)                                    | a whip release (or a 2nd release)|
- * | ink   | hitched (after sling)                                              | a segment inked                  |
- * | chain | released with another line's ride within 25 m (after sling)        | a hitch as the 2nd link or more  |
+ * The lesson is four things: carve, hitch, sling, ink. Once they are done, two closing tickets follow
+ * ('map': where the map is; 'lift': no pushing, everything that moves is a lift) and the lesson is
+ * complete. Four more hints show in their situations until each has been done once, before or after
+ * completion, and hold nothing back: hop, grind, chain and roll (the rescue for a stalled skater).
  *
- * A step counts whenever its condition happens, even before its hint has shown: someone who already
- * knows how to hop has nothing to learn there. Once the six lesson steps are done, two closing
- * tickets follow ('map': where the map is; 'lift': no pushing, everything that moves is a lift) and
- * the lesson is complete. The chain is taught later and is not part of completion, so it is the one
- * hint that can still show after it.
+ * | step  | shows when                                                              | done when                     |
+ * | carve | rolling on the ground for 1 s                                           | steer past ±0.4 both ways     |
+ * | hop   | rolling at a ledge, stair top or rail within 12 m ahead (after carve)   | a hop                         |
+ * | grind | within 8 m of a handrail's run-in, rolling or airborne (after hop)       | a grind starts                |
+ * | hitch | a ride to catch: see below (after carve)                                | a hitch                       |
+ * | sling | hitched for 1.5 s (after hitch)                                         | the player lets go in a whip  |
+ * | ink   | hitched, or a ride to catch (after sling)                               | a segment inked               |
+ * | chain | released with another line's ride within 25 m (after sling)             | a hitch as the 2nd link       |
+ * | roll  | standing on flat ground for 3 s without holding                         | pumped above 2 m/s            |
+ *
+ * **A ride to catch** leads the player to it rather than announcing it as it goes by: when the skater
+ * is heading for a stop (within LEAD_NEAR, no higher than them, on their way) where a ground ride
+ * they could grab will stand or pass within LEAD_TICKS, the pointer is over a waiting spot beside the
+ * lane (within reach of where the grab point passes, clear of every vehicle's body) and the hint says
+ * to press and hold still, which plants a foot and stops them there. Once that ride is within
+ * HITCH_NEAR the pointer moves to its grab bar. With no stop to lead to, a ride coming at the skater
+ * or standing close by is pointed at directly. Until the hitch is learnt, no ride that needs a hop to
+ * reach is ever pointed at.
+ *
+ * A step counts whenever its condition happens, even before its hint has shown. Only a release the
+ * player makes (lifting the finger, or a flick) counts toward the sling; a ride that lets go of them
+ * does not.
  *
  * Nothing shows with the hints setting off, during a chalk recording or race, or during an errand.
  * Until the hitch step is done (and while the lesson runs with hints on) errands do not offer
  * themselves: a new player's first sight should not be an offer asking them to hold still before
  * they know what holding does (`Game.errandsOpen`).
  *
- * World scans (rides near the skater, ledges ahead, handrail run-ins) run every SCAN_EVERY ticks,
- * only for the hints that could show, with bounding-box rejects and no allocation.
+ * World scans (rides and stops near the skater, ledges ahead, handrail run-ins) run every SCAN_EVERY
+ * ticks, only for the hints that could show, with bounding-box rejects and no allocation.
  */
 import { DT, FEEL } from '../constants';
-import { grabPoint, makeVehicleState, vehicleAt, type CompiledLine } from '../lines';
+import { computeVehicle, grabPoint, makeVehicleState, pathAt, vehicleAt, type CompiledLine } from '../lines';
 import { dcos, dsin, len2 } from '../math';
 import { Mode } from '../types';
-import { Surface, makeRailHit, nearestRail, terrainSurface, topHeight, type World } from '../world';
+import { Surface, makeGroundSample, makeRailHit, nearestRail, sampleGround, terrainSurface, topHeight, type World } from '../world';
 import type { Game, GameReducer } from './game';
 import { lineSegments, segmentSlack, type Segment } from './progress';
 
-/** The six things the lesson teaches, in order. */
-export const LESSON_STEPS = ['carve', 'hop', 'grind', 'hitch', 'sling', 'ink'] as const;
+/** The four things the lesson teaches; all four done (then the closing tickets) completes it. */
+export const LESSON_STEPS = ['carve', 'hitch', 'sling', 'ink'] as const;
 export type LessonStep = (typeof LESSON_STEPS)[number];
-/** Every step with a hint: the lesson plus the chain, taught later. */
-export type OnboardingStep = LessonStep | 'chain';
-export const ONBOARDING_STEPS: readonly OnboardingStep[] = [...LESSON_STEPS, 'chain'];
+/** Hints that show in their situations until done once and are not part of completion. */
+export const EXTRA_STEPS = ['hop', 'grind', 'chain', 'roll'] as const;
+export type ExtraStep = (typeof EXTRA_STEPS)[number];
+/** Every step with a hint. */
+export type OnboardingStep = LessonStep | ExtraStep;
+export const ONBOARDING_STEPS: readonly OnboardingStep[] = ['carve', 'hop', 'grind', 'hitch', 'sling', 'ink', 'chain', 'roll'];
 /** What the hint stub can show: a step, or one of the two closing tickets. */
 export type HintId = OnboardingStep | 'map' | 'lift';
 
 /** Ticks rolling on the ground before the carve hint shows (1 s). */
 export const CARVE_SHOW_TICKS = 60;
+/** ...and going at least this fast (or rolling for CARVE_LATE_TICKS): a carve at walking pace on the lookout would turn them off the way down, m/s. */
+export const CARVE_SPEED = 4;
+/** Rolling this long shows the carve hint whatever the speed (6 s). */
+export const CARVE_LATE_TICKS = 360;
 /** Steer the skater must carve past, each way. */
 export const CARVE_STEER = 0.4;
 /** Rolling: faster than this, m/s. */
@@ -53,7 +73,7 @@ export const ROLLING_SPEED = 0.5;
 export const HOP_AHEAD = 12;
 /** How close to a handrail's run-in the grind hint shows, metres. */
 export const GRIND_NEAR = 8;
-/** A moving ride this close and coming prompts the hitch hint, metres. */
+/** A moving ride this close and coming prompts the hitch hint; the lead's ride this close is pointed at, metres. */
 export const HITCH_NEAR = 30;
 /** A ride standing at a stop this close prompts it, metres. */
 export const HITCH_STOP_NEAR = 20;
@@ -63,27 +83,77 @@ export const HITCH_LATERAL = 10;
 export const LEVEL_DY = 4;
 /** A ride must stay in service this long to be pointed at (2 s). */
 export const CATCH_AHEAD_TICKS = 120;
+/** A stop this close (horizontally) can be led to, metres. */
+export const LEAD_NEAR = 45;
+/** A stop being led to keeps the lead out to this distance, metres. */
+export const LEAD_KEEP_NEAR = 55;
+/** A stop may be at most this far above the skater to be led to, metres. */
+export const LEAD_ABOVE = 1;
+/** A ride must reach the stop within this many ticks for the lead to start (20 s). */
+export const LEAD_TICKS = 20 * 60;
+/** A lead already shown holds while a ride reaches its stop within this many ticks (45 s). */
+export const LEAD_KEEP_TICKS = 45 * 60;
+/** A skater slower than this on flat ground has no hill to take them: stops further off can be led to, m/s. */
+export const LEAD_SLOW = 2.5;
+/** How far off a stop can be led to for a slow skater on flat ground, metres. */
+export const LEAD_FAR = 120;
+/** How far above a slow skater on flat ground that stop can be, metres. */
+export const LEAD_FAR_ABOVE = 2.5;
+/** Its ride may be this far off (45 s): there is a way to go. */
+export const LEAD_FAR_TICKS = 45 * 60;
+/** A spot across another ride's lane from the skater counts as this much further, metres. */
+export const LANE_CROSS_COST = 30;
+/** Rolling faster than this, a stop must be ahead to be on the skater's way, m/s. */
+export const LEAD_MOVING = 1.5;
+/** Ahead: within this cosine of the direction of travel (60 degrees), unless closer than LEAD_CLOSE. */
+export const LEAD_COS = 0.5;
+/** A stop this close is on the way whichever way the skater is going, metres. */
+export const LEAD_CLOSE = 15;
+/** A waiting spot stands this far beyond the side of the ride's body, metres. */
+export const SPOT_CLEAR = 1.2;
+/** ...and at least this far beyond the side of every other ride's body, metres. */
+export const LANE_CLEAR = 1.0;
+/** Within this of the waiting spot the skater is waiting there, metres. */
+export const SPOT_NEAR = 3;
 /** Hitched this long, the sling hint shows (1.5 s). */
 export const SLING_SHOW_TICKS = 90;
 /** A release whose exit speed is at least this times the ride's speed is a whip. */
 export const WHIP_RATIO = 1.15;
 /** Another line's ride this close at a release introduces the chain, metres. */
 export const CHAIN_NEAR = 25;
+/** Stalled: slower than this, m/s (a skater rocking on the spot is still stalled). */
+export const STAND_SPEED = 1.5;
+/** ...and staying within this of where the stall began, metres. */
+export const STAND_RANGE = 3;
+/** Stalled this long on flat ground without holding shows the roll hint (3 s). */
+export const ROLL_STAND_TICKS = 180;
+/** Ground this flat (rise over run) has no slope to take a standing skater. */
+export const ROLL_FLAT = 0.06;
+/** Pumped above this, the roll is learnt, m/s. */
+export const ROLL_DONE_SPEED = 2;
 /** World scans run every this many ticks. */
 export const SCAN_EVERY = 10;
 /** A hint stays this long after its situation stops holding (0.75 s). */
 export const HINT_LINGER_TICKS = 45;
-/** The map pointer shows this long once the six steps are done (4 s). */
+/** The map pointer shows this long once the lesson's steps are done (4 s). */
 export const MAP_TICKS = 240;
 /** The last ticket shows this long, then the lesson is complete (5 s). */
 export const LIFT_TICKS = 300;
 
 /** Display priority, highest first: a fleeting chance beats one that comes back. */
-const PRIORITY: readonly OnboardingStep[] = ['sling', 'ink', 'hitch', 'grind', 'hop', 'chain', 'carve'];
+const PRIORITY: readonly OnboardingStep[] = ['sling', 'ink', 'roll', 'hitch', 'grind', 'hop', 'chain', 'carve'];
 
-export type HintTargetKind = 'none' | 'rail' | 'vehicle';
+/** Arrival samples: how often a ride's place on its lap is checked when looking ahead (0.5 s). */
+const ARRIVE_STEP = 30;
+/** A ride is at a stop when its arc position is this close to the stop's, metres. */
+const AT_STOP = 0.6;
 
-/** What the world pointer is over. Rails: the run-in point. Vehicles: line and vehicle (the renderer finds the grab point). */
+export type HintTargetKind = 'none' | 'rail' | 'vehicle' | 'spot';
+
+/**
+ * What the world pointer is over, and where: the run-in point for a rail, the grab point (this tick)
+ * for a vehicle, the ground at the waiting spot for a spot.
+ */
 export interface HintTarget {
   kind: HintTargetKind;
   line: number;
@@ -92,21 +162,25 @@ export interface HintTarget {
   x: number;
   y: number;
   z: number;
+  /** The ride pointed at needs a hop to reach (never before the hitch is learnt). */
+  hop: boolean;
 }
 
 export interface OnboardingState {
   done: Record<OnboardingStep, boolean>;
   /** The hint showing now, or ''. */
   shown: HintId | '';
-  /** The six steps and the closing tickets are done. */
+  /** The lesson's steps and the closing tickets are done. */
   complete: boolean;
   /** The hints setting. Off: nothing shows and errands are open. Not saved (settings are). */
   enabled: boolean;
   /** The sling hint asks for a real whip: the last release was a plain one. */
   slingRetry: boolean;
+  /** The ink hint is asking to catch a ride first (not hitched). */
+  inkCatch: boolean;
   /** The ink hint: the stop where the current hitch will ink its first segment ('' if unknown). */
   stopName: string;
-  /** What the world pointer is over while `shown` is 'grind' or 'hitch'. */
+  /** What the world pointer is over while `shown` is 'grind', 'hitch' or a catching 'ink'. */
   readonly target: HintTarget;
 }
 
@@ -118,10 +192,10 @@ export interface OnboardingData {
 }
 
 function freshDone(): Record<OnboardingStep, boolean> {
-  return { carve: false, hop: false, grind: false, hitch: false, sling: false, ink: false, chain: false };
+  return { carve: false, hop: false, grind: false, hitch: false, sling: false, ink: false, chain: false, roll: false };
 }
 
-/** Count of done lesson steps (the chain is not one). */
+/** Count of done lesson steps. */
 export function lessonDoneCount(st: Pick<OnboardingState, 'done'>): number {
   let n = 0;
   for (const s of LESSON_STEPS) if (st.done[s]) n++;
@@ -131,15 +205,22 @@ export function lessonDoneCount(st: Pick<OnboardingState, 'done'>): number {
 const VS = makeVehicleState();
 const VS2 = makeVehicleState();
 const GP = { x: 0, y: 0, z: 0 };
+const PA = { x: 0, y: 0, z: 0, hx: 0, hz: 1 };
 const RH = makeRailHit();
+const GS = makeGroundSample();
+
+/** A standing hop's height, with a margin: what a skater on the ground can add to their reach. */
+function hopReach(): number {
+  return (0.6 * FEEL.HOP_V * FEEL.HOP_V) / (2 * FEEL.GRAVITY);
+}
 
 /**
  * The best ride to point at for a skater at (x, y, z) with `chain` links alive, at `tick`: a ride
  * tryHitch would accept (in service now and for CATCH_AHEAD_TICKS more, not gated above the next
- * link, its grab point within vertical reach of the ground under it, or a hop's reach for a strap,
- * that ground within LEVEL_DY of the skater's height) that is standing within
+ * link, its grab point within vertical reach of the ground under it, or a hop's reach for a strap
+ * when `allowHop`, that ground within LEVEL_DY of the skater's height) that is standing within
  * HITCH_STOP_NEAR or moving within HITCH_NEAR toward the skater and passing within HITCH_LATERAL.
- * Writes the line and vehicle into `out` (line -1 when none). Pure.
+ * Writes the line and vehicle into `out` (line -1 when none) and whether it needs a hop. Pure.
  */
 export function findCatchable(
   w: World,
@@ -148,13 +229,14 @@ export function findCatchable(
   y: number,
   z: number,
   chain: number,
-  out: { line: number; veh: number },
+  out: { line: number; veh: number; hop?: boolean },
+  allowHop = false,
 ): void {
   out.line = -1;
   out.veh = -1;
+  out.hop = false;
   const reachY = FEEL.HITCH_REACH_Y;
-  // A standing hop's height, with a margin: what a skater on the ground can add to their reach.
-  const hopUp = (0.6 * FEEL.HOP_V * FEEL.HOP_V) / (2 * FEEL.GRAVITY);
+  const hopUp = hopReach();
   let best = Infinity;
   for (let li = 0; li < w.lines.length; li++) {
     const L = w.lines[li];
@@ -174,7 +256,9 @@ export function findCatchable(
       const under = topHeight(w, GP.x, GP.z);
       if (under - y > LEVEL_DY || y - under > LEVEL_DY) continue;
       const dy = GP.y - (under + FEEL.HAND_HEIGHT);
-      if (dy < -reachY || dy > (L.overhead ? reachY + hopUp : reachY)) continue;
+      if (dy < -reachY) continue;
+      const needHop = dy > reachY;
+      if (needHop && !(allowHop && L.overhead && dy <= reachY + hopUp)) continue;
       const sp = len2(VS.vx, VS.vz);
       if (sp < 0.05) {
         if (d >= HITCH_STOP_NEAR) continue;
@@ -189,8 +273,173 @@ export function findCatchable(
       best = d;
       out.line = li;
       out.veh = vi;
+      out.hop = needHop;
     }
   }
+}
+
+/** Squared horizontal distance from (x, z) to the nearest segment of a line's path. */
+function pathDist2(L: CompiledLine, x: number, z: number, limit: number): number {
+  if (x < L.minX - limit || x > L.maxX + limit || z < L.minZ - limit || z > L.maxZ + limit) return Infinity;
+  const p = L.pathPts;
+  let best = Infinity;
+  for (let i = 3; i < p.length; i += 3) {
+    const ax = p[i - 3];
+    const az = p[i - 1];
+    const bx = p[i];
+    const bz = p[i + 2];
+    if ((x < ax - limit && x < bx - limit) || (x > ax + limit && x > bx + limit)) continue;
+    if ((z < az - limit && z < bz - limit) || (z > az + limit && z > bz + limit)) continue;
+    const ex = bx - ax;
+    const ez = bz - az;
+    const l2 = ex * ex + ez * ez;
+    let t = l2 > 0 ? ((x - ax) * ex + (z - az) * ez) / l2 : 0;
+    if (t < 0) t = 0;
+    else if (t > 1) t = 1;
+    const qx = ax + ex * t - x;
+    const qz = az + ez * t - z;
+    const d2 = qx * qx + qz * qz;
+    if (d2 < best) best = d2;
+  }
+  return best;
+}
+
+/**
+ * Stops a ground ride can be caught at, each with up to two waiting spots: beside the lane, level
+ * with the grab point where the ride stands (so it passes within reach), SPOT_CLEAR beyond the side
+ * of its body and LANE_CLEAR beyond every other ride's, on level ground that is not stairs or water,
+ * with nothing in the way between spot and lane.
+ */
+export interface StopSites {
+  n: number;
+  line: Int32Array;
+  stop: Int32Array;
+  s: Float64Array;
+  /** The stop on the path. */
+  x: Float64Array;
+  y: Float64Array;
+  z: Float64Array;
+  /** Two spots per stop: (x, y, z) at [2i] and [2i+1]; ok[k] says whether spot k exists. */
+  sx: Float64Array;
+  sy: Float64Array;
+  sz: Float64Array;
+  ok: Uint8Array;
+}
+
+export function stopSites(w: World): StopSites {
+  const line: number[] = [];
+  const stop: number[] = [];
+  const s: number[] = [];
+  const x: number[] = [];
+  const y: number[] = [];
+  const z: number[] = [];
+  const sx: number[] = [];
+  const sy: number[] = [];
+  const sz: number[] = [];
+  const ok: number[] = [];
+  const ground = w.lines.filter((L) => !L.overhead);
+  for (const L of w.lines) {
+    if (L.overhead) continue;
+    const off = Math.min(L.bodyHalfWid + SPOT_CLEAR, FEEL.HITCH_REACH - 1);
+    for (let k = 0; k < L.allStops.length; k++) {
+      // A loop's closing terminus is its first stop again.
+      if (L.loop && k > 0 && L.allStops[k].s >= L.length - 1e-6) continue;
+      pathAt(L, L.allStops[k].s, PA);
+      const gx = PA.x - PA.hx * L.anchorBack;
+      const gz = PA.z - PA.hz * L.anchorBack;
+      const grabY = PA.y + L.anchorY - L.hang;
+      line.push(L.index);
+      stop.push(k);
+      s.push(L.allStops[k].s);
+      x.push(PA.x);
+      y.push(PA.y);
+      z.push(PA.z);
+      for (const side of [1, -1]) {
+        const qx = gx + side * PA.hz * off;
+        const qz = gz - side * PA.hx * off;
+        let good = qx > w.minX + 1 && qx < w.maxX - 1 && qz > w.minZ + 1 && qz < w.maxZ - 1;
+        let qy = PA.y;
+        if (good) {
+          qy = topHeight(w, qx, qz);
+          const surf = terrainSurface(w, qx, qz);
+          const mid = topHeight(w, (qx + gx) * 0.5, (qz + gz) * 0.5);
+          const dy = grabY - (qy + FEEL.HAND_HEIGHT);
+          good =
+            Math.abs(qy - PA.y) < 0.6 &&
+            Math.abs(mid - PA.y) < 0.6 &&
+            surf !== Surface.WATER &&
+            surf !== Surface.STAIRS &&
+            dy >= -FEEL.HITCH_REACH_Y &&
+            dy <= FEEL.HITCH_REACH_Y;
+        }
+        if (good) {
+          for (const M of ground) {
+            const clear = M === L ? off - 0.2 : M.bodyHalfWid + LANE_CLEAR + 0.35;
+            if (pathDist2(M, qx, qz, clear) < clear * clear) {
+              good = false;
+              break;
+            }
+          }
+        }
+        sx.push(qx);
+        sy.push(qy);
+        sz.push(qz);
+        ok.push(good ? 1 : 0);
+      }
+    }
+  }
+  return {
+    n: line.length,
+    line: Int32Array.from(line),
+    stop: Int32Array.from(stop),
+    s: Float64Array.from(s),
+    x: Float64Array.from(x),
+    y: Float64Array.from(y),
+    z: Float64Array.from(z),
+    sx: Float64Array.from(sx),
+    sy: Float64Array.from(sy),
+    sz: Float64Array.from(sz),
+    ok: Uint8Array.from(ok),
+  };
+}
+
+/**
+ * Ticks until a vehicle of `L` stands at or passes arc position `s0` (0 if one is there now), within
+ * `limit` ticks, and stays in service CATCH_AHEAD_TICKS beyond; -1 if none. The vehicle goes in
+ * `out.veh`. Pure (it does not touch the vehicle memo).
+ */
+export function rideToStop(L: CompiledLine, s0: number, tick: number, limit: number, out: { veh: number }): number {
+  let best = -1;
+  out.veh = -1;
+  const half = L.length * 0.5;
+  for (let vi = 0; vi < L.vehicles; vi++) {
+    let prevS = 0;
+    let prevOn = false;
+    for (let k = 0; k <= limit && (best < 0 || k < best); k += ARRIVE_STEP) {
+      computeVehicle(L, vi, tick + k, VS2);
+      const on = VS2.active;
+      let at = false;
+      if (on) {
+        let ds = VS2.s - s0;
+        if (L.loop && ds > half) ds -= L.length;
+        else if (L.loop && ds < -half) ds += L.length;
+        if (ds < AT_STOP && ds > -AT_STOP) at = true;
+        else if (prevOn) {
+          const step = VS2.s - prevS;
+          if (step < half && step > -half && (prevS - s0) * (VS2.s - s0) <= 0) at = true;
+        }
+      }
+      prevS = VS2.s;
+      prevOn = on;
+      if (!at) continue;
+      computeVehicle(L, vi, tick + k + CATCH_AHEAD_TICKS, VS2);
+      if (!VS2.active) continue;
+      best = k;
+      out.veh = vi;
+      break;
+    }
+  }
+  return best;
 }
 
 /**
@@ -216,16 +465,22 @@ export class OnboardingReducer implements GameReducer {
   readonly state: OnboardingState;
   private readonly world: World;
   private readonly runIns: Float64Array;
+  private readonly sites: StopSites;
   private readonly segs: Segment[][];
   private readonly slack: number[][];
   /** Ticks rolling on the ground so far (for the carve hint). */
   private groundTicks = 0;
   private carvedL = false;
   private carvedR = false;
-  /** Releases counted toward the sling step. */
+  /** Releases the player made, counted toward the sling step. */
   private releases = 0;
   /** Closing tickets: ticks left on the current one. */
   private closing = 0;
+  /** Ticks standing on flat ground without holding, and whether the roll hint's situation is on. */
+  private standTicks = 0;
+  private standX = 0;
+  private standZ = 0;
+  private rollArmed = false;
   /** Last tick each step's situation held. */
   private readonly lastHeld: Record<OnboardingStep, number> = {
     carve: -1e9,
@@ -235,11 +490,25 @@ export class OnboardingReducer implements GameReducer {
     sling: -1e9,
     ink: -1e9,
     chain: -1e9,
+    roll: -1e9,
   };
   // Cached scan results.
   private hopAhead = false;
   private runIn = -1;
-  private readonly catchable = { line: -1, veh: -1 };
+  private readonly catchable = { line: -1, veh: -1, hop: false };
+  /** The stop being led to: site index (-1 none), which spot, the ride and when it gets there. */
+  private leadSite = -1;
+  private leadSpot = 0;
+  private leadLine = -1;
+  private leadVeh = -1;
+  /** The lead was found for a slow skater on flat ground, with the far limits. */
+  private leadFar = false;
+  private readonly arrive = { veh: -1 };
+  /** Ticks until the ride reaches the stop, as the last leadWorks found it. */
+  private leadEta = 0;
+  /** The skater and the tick this step (for the pointer between scans). */
+  private readonly lastPlayer = { x: 0, z: 0 };
+  private lastTick = 0;
   /** A release with another line close: the chain hint holds until the chain ends. */
   private chainWindow = false;
   // The current hitch, for the ink hint's stop: arc positions like the progress reducer keeps.
@@ -255,6 +524,7 @@ export class OnboardingReducer implements GameReducer {
   constructor(world: World) {
     this.world = world;
     this.runIns = handrailRunIns(world);
+    this.sites = stopSites(world);
     this.segs = world.lines.map(lineSegments);
     this.slack = this.segs.map((ss) => ss.map(segmentSlack));
     this.state = {
@@ -263,8 +533,9 @@ export class OnboardingReducer implements GameReducer {
       complete: false,
       enabled: true,
       slingRetry: false,
+      inkCatch: false,
       stopName: '',
-      target: { kind: 'none', line: -1, veh: -1, rail: -1, x: 0, y: 0, z: 0 },
+      target: { kind: 'none', line: -1, veh: -1, rail: -1, x: 0, y: 0, z: 0, hop: false },
     };
   }
 
@@ -307,6 +578,7 @@ export class OnboardingReducer implements GameReducer {
     st.done = freshDone();
     st.complete = false;
     st.slingRetry = false;
+    st.inkCatch = false;
     st.stopName = '';
     this.hide();
     this.groundTicks = 0;
@@ -314,6 +586,9 @@ export class OnboardingReducer implements GameReducer {
     this.carvedR = false;
     this.releases = 0;
     this.closing = 0;
+    this.standTicks = 0;
+    this.rollArmed = false;
+    this.leadSite = -1;
     this.chainWindow = false;
     this.hitched = false;
     for (const s of ONBOARDING_STEPS) this.lastHeld[s] = -1e9;
@@ -354,6 +629,7 @@ export class OnboardingReducer implements GameReducer {
           this.finish(game, 'hitch');
           if (e.chain >= 2) this.finish(game, 'chain');
           this.chainWindow = false;
+          this.leadSite = -1;
           break;
         case 'release':
           this.onRelease(game, e.line, e.vehicle, e.speed);
@@ -365,6 +641,7 @@ export class OnboardingReducer implements GameReducer {
     for (const e of game.events) if (e.type === 'segmentInked') this.finish(game, 'ink');
     if (p.chainAlive !== 1 || p.mode === Mode.HITCH) this.chainWindow = false;
     this.trackHitch(game);
+    this.trackStand(game);
 
     // 2. The closing tickets, then complete. Their clock stands still while hints are suppressed.
     const suppressed = !st.enabled || game.chalk.mode !== 'idle' || game.errands.active !== null;
@@ -384,7 +661,7 @@ export class OnboardingReducer implements GameReducer {
       this.show(game, this.closing > LIFT_TICKS ? 'map' : 'lift');
       return;
     }
-    if (suppressed || (st.complete && st.done.chain)) {
+    if (suppressed || (st.complete && this.extrasDone())) {
       this.hide();
       return;
     }
@@ -395,26 +672,32 @@ export class OnboardingReducer implements GameReducer {
     const lesson = !st.complete;
     const ground = p.mode === Mode.GROUND;
     const rolling = ground && p.speed > ROLLING_SPEED;
-    if (lesson && !d.carve && rolling && this.groundTicks >= CARVE_SHOW_TICKS) this.lastHeld.carve = tick;
-    if (lesson && d.carve && !d.hop) {
+    const free = ground || p.mode === Mode.AIR || p.mode === Mode.GRIND;
+    if (lesson && !d.carve && rolling && this.groundTicks >= CARVE_SHOW_TICKS && (p.speed >= CARVE_SPEED || this.groundTicks >= CARVE_LATE_TICKS)) this.lastHeld.carve = tick;
+    if (d.carve && !d.hop) {
       if (scan) this.hopAhead = rolling && p.speed > 1 && this.scanAhead(p.x, p.y, p.z, p.heading, p.surface);
       if (this.hopAhead && rolling) this.lastHeld.hop = tick;
     }
-    if (lesson && d.hop && !d.grind) {
+    if (d.hop && !d.grind) {
       if (scan) this.runIn = ground || p.mode === Mode.AIR ? this.scanRunIn(p.x, p.y, p.z, p.vx, p.vz) : -1;
       if (this.runIn >= 0 && (ground || p.mode === Mode.AIR)) this.lastHeld.grind = tick;
     }
-    if (lesson && d.carve && !d.hitch) {
-      const free = p.mode === Mode.GROUND || p.mode === Mode.AIR || p.mode === Mode.GRIND;
-      if (scan) {
-        if (free) findCatchable(this.world, tick, p.x, p.y, p.z, p.chainAlive === 1 ? p.chain : 0, this.catchable);
-        else this.catchable.line = -1;
-      }
-      if (free && this.catchable.line >= 0) this.lastHeld.hitch = tick;
+    // A ride to catch: for the hitch, and after the sling for the ink.
+    const wantRide = lesson && free && ((d.carve && !d.hitch) || (d.hitch && !d.ink));
+    if (wantRide) {
+      if (scan) this.scanRides(game);
+      this.followRide(game);
+    } else {
+      this.leadSite = -1;
+      this.catchable.line = -1;
     }
-    if (lesson && d.hitch && !d.sling && p.mode === Mode.HITCH && p.hitchTime >= SLING_SHOW_TICKS * DT - 1e-9) this.lastHeld.sling = tick;
-    if (lesson && d.sling && !d.ink && p.mode === Mode.HITCH) this.lastHeld.ink = tick;
+    const ride = wantRide && this.rideKind() !== 'none';
+    if (lesson && d.carve && !d.hitch && ride) this.lastHeld.hitch = tick;
+    // On the first ride: stay on to the next stop first (the map fills), then drag and let go.
+    if (lesson && d.hitch && !d.ink && (p.mode === Mode.HITCH || ride)) this.lastHeld.ink = tick;
+    if (lesson && d.hitch && d.ink && !d.sling && p.mode === Mode.HITCH && p.hitchTime >= SLING_SHOW_TICKS * DT - 1e-9) this.lastHeld.sling = tick;
     if (d.sling && !d.chain && this.chainWindow) this.lastHeld.chain = tick;
+    if (!d.roll && this.rollArmed) this.lastHeld.roll = tick;
 
     // 4. Pick: the highest-priority situation holding now; the hint already up stays while its
     // situation held within the linger unless something more urgent comes up.
@@ -430,11 +713,17 @@ export class OnboardingReducer implements GameReducer {
       if (want === '' || PRIORITY.indexOf(want as OnboardingStep) >= PRIORITY.indexOf(cur)) want = cur;
     }
     this.show(game, want);
-    this.aim(st.shown);
+    st.inkCatch = st.shown === 'ink' && p.mode !== Mode.HITCH;
+    this.aim(st.shown, p.mode === Mode.HITCH);
     if (st.shown === 'ink') this.updateStopName(game);
   }
 
   // ------------------------------------------------------------------------------------------
+
+  private extrasDone(): boolean {
+    const d = this.state.done;
+    return d.hop && d.grind && d.chain && d.roll;
+  }
 
   private finish(game: Game, s: OnboardingStep): void {
     const st = this.state;
@@ -448,7 +737,9 @@ export class OnboardingReducer implements GameReducer {
   private onRelease(game: Game, line: number, veh: number, speed: number): void {
     const st = this.state;
     const sim = game.sim;
-    if (st.done.hitch && !st.done.sling) {
+    // Only the player's own release: a lifted finger or a flick, not the ride letting go of them.
+    const byPlayer = !game.applied.hold || game.applied.hop;
+    if (st.done.hitch && !st.done.sling && byPlayer) {
       const L = sim.world.lines[line];
       vehicleAt(L, veh, sim.tick, VS);
       const rideSpeed = len2(VS.vx, VS.vz);
@@ -458,6 +749,173 @@ export class OnboardingReducer implements GameReducer {
     }
     // A chance at a chain: another line's ride close by as the skater flies off.
     if (st.done.sling && !st.done.chain) this.chainWindow = this.otherLineNear(game, line);
+  }
+
+  /** Standing on flat ground without holding: after ROLL_STAND_TICKS the roll hint's situation is on until they pump past ROLL_DONE_SPEED. */
+  private trackStand(game: Game): void {
+    const p = game.sim.player;
+    const holding = game.applied.hold;
+    if (this.rollArmed) {
+      if (p.mode !== Mode.GROUND || holding) {
+        this.rollArmed = false;
+        this.standTicks = 0;
+      } else if (p.speed > ROLL_DONE_SPEED) {
+        this.rollArmed = false;
+        this.standTicks = 0;
+        this.finish(game, 'roll');
+      }
+      return;
+    }
+    const dx = p.x - this.standX;
+    const dz = p.z - this.standZ;
+    if (
+      this.state.done.roll ||
+      p.mode !== Mode.GROUND ||
+      holding ||
+      p.speed >= STAND_SPEED ||
+      dx * dx + dz * dz > STAND_RANGE * STAND_RANGE ||
+      this.atSpot(p.x, p.z) ||
+      !this.flat(p.x, p.y, p.z)
+    ) {
+      this.standTicks = 0;
+      this.standX = p.x;
+      this.standZ = p.z;
+      return;
+    }
+    if (++this.standTicks >= ROLL_STAND_TICKS) this.rollArmed = true;
+  }
+
+  /** No slope under (x, y, z) to take a standing skater anywhere. */
+  private flat(x: number, y: number, z: number): boolean {
+    sampleGround(this.world, x, y, z, FEEL.STEP_UP, GS);
+    return GS.gx * GS.gx + GS.gz * GS.gz <= ROLL_FLAT * ROLL_FLAT;
+  }
+
+  /** Waiting at the spot the pointer leads to (a skater waiting there is not stalled). */
+  private atSpot(x: number, z: number): boolean {
+    if (this.leadSite < 0) return false;
+    const k = this.leadSite * 2 + this.leadSpot;
+    const dx = this.sites.sx[k] - x;
+    const dz = this.sites.sz[k] - z;
+    return dx * dx + dz * dz < SPOT_NEAR * SPOT_NEAR;
+  }
+
+  /** Refresh the lead to a stop and the catchable ride near the skater (every SCAN_EVERY ticks). */
+  private scanRides(game: Game): void {
+    const sim = game.sim;
+    const p = sim.player;
+    const chain = p.chainAlive === 1 ? p.chain : 0;
+    const allowHop = this.state.done.hitch;
+    // Keep the stop being led to while it still works, with the looser keep limits.
+    if (this.leadSite >= 0 && !this.leadWorks(this.leadSite, sim.tick, p.x, p.y, p.z, chain, Math.max(LEAD_KEEP_NEAR, this.leadFar ? LEAD_FAR + 10 : 0), LEAD_KEEP_TICKS, this.leadFar ? LEAD_FAR_ABOVE : LEAD_ABOVE)) this.leadSite = -1;
+    if (this.leadSite < 0) {
+      let best = Infinity;
+      const sp = len2(p.vx, p.vz);
+      // A slow skater on flat ground has no hill to take them anywhere: look further.
+      const far = p.mode === Mode.GROUND && sp < LEAD_SLOW && this.flat(p.x, p.y, p.z);
+      const near = far ? LEAD_FAR : LEAD_NEAR;
+      const above = far ? LEAD_FAR_ABOVE : LEAD_ABOVE;
+      const ticks = far ? LEAD_FAR_TICKS : LEAD_TICKS;
+      const S = this.sites;
+      for (let i = 0; i < S.n; i++) {
+        const dx = S.x[i] - p.x;
+        const dz = S.z[i] - p.z;
+        if (dx > near || dx < -near || dz > near || dz < -near) continue;
+        const dist = Math.sqrt(dx * dx + dz * dz);
+        if (dist > near) continue;
+        // On the skater's way: ahead of them when they are rolling, unless it is close.
+        if (sp > LEAD_MOVING && dist > LEAD_CLOSE && (dx * p.vx + dz * p.vz) / (dist * sp) < LEAD_COS) continue;
+        for (let j = 0; j < 2; j++) {
+          const k = i * 2 + j;
+          if (S.ok[k] === 0) continue;
+          const ds = Math.sqrt((S.sx[k] - p.x) * (S.sx[k] - p.x) + (S.sz[k] - p.z) * (S.sz[k] - p.z));
+          if (ds >= best) continue;
+          if (!this.leadWorks(i, sim.tick, p.x, p.y, p.z, chain, near, ticks, above)) break;
+          let score = ds + this.leadEta / 60;
+          if (score >= best) continue;
+          if (this.crossesLane(p.x, p.z, S.sx[k], S.sz[k])) score += LANE_CROSS_COST;
+          if (score >= best) continue;
+          best = score;
+          this.leadSite = i;
+          this.leadSpot = j;
+          this.leadFar = far;
+          this.leadLine = S.line[i];
+          this.leadVeh = this.arrive.veh;
+        }
+      }
+    } else {
+      this.leadVeh = this.arrive.veh;
+    }
+    if (this.leadSite < 0) findCatchable(this.world, sim.tick, p.x, p.y, p.z, chain, this.catchable, allowHop);
+    else this.catchable.line = -1;
+  }
+
+  /** Whether site i can be led to from (x, y, z) now: near enough, no higher, a ride due in time. Sets leadEta and arrive.veh. */
+  private leadWorks(i: number, tick: number, x: number, y: number, z: number, chain: number, near: number, ticks: number, above: number): boolean {
+    const S = this.sites;
+    const L = this.world.lines[S.line[i]];
+    if (chain + 1 < L.minChainN) return false;
+    if (S.y[i] > y + above) return false;
+    const dx = S.x[i] - x;
+    const dz = S.z[i] - z;
+    if (dx * dx + dz * dz > near * near) return false;
+    const eta = rideToStop(L, S.s[i], tick, ticks, this.arrive);
+    if (eta < 0) return false;
+    this.leadEta = eta;
+    return true;
+  }
+
+  /** Whether going straight from (ax, az) to (bx, bz) crosses a ground ride's lane. */
+  private crossesLane(ax: number, az: number, bx: number, bz: number): boolean {
+    const w = this.world;
+    for (let li = 0; li < w.lines.length; li++) {
+      const L = w.lines[li];
+      if (L.overhead) continue;
+      if ((ax < L.minX && bx < L.minX) || (ax > L.maxX && bx > L.maxX) || (az < L.minZ && bz < L.minZ) || (az > L.maxZ && bz > L.maxZ)) continue;
+      const p = L.pathPts;
+      for (let i = 3; i < p.length; i += 3) {
+        const cx = p[i - 3];
+        const cz = p[i - 1];
+        const dx = p[i];
+        const dz = p[i + 2];
+        if ((cx < ax && cx < bx && dx < ax && dx < bx) || (cx > ax && cx > bx && dx > ax && dx > bx)) continue;
+        if ((cz < az && cz < bz && dz < az && dz < bz) || (cz > az && cz > bz && dz > az && dz > bz)) continue;
+        const d1 = (bx - ax) * (cz - az) - (bz - az) * (cx - ax);
+        const d2 = (bx - ax) * (dz - az) - (bz - az) * (dx - ax);
+        const d3 = (dx - cx) * (az - cz) - (dz - cz) * (ax - cx);
+        const d4 = (dx - cx) * (bz - cz) - (dz - cz) * (bx - cx);
+        if (d1 * d2 < 0 && d3 * d4 < 0) return true;
+      }
+    }
+    return false;
+  }
+
+  /** Every tick: drop rides gone out of service. */
+  private followRide(game: Game): void {
+    const tick = game.sim.tick;
+    if (this.catchable.line >= 0) {
+      vehicleAt(this.world.lines[this.catchable.line], this.catchable.veh, tick, VS);
+      if (!VS.active) this.catchable.line = -1;
+    }
+  }
+
+  /** What the ride pointer would be over now: the lead's ride when within HITCH_NEAR, else its spot, else a catchable ride. */
+  private rideKind(): HintTargetKind {
+    if (this.leadSite >= 0) {
+      if (this.leadVeh >= 0) {
+        const L = this.world.lines[this.leadLine];
+        const p = this.lastPlayer;
+        vehicleAt(L, this.leadVeh, this.lastTick, VS);
+        if (VS.active) {
+          grabPoint(L, VS, GP);
+          const dx = GP.x - p.x;
+          const dz = GP.z - p.z;
+          if (dx * dx + dz * dz < HITCH_NEAR * HITCH_NEAR) return 'vehicle';
+        }
+      }
+      return 'spot';
+    }
+    return this.catchable.line >= 0 ? 'vehicle' : 'none';
   }
 
   private otherLineNear(game: Game, line: number): boolean {
@@ -489,17 +947,18 @@ export class OnboardingReducer implements GameReducer {
     if (st.shown === id) return;
     st.shown = id;
     if (id !== '') game.events.push({ type: 'hintShow', step: id });
-    if (id !== 'grind' && id !== 'hitch') st.target.kind = 'none';
   }
 
   private hide(): void {
     this.state.shown = '';
+    this.state.inkCatch = false;
     this.state.target.kind = 'none';
   }
 
   /** Point the world pointer at what the hint is about. */
-  private aim(id: HintId | ''): void {
+  private aim(id: HintId | '', hitched: boolean): void {
     const t = this.state.target;
+    t.hop = false;
     if (id === 'grind' && this.runIn >= 0) {
       const k = this.runIn * 4;
       t.kind = 'rail';
@@ -509,12 +968,38 @@ export class OnboardingReducer implements GameReducer {
       t.rail = this.runIns[k + 3];
       t.line = -1;
       t.veh = -1;
-    } else if (id === 'hitch' && this.catchable.line >= 0) {
-      t.kind = 'vehicle';
-      t.line = this.catchable.line;
-      t.veh = this.catchable.veh;
+      return;
+    }
+    if (id === 'hitch' || (id === 'ink' && !hitched)) {
+      const kind = this.rideKind();
       t.rail = -1;
-    } else t.kind = 'none';
+      if (kind === 'spot') {
+        const k = this.leadSite * 2 + this.leadSpot;
+        t.kind = 'spot';
+        t.line = this.leadLine;
+        t.veh = this.leadVeh;
+        t.x = this.sites.sx[k];
+        t.y = this.sites.sy[k];
+        t.z = this.sites.sz[k];
+        return;
+      }
+      if (kind === 'vehicle') {
+        const line = this.leadSite >= 0 ? this.leadLine : this.catchable.line;
+        const veh = this.leadSite >= 0 ? this.leadVeh : this.catchable.veh;
+        const L = this.world.lines[line];
+        vehicleAt(L, veh, this.lastTick, VS);
+        grabPoint(L, VS, GP);
+        t.kind = 'vehicle';
+        t.line = line;
+        t.veh = veh;
+        t.x = GP.x;
+        t.y = GP.y;
+        t.z = GP.z;
+        t.hop = this.leadSite < 0 && this.catchable.hop;
+        return;
+      }
+    }
+    t.kind = 'none';
   }
 
   /** A ledge, a stair top, a step up or a rail within HOP_AHEAD ahead. */
@@ -572,7 +1057,10 @@ export class OnboardingReducer implements GameReducer {
     const sim = game.sim;
     const p = sim.player;
     const st = this.state;
-    if (p.mode !== Mode.HITCH || st.done.ink || !st.done.sling) {
+    this.lastPlayer.x = p.x;
+    this.lastPlayer.z = p.z;
+    this.lastTick = sim.tick;
+    if (p.mode !== Mode.HITCH || st.done.ink || !st.done.hitch) {
       this.hitched = false;
       return;
     }

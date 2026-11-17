@@ -20,6 +20,10 @@ export interface HintContext {
   slingRetry: boolean;
   /** The stop where the current ride will ink its first segment ('' if unknown). */
   stopName: string;
+  /** The ink hint is asking to catch a ride first (not hitched yet). */
+  inkCatch: boolean;
+  /** What the world pointer is over: `hop` when that ride needs a hop to reach. */
+  target: { readonly hop: boolean };
 }
 
 export function hintCopy(id: HintId, ctx: HintContext): HintCopy {
@@ -31,15 +35,22 @@ export function hintCopy(id: HintId, ctx: HintContext): HintCopy {
     case 'grind':
       return { glyph: 'flick', title: 'LAND ON THE RAIL', sub: '' };
     case 'hitch':
-      return { glyph: 'press', title: 'PRESS AND HOLD STILL', sub: '' };
+      return ctx.target.hop ? { glyph: 'flick', title: 'FLICK UP, THEN HOLD', sub: '' } : { glyph: 'press', title: 'PRESS AND HOLD STILL', sub: '' };
     case 'sling':
       return ctx.slingRetry
         ? { glyph: 'drag', title: 'TRY CARVING BEHIND IT FIRST', sub: '' }
         : { glyph: 'drag', title: 'DRAG... THEN LET GO', sub: '' };
     case 'ink':
+      if (ctx.inkCatch) {
+        return ctx.target.hop
+          ? { glyph: 'flick', title: 'FLICK UP, THEN HOLD', sub: 'RIDE IT TO THE NEXT STOP' }
+          : { glyph: 'press', title: 'PRESS AND HOLD STILL', sub: 'RIDE IT TO THE NEXT STOP' };
+      }
       return { glyph: 'press', title: 'STAY ON TO THE NEXT STOP', sub: ctx.stopName === '' ? '' : '→ ' + ctx.stopName.toUpperCase() };
     case 'chain':
       return { glyph: 'press', title: 'CATCH ANOTHER BEFORE YOU LAND', sub: '' };
+    case 'roll':
+      return { glyph: 'slide', title: 'WIGGLE TO ROLL', sub: '' };
     case 'map':
       return { glyph: 'map', title: 'YOUR MAP', sub: '' };
     case 'lift':

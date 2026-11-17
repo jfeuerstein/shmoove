@@ -78,7 +78,7 @@ function boot(): void {
   const view = createView(canvas, world, isStreamed(params) ? { worldView: (w) => (cityView = createCityView(w, () => view.chase.camera)) } : {});
   const chalkView = createChalkView(view.scene, world);
   const markersView = createMarkersView(view.scene, world, game);
-  const hintView = createHintView(view.scene, world);
+  const hintView = createHintView(view.scene, world, view.chase.camera);
   const route = getRoute(params.route);
   const panel: DebugPanel | null = params.debug ? createDebugPanel(uiRoot) : null;
   // After the panel, so the UI can keep its controls clear of it.
@@ -262,7 +262,7 @@ function boot(): void {
 
   let frames = 0;
   let lastWork = 0;
-  const uiFrame = { game, armed: false, simEvents: pending, gameEvents: pendingGame, dt: 0 };
+  const uiFrame = { game, armed: false, simEvents: pending, gameEvents: pendingGame, dt: 0, pointer: hintView.screen };
   const draw = (alpha: number, dt: number): void => {
     let t0 = performance.now();
     chalkView.update(game, alpha, dt);
