@@ -226,6 +226,75 @@ describe('service worker generator', () => {
     }
   });
 
+  /** Run the generated worker against stub `self` and `caches`; returns its install outcome. */
+  const install = async (source: string, failOn: string | null): Promise<{ ok: boolean; requested: string[]; modes: string[]; deleted: string[]; opened: string[] }> => {
+    const handlers: Record<string, (e: unknown) => void> = {};
+    const requested: string[] = [];
+    const modes: string[] = [];
+    const deleted: string[] = [];
+    const opened: string[] = [];
+    const self = {
+      registration: { scope: 'https://example.test/app/' },
+      location: { origin: 'https://example.test' },
+      addEventListener: (type: string, fn: (e: unknown) => void): void => {
+        handlers[type] = fn;
+      },
+    };
+    class FakeRequest {
+      readonly url: string;
+      readonly cache: string;
+      constructor(url: string, init: { cache?: string } = {}) {
+        this.url = url;
+        this.cache = init.cache ?? 'default';
+      }
+    }
+    const caches = {
+      open: (name: string): Promise<unknown> => {
+        opened.push(name);
+        return Promise.resolve({
+          addAll: (reqs: FakeRequest[]): Promise<void> => {
+            for (const r of reqs) {
+              requested.push(r.url);
+              modes.push(r.cache);
+            }
+            return failOn !== null && reqs.some((r) => r.url === failOn) ? Promise.reject(new Error(`404 ${failOn}`)) : Promise.resolve();
+          },
+        });
+      },
+      delete: (name: string): Promise<boolean> => {
+        deleted.push(name);
+        return Promise.resolve(true);
+      },
+    };
+    const run = new Function('self', 'caches', 'Request', source) as (s: unknown, c: unknown, r: unknown) => void;
+    run(self, caches, FakeRequest);
+    let done: Promise<unknown> = Promise.resolve();
+    handlers.install({ waitUntil: (p: Promise<unknown>) => (done = p) });
+    const ok = await done.then(
+      () => true,
+      () => false,
+    );
+    return { ok, requested, modes, deleted, opened };
+  };
+
+  it('install precaches every file past the HTTP cache; a failed precache deletes its new cache and fails the install', async () => {
+    const dir = makeDist(FILES);
+    try {
+      const sw = buildServiceWorker(dir);
+      const good = await install(sw.source, null);
+      expect(good.ok).toBe(true);
+      expect(good.requested).toEqual(sw.files);
+      expect(new Set(good.modes)).toEqual(new Set(['reload']));
+      expect(good.deleted).toEqual([]);
+      const bad = await install(sw.source, 'manifest.webmanifest');
+      expect(bad.ok).toBe(false);
+      expect(bad.opened).toEqual([sw.name]);
+      expect(bad.deleted).toEqual([sw.name]);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('refuses a directory without index.html', () => {
     const dir = makeDist({ 'a.js': '1' });
     try {
