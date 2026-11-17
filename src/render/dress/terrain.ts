@@ -199,8 +199,7 @@ const RAIL_INK = 0x2c2a3c;
 const TIE_INK = 0x4d4757;
 const TUFT = 0x2f8f5a;
 const TREAD_A = 0xddd5c4;
-const TREAD_B = 0xcfc6b3;
-const NOSE = 0x7e776c;
+const TREAD_B = 0xb3aa98;
 const RISER = 0xa39b8c;
 
 /** Decoration for cells [ix0, ix1) x [iz0, iz1). It never changes the ground by more than 3 cm (12 cm for treads). */
@@ -371,8 +370,10 @@ function stairTreads(b: MeshBuilder, w: World, ix0: number, iz0: number, ix1: nu
  * along the fall axis (its sign says which way is down), `gMax` the steepest.
  */
 function steps(b: MeshBuilder, w: World, a0: number, a1: number, f0: number, f1: number, g: number, gMax: number, fallZ: boolean): void {
-  // A tread sits 6 cm over the ramp at its middle, so its nose stands 6 cm + gMax * run / 2 proud.
-  const run = Math.min(0.6, (2 * (TREAD_MAX - 0.065)) / Math.max(gMax, 1e-3));
+  // A tread sits `lift` over the ramp at its middle, so its nose stands lift + gMax * run / 2
+  // proud; its back edge dips under the ramp, which hides it. Few, deep steps keep stairs cheap.
+  const lift = 0.04;
+  const run = Math.min(0.6, (2 * (TREAD_MAX - 0.005 - lift)) / Math.max(gMax, 1e-3));
   const n = Math.max(1, Math.ceil((f1 - f0) / run - 1e-6));
   const r = (f1 - f0) / n;
   // World point from (run axis, fall axis).
@@ -380,20 +381,17 @@ function steps(b: MeshBuilder, w: World, a0: number, a1: number, f0: number, f1:
   const Z = (a: number, f: number): number => (fallZ ? f : a);
   const H = (a: number, f: number): number => terrainHeight(w, X(a, f), Z(a, f));
   const down = g > 0 ? -1 : 1; // the downhill direction along the fall axis
-  const lift = 0.06;
-  const nose = Math.min(0.07, r * 0.25);
   for (let k = 0; k < n; k++) {
     const lo = f0 + k * r;
     const hi = lo + r;
     const mid = (lo + hi) / 2;
     const fn = down < 0 ? lo : hi; // nose edge (downhill side)
     const fb = down < 0 ? hi : lo; // back edge (uphill side)
-    const fs = fn - down * nose; // start of the nose strip
     const ta = H(a0, mid) + lift;
     const tb = H(a1, mid) + lift;
+    // Two tones, alternating, so each step's edge reads from above.
     const ink = (k & 1) === 0 ? TREAD_A : TREAD_B;
-    facing(b, X(a0, fb), ta, Z(a0, fb), X(a1, fb), tb, Z(a1, fb), X(a1, fs), tb, Z(a1, fs), X(a0, fs), ta, Z(a0, fs), 0, 1, 0, ink);
-    facing(b, X(a0, fs), ta, Z(a0, fs), X(a1, fs), tb, Z(a1, fs), X(a1, fn), tb, Z(a1, fn), X(a0, fn), ta, Z(a0, fn), 0, 1, 0, NOSE);
+    facing(b, X(a0, fb), ta, Z(a0, fb), X(a1, fb), tb, Z(a1, fb), X(a1, fn), tb, Z(a1, fn), X(a0, fn), ta, Z(a0, fn), 0, 1, 0, ink);
     // Riser at the nose, from just under the ramp to the tread, facing downhill.
     const ra = H(a0, fn) - 0.03;
     const rb = H(a1, fn) - 0.03;

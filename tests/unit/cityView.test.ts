@@ -12,7 +12,7 @@ import {
 } from '../../src/render/cityView';
 import { Lod } from '../../src/render/dress/kit';
 import { RAIL_KINDS } from '../../src/render/dress/rails';
-import { ROOF_CLUTTER_MAX, ROOF_EDGE, SOLID_KINDS } from '../../src/render/dress/solids';
+import { BOUND_KINDS, CONTAINER_LEVEL, ROOF_CLUTTER_MAX, ROOF_EDGE, SOLID_KINDS } from '../../src/render/dress/solids';
 import { PAINT_LIFT, TREAD_MAX, meshGround, meshGroundDecor } from '../../src/render/dress/terrain';
 import { stopSpot, STOP_SHELTER_TOP, STOP_SIGN_TOP } from '../../src/render/dress/zones';
 import { MeshBuilder } from '../../src/render/geom';
@@ -235,6 +235,7 @@ describe('solid dressing', () => {
   it('winds every wall and roof face of the box outward', () => {
     for (const w of [town, kw]) {
       for (const o of w.solids) {
+        if (BOUND_KINDS.includes(o.kind)) continue;
         const g = geometry((b) => meshSolid(b, w, o, Lod.NEAR));
         const pos = positions(g);
         const tri = triangles(g);
@@ -272,6 +273,22 @@ describe('solid dressing', () => {
           }
         }
         expect(checked, `${o.kind} has box faces`).toBeGreaterThanOrEqual(8);
+      }
+    }
+  });
+
+  it('draws a container stack level by level', () => {
+    const stacks = town.solids.filter((o) => o.kind === 'container' && o.yTop - o.yBase > 2 * CONTAINER_LEVEL);
+    expect(stacks.length).toBeGreaterThan(0);
+    for (const o of stacks) {
+      const pos = positions(geometry((b) => meshSolid(b, town, o, Lod.NEAR)));
+      // A seam corner at every level boundary below the top.
+      const levels = Math.round((o.yTop - o.yBase) / CONTAINER_LEVEL);
+      for (let k = 1; k < levels; k++) {
+        const y = o.yTop - k * CONTAINER_LEVEL;
+        let found = false;
+        for (let i = 1; i < pos.length; i += 3) if (Math.abs(pos[i] - y) < 1e-3) found = true;
+        expect(found, `level boundary at ${y}`).toBe(true);
       }
     }
   });
@@ -384,12 +401,18 @@ describe('chunks', () => {
       };
       for (const s of bk.solids[ci]) {
         const o = town.solids[s];
-        for (const [sx, sz] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) {
-          const x = o.cx + sx * o.hx * o.cosR - sz * o.hz * o.sinR;
-          const z = o.cz + sx * o.hx * o.sinR + sz * o.hz * o.cosR;
-          for (const y of [o.yBase, o.yTop]) {
-            expect(has(far, x, y, z), `far ${o.kind} corner`).toBe(true);
-            expect(has(near, x, y, z), `near ${o.kind} corner`).toBe(true);
+        // Every corner of the solid's far silhouette is also a corner in the near chunk.
+        const farSolid = positions(geometry((bb) => meshSolid(bb, town, o, Lod.FAR)));
+        for (let i = 0; i < farSolid.length; i += 3) {
+          expect(has(far, farSolid[i], farSolid[i + 1], farSolid[i + 2]), `far ${o.kind}`).toBe(true);
+          expect(has(near, farSolid[i], farSolid[i + 1], farSolid[i + 2]), `near ${o.kind} outline`).toBe(true);
+        }
+        if (!BOUND_KINDS.includes(o.kind)) {
+          // ... and for a box, that silhouette is exactly the solid's box.
+          for (const [sx, sz] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) {
+            const x = o.cx + sx * o.hx * o.cosR - sz * o.hz * o.sinR;
+            const z = o.cz + sx * o.hx * o.sinR + sz * o.hz * o.cosR;
+            for (const y of [o.yBase, o.yTop]) expect(has(farSolid, x, y, z), `${o.kind} box corner`).toBe(true);
           }
         }
       }

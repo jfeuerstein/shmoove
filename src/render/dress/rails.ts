@@ -125,7 +125,8 @@ function posts(b: MeshBuilder, w: World, r: Rail, spacing: number, half: number,
  */
 function wireDressing(b: MeshBuilder, w: World, r: Rail): void {
   const district = districtAt(w, r.pts[2]);
-  const laundry = district === District.TERRACES ? r.index % 3 !== 0 : r.index % 5 === 0;
+  // The city's wires are laundry lines across terrace streets: always laundry there.
+  const laundry = district === District.TERRACES || r.index % 5 === 0;
   if (laundry) {
     const cloth = [INK.pink, INK.white, INK.mango, INK.cobalt, INK.teal, INK.white];
     along(r, 1.1, (x, y, z, tx, tz, k) => {

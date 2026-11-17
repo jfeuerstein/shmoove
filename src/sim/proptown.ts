@@ -185,7 +185,8 @@ export function buildProptown(seed = 1): World {
   ];
   w.spawn = { x: P.spawn.x, z: P.spawn.z, heading: PI };
   let style = 0;
-  const nextStyle = (): number => style++ * 3 + rng.int(3);
+  // Facade colours 0..7, as the city generator uses them.
+  const nextStyle = (): number => (style++ * 3 + rng.int(3)) % 8;
 
   // --- Docks -----------------------------------------------------------------------------------
   // The quay: a low wall over the bank down to the sea, in segments.
@@ -196,11 +197,13 @@ export function buildProptown(seed = 1): World {
   stand(w, 'warehouse', -34, 44, 18, 10, 10, { style: 1 });
   stand(w, 'warehouse', -36, 80, 17, 12, 9, { style: 2 });
   stand(w, 'warehouse', -100, 44, 16, 11, 8, { style: 3 });
-  stand(w, 'shed', -95, 80, 4, 3, 3.2, { style: 1 });
+  stand(w, 'shed', -95, 80, 4, 3, 3.2, { style: 0 });
+  // The ferry pier out over the sea.
+  addSolid(w, { cx: -50, cz: 8, hx: 3, hz: 6.6, yBase: 0, yTop: 3, kind: 'platform', style: 0 });
   // East: the harbour office, the fish market, crates, a kiosk and the container yard.
   stand(w, 'building', 24, 44, 10, 9, 9, { style: nextStyle() });
-  stand(w, 'warehouse', 66, 42, 14, 8, 3.2, { style: 4 }); // the fish market
-  stand(w, 'shed', 112, 42, 3, 2.5, 3, { style: 2 });
+  stand(w, 'market', 66, 42, 14, 8, 3.2, { style: 0 }); // the fish market hall
+  stand(w, 'shed', 112, 42, 3, 2.5, 3, { style: 2 }); // a hut
   stand(w, 'kiosk', 15.6, 70, 1.6, 1.4, 2.6, { style: 2 });
   // Container stacks stepping up and down: 1, 2, 3, 2, 1 levels.
   let ci = 0;
@@ -210,9 +213,8 @@ export function buildProptown(seed = 1): World {
       const cx = 24 + col * 13.5;
       const levels = [1, 2, 3, 2, 1, 2][(col + row) % 6];
       const g = terrainHeight(w, cx, cz);
-      for (let l = 0; l < levels; l++) {
-        addSolid(w, { cx, cz, hx: 6.05, hz: 1.22, yBase: g + 2.6 * l - (l === 0 ? 0.3 : 0), yTop: g + 2.6 * (l + 1), kind: 'container', style: (ci++ * 3) % 8 });
-      }
+      // One solid per stack, 2.6 m per level, as the city generator builds them.
+      addSolid(w, { cx, cz, hx: 6.05, hz: 1.22, yBase: g - 0.3, yTop: g + 2.6 * levels, kind: 'container', style: (ci++ * 5) % 6 });
     }
   }
   for (let k = 0; k < 6; k++) {
@@ -258,9 +260,12 @@ export function buildProptown(seed = 1): World {
     addSolid(w, { cx: 60 + k * 16, cz: 110.6, hx: 5, hz: 1.4, yBase: g + 2.5, yTop: g + 2.7, surface: Surface.AWNING, oneWay: true, kind: 'awning', style: k });
   }
   // High landing: houses and a kiosk.
-  for (let k = 0; k < 6; k++) {
+  stand(w, 'church', 44, 188, 7, 9, 12, { style: 0 });
+  for (let k = 1; k < 6; k++) {
     stand(w, 'building', 44 + k * 17, 190, 7, 8, 6 + ((k * 5) % 7), { style: nextStyle() });
   }
+  stand(w, 'kiosk', 122, 110, 2, 2, 0.8, { style: 1 }); // a fountain block
+  stand(w, 'platform', -45, 160, 4, 4, 0.6, { style: 2 }); // the old tunnel lid
   stand(w, 'kiosk', 30, 170, 1.6, 2.4, 2.7, { style: 1 });
   // West side: a street wall of shops with awnings over the sidewalk.
   for (let k = 0; k < 8; k++) {
@@ -308,8 +313,9 @@ export function buildProptown(seed = 1): World {
   for (let k = 0; k < 8; k++) {
     stand(w, k % 3 === 1 ? 'building' : 'house', 20.2, 210 + k * 12.5, 6.5, 5.4, 5 + ((k * 5) % 5), { style: nextStyle() });
   }
+  stand(w, 'school', 78, 222, 9, 6, 7, { style: 0 });
   for (let k = 0; k < 4; k++) {
-    stand(w, 'house', 75 + k * 18, 222, 6, 5, 5 + k, { style: nextStyle() });
+    if (k > 0) stand(w, 'house', 75 + k * 18 + 4, 222, 6, 5, 5 + k, { style: nextStyle() });
     stand(w, 'house', 75 + k * 18, 286, 6, 5, 7 - k, { style: nextStyle() });
   }
   addZone(w, { id: 'stop_terrazas', name: 'Terrazas', kind: 'stop', x: -5, y: base(262), z: 262, r: 4 });
@@ -330,13 +336,18 @@ export function buildProptown(seed = 1): World {
   // Guy wires fan away from the street.
   mastAt(20, 342, 22, [0.2, 1.9, -1.9]);
   mastAt(-30, 360, 20, [PI - 0.2, PI / 2 + 0.3, -PI / 2 - 0.3]);
+  // The needle: a mast with the 4 x 4 m platform on top.
   const top = mastAt(-20, 318, 16, []);
-  addSolid(w, { cx: -20, cz: 318, hx: 2, hz: 2, yBase: top, yTop: top + 0.6, kind: 'platform', style: 0 });
+  w.solids[w.solids.length - 1].style = 1;
+  addSolid(w, { cx: -20, cz: 318, hx: 2, hz: 2, yBase: top, yTop: top + 0.6, kind: 'needle', style: 0 });
+  stand(w, 'platform', -62, 376, 5, 3, 1, { style: 1 }); // the hill station
+  stand(w, 'dish', 30, 334, 1.8, 1.8, 4.2, { style: 1 });
+  stand(w, 'dish', -38, 352, 1.0, 1.0, 2.4, { style: 0 });
   stand(w, 'pylon', 52, 330, 0.4, 0.4, 14, { style: 0 });
   stand(w, 'pylon', -60, 345, 0.4, 0.4, 14, { style: 0 });
   stand(w, 'pylon', 70, 132, 0.4, 0.4, 12, { style: 0 });
   stand(w, 'tank', 34, 364, 2.5, 2.5, 6, { style: 0 });
-  stand(w, 'shed', -46, 330, 3, 2.4, 3, { style: 2 });
+  stand(w, 'shed', -46, 330, 3, 2.4, 3, { style: 1 }); // the radio shack
   stand(w, 'building', 19, 322, 4, 3, 3.5, { style: nextStyle() }); // the radio shack
   addZone(w, { id: 'stop_antena', name: 'Antena', kind: 'stop', x: 5, y: base(345), z: 345, r: 4 });
   addZone(w, { id: 'stop_muelle', name: 'Muelle', kind: 'stop', x: 5, y: base(76), z: 76, r: 4 });

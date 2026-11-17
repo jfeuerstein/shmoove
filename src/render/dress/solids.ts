@@ -38,33 +38,87 @@ import {
 export const ROOF_CLUTTER_MAX = 0.35;
 export const ROOF_EDGE = 0.5;
 
-/** Kinds the dresser knows. Anything else is drawn as a plain box. */
+/**
+ * Kinds the dresser knows: the city generator's vocabulary (src/sim/city/kinds.ts) plus 'tank',
+ * which fixtures use. Anything else is drawn as a plain box.
+ */
 export const SOLID_KINDS = [
-  'building', 'house', 'tower', 'warehouse', 'container', 'crate', 'kiosk', 'stall', 'shed',
-  'awning', 'wall', 'quay', 'mast', 'pylon', 'tank', 'platform',
+  'building', 'church', 'tower', 'house', 'school', 'warehouse', 'market', 'container', 'crate',
+  'awning', 'stall', 'kiosk', 'wall', 'quay', 'platform', 'shed', 'dish', 'mast', 'needle', 'pylon',
+  'tank',
 ] as const;
 
-const CONTAINER_INKS = [INK.mango, INK.pink, INK.teal, INK.cobalt, INK.brick, 0x2b8f87, 0xe9e1cf, 0x7a4fc9];
+/** Kinds whose box is only a bound (the dish is a plinth and a dish inside it), not a drawn body. */
+export const BOUND_KINDS: readonly string[] = ['dish'];
+
+/** Height of one container level; a container solid is a whole stack. */
+export const CONTAINER_LEVEL = 2.6;
+
+/** Container colours by style (red, blue, green, orange, white, yellow) in the print's inks. */
+const CONTAINER_INKS = [INK.pink, INK.cobalt, INK.teal, INK.mango, 0xe9e1cf, 0xffd27a];
+/** Warehouse cladding by style (rust, green, grey, blue). */
+const CLADDING = [INK.brick, INK.teal, 0xb9b3a6, INK.cobalt];
+/** Crate wood tones. */
+const WOOD = [0xc98a55, 0xa9683a, 0xe0b27a];
 const PROP_INKS = [INK.mango, INK.pink, INK.teal, INK.cobalt, INK.brick, INK.leaf];
+
+/** Six stripe / canopy inks: the district's two first, then the rest of the print. */
+function stripeInk(p: Palette, style: number): number {
+  const all = [p.accents[0], p.accents[1], INK.pink, INK.mango, INK.teal, INK.cobalt, INK.leaf];
+  const uniq: number[] = [];
+  for (const c of all) if (c !== INK.paper && !uniq.includes(c)) uniq.push(c);
+  return uniq[style % 6];
+}
+
+function facadeIndex(style: number, n: number): number {
+  return (style + (style >= n ? 2 : 0)) % n;
+}
+
+/**
+ * Facade ink for building / house styles (eight facade colours in the city's vocabulary) mapped
+ * onto the district's building inks; a solid never repeats the ink of the one laid just before it.
+ */
+function facadeInk(w: World, p: Palette, o: Solid): number {
+  const n = p.walls.length;
+  const k = facadeIndex(o.style, n);
+  const prev = o.index > 0 ? w.solids[o.index - 1] : null;
+  if (prev && prev.kind === o.kind && facadeIndex(prev.style, n) === k && Math.abs(prev.cx - o.cx) + Math.abs(prev.cz - o.cz) < 30) {
+    return p.walls[(k + 1) % n];
+  }
+  return p.walls[k];
+}
 
 /** Wall ink of a solid, shared by its far and near versions. */
 export function baseInk(w: World, o: Solid): number {
   const p = paletteAt(w, o.cz);
   switch (o.kind) {
+    case 'building':
+    case 'house':
+      return facadeInk(w, p, o);
+    case 'church':
+      return INK.paper;
+    case 'school':
+      return p.walls[1];
     case 'container':
       return CONTAINER_INKS[o.style % CONTAINER_INKS.length];
     case 'crate':
+      return WOOD[o.style % WOOD.length];
     case 'kiosk':
-      return PROP_INKS[(o.style + o.index) % PROP_INKS.length];
+      return o.style === 1 ? p.stone : stripeInk(p, o.index);
     case 'stall':
       return 0xc98a55;
     case 'shed':
-      return p.walls[(o.index + 2) % p.walls.length];
+      return o.style === 2 ? WOOD[1] : p.walls[(o.index + 2) % p.walls.length];
     case 'awning':
-      return p.accents[o.style % 2];
+      return stripeInk(p, o.style);
     case 'wall':
+      return o.style === 1 ? 0xcfcbc1 : p.stone;
     case 'quay':
       return p.stone;
+    case 'warehouse':
+      return CLADDING[o.style % CLADDING.length];
+    case 'market':
+      return INK.teal;
     case 'mast':
       return INK.pink;
     case 'pylon':
@@ -72,7 +126,11 @@ export function baseInk(w: World, o: Solid): number {
     case 'tank':
       return 0xe9e3d6;
     case 'platform':
+      return o.style === 0 ? WOOD[1] : o.style === 2 ? 0xbdb6a8 : INK.cobalt;
+    case 'needle':
       return INK.cobalt;
+    case 'dish':
+      return 0xd9d2c3;
     default:
       return wallInk(p, o);
   }
@@ -84,26 +142,36 @@ export function topInk(w: World, o: Solid): number {
   switch (o.kind) {
     case 'container':
     case 'crate':
-    case 'kiosk':
       return light(baseInk(w, o), 1.08);
+    case 'kiosk':
+      return o.style === 1 ? 0x2fb8c9 : light(baseInk(w, o), 1.08);
     case 'awning':
     case 'stall':
-      return p.accents[o.style % 2];
+      return stripeInk(p, o.style);
     case 'wall':
     case 'quay':
-      return light(p.stone, 1.1);
+      return light(baseInk(w, o), 1.1);
     case 'mast':
     case 'pylon':
       return INK.white;
     case 'tank':
       return 0xd9d2c3;
+    case 'school':
+      return INK.mango;
+    case 'market':
+      return INK.white;
+    case 'platform':
+      return o.style === 0 ? WOOD[2] : o.style === 2 ? 0xcfc8ba : INK.paper;
+    case 'needle':
+      return INK.pink;
     default:
       return roofInk(p, o);
   }
 }
 
-/** Far: the plain silhouette box. */
+/** Far: the plain silhouette box (the dish, whose box is only a bound, draws its simple self). */
 export function meshSolidFar(b: MeshBuilder, w: World, o: Solid): void {
+  if (o.kind === 'dish') return dish(b, w, o);
   const hy = (o.yTop - o.yBase) / 2;
   b.box(o.cx, o.yBase + hy, o.cz, o.hx, hy, o.hz, o.cosR, o.sinR, baseInk(w, o), { top: topInk(w, o), bottom: o.oneWay });
 }
@@ -117,16 +185,22 @@ export function meshSolidNear(b: MeshBuilder, w: World, o: Solid): void {
       return building(b, w, o, 1);
     case 'tower':
       return building(b, w, o, 2);
+    case 'church':
+      return building(b, w, o, 3);
+    case 'school':
+      return building(b, w, o, 4);
     case 'warehouse':
-      return warehouse(b, w, o, false);
+      return warehouse(b, w, o, false, false);
+    case 'market':
+      return warehouse(b, w, o, false, true);
     case 'shed':
-      return warehouse(b, w, o, true);
+      return warehouse(b, w, o, true, false);
     case 'container':
       return container(b, w, o);
     case 'crate':
       return crate(b, w, o);
     case 'kiosk':
-      return kiosk(b, w, o);
+      return o.style === 1 ? fountain(b, w, o) : kiosk(b, w, o);
     case 'stall':
       return stall(b, w, o);
     case 'awning':
@@ -136,13 +210,16 @@ export function meshSolidNear(b: MeshBuilder, w: World, o: Solid): void {
     case 'quay':
       return retaining(b, w, o, true);
     case 'mast':
-      return mast(b, w, o, INK.pink);
+      return mast(b, w, o, o.style === 1 ? INK.mango : INK.pink);
     case 'pylon':
       return mast(b, w, o, INK.cobalt);
     case 'tank':
       return tank(b, w, o);
     case 'platform':
+    case 'needle':
       return platform(b, w, o);
+    case 'dish':
+      return dish(b, w, o);
     default:
       return meshSolidFar(b, w, o);
   }
@@ -191,7 +268,8 @@ function facesByWidth(o: Solid): Face[] {
 // ---------------------------------------------------------------------------------------------
 // Buildings, houses, towers
 
-function building(b: MeshBuilder, w: World, o: Solid, variant: 0 | 1 | 2): void {
+/** variant: 0 town building, 1 house, 2 clock tower, 3 church, 4 school. */
+function building(b: MeshBuilder, w: World, o: Solid, variant: 0 | 1 | 2 | 3 | 4): void {
   const p = paletteAt(w, o.cz);
   const wall = baseInk(w, o);
   const roof = topInk(w, o);
@@ -210,7 +288,7 @@ function building(b: MeshBuilder, w: World, o: Solid, variant: 0 | 1 | 2): void 
   }
   // Mural: the widest open face with room for one (the front if it is as wide).
   let muralFace = -1;
-  if (sh(o, 3) < 0.75) {
+  if (variant !== 3 && (variant === 4 || sh(o, 3) < 0.75)) {
     for (let i = 0; i < 4; i++) {
       if (occluded(w, o, faces[i]) || faces[i].hw < 2.2) continue;
       if (muralFace < 0 || faces[i].hw > faces[muralFace].hw + 0.01 || (i === front && faces[i].hw >= faces[muralFace].hw - 0.01)) muralFace = i;
@@ -313,6 +391,7 @@ function building(b: MeshBuilder, w: World, o: Solid, variant: 0 | 1 | 2): void 
         fquad(b, f, u - 0.45, u + 0.45, groundTop + 0.95, groundTop + 2.15, 0.03, WINDOW_INK, lit);
       }
     }
+    if (variant === 3 && i === (front >= 0 ? front : 0)) churchFront(b, w, o, f, groundTop, acc);
     if (variant === 2 && o.yTop - groundTop > 9) {
       // Tower clock near the top of every open face.
       const cy = o.yTop - 1.9;
@@ -323,7 +402,49 @@ function building(b: MeshBuilder, w: World, o: Solid, variant: 0 | 1 | 2): void 
       fquad(b, f, 0, r * 0.55, cy - 0.06, cy + 0.06, 0.06, INK.ink);
     }
   }
-  if (o.surface === Surface.ROOF) roofClutter(b, w, o, p, acc, acc2);
+  if (variant === 4) {
+    // The school roof is a landmark: a big painted target to land on.
+    const r = Math.min(o.hx, o.hz) * 0.8;
+    hdisc(b, o.cx, o.yTop + 0.02, o.cz, r, 16, INK.pink);
+    hdisc(b, o.cx, o.yTop + 0.03, o.cz, r * 0.62, 16, INK.paper);
+    hdisc(b, o.cx, o.yTop + 0.04, o.cz, r * 0.28, 12, INK.cobalt);
+  } else if (o.surface === Surface.ROOF && variant !== 3) {
+    roofClutter(b, w, o, p, acc, acc2);
+  }
+}
+
+/** A flat disc lying on a roof, facing up. */
+function hdisc(b: MeshBuilder, x: number, y: number, z: number, r: number, sides: number, color: number): void {
+  const c = b.vert(x, y, z, color);
+  const first = b.vert(x + r, y, z, color);
+  let prev = first;
+  for (let i = 1; i <= sides; i++) {
+    const a = (i / sides) * Math.PI * 2;
+    const v = i === sides ? first : b.vert(x + Math.cos(a) * r, y, z + Math.sin(a) * r, color);
+    b.tri(c, v, prev);
+    prev = v;
+  }
+}
+
+/** The church front: a tall arched door, a glowing rose window and a striped gable band. */
+function churchFront(b: MeshBuilder, w: World, o: Solid, f: Face, g: number, acc: number): void {
+  const H = o.yTop - g;
+  const dg = terrainHeight(w, fx(f, 0, 0.3), fz(f, 0, 0.3));
+  const dw = Math.min(1.1, f.hw * 0.3);
+  const dh = Math.min(3.6, H * 0.35);
+  fquad(b, f, -dw - 0.2, dw + 0.2, dg, dg + dh + 0.2, 0.05, acc);
+  fdisc(b, f, 0, dg + dh + 0.2, dw + 0.2, 10, 0.05, acc);
+  fquad(b, f, -dw, dw, dg, dg + dh, 0.07, INK.ink);
+  fdisc(b, f, 0, dg + dh, dw, 10, 0.07, INK.ink);
+  const ry = Math.min(o.yTop - 1.8, dg + dh + 2.6);
+  const rr = Math.min(1.4, f.hw * 0.45, (o.yTop - ry) * 0.7);
+  if (rr > 0.4) {
+    fdisc(b, f, 0, ry, rr + 0.15, 14, 0.05, INK.cobalt);
+    fdisc(b, f, 0, ry, rr, 14, 0.07, INK.pink, 0.8);
+    fdisc(b, f, 0, ry, rr * 0.35, 8, 0.09, INK.mango, 0.8);
+  }
+  const m = Math.max(2, Math.floor((2 * f.hw) / 0.8));
+  for (let k = 0; k < m; k += 2) fquad(b, f, -f.hw + (k * 2 * f.hw) / m, -f.hw + ((k + 1) * 2 * f.hw) / m, o.yTop - 1.0, o.yTop - 0.4, 0.05, INK.cobalt);
 }
 
 /** Painted-bus murals made of a few flat shapes. */
@@ -473,11 +594,11 @@ function roofClutter(b: MeshBuilder, w: World, o: Solid, p: Palette, acc: number
 // ---------------------------------------------------------------------------------------------
 // Warehouses and sheds
 
-function warehouse(b: MeshBuilder, w: World, o: Solid, shed: boolean): void {
+/** Warehouses, the fish market hall (`fish`) and sheds (radio shack and hut by style). */
+function warehouse(b: MeshBuilder, w: World, o: Solid, shed: boolean, fish: boolean): void {
   const p = paletteAt(w, o.cz);
   const wall = baseInk(w, o);
   const acc = accentFor(p, wall, o.style);
-  const fish = !shed && o.style % 5 === 4;
   walls(b, o, wall);
   cap(b, o, 0.1, 0.25, dark(wall, 0.7), topInk(w, o));
   const faces = facesByWidth(o);
@@ -529,42 +650,56 @@ function warehouse(b: MeshBuilder, w: World, o: Solid, shed: boolean): void {
       const yb = top - 1.1;
       const m = Math.max(2, Math.floor((2 * f.hw) / 0.9));
       for (let k = 0; k < m; k++) fquad(b, f, -f.hw + (k * 2 * f.hw) / m, -f.hw + ((k + 1) * 2 * f.hw) / m, yb, top, 0.035, k % 2 ? INK.white : INK.teal);
-      if (i === 1 && f.hw > 3 && yb - g.hi > 3) mural(b, f, -f.hw + 1, -f.hw + 1 + Math.min(7, 2 * f.hw - 2), g.hi + 0.8, yb - 0.3, 3, INK.mango, INK.teal, wall, o.index);
+      if (i === 1 && f.hw > 3 && yb - g.hi > 1.6) mural(b, f, -f.hw + 1, -f.hw + 1 + Math.min(7, 2 * f.hw - 2), g.hi + 0.3, yb - 0.1, 3, INK.mango, INK.paper, wall, o.index);
     }
+  }
+  if (shed && o.style === 1) {
+    // Radio shack: an aerial on a roof corner (inside the edge band) with a lamp on top.
+    const x = lx2x(o, o.hx - 0.2, o.hz - 0.2);
+    const z = lx2z(o, o.hx - 0.2, o.hz - 0.2);
+    b.beam(x, o.yTop, z, x, o.yTop + 2.4, z, 0.03, INK.ink);
+    b.box(x, o.yTop + 2.45, z, 0.06, 0.06, 0.06, 1, 0, INK.pink, { glow: 1 });
   }
 }
 
 // ---------------------------------------------------------------------------------------------
 // Containers, crates, kiosks, stalls
 
+/** A container stack: one solid, CONTAINER_LEVEL per level, each level its own box and colour. */
 function container(b: MeshBuilder, w: World, o: Solid): void {
-  const ink = baseInk(w, o);
-  walls(b, o, ink, topInk(w, o));
+  const levels = Math.max(1, Math.round((o.yTop - o.yBase) / CONTAINER_LEVEL));
   const faces = solidFaces(o);
-  const y0 = o.yBase;
-  const y1 = o.yTop;
-  const seam = dark(ink, 0.55);
-  const rib = dark(ink, 0.82);
   const longX = o.hz >= o.hx; // the +-x faces are the long sides when hz is the long half
-  for (let i = 0; i < 4; i++) {
-    const f = faces[i];
-    const isLong = (i < 2) === longX;
-    // Frame seams top and bottom, so stacks read as stacks.
-    fquad(b, f, -f.hw, f.hw, y0, y0 + 0.14, 0.015, seam);
-    fquad(b, f, -f.hw, f.hw, y1 - 0.1, y1, 0.015, seam);
-    if (isLong) {
-      const n = Math.floor((2 * f.hw) / 0.8);
-      for (let k = 1; k < n; k += 1) {
-        const u = -f.hw + (k * 2 * f.hw) / n;
-        fquad(b, f, u - 0.12, u + 0.12, y0 + 0.14, y1 - 0.1, 0.015, rib);
-      }
-      if (o.style % 3 === 0) fquad(b, f, -f.hw + 0.3, f.hw - 0.3, y0 + (y1 - y0) * 0.55, y0 + (y1 - y0) * 0.68, 0.03, o.style % 2 ? INK.white : INK.ink);
-    } else if (i === 0 || i === 2) {
-      // Door end: four locking bars and the door split.
-      fquad(b, f, -0.03, 0.03, y0 + 0.14, y1 - 0.1, 0.025, seam);
-      for (let k = 0; k < 4; k++) {
-        const u = -f.hw * 0.75 + (k * f.hw * 1.5) / 3;
-        fquad(b, f, u - 0.035, u + 0.035, y0 + 0.2, y1 - 0.16, 0.035, INK.paper);
+  for (let lv = 0; lv < levels; lv++) {
+    // Levels count down from the top; the lowest one also covers any sunk base.
+    const y1 = o.yTop - (levels - 1 - lv) * CONTAINER_LEVEL;
+    const y0 = lv === 0 ? o.yBase : y1 - CONTAINER_LEVEL;
+    const ink = lv === 0 ? baseInk(w, o) : CONTAINER_INKS[(o.style + 1 + Math.floor(hash2(o.index, lv) * 5)) % CONTAINER_INKS.length];
+    const top = lv === levels - 1;
+    b.box(o.cx, (y0 + y1) / 2, o.cz, o.hx, (y1 - y0) / 2, o.hz, o.cosR, o.sinR, ink, top ? { top: light(ink, 1.08) } : { noTop: true });
+    const seam = dark(ink, 0.55);
+    const rib = dark(ink, 0.82);
+    for (let i = 0; i < 4; i++) {
+      const f = faces[i];
+      const isLong = (i < 2) === longX;
+      // Frame seams top and bottom of every level, so stacks read as stacks.
+      fquad(b, f, -f.hw, f.hw, Math.max(y0, y1 - CONTAINER_LEVEL), Math.max(y0, y1 - CONTAINER_LEVEL) + 0.14, 0.015, seam);
+      fquad(b, f, -f.hw, f.hw, y1 - 0.1, y1, 0.015, seam);
+      const r0 = Math.max(y0, y1 - CONTAINER_LEVEL) + 0.14;
+      if (isLong) {
+        const n = Math.floor((2 * f.hw) / 0.8);
+        for (let k = 1; k < n; k += 1) {
+          const u = -f.hw + (k * 2 * f.hw) / n;
+          fquad(b, f, u - 0.12, u + 0.12, r0, y1 - 0.1, 0.015, rib);
+        }
+        if ((o.style + lv) % 3 === 0) fquad(b, f, -f.hw + 0.3, f.hw - 0.3, y1 - CONTAINER_LEVEL * 0.45, y1 - CONTAINER_LEVEL * 0.32, 0.03, (o.style + lv) % 2 ? INK.white : INK.ink);
+      } else if (i === 0 || i === 2) {
+        // Door end: four locking bars and the door split.
+        fquad(b, f, -0.03, 0.03, r0, y1 - 0.1, 0.025, seam);
+        for (let k = 0; k < 4; k++) {
+          const u = -f.hw * 0.75 + (k * f.hw * 1.5) / 3;
+          fquad(b, f, u - 0.035, u + 0.035, r0 + 0.06, y1 - 0.16, 0.035, INK.paper);
+        }
       }
     }
   }
@@ -643,7 +778,7 @@ function kiosk(b: MeshBuilder, w: World, o: Solid): void {
 function stall(b: MeshBuilder, w: World, o: Solid): void {
   const p = paletteAt(w, o.cz);
   const wood = baseInk(w, o);
-  const acc = p.accents[o.style % 2];
+  const acc = stripeInk(p, o.style);
   walls(b, o, wood);
   // Striped canopy as the skateable lid: stripes across the long axis.
   const longX = o.hx >= o.hz;
@@ -862,7 +997,129 @@ function tank(b: MeshBuilder, w: World, o: Solid): void {
   }
 }
 
+/** Kiosk style 1: a fountain block. Stone sides, a water lid with a paper rim, a low spout. */
+function fountain(b: MeshBuilder, w: World, o: Solid): void {
+  const stone = baseInk(w, o);
+  walls(b, o, stone);
+  cap(b, o, 0.1, 0.3, light(stone, 1.08), topInk(w, o));
+  const faces = solidFaces(o);
+  for (const f of faces) {
+    fquad(b, f, -f.hw, f.hw, o.yTop - 0.3, o.yTop - 0.05, 0.13, INK.paper);
+    const m = Math.max(1, Math.floor((2 * f.hw) / 1.2));
+    for (let k = 0; k < m; k++) {
+      const u = -f.hw + (k + 0.5) * ((2 * f.hw) / m);
+      fdisc(b, f, u, (o.yBase + o.yTop) / 2 + 0.1, 0.22, 8, 0.03, INK.teal);
+    }
+  }
+  prism(b, o.cx, o.cz, Math.min(0.3, o.hx * 0.3, o.hz * 0.3), o.yTop, o.yTop + 0.3, 6, INK.mango, INK.white);
+}
+
+/**
+ * A satellite dish: its box is the plinth plus the dish's bounds. A plinth in the lower part, a
+ * mast, and a dish tilted up toward the sky, all inside the box. Near and far draw the same.
+ */
+function dish(b: MeshBuilder, w: World, o: Solid): void {
+  const H = o.yTop - o.yBase;
+  const ground = terrainHeight(w, o.cx, o.cz);
+  const plinthTop = Math.max(o.yBase + 0.3, Math.min(ground + 1.0, o.yBase + H * 0.3));
+  const ph = (plinthTop - o.yBase) / 2;
+  b.box(o.cx, o.yBase + ph, o.cz, o.hx * 0.55, ph, o.hz * 0.55, o.cosR, o.sinR, 0xbdb6a8, { top: 0xcfc8ba });
+  const R = Math.min(o.hx, o.hz) * 0.95;
+  // Dish centre and tilt: facing up and along local -z at 40 degrees, kept inside the box.
+  const cy = Math.min(o.yTop - R * 0.65, plinthTop + R * 0.9);
+  b.beam(o.cx, plinthTop, o.cz, o.cx, cy, o.cz, Math.min(0.12, R * 0.08), INK.ink);
+  const c40 = 0.766;
+  const s40 = 0.643;
+  // Dish plane axes: u along local x, v up-and-back; normal faces up and toward local -z.
+  const ux = o.cosR;
+  const uz = o.sinR;
+  const lzx = -o.sinR;
+  const lzz = o.cosR;
+  const sides = 12;
+  const ring: number[] = [];
+  for (let i = 0; i < sides; i++) {
+    const a = (i / sides) * Math.PI * 2;
+    const du = Math.cos(a) * R;
+    const dv = Math.sin(a) * R;
+    // v axis = (0, c40, ...) tilted: up by c40, toward +z by s40.
+    ring.push(o.cx + ux * du + lzx * dv * s40, cy + dv * c40 * 0.65, o.cz + uz * du + lzz * dv * s40);
+  }
+  const face = (front: boolean, color: number, depth: number): void => {
+    // A shallow bowl: the centre sits back along the dish normal.
+    const nx = -lzx * c40;
+    const nz = -lzz * c40;
+    const ny = s40;
+    const k = front ? -depth : 0;
+    const c = b.vert(o.cx + nx * k, cy + ny * k, o.cz + nz * k, color);
+    const vs: number[] = [];
+    for (let i = 0; i < sides; i++) vs.push(b.vert(ring[i * 3], ring[i * 3 + 1], ring[i * 3 + 2], color));
+    for (let i = 0; i < sides; i++) {
+      const j = (i + 1) % sides;
+      if (front) b.tri(c, vs[j], vs[i]);
+      else b.tri(c, vs[i], vs[j]);
+    }
+  };
+  face(true, INK.white, R * 0.18);
+  face(false, 0xbdb6a8, 0);
+  // Feed arm to the focus.
+  b.beam(o.cx, cy, o.cz, o.cx - lzx * c40 * R * 0.6, cy + s40 * R * 0.6, o.cz - lzz * c40 * R * 0.6, Math.min(0.05, R * 0.04), INK.ink);
+}
+
+/** Platform styles: 0 ferry pier, 1 hill station, 2 tunnel lid; and the summit needle. */
 function platform(b: MeshBuilder, w: World, o: Solid): void {
+  const needle = o.kind === 'needle';
+  if (o.kind === 'platform' && o.style === 0) return pier(b, w, o);
+  if (o.kind === 'platform' && o.style === 2) return lid(b, w, o);
+  railedDeck(b, w, o);
+  if (needle) {
+    // A painted target on the deck and a glowing ring under its lip.
+    const r = Math.min(o.hx, o.hz) * 0.7;
+    hdisc(b, o.cx, o.yTop + 0.02, o.cz, r, 16, INK.mango);
+    hdisc(b, o.cx, o.yTop + 0.03, o.cz, r * 0.55, 16, INK.white);
+    for (const f of solidFaces(o)) fquad(b, f, -f.hw, f.hw, o.yTop - 0.25, o.yTop - 0.05, 0.02, INK.mango, 1);
+  }
+}
+
+function pier(b: MeshBuilder, w: World, o: Solid): void {
+  walls(b, o, baseInk(w, o));
+  // Plank deck: the lid itself is drawn in alternating boards across the long axis.
+  const longX = o.hx >= o.hz;
+  const L = longX ? o.hx : o.hz;
+  const n = Math.max(2, Math.round((2 * L) / 0.5));
+  for (let k = 0; k < n; k++) {
+    const a0 = -L + (k * 2 * L) / n;
+    const a1 = -L + ((k + 1) * 2 * L) / n;
+    const col = k % 2 ? WOOD[2] : shade(WOOD[2], 0.9);
+    const [x0, z0, x1, z1] = longX ? [a0, -o.hz, a1, o.hz] : [-o.hx, a0, o.hx, a1];
+    b.quad(
+      lx2x(o, x0, z0), o.yTop, lx2z(o, x0, z0),
+      lx2x(o, x0, z1), o.yTop, lx2z(o, x0, z1),
+      lx2x(o, x1, z1), o.yTop, lx2z(o, x1, z1),
+      lx2x(o, x1, z0), o.yTop, lx2z(o, x1, z0),
+      col,
+    );
+  }
+  // Piles along the sides and bollards on the edge.
+  for (const f of solidFaces(o)) {
+    const m = Math.max(1, Math.floor((2 * f.hw) / 4));
+    for (let k = 0; k < m; k++) {
+      const u = -f.hw + (k + 0.5) * ((2 * f.hw) / m);
+      fbox(b, f, u, (o.yBase + o.yTop) / 2, 0.18, (o.yTop - o.yBase) / 2, 0.2, 0.01, INK.ink);
+      prism(b, fx(f, u, -0.25), fz(f, u, -0.25), 0.15, o.yTop, o.yTop + 0.28, 6, INK.mango, INK.ink);
+    }
+  }
+}
+
+function lid(b: MeshBuilder, w: World, o: Solid): void {
+  walls(b, o, baseInk(w, o), topInk(w, o));
+  // Hazard blocks around the edge of the slab.
+  for (const f of solidFaces(o)) {
+    const m = Math.max(2, Math.floor((2 * f.hw) / 1.2));
+    for (let k = 0; k < m; k += 2) fquad(b, f, -f.hw + (k * 2 * f.hw) / m, -f.hw + ((k + 1) * 2 * f.hw) / m, o.yTop - 0.3, o.yTop - 0.02, 0.02, INK.mango);
+  }
+}
+
+function railedDeck(b: MeshBuilder, w: World, o: Solid): void {
   const ink = baseInk(w, o);
   walls(b, o, ink, topInk(w, o));
   const faces = solidFaces(o);
