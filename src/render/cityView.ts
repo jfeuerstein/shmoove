@@ -477,6 +477,7 @@ export function createCityView(world: World): CityView {
     group,
     update(camX, camZ, dayFrac) {
       streamer.update(camX, camZ, now(), now);
+      (globalThis as unknown as Record<string, number>).__built = streamer.builtTotal;
       sea?.setTime(dayFrac * 720);
     },
     stats() {

@@ -3,5 +3,9 @@
   "triangles": 180000,
   "workMeanMs": 10,
   "workP95Ms": 16.6,
+  "stepMeanMs": 0.6,
+  "stepP95Ms": 1.5,
+  "oneStepMeanMs": 6,
+  "oneStepP95Ms": 10,
   "bundleGzipKb": 400
 }
