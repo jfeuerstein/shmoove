@@ -54,16 +54,21 @@ class Builder {
     if (dx * dx + dz * dz > 1e-6) this.xz.push(x, z);
   }
 
+  /** Exact heading after the last arc or straight (chords of an arc are off by half a step). */
+  private head = 0;
+
   turtle(): Turtle {
-    return new Turtle(this.x, this.z, this.xz.length >= 4 ? this.a : 0);
+    return new Turtle(this.x, this.z, this.head);
   }
 
   take(t: Turtle): void {
     for (let i = 2; i < t.xz.length; i += 2) this.push(t.xz[i], t.xz[i + 1]);
+    this.head = t.a;
   }
 
   straightTo(x: number, z: number): void {
     const len = len2(x - this.x, z - this.z);
+    if (len > 1e-6) this.head = datan2(z - this.z, x - this.x);
     const n = Math.max(1, Math.ceil(len / 2));
     const x0 = this.x;
     const z0 = this.z;
@@ -99,6 +104,8 @@ class Builder {
     }
     const [ex, ez] = at(s1);
     this.push(ex, ez);
+    const [px, pz] = at(s1 >= s0 ? s1 - 1 : s1 + 1);
+    this.head = datan2(ez - pz, ex - px);
   }
 
   /** Shift sideways by dz while heading along +-x, with two arcs of radius S_R. */

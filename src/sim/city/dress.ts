@@ -310,7 +310,7 @@ function dressMercado(w: World, rng: Rng, firstTerrace: number): number {
   paintUnder(w, P.x0 - 4, P.x1 + 4, P.z0, merc[4].z0, Surface.PLAZA);
   box(w, 36, 44, P.z1 + 3, P.z1 + 11, cg.lo - 1, yP + 24, 'tower', 0);
   for (let x = P.x0 + 6; x <= P.x1 - 6; x += 6.4) {
-    box(w, x - 1.1, x + 1.1, P.z1 - 2.4, P.z1 - 0.8, yP - 0.2, yP + 2.4, 'stall', rng.int(6));
+    box(w, x - 1.1, x + 1.1, P.z1 - 2.0, P.z1 - 0.4, yP - 0.2, yP + 2.4, 'stall', rng.int(6));
   }
   box(w, 38.5, 41.5, 467.5, 470.5, yP - 0.2, yP + 1.0, 'kiosk', 1);
   // Spice row: stalls along the south side of the landing at 514.

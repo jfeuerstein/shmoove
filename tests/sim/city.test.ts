@@ -562,3 +562,199 @@ describe('roofs are play space', () => {
   });
 });
 
+// ---------------------------------------------------------------------------------------------
+// Routes.
+
+const LINE_IDS = ['D1', 'D2', 'D3', 'M1', 'M2', 'M3', 'T1', 'T2', 'T3', 'T4', 'A1', 'A2', 'A3', 'S1', 'S2', 'S3'];
+/** Steepest grade a ground line may climb. */
+const MAX_GRADE: Record<string, number> = { T1: 0.45 };
+/** Tightest corner radius a ground line may take. */
+const MIN_RADIUS: Record<string, number> = { M1: 6, M2: 6, D2: 6 };
+/** Height bands above whatever is below, for overhead lines. */
+const BANDS: Record<string, [number, number]> = {
+  D1: [10, 12],
+  A1: [9, 13],
+  A2: [9, 13],
+  A3: [12, 22],
+  S2: [30, 45],
+  S3: [5, 45],
+};
+
+function pathLength(p: number[]): number {
+  let s = 0;
+  for (let i = 3; i < p.length; i += 3) s += Math.hypot(p[i] - p[i - 3], p[i + 1] - p[i - 2], p[i + 2] - p[i - 1]);
+  return s;
+}
+
+function circumradius(ax: number, az: number, bx: number, bz: number, cx: number, cz: number): number {
+  const a = Math.hypot(bx - cx, bz - cz);
+  const b = Math.hypot(ax - cx, az - cz);
+  const c = Math.hypot(ax - bx, az - bz);
+  const area2 = Math.abs((bx - ax) * (cz - az) - (bz - az) * (cx - ax));
+  return area2 < 1e-9 ? Infinity : (a * b * c) / (2 * area2);
+}
+
+describe('routes', () => {
+  it('all 16 lines exist, loops are closed, points are close together, stops start at 0', () => {
+    for (const id of LINE_IDS) {
+      const r = city.routes[id];
+      expect(r, id).toBeDefined();
+      if (!r) continue;
+      expect(r.id).toBe(id);
+      const p = r.path;
+      expect(p.length % 3).toBe(0);
+      expect(p.length / 3).toBeGreaterThan(4);
+      for (let i = 3; i < p.length; i += 3) {
+        expect(Math.hypot(p[i] - p[i - 3], p[i + 1] - p[i - 2], p[i + 2] - p[i - 1]), id).toBeLessThanOrEqual(4.05);
+      }
+      if (r.loop) {
+        const n = p.length;
+        expect([p[n - 3], p[n - 2], p[n - 1]]).toEqual([p[0], p[1], p[2]]);
+      }
+      expect(r.stops.length, id).toBeGreaterThanOrEqual(2);
+      expect(r.stops[0].s).toBe(0);
+      const len = pathLength(p);
+      for (let k = 1; k < r.stops.length; k++) {
+        expect(r.stops[k].s, `${id} stop ${k}`).toBeGreaterThan(r.stops[k - 1].s);
+        expect(r.stops[k].s).toBeLessThanOrEqual(len + 1e-6);
+      }
+    }
+    const overhead = LINE_IDS.filter((id) => city.routes[id]?.overhead);
+    expect(overhead.sort()).toEqual(['A1', 'A2', 'A3', 'D1', 'S2', 'S3']);
+    expect(city.routes.D1.loop).toBe(false);
+  });
+
+  it('ground lines are draped, gentle, round enough and clear of solids, on street, track or plaza', () => {
+    const w = city.world;
+    const ok = new Set<number>([Surface.STREET, Surface.TRACK, Surface.PLAZA]);
+    const problems: string[] = [];
+    for (const id of LINE_IDS) {
+      const r = city.routes[id];
+      if (!r || r.overhead) continue;
+      const p = r.path;
+      const n = p.length / 3;
+      const maxG = MAX_GRADE[id] ?? 0.14;
+      const minR = MIN_RADIUS[id] ?? 12;
+      let worstG = 0;
+      let worstR = Infinity;
+      for (let i = 0; i < n; i++) {
+        const x = p[i * 3];
+        const y = p[i * 3 + 1];
+        const z = p[i * 3 + 2];
+        if (Math.abs(y - terrainHeight(w, x, z)) >= 0.05) problems.push(`${id} not draped at ${x.toFixed(0)},${z.toFixed(0)}`);
+        if (i > 0) {
+          const dx = x - p[i * 3 - 3];
+          const dz = z - p[i * 3 - 1];
+          const plan = Math.hypot(dx, dz);
+          if (plan > 0.5) worstG = Math.max(worstG, Math.abs(y - p[i * 3 - 2]) / plan);
+          // Every 2 m along the segment: surface and clearance.
+          const steps = Math.max(1, Math.ceil(plan / 2));
+          for (let k = 0; k < steps; k++) {
+            const sx = p[i * 3 - 3] + (dx * k) / steps;
+            const sz = p[i * 3 - 1] + (dz * k) / steps;
+            sampleTerrain(w, sx, sz, TS);
+            if (!ok.has(TS.surface)) problems.push(`${id} on surface ${TS.surface} at ${sx.toFixed(0)},${sz.toFixed(0)}`);
+            collideSolids(w, sx, TS.y, sz, 2.6, 3.0, 0.4, WH);
+            if (WH.hit) {
+              const o = w.solids[WH.solid];
+              problems.push(`${id} within 2.6 m of ${o.kind} at ${sx.toFixed(0)},${sz.toFixed(0)}`);
+            }
+          }
+        }
+        // Corner radius over points about 6 m apart.
+        if (i >= 2 && i < n - 2) {
+          const R = circumradius(p[i * 3 - 6], p[i * 3 - 4], x, z, p[i * 3 + 6], p[i * 3 + 8]);
+          worstR = Math.min(worstR, R);
+        }
+      }
+      if (worstG > maxG + 0.005) problems.push(`${id} grade ${worstG.toFixed(3)} > ${maxG}`);
+      if (worstR < minR - 0.3) problems.push(`${id} corner radius ${worstR.toFixed(1)} < ${minR}`);
+    }
+    expect(problems.slice(0, 20)).toEqual([]);
+  });
+
+  it('overhead lines ride in their height bands, and the king kite passes just over the needle', () => {
+    const w = city.world;
+    for (const id of LINE_IDS) {
+      const r = city.routes[id];
+      if (!r || !r.overhead) continue;
+      const [lo, hi] = BANDS[id];
+      const p = r.path;
+      for (let i = 0; i < p.length; i += 3) {
+        const above = p[i + 1] - topHeight(w, p[i], p[i + 2]);
+        expect(above, `${id} at ${p[i].toFixed(0)},${p[i + 2].toFixed(0)}`).toBeGreaterThanOrEqual(lo);
+        expect(above, `${id} at ${p[i].toFixed(0)},${p[i + 2].toFixed(0)}`).toBeLessThanOrEqual(hi);
+      }
+    }
+    const n = findZone(w, 'needle');
+    expect(n).not.toBeNull();
+    if (!n) return;
+    const s3 = city.routes.S3.path;
+    let best = Infinity;
+    let above = 0;
+    for (let i = 0; i < s3.length; i += 3) {
+      const d = Math.hypot(s3[i] - n.x, s3[i + 2] - n.z);
+      if (d < best) {
+        best = d;
+        above = s3[i + 1] - n.y;
+      }
+    }
+    expect(best).toBeLessThan(1);
+    expect(above).toBeGreaterThanOrEqual(5);
+    expect(above).toBeLessThanOrEqual(7);
+    // Cable cars have pylons, and none stands on a street.
+    const pylons = w.solids.filter((o) => o.kind === 'pylon');
+    expect(pylons.length).toBeGreaterThanOrEqual(4);
+    for (const o of pylons) {
+      sampleTerrain(w, o.cx, o.cz, TS);
+      expect(TS.surface).not.toBe(Surface.STREET);
+      expect(Math.max(o.hx, o.hz)).toBeLessThan(1);
+    }
+  });
+
+  it('at least 8 chain spots, each where two lines really pass within 12 m at compatible heights', () => {
+    const w = city.world;
+    const chains = w.zones.filter((z) => z.kind === 'chain');
+    expect(chains.length).toBeGreaterThanOrEqual(8);
+    for (const c of chains) {
+      const m = /^chain_([A-Z]\d)_([A-Z]\d)$/.exec(c.id);
+      expect(m, c.id).not.toBeNull();
+      if (!m) continue;
+      const A = city.routes[m[1]];
+      const B = city.routes[m[2]];
+      expect(m[1]).not.toBe(m[2]);
+      const tol = A.overhead && B.overhead ? 8 : 3;
+      let found = false;
+      for (let i = 0; i < A.path.length && !found; i += 3) {
+        if (Math.hypot(A.path[i] - c.x, A.path[i + 2] - c.z) > c.r + 12) continue;
+        for (let j = 0; j < B.path.length; j += 3) {
+          const d = Math.hypot(A.path[i] - B.path[j], A.path[i + 2] - B.path[j + 2]);
+          if (d <= 12 && Math.abs(A.path[i + 1] - B.path[j + 1]) <= tol) {
+            found = true;
+            break;
+          }
+        }
+      }
+      expect(found, c.id).toBe(true);
+    }
+  });
+
+  it('every stop has a zone at it', () => {
+    const w = city.world;
+    for (const id of LINE_IDS) {
+      const r = city.routes[id];
+      r.stops.forEach((_st, n) => {
+        const z = findZone(w, `stop_${id}_${n}`);
+        expect(z, `stop_${id}_${n}`).not.toBeNull();
+        if (z) {
+          expect(z.kind).toBe('stop');
+          expect(z.r).toBeGreaterThanOrEqual(4);
+          expect(z.r).toBeLessThanOrEqual(10);
+        }
+      });
+    }
+    const g = findZone(w, 'ghost_tunnel');
+    expect(g?.kind).toBe('secret');
+  });
+});
+
