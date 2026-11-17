@@ -289,6 +289,7 @@ export class Shell {
   private refreshTitle(): void {
     this.title.refresh({
       hasSave: this.host.hasSave(),
+      playSeconds: this.host.playSeconds(),
       mapPercent: this.hooks.mapPercent(),
       installAvailable: this.host.installAvailable(),
       iosHint: this.host.iosHint(),
@@ -304,6 +305,7 @@ export class Shell {
       this.title.open(
         {
           hasSave: this.host.hasSave(),
+      playSeconds: this.host.playSeconds(),
           mapPercent: this.hooks.mapPercent(),
           installAvailable: this.host.installAvailable(),
           iosHint: this.host.iosHint(),

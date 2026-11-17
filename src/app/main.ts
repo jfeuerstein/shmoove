@@ -130,6 +130,10 @@ function boot(): void {
     resetSave() {
       const before = settings;
       saves.resetSave(false);
+      // The skater is back at the spawn: do not interpolate from where they were.
+      prev.x = sim.player.x;
+      prev.y = sim.player.y;
+      prev.z = sim.player.z;
       settings = { ...DEFAULT_APP_SETTINGS };
       applySettings(settings, sinks, shakeDefault, before);
     },
