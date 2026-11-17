@@ -379,7 +379,7 @@ export const KING: readonly (readonly [number, number, number])[] = [
   [33, 1194, 237],
   [21, 1212, 241],
   [9, 1234, 252],
-  [-3, 1250, 259],
+  [-3, 1250, 261.5],
 ];
 const KING_FAR = 5;
 
