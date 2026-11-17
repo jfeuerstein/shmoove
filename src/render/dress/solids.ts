@@ -201,22 +201,24 @@ function building(b: MeshBuilder, w: World, o: Solid, variant: 0 | 1 | 2): void 
   walls(b, o, wall);
   cap(b, o, 0.14, 0.32, acc === INK.paper ? dark(wall, 0.85) : acc, roof);
 
-  const storey = variant === 1 ? 2.8 : 3.1;
+  const storey = variant === 1 ? 2.7 : 3.1;
   const faces = solidFaces(o);
-  // Front: a street-side face that is not hidden; it gets the door, shopfront and sign.
+  // Front: a street-side face that is not hidden; it gets the door, shopfront and signs.
   let front = -1;
   for (let i = 0; i < 4; i++) {
     if (!occluded(w, o, faces[i]) && faces[i].hw >= 1.4 && streetSide(w, faces[i]) && (front < 0 || faces[i].hw > faces[front].hw)) front = i;
   }
-  // Mural: the widest open face with room for one.
+  // Mural: the widest open face with room for one (the front if it is as wide).
   let muralFace = -1;
-  if (sh(o, 3) < 0.55) {
+  if (sh(o, 3) < 0.75) {
     for (let i = 0; i < 4; i++) {
       if (occluded(w, o, faces[i]) || faces[i].hw < 2.2) continue;
-      if (muralFace < 0 || faces[i].hw > faces[muralFace].hw) muralFace = i;
+      if (muralFace < 0 || faces[i].hw > faces[muralFace].hw + 0.01 || (i === front && faces[i].hw >= faces[muralFace].hw - 0.01)) muralFace = i;
     }
   }
   const shutters = sh(o, 5) < 0.5;
+  const winH = variant === 1 ? 1.1 : 1.35;
+  const ww = variant === 1 ? 0.42 : 0.5;
   for (let i = 0; i < 4; i++) {
     const f = faces[i];
     if (occluded(w, o, f)) continue;
@@ -225,16 +227,16 @@ function building(b: MeshBuilder, w: World, o: Solid, variant: 0 | 1 | 2): void 
     const plinth = Math.min(o.yTop - 0.4, g.hi + 0.55);
     if (plinth > o.yBase) fquad(b, f, -f.hw, f.hw, o.yBase, plinth, 0.02, trim);
     const groundTop = g.hi;
-    // Mural rectangle on this face, if any.
+    // Mural rectangle on this face, if any: most of the wall above the ground floor.
     let mu0 = 0;
     let mu1 = 0;
     let my0 = 0;
     let my1 = 0;
     if (i === muralFace) {
-      my0 = groundTop + storey + 0.2;
-      my1 = Math.min(o.yTop - 0.7, my0 + 4.5 + 2 * sh(o, 7));
-      if (my1 - my0 >= 2.6) {
-        const width = Math.min(2 * f.hw - 1.0, 3.6 + 5 * sh(o, 8));
+      my0 = groundTop + storey + 0.25;
+      my1 = Math.min(o.yTop - 0.6, my0 + 4 + 3 * sh(o, 7));
+      if (my1 - my0 >= 2.4) {
+        const width = Math.min(2 * f.hw - 1.0, 4 + 6 * sh(o, 8));
         const centre = (sh(o, 9) - 0.5) * (2 * f.hw - 1.0 - width);
         mu0 = centre - width / 2;
         mu1 = centre + width / 2;
@@ -243,36 +245,34 @@ function building(b: MeshBuilder, w: World, o: Solid, variant: 0 | 1 | 2): void 
         my1 = my0;
       }
     }
-    // Upper-floor windows.
     const cols = Math.floor((2 * f.hw - 0.6) / (variant === 1 ? 2.4 : 2.7));
-    if (cols >= 1) {
-      const pitch = (2 * f.hw) / cols;
-      const ww = variant === 1 ? 0.42 : 0.5;
-      for (let r = 1; ; r++) {
-        const y0 = groundTop + r * storey + 0.85 - storey;
-        const y1 = y0 + (variant === 1 ? 1.15 : 1.35);
-        if (r === 1) continue; // the ground floor is drawn below
-        if (y1 > o.yTop - 0.55) break;
-        for (let c = 0; c < cols; c++) {
-          const u = -f.hw + (c + 0.5) * pitch;
-          if (my1 > my0 && u + 0.9 > mu0 && u - 0.9 < mu1 && y1 > my0 && y0 < my1) continue;
-          const lit = hash2(o.index * 31 + r * 7 + c, i) > 0.5 ? 1 : 0;
-          if (shutters) {
-            fquad(b, f, u - ww, u + ww, y0, y1, 0.03, WINDOW_INK, lit);
-            fquad(b, f, u - ww - 0.42, u - ww - 0.02, y0, y1, 0.04, acc);
-            fquad(b, f, u + ww + 0.02, u + ww + 0.42, y0, y1, 0.04, acc);
-          } else {
-            fquad(b, f, u - ww - 0.12, u + ww + 0.12, y0 - 0.12, y1 + 0.12, 0.03, INK.paper);
-            fquad(b, f, u - ww, u + ww, y0, y1, 0.045, WINDOW_INK, lit);
-          }
-          if (variant === 1 && (c + r + o.index) % 3 === 0) {
-            // Flower box under a house window.
-            fbox(b, f, u, y0 - 0.12, ww + 0.1, 0.1, 0.22, 0.02, INK.leaf, 0, INK.pink);
-          }
+    const pitch = cols >= 1 ? (2 * f.hw) / cols : 0;
+    // Upper-floor windows.
+    for (let r = 1; cols >= 1; r++) {
+      const y0 = groundTop + r * storey + 0.6;
+      const y1 = y0 + winH;
+      if (y1 > o.yTop - 0.4) break;
+      for (let c = 0; c < cols; c++) {
+        const u = -f.hw + (c + 0.5) * pitch;
+        if (my1 > my0 && u + 0.9 > mu0 && u - 0.9 < mu1 && y1 > my0 && y0 < my1) continue;
+        const lit = hash2(o.index * 31 + r * 7 + c, i) > 0.5 ? 1 : 0;
+        if (shutters) {
+          fquad(b, f, u - ww, u + ww, y0, y1, 0.03, WINDOW_INK, lit);
+          fquad(b, f, u - ww - 0.42, u - ww - 0.02, y0, y1, 0.04, acc);
+          fquad(b, f, u + ww + 0.02, u + ww + 0.42, y0, y1, 0.04, acc);
+        } else {
+          fquad(b, f, u - ww - 0.12, u + ww + 0.12, y0 - 0.12, y1 + 0.12, 0.03, INK.paper);
+          fquad(b, f, u - ww, u + ww, y0, y1, 0.045, WINDOW_INK, lit);
+        }
+        if (variant === 1 && (c + r + o.index) % 3 === 0) {
+          // Flower box under a house window.
+          fbox(b, f, u, y0 - 0.12, ww + 0.1, 0.1, 0.22, 0.02, INK.leaf, 0, INK.pink);
         }
       }
     }
-    // Ground floor: door, shop window and a glowing sign on the front; windows elsewhere.
+    // Ground floor: door, shop window and signs on the front; windows elsewhere.
+    let busy0 = 0;
+    let busy1 = 0;
     if (i === front) {
       const du = (sh(o, 11) - 0.5) * Math.max(0, 2 * f.hw - 3);
       const dg = terrainHeight(w, fx(f, du, 0.3), fz(f, du, 0.3));
@@ -285,6 +285,8 @@ function building(b: MeshBuilder, w: World, o: Solid, variant: 0 | 1 | 2): void 
         const side = du < 0 ? 1 : -1;
         const s0 = du + side * 1.1;
         const s1 = side > 0 ? Math.min(f.hw - 0.4, s0 + 2.6) : Math.max(-f.hw + 0.4, s0 - 2.6);
+        busy0 = Math.min(du - 0.8, s0, s1);
+        busy1 = Math.max(du + 0.8, s0, s1);
         if (Math.abs(s1 - s0) > 1) {
           const sg = terrainHeight(w, fx(f, (s0 + s1) / 2, 0.3), fz(f, (s0 + s1) / 2, 0.3));
           const lit = sh(o, 12) < 0.75 ? 1 : 0;
@@ -292,12 +294,23 @@ function building(b: MeshBuilder, w: World, o: Solid, variant: 0 | 1 | 2): void 
           fquad(b, f, Math.min(s0, s1) - 0.1, Math.max(s0, s1) + 0.1, sg + 2.2, sg + 2.38, 0.04, acc);
         }
       }
-    } else if (cols >= 1 && groundTop + 2.4 < o.yTop - 0.5) {
-      const pitch = (2 * f.hw) / cols;
-      for (let c = 0; c < cols; c += 2) {
+      // A blade sign standing off the wall near a corner, read face-on from down the street.
+      const bh = Math.min(1.4, (o.yTop - groundTop - storey - 0.8) / 2);
+      if (bh > 0.5 && f.hw > 2.4 && sh(o, 13) < 0.8) {
+        const bu = (sh(o, 14) < 0.5 ? -1 : 1) * (f.hw - 0.7);
+        const by = groundTop + storey + 0.3 + bh;
+        fbox(b, f, bu, by, 0.06, bh, 1.0, 0.02, acc, 0, acc);
+        fbox(b, f, bu, by, 0.08, bh - 0.16, 0.76, 0.14, INK.paper, 0.7, INK.paper);
+        fbox(b, f, bu, by, 0.1, (bh - 0.16) * 0.28, 0.5, 0.27, acc2, 0.7, acc2);
+      }
+    }
+    if (cols >= 1 && groundTop + 2.4 < o.yTop - 0.5) {
+      for (let c = 0; c < cols; c++) {
         const u = -f.hw + (c + 0.5) * pitch;
+        if (busy1 > busy0 && u + 0.5 > busy0 && u - 0.5 < busy1) continue;
+        if (i !== front && (c & 1) === 1) continue;
         const lit = hash2(o.index * 13 + c, i + 9) > 0.55 ? 1 : 0;
-        fquad(b, f, u - 0.45, u + 0.45, groundTop + 1.0, groundTop + 2.2, 0.03, WINDOW_INK, lit);
+        fquad(b, f, u - 0.45, u + 0.45, groundTop + 0.95, groundTop + 2.15, 0.03, WINDOW_INK, lit);
       }
     }
     if (variant === 2 && o.yTop - groundTop > 9) {

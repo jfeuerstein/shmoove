@@ -119,10 +119,13 @@ function posts(b: MeshBuilder, w: World, r: Rail, spacing: number, half: number,
   });
 }
 
-/** Wires carry laundry in the Terraces and strings of bulbs elsewhere (bulbs glow at night). */
+/**
+ * Wires carry laundry in the Terraces, papel picado flags in the Mercado and strings of bulbs
+ * elsewhere (bulbs glow at night).
+ */
 function wireDressing(b: MeshBuilder, w: World, r: Rail): void {
   const district = districtAt(w, r.pts[2]);
-  const laundry = district === District.TERRACES ? r.index % 3 !== 0 : r.index % 4 === 0;
+  const laundry = district === District.TERRACES ? r.index % 3 !== 0 : r.index % 5 === 0;
   if (laundry) {
     const cloth = [INK.pink, INK.white, INK.mango, INK.cobalt, INK.teal, INK.white];
     along(r, 1.1, (x, y, z, tx, tz, k) => {
@@ -136,6 +139,19 @@ function wireDressing(b: MeshBuilder, w: World, r: Rail): void {
       const bz = z + tz * hw;
       b.quad(ax, y - h, az, bx, y - h, bz, bx, y - 0.02, bz, ax, y - 0.02, az, col);
       b.quad(bx, y - h, bz, ax, y - h, az, ax, y - 0.02, az, bx, y - 0.02, bz, shade(col, 0.88));
+    });
+    return;
+  }
+  if (district === District.MERCADO && r.index % 3 !== 0) {
+    const flags = [INK.pink, INK.mango, INK.teal, INK.cobalt, INK.white];
+    along(r, 0.7, (x, y, z, tx, tz, k) => {
+      const hw = 0.26;
+      const col = flags[(k + r.index) % flags.length];
+      const v0 = b.vert(x - tx * hw, y - 0.03, z - tz * hw, col);
+      const v1 = b.vert(x + tx * hw, y - 0.03, z + tz * hw, col);
+      const v2 = b.vert(x, y - 0.5, z, col);
+      b.tri(v0, v2, v1);
+      b.tri(v0, v1, v2);
     });
     return;
   }

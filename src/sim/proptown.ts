@@ -29,6 +29,8 @@ export const PROPTOWN = {
   nx: 100,
   nz: 140,
   bands: { docks: 0, mercado: 100, terraces: 200, antenna: 310 },
+  /** The quay edge: sea below z = quayZ - 3, a bank under the quay wall up to the docks. */
+  quayZ: 18,
   streetHalf: 6,
   walkHalf: 12,
   /** Mercado stair street (east of the main street). */
@@ -53,9 +55,10 @@ export const PROPTOWN = {
 
 /** The main street's profile: flat docks, then steady climbs. */
 function base(z: number): number {
-  if (z < -3) return 0.3;
-  if (z < 0) return lerp(0.3, 3, (z + 3) / 3);
-  if (z < 100) return 3 + 0.005 * z;
+  const q = PROPTOWN.quayZ;
+  if (z < q - 3) return 0.3;
+  if (z < q) return lerp(0.3, 3, (z - q + 3) / 3);
+  if (z < 100) return 3 + (0.5 * (z - q)) / (100 - q);
   if (z < 200) return 3.5 + 0.08 * (z - 100);
   if (z < 310) return 11.5 + 0.07 * (z - 200);
   return 19.2 + 0.09 * (z - 310);
@@ -101,13 +104,13 @@ export function proptownHeight(x: number, z: number): number {
 function proptownSurface(x: number, z: number): Surface {
   const P = PROPTOWN;
   const ax = Math.abs(x);
-  if (z < -3) return Surface.WATER;
-  if (z < 0) return Surface.PLAZA;
+  if (z < P.quayZ - 3) return Surface.WATER;
+  if (z < P.quayZ) return Surface.PLAZA;
   if (x >= P.stairX0 && x <= P.stairX1 && z >= P.stairZ0 && z <= P.stairZ1) return Surface.STAIRS;
-  if (z >= 9 && z <= 15) return Surface.TRACK; // the crane rails along the quay
-  if (ax <= P.streetHalf && z >= 9) return Surface.STREET;
+  if (z >= P.quayZ + 6 && z <= P.quayZ + 12) return Surface.TRACK; // the crane rails along the quay
+  if (ax <= P.streetHalf && z >= P.quayZ + 6) return Surface.STREET;
   if (z < P.bands.mercado) {
-    if (z >= 42 && z <= 51) return Surface.STREET;
+    if (z >= 57 && z <= 66) return Surface.STREET;
     if (x > 100 && z > 60 && z < 96) return Surface.DIRT;
     return Surface.PLAZA;
   }
@@ -187,35 +190,39 @@ export function buildProptown(seed = 1): World {
   // --- Docks -----------------------------------------------------------------------------------
   // The quay: a low wall over the bank down to the sea, in segments.
   for (let x = -150; x < 150; x += 30) {
-    addSolid(w, { cx: x + 15, cz: -1.35, hx: 15, hz: 1.95, yBase: 0, yTop: 3.7, kind: 'quay', style: 0 });
+    addSolid(w, { cx: x + 15, cz: P.quayZ - 1.35, hx: 15, hz: 1.95, yBase: 0, yTop: 3.7, kind: 'quay', style: 0 });
   }
-  stand(w, 'warehouse', -70, 30, 18, 10, 10, { style: 1 });
-  stand(w, 'warehouse', -72, 76, 15, 12, 9, { style: 2 });
-  stand(w, 'warehouse', 70, 27, 14, 8, 3.2, { style: 4 }); // the fish market
-  stand(w, 'shed', 112, 30, 3, 2.5, 3, { style: 1 });
-  stand(w, 'kiosk', 16, 76, 2, 1.4, 2.6, { style: 2 });
-  // Container stacks stepping up: 1, 2, 3, 2, 1 levels.
-  const cInk = [0, 1, 2, 3, 4, 5, 6, 7];
+  // West of the street: big warehouses close to the sidewalk, a pipe along it.
+  stand(w, 'warehouse', -34, 44, 18, 10, 10, { style: 1 });
+  stand(w, 'warehouse', -36, 80, 17, 12, 9, { style: 2 });
+  stand(w, 'warehouse', -100, 44, 16, 11, 8, { style: 3 });
+  stand(w, 'shed', -95, 80, 4, 3, 3.2, { style: 1 });
+  // East: the harbour office, the fish market, crates, a kiosk and the container yard.
+  stand(w, 'building', 24, 44, 10, 9, 9, { style: nextStyle() });
+  stand(w, 'warehouse', 66, 42, 14, 8, 3.2, { style: 4 }); // the fish market
+  stand(w, 'shed', 112, 42, 3, 2.5, 3, { style: 2 });
+  stand(w, 'kiosk', 15.6, 70, 1.6, 1.4, 2.6, { style: 2 });
+  // Container stacks stepping up and down: 1, 2, 3, 2, 1 levels.
   let ci = 0;
   for (let row = 0; row < 3; row++) {
-    const cz = 62 + row * 10;
-    for (let col = 0; col < 5; col++) {
-      const cx = 32 + col * 13.5;
-      const levels = [1, 2, 3, 2, 1][(col + row) % 5];
+    const cz = 72 + row * 9;
+    for (let col = 0; col < 6; col++) {
+      const cx = 24 + col * 13.5;
+      const levels = [1, 2, 3, 2, 1, 2][(col + row) % 6];
       const g = terrainHeight(w, cx, cz);
       for (let l = 0; l < levels; l++) {
-        addSolid(w, { cx, cz, hx: 6.05, hz: 1.22, yBase: g + 2.6 * l - (l === 0 ? 0.3 : 0), yTop: g + 2.6 * (l + 1), kind: 'container', style: cInk[ci++ % cInk.length] });
+        addSolid(w, { cx, cz, hx: 6.05, hz: 1.22, yBase: g + 2.6 * l - (l === 0 ? 0.3 : 0), yTop: g + 2.6 * (l + 1), kind: 'container', style: (ci++ * 3) % 8 });
       }
     }
   }
   for (let k = 0; k < 6; k++) {
-    const cx = 18 + (k % 3) * 2.2;
-    const cz = 22 + Math.floor(k / 3) * 2.4;
+    const cx = 39 + (k % 3) * 2.2;
+    const cz = 36 + Math.floor(k / 3) * 2.4;
     const s = 0.5 + 0.12 * (k % 2);
     stand(w, 'crate', cx, cz, s, s, 2 * s, { style: k });
   }
-  addRail(w, [-40, 1.0 + base(15), 15, -40, 1.0 + base(50), 50, -40, 1.0 + base(90), 90], 'pipe');
-  addRail(w, [12.5, base(20) + 0.45, 20, 12.5, base(40) + 0.45, 40], 'ledge');
+  addRail(w, [-13.2, 1.0 + base(34), 34, -13.2, 1.0 + base(54), 54], 'pipe');
+  addRail(w, [12.5, base(36) + 0.45, 36, 12.5, base(52) + 0.45, 52], 'ledge');
 
   // --- Mercado Steps ---------------------------------------------------------------------------
   // The wall between the main street and the east block.
@@ -260,6 +267,8 @@ export function buildProptown(seed = 1): World {
       addSolid(w, { cx: -11.4, cz, hx: 1.6, hz: 3.2, yBase: g + 2.4, yTop: g + 2.6, surface: Surface.AWNING, oneWay: true, kind: 'awning', style: k });
     }
   }
+  // Papel picado strung across the street from the shop fronts to the wall.
+  for (let z = 128; z <= 192; z += 16) addRail(w, [-13.4, base(z) + 6, z, 11.6, base(z) + 6, z + 1], 'wire');
   addZone(w, { id: 'stop_mercado', name: 'Mercado', kind: 'stop', x: 5, y: base(160), z: 160, r: 4 });
 
   // --- Terraces --------------------------------------------------------------------------------
@@ -274,7 +283,7 @@ export function buildProptown(seed = 1): World {
     const front = z0 + 6.5;
     const back = z1 - 9.5;
     for (let k = 0; k < 6; k++) {
-      const cx = -30 - k * 19;
+      const cx = -24 - k * 19;
       const hf = 5 + ((k * 3) % 4);
       const hb = 5.5 + ((k * 5) % 4);
       stand(w, 'house', cx, front, 6.5, 4.5, hf, { style: nextStyle() });
@@ -290,7 +299,11 @@ export function buildProptown(seed = 1): World {
   for (let z = 204; z <= 306; z += 6) fence.push(P.trackX0 - 1.2, proptownHeight(P.trackX0 - 1.2, z) + 1.1, z);
   addRail(w, fence, 'fence');
   stand(w, 'tower', 52, 256, 4, 4, 18, { style: 3 });
-  stand(w, 'kiosk', 20, 232, 2.2, 1.5, 2.6, { style: 4 });
+  stand(w, 'kiosk', 40.5, 232, 2.2, 1.5, 2.6, { style: 4 });
+  // A street wall of houses and shops on the east side.
+  for (let k = 0; k < 8; k++) {
+    stand(w, k % 3 === 1 ? 'building' : 'house', 20.2, 210 + k * 12.5, 6.5, 5.4, 5 + ((k * 5) % 5), { style: nextStyle() });
+  }
   for (let k = 0; k < 4; k++) {
     stand(w, 'house', 75 + k * 18, 222, 6, 5, 5 + k, { style: nextStyle() });
     stand(w, 'house', 75 + k * 18, 286, 6, 5, 7 - k, { style: nextStyle() });
@@ -298,11 +311,10 @@ export function buildProptown(seed = 1): World {
   addZone(w, { id: 'stop_terrazas', name: 'Terrazas', kind: 'stop', x: -5, y: base(262), z: 262, r: 4 });
 
   // --- Antenna Hill ----------------------------------------------------------------------------
-  const mastAt = (mx: number, mz: number, h: number, guys: number): number => {
+  const mastAt = (mx: number, mz: number, h: number, angles: readonly number[]): number => {
     const g = terrainHeight(w, mx, mz);
     addSolid(w, { cx: mx, cz: mz, hx: 0.5, hz: 0.5, yBase: g - 0.5, yTop: g + h, kind: 'mast', style: 0 });
-    for (let k = 0; k < guys; k++) {
-      const a = (k / guys) * PI * 2 + 0.4;
+    for (const a of angles) {
       const ca = dcos(a);
       const sa = dsin(a);
       const ax = mx + 26 * ca;
@@ -311,25 +323,26 @@ export function buildProptown(seed = 1): World {
     }
     return g + h;
   };
-  mastAt(40, 352, 22, 3);
-  mastAt(-72, 362, 20, 3);
-  const top = mastAt(100, 376, 16, 0);
-  addSolid(w, { cx: 100, cz: 376, hx: 2, hz: 2, yBase: top, yTop: top + 0.6, kind: 'platform', style: 0 });
-  stand(w, 'pylon', 62, 322, 0.4, 0.4, 14, { style: 0 });
-  stand(w, 'pylon', -60, 330, 0.4, 0.4, 14, { style: 0 });
+  // Guy wires fan away from the street.
+  mastAt(20, 342, 22, [0.2, 1.9, -1.9]);
+  mastAt(-30, 360, 20, [PI - 0.2, PI / 2 + 0.3, -PI / 2 - 0.3]);
+  const top = mastAt(-20, 318, 16, []);
+  addSolid(w, { cx: -20, cz: 318, hx: 2, hz: 2, yBase: top, yTop: top + 0.6, kind: 'platform', style: 0 });
+  stand(w, 'pylon', 52, 330, 0.4, 0.4, 14, { style: 0 });
+  stand(w, 'pylon', -60, 345, 0.4, 0.4, 14, { style: 0 });
   stand(w, 'pylon', 70, 132, 0.4, 0.4, 12, { style: 0 });
-  stand(w, 'tank', -30, 342, 2.5, 2.5, 6, { style: 0 });
-  stand(w, 'shed', -104, 330, 3, 2.4, 3, { style: 2 });
-  stand(w, 'building', 72, 344, 4, 3, 3.5, { style: nextStyle() }); // the radio shack
+  stand(w, 'tank', 34, 364, 2.5, 2.5, 6, { style: 0 });
+  stand(w, 'shed', -46, 330, 3, 2.4, 3, { style: 2 });
+  stand(w, 'building', 19, 322, 4, 3, 3.5, { style: nextStyle() }); // the radio shack
   addZone(w, { id: 'stop_antena', name: 'Antena', kind: 'stop', x: 5, y: base(345), z: 345, r: 4 });
-  addZone(w, { id: 'stop_muelle', name: 'Muelle', kind: 'stop', x: 5, y: base(64), z: 64, r: 4 });
+  addZone(w, { id: 'stop_muelle', name: 'Muelle', kind: 'stop', x: 5, y: base(76), z: 76, r: 4 });
 
   // Something the vocabulary does not know: drawn as a plain box.
   stand(w, 'bandstand', -40, 120, 2, 2, 1, { style: 0 });
 
   const sy = terrainHeight(w, w.spawn.x, w.spawn.z);
   addZone(w, { id: 'spawn', name: 'Mirador', kind: 'spawn', x: w.spawn.x, y: sy, z: w.spawn.z, r: 5 });
-  addZone(w, { id: 'fish_market', name: 'Mercado del Pescado', kind: 'landmark', x: 70, y: base(27), z: 27, r: 8 });
+  addZone(w, { id: 'fish_market', name: 'Mercado del Pescado', kind: 'landmark', x: 66, y: base(42), z: 42, r: 8 });
   addZone(w, { id: 'stairs', name: 'Escalera', kind: 'landmark', x: rx, y: east(132), z: 132, r: 6 });
   finalizeWorld(w);
   return w;
