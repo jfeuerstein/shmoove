@@ -30,8 +30,13 @@ export interface View {
   resize(): void;
   /** Draw calls and triangles of the last frame (scene pass plus print pass). */
   info(): { drawCalls: number; triangles: number };
+  /** Milliseconds each part of the last render() took, indexed like VIEW_PARTS (frame accounting). */
+  readonly partMs: Float64Array;
   dispose(): void;
 }
+
+/** The parts of render() timed into `View.partMs`, in order. */
+export const VIEW_PARTS = ['vehicles', 'world', 'skater', 'camera', 'submit'] as const;
 
 /** Further than any skater moves in one frame: the camera cuts instead of following. */
 const TELEPORT_DIST = 12;
@@ -79,7 +84,8 @@ export function createView(canvas: HTMLCanvasElement, world: World, opts: ViewOp
   aim.visible = false;
   scene.add(aim);
 
-  let last = { drawCalls: 0, triangles: 0 };
+  const last = { drawCalls: 0, triangles: 0 };
+  const partMs = new Float64Array(VIEW_PARTS.length);
   let snapped = false;
   let lastX = 0;
   let lastY = 0;
@@ -104,7 +110,9 @@ export function createView(canvas: HTMLCanvasElement, world: World, opts: ViewOp
     chase,
     riso,
     resize,
+    partMs,
     render(sim, prev, alpha, dt, events) {
+      let t0 = performance.now();
       const p = sim.player;
       const x = prev.x + (p.x - prev.x) * alpha;
       const y = prev.y + (p.y - prev.y) * alpha;
@@ -123,7 +131,13 @@ export function createView(canvas: HTMLCanvasElement, world: World, opts: ViewOp
       // Last frame's camera is close enough for distance culling.
       vehicles.setCamera(chase.camera.position.x, chase.camera.position.y, chase.camera.position.z);
       vehicles.update(sim.tick, alpha);
+      let t1 = performance.now();
+      partMs[0] = t1 - t0;
+      t0 = t1;
       worldView.update(chase.camera.position.x, chase.camera.position.z, sim.dayFrac);
+      t1 = performance.now();
+      partMs[1] = t1 - t0;
+      t0 = t1;
 
       sampleGround(world, x, y, z, FEEL.STEP_UP, _g);
       const hitched = p.mode === Mode.HITCH;
@@ -168,6 +182,9 @@ export function createView(canvas: HTMLCanvasElement, world: World, opts: ViewOp
       frame.groundY = _g.y;
       frame.tick = sim.tick;
       skater.update(frame);
+      t1 = performance.now();
+      partMs[2] = t1 - t0;
+      t0 = t1;
 
       target.x = x;
       target.y = y;
@@ -189,10 +206,15 @@ export function createView(canvas: HTMLCanvasElement, world: World, opts: ViewOp
         snapped = true;
       }
       chase.update(target, world, dt);
+      t1 = performance.now();
+      partMs[3] = t1 - t0;
+      t0 = t1;
 
       renderer.info.reset();
       riso.render(renderer, scene, chase.camera);
-      last = { drawCalls: renderer.info.render.calls, triangles: renderer.info.render.triangles };
+      last.drawCalls = renderer.info.render.calls;
+      last.triangles = renderer.info.render.triangles;
+      partMs[4] = performance.now() - t0;
     },
     info: () => last,
     dispose() {

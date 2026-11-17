@@ -101,6 +101,19 @@ export function createVehicleView(world: World): VehicleView {
       for (let li = 0; li < world.lines.length; li++) {
         const line = world.lines[li];
         const variants = geos[li];
+        // Every vehicle stays on its path: a line whose path box is out of drawing range has
+        // nothing to draw, without asking where each vehicle is.
+        if (haveCam) {
+          const bx = camX < line.minX ? line.minX - camX : camX > line.maxX ? camX - line.maxX : 0;
+          const bz = camZ < line.minZ ? line.minZ - camZ : camZ > line.maxZ ? camZ - line.maxZ : 0;
+          if (bx * bx + bz * bz > drawD2) {
+            for (let i = 0; i < line.vehicles; i++) {
+              meshes[li][i].visible = false;
+              shadows[li][i].visible = false;
+            }
+            continue;
+          }
+        }
         for (let i = 0; i < line.vehicles; i++) {
           const m = meshes[li][i];
           const s = shadows[li][i];

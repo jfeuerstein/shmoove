@@ -6,30 +6,77 @@
 import * as THREE from 'three';
 
 export class MeshBuilder {
-  private pos: number[] = [];
-  private col: number[] = [];
-  private glo: number[] = [];
-  private idx: number[] = [];
+  // Growable typed storage (doubling): pushing into big JS arrays and converting them in build()
+  // was a large share of a chunk build. Positions stay doubles until build(), exactly as before,
+  // so append() transforms the same numbers; colours and glow are stored as the float32 values
+  // build() produced anyway, so every built geometry is identical.
+  private pos = new Float64Array(96);
+  private col = new Float32Array(96);
+  private glo = new Float32Array(32);
+  private idx = new Uint32Array(96);
+  private nv = 0;
+  private ni = 0;
   private anyGlow = false;
 
   get vertexCount(): number {
-    return this.pos.length / 3;
+    return this.nv;
   }
 
   get triangleCount(): number {
-    return this.idx.length / 3;
+    return this.ni / 3;
+  }
+
+  private growVerts(need: number): void {
+    let cap = this.glo.length;
+    if (need <= cap) return;
+    while (cap < need) cap *= 2;
+    const pos = new Float64Array(cap * 3);
+    pos.set(this.pos.subarray(0, this.nv * 3));
+    this.pos = pos;
+    const col = new Float32Array(cap * 3);
+    col.set(this.col.subarray(0, this.nv * 3));
+    this.col = col;
+    const glo = new Float32Array(cap);
+    glo.set(this.glo.subarray(0, this.nv));
+    this.glo = glo;
+  }
+
+  private growIdx(need: number): void {
+    let cap = this.idx.length;
+    if (need <= cap) return;
+    while (cap < need) cap *= 2;
+    const idx = new Uint32Array(cap);
+    idx.set(this.idx.subarray(0, this.ni));
+    this.idx = idx;
   }
 
   vert(x: number, y: number, z: number, color: number, glow = 0): number {
-    this.pos.push(x, y, z);
-    this.col.push(((color >> 16) & 255) / 255, ((color >> 8) & 255) / 255, (color & 255) / 255);
-    this.glo.push(glow);
+    const v = this.nv;
+    if (v >= this.glo.length) this.growVerts(v + 1);
+    const k = v * 3;
+    this.pos[k] = x;
+    this.pos[k + 1] = y;
+    this.pos[k + 2] = z;
+    this.col[k] = ((color >> 16) & 255) / 255;
+    this.col[k + 1] = ((color >> 8) & 255) / 255;
+    this.col[k + 2] = (color & 255) / 255;
+    this.glo[v] = glow;
     if (glow > 0) this.anyGlow = true;
-    return this.pos.length / 3 - 1;
+    this.nv = v + 1;
+    return v;
+  }
+
+  private pushIdx3(a: number, b: number, c: number): void {
+    const n = this.ni;
+    if (n + 3 > this.idx.length) this.growIdx(n + 3);
+    this.idx[n] = a;
+    this.idx[n + 1] = b;
+    this.idx[n + 2] = c;
+    this.ni = n + 3;
   }
 
   tri(a: number, b: number, c: number): void {
-    this.idx.push(a, b, c);
+    this.pushIdx3(a, b, c);
   }
 
   /** Quad a-b-c-d, counter-clockwise seen from its front. */
@@ -45,7 +92,8 @@ export class MeshBuilder {
     const b = this.vert(bx, by, bz, color, glow);
     const c = this.vert(cx, cy, cz, color, glow);
     const d = this.vert(dx, dy, dz, color, glow);
-    this.idx.push(a, b, c, a, c, d);
+    this.pushIdx3(a, b, c);
+    this.pushIdx3(a, c, d);
   }
 
   /**
@@ -128,25 +176,36 @@ export class MeshBuilder {
 
   /** Append another builder's contents, transformed by `m`. */
   append(other: MeshBuilder, m: THREE.Matrix4): void {
-    const base = this.vertexCount;
+    const base = this.nv;
+    const n = other.nv;
+    this.growVerts(base + n);
     const v = new THREE.Vector3();
-    for (let i = 0; i < other.pos.length; i += 3) {
-      v.set(other.pos[i], other.pos[i + 1], other.pos[i + 2]).applyMatrix4(m);
-      this.pos.push(v.x, v.y, v.z);
+    const op = other.pos;
+    for (let i = 0; i < n; i++) {
+      v.set(op[i * 3], op[i * 3 + 1], op[i * 3 + 2]).applyMatrix4(m);
+      const k = (base + i) * 3;
+      this.pos[k] = v.x;
+      this.pos[k + 1] = v.y;
+      this.pos[k + 2] = v.z;
     }
-    for (const c of other.col) this.col.push(c);
-    for (const g of other.glo) this.glo.push(g);
+    this.col.set(other.col.subarray(0, n * 3), base * 3);
+    this.glo.set(other.glo.subarray(0, n), base);
+    this.nv = base + n;
     if (other.anyGlow) this.anyGlow = true;
-    for (const i of other.idx) this.idx.push(i + base);
+    const ni = other.ni;
+    this.growIdx(this.ni + ni);
+    for (let i = 0; i < ni; i++) this.idx[this.ni + i] = other.idx[i] + base;
+    this.ni += ni;
   }
 
   build(): THREE.BufferGeometry {
     const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(this.pos), 3));
-    g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(this.col), 3));
-    if (this.anyGlow) g.setAttribute('glow', new THREE.BufferAttribute(new Float32Array(this.glo), 1));
-    const n = this.pos.length / 3;
-    g.setIndex(new THREE.BufferAttribute(n > 65535 ? new Uint32Array(this.idx) : new Uint16Array(this.idx), 1));
+    const n = this.nv;
+    g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(this.pos.subarray(0, n * 3)), 3));
+    g.setAttribute('color', new THREE.BufferAttribute(this.col.slice(0, n * 3), 3));
+    if (this.anyGlow) g.setAttribute('glow', new THREE.BufferAttribute(this.glo.slice(0, n), 1));
+    const idx = this.idx.subarray(0, this.ni);
+    g.setIndex(new THREE.BufferAttribute(n > 65535 ? idx.slice() : new Uint16Array(idx), 1));
     g.computeBoundingSphere();
     g.computeBoundingBox();
     return g;

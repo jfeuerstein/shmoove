@@ -27,6 +27,13 @@ export interface SkitchPerfStats {
   workMs: number[];
   drawCalls: number;
   triangles: number;
+  /**
+   * Frame accounting, one entry per frame like `workMs`: milliseconds per part of the frame (sim,
+   * each reducer, each view part, UI, audio...) and `steps`, the sim steps the frame carried.
+   */
+  parts?: Record<string, number[]>;
+  /** Milliseconds of each game step (sim + reducers) in those frames, in order. */
+  stepMs?: number[];
 }
 
 export interface SkitchHook {
