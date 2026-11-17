@@ -5,8 +5,9 @@
  * placement, crate scatter, styles). Same seed, same world.
  */
 import { PI } from '../math';
-import { District, createWorld, finalizeWorld, terrainHeight, type World } from '../world';
-import { CITY, GRID } from './layout';
+import { District, addZone, createWorld, finalizeWorld, terrainHeight, type World } from '../world';
+import { CITY, GRID, LEVELS } from './layout';
+import { GHOST_CUT, addChainZones, addPylons, addRouteStructures, addStopZones, buildRoutes } from './routes';
 import { dressCity, needleTop } from './dress';
 import { buildGround, spinePolyline } from './terrain';
 import { addZones } from './zones';
@@ -50,8 +51,20 @@ export function buildCity(seed = 1): City {
   const spine = spinePolyline(ground);
   for (let i = 0; i < spine.length; i += 3) spine[i + 1] = terrainHeight(w, spine[i], spine[i + 2]);
 
+  addRouteStructures(w);
   w.spawn = { x: 0, z: 566, heading: PI };
   finalizeWorld(w);
   addZones(w, needleTop());
-  return { world: w, routes: {}, spine };
+
+  const routes = buildRoutes(w, ground);
+  addPylons(w);
+  finalizeWorld(w);
+  addStopZones(w, routes);
+  addChainZones(w, routes);
+  const L = LEVELS.find((l) => l.z === GHOST_CUT.level);
+  if (L) {
+    const gx = (GHOST_CUT.x0 + GHOST_CUT.x1) / 2;
+    addZone(w, { id: 'ghost_tunnel', name: 'Túnel Fantasma', kind: 'secret', x: gx, y: terrainHeight(w, gx, L.z), z: L.z, r: 8 });
+  }
+  return { world: w, routes, spine };
 }

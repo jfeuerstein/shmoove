@@ -133,8 +133,8 @@ export const SPINE_BOTTOM_Z = 236;
 
 /** Funicular corridor (TRACK), with the axis at FUNI_X. */
 export const FUNI_X = -28;
-export const FUNI_X0 = -42;
-export const FUNI_X1 = -15;
+export const FUNI_X0 = -45;
+export const FUNI_X1 = -12;
 export const FUNI_Z0 = 558;
 export const FUNI_Z1 = 950;
 
