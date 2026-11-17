@@ -72,28 +72,18 @@ function atStop(l: CompiledLine, v: VehicleState, k: number): boolean {
   return Math.abs(v.s - l.allStops[k].s) < 0.05 && Math.hypot(v.vx, v.vz) < 0.05;
 }
 
-/** Is any vehicle of l standing at stop k at this tick? */
-function anyAtStop(l: CompiledLine, k: number, tick: number): boolean {
-  const V = makeVehicleState();
-  for (let i = 0; i < l.vehicles; i++) {
-    vehicleAt(l, i, tick, V);
-    if (V.active && atStop(l, V, k)) return true;
-  }
-  return false;
-}
-
 /**
  * A small closed-loop climber. On the ground it steers for the next ride's waiting point,
  * tic-tacs when slow, keeps the touch armed only when a vehicle of the wanted line is close, and
  * hops for a strap that is out of standing reach. Riding, it holds on until the leg says to let
  * go. After the last leg it rolls for the summit.
  */
-function climb(legs: Leg[], startZone: string, endZone: string, maxTicks: number): ClimbLog {
+function climb(legs: Leg[], startZone: string, endZone: string, maxTicks: number, dayFrac = 0.3): ClimbLog {
   const w = city.world;
   const start = findZone(w, startZone);
   const end = findZone(w, endZone);
   if (!start || !end) throw new Error('zones');
-  const sim = new Sim(w, { seed: 1, startDayFrac: 0.3 });
+  const sim = new Sim(w, { seed: 1, startDayFrac: dayFrac });
   placePlayer(w, sim.player, start.x, start.z, w.spawn.heading);
   const p = sim.player;
   const log: ClimbLog = { reached: -1, ladder: [], maxStep: 0, maxStepAt: '', worstFreeClimb: 0, bails: 0, trace: [] };
@@ -181,37 +171,42 @@ function climb(legs: Leg[], startZone: string, endZone: string, maxTicks: number
   return log;
 }
 
+/** The ride ladder from the docks to the summit: tram 5 up to the Antenna gate, then both cable cars. */
+function climbLegs(): Leg[] {
+  const T2 = line('T2');
+  const A1 = line('A1');
+  const A2 = line('A2');
+  const muelle = stopPose(T2, 0);
+  const puerta = T2.allStops.findIndex((s) => s.name === 'Puerta de la Antena');
+  const a1Base = stopPose(A1, 0);
+  const a2Base = stopPose(A2, 0);
+  return [
+    {
+      // Tram 5 from its docks terminus: wait beside the lane at the rear bumper, on its left,
+      // out of the mopeds' lane to its right.
+      line: 'T2',
+      wait: () => [muelle.x - muelle.hx * T2.anchorBack + muelle.hz * 2.6, muelle.z - muelle.hz * T2.anchorBack - muelle.hx * 2.6],
+      // Let go at the Antenna gate stop, under the lower cable car's base.
+      alight: (v) => atStop(T2, v, puerta),
+    },
+    {
+      line: 'A1',
+      wait: () => [a1Base.x, a1Base.z],
+      // Let go as the car stands at the hill station, onto the platform.
+      alight: (v) => atStop(A1, v, 1),
+    },
+    {
+      // Then the few metres across the platform to the summit car's base, and the next car.
+      line: 'A2',
+      wait: () => [a2Base.x, a2Base.z],
+      alight: (v) => atStop(A2, v, 1),
+    },
+  ];
+}
+
 describe('the climb', () => {
   it('a skater gets from the docks to the summit on rides alone, in under 12 minutes', () => {
-    const T2 = line('T2');
-    const A1 = line('A1');
-    const A2 = line('A2');
-    const muelle = stopPose(T2, 0);
-    const puerta = T2.allStops.findIndex((s) => s.name === 'Puerta de la Antena');
-    const a1Base = stopPose(A1, 0);
-    const a2Base = stopPose(A2, 0);
-    const legs: Leg[] = [
-      {
-        // Tram 5 from its docks terminus: wait beside the lane at the rear bumper, on its left,
-        // out of the mopeds' lane to its right.
-        line: 'T2',
-        wait: () => [muelle.x - muelle.hx * T2.anchorBack + muelle.hz * 2.6, muelle.z - muelle.hz * T2.anchorBack - muelle.hx * 2.6],
-        // Let go at the Antenna gate stop, under the lower cable car's base.
-        alight: (v) => atStop(T2, v, puerta),
-      },
-      {
-        line: 'A1',
-        wait: () => [a1Base.x, a1Base.z],
-        // At the hill station, let go as a summit cable car waits beside it.
-        alight: (v, sim) => Math.abs(v.s - A1.allStops[1].s) < 3 && anyAtStop(A2, 0, sim.tick),
-      },
-      {
-        line: 'A2',
-        wait: () => [a2Base.x, a2Base.z],
-        alight: (v) => atStop(A2, v, 1),
-      },
-    ];
-    const log = climb(legs, 'spawn_docks', 'summit', 12 * 60 * 60);
+    const log = climb(climbLegs(), 'spawn_docks', 'summit', 12 * 60 * 60);
     expect(log.reached, log.trace.slice(-12).join('\n')).toBeGreaterThan(0);
     expect(log.ladder).toEqual(['T2', 'A1', 'A2']);
     expect(log.bails).toBe(0);
@@ -221,6 +216,22 @@ describe('the climb', () => {
     // Height is won on rides: off a ride, never more than a hop or a sling's pop above where it let go.
     expect(log.worstFreeClimb).toBeLessThan(3);
   });
+
+  for (const [zone, frac] of [
+    ['spawn_docks', 0.3],
+    ['spawn_docks', 0.33],
+    ['spawn_docks', 0.36],
+    ['spawn_docks', 0.4],
+    ['spawn_mercado', 0.3],
+  ] as const) {
+    it(`works from ${zone} starting at ${frac}, and reaches the summit the same day`, () => {
+      const log = climb(climbLegs(), zone, 'summit', 12 * 60 * 60, frac);
+      expect(log.reached, log.trace.slice(-12).join('\n')).toBeGreaterThan(0);
+      expect(log.ladder).toEqual(['T2', 'A1', 'A2']);
+      expect(log.bails).toBe(0);
+      expect(frac + log.reached / DAY_TICKS).toBeLessThan(1);
+    });
+  }
 });
 
 const REGULAR = ['D1', 'D2', 'D3', 'M1', 'M2', 'M3', 'T1', 'T2', 'T3', 'T4', 'A1', 'A2', 'A3'];
