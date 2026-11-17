@@ -6,6 +6,8 @@ export interface SkitchParams {
   debug: boolean;
   /** M1 feel slice */
   slice: boolean;
+  /** named world to boot into (see src/app/world.ts), or null for the default */
+  world: string | null;
   /** named scripted route (e.g. 'perf'), or null */
   route: string | null;
   /** world / RNG seed */
@@ -43,10 +45,12 @@ function parseDayFrac(raw: string | null): number | null {
 export function parseParams(search: string): SkitchParams {
   const q = new URLSearchParams(search.startsWith('?') ? search.slice(1) : search);
   const route = q.get('route');
+  const world = q.get('world');
   return {
     e2e: flag(q, 'e2e'),
     debug: flag(q, 'debug'),
     slice: flag(q, 'slice'),
+    world: world === null || world === '' ? null : world,
     route: route === null || route === '' ? null : route,
     seed: parseSeed(q.get('seed')),
     t: parseDayFrac(q.get('t')),

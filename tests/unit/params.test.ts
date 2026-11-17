@@ -7,6 +7,7 @@ describe('parseParams', () => {
       e2e: false,
       debug: false,
       slice: false,
+      world: null,
       route: null,
       seed: 1,
       t: null,
@@ -21,6 +22,11 @@ describe('parseParams', () => {
     expect(p.debug).toBe(true);
     expect(p.slice).toBe(true);
     expect(parseParams('e2e').e2e).toBe(true);
+  });
+
+  it('reads a named world, and treats an empty one as unset', () => {
+    expect(parseParams('?world=lineup').world).toBe('lineup');
+    expect(parseParams('?world=').world).toBe(null);
   });
 
   it('lets a flag be switched off explicitly', () => {
