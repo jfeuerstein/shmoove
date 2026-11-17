@@ -11,6 +11,7 @@ import { GHOST_CUT, addChainZones, addPylons, addRouteStructures, addStopZones, 
 import { dressCity, needleTop } from './dress';
 import { buildGround, spinePolyline } from './terrain';
 import { addZones } from './zones';
+import { buildCityLines } from './lines';
 
 export { CITY } from './layout';
 
@@ -27,7 +28,7 @@ export interface RouteDef {
 }
 
 export interface City {
-  /** Finalized; world.lines is [] (the rides task fills it). */
+  /** Finalized, with every line of the roster compiled onto its route. */
   world: World;
   routes: Record<string, RouteDef>;
   /** xyz polyline along streets from the summit down to the docks that is downhill (or level) all the way: the line a skater with no rides follows. */
@@ -66,5 +67,6 @@ export function buildCity(seed = 1): City {
     const gx = (GHOST_CUT.x0 + GHOST_CUT.x1) / 2;
     addZone(w, { id: 'ghost_tunnel', name: 'Túnel Fantasma', kind: 'secret', x: gx, y: terrainHeight(w, gx, L.z), z: L.z, r: 8 });
   }
+  w.lines = buildCityLines(w, routes);
   return { world: w, routes, spine };
 }
