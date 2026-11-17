@@ -32,14 +32,18 @@ export class CompleteScreen {
     head.appendChild(this.word.el);
     const body = el('div', 'sk-chalkbody sk-xbody');
     const hero = el('div', 'sk-xhero');
-    hero.append(el('div', 'sk-xkicker', 'Every line inked'), el('div', 'sk-xtitle', 'Santa Rampa is yours'));
+    const title = el('div', 'sk-xtitle');
+    title.append(el('span', '', 'Santa Rampa'), el('span', '', 'is yours'));
+    hero.append(el('div', 'sk-xkicker', 'Every line inked'), title);
     this.grid = el('div', 'sk-xgrid');
     const facts = el('div', 'sk-ticket sk-big sk-xfacts');
     const row = el('div', 'sk-cfacts');
     this.time = el('b', '', '0:00');
     row.append(el('span', 'sk-cfact', 'Time on the board'), this.time);
     facts.appendChild(row);
-    body.append(hero, this.grid, facts);
+    const stamp = el('div', 'sk-xstamp');
+    stamp.append(el('span', '', 'Santa Rampa'), el('b', '', 'Paid'), el('b', '', 'in full'), el('span', '', 'Transit'));
+    body.append(hero, this.grid, facts, stamp);
     const foot = el('div', 'sk-chalkfoot');
     const cont = shellButton('sk-tplay sk-xcontinue', 'Continue', 'completeContinue', () => {
       tap();

@@ -57,6 +57,9 @@ const CSS = `
 .sk-ttear .sk-op{font-size:22px}
 .sk-ttearbody{margin-top:7px;font-weight:700;font-size:14px;letter-spacing:.05em;line-height:1.35;text-transform:none;color:rgba(27,26,46,.85)}
 
+.sk-titling .sk-board,.sk-titling .sk-mapbtn,.sk-titling .sk-chalkbtn,.sk-titling .sk-pausebtn,.sk-titling .sk-chain,
+.sk-titling .sk-toasts,.sk-titling .sk-stop,.sk-titling .sk-hold,.sk-titling .sk-rec,.sk-titling .sk-split{visibility:hidden}
+
 /* Pause */
 .sk-pause{position:absolute;inset:0;z-index:6;pointer-events:auto;align-items:center;justify-content:center;touch-action:none;
   background:${DOTS},rgba(27,26,46,.45);padding:0 calc(var(--sk-sr) + 20px) 0 calc(var(--sk-sl) + 20px)}
@@ -109,11 +112,18 @@ const CSS = `
   text-transform:uppercase;letter-spacing:.05em;touch-action:none}
 .sk-complete.sk-on{display:flex}
 .sk-complete .sk-maphead .sk-flap{--sk-cw:min(17px,calc((100vw - 40px) / 13));--sk-ch:calc(var(--sk-cw) * 1.5)}
+.sk-xbody{justify-content:center;gap:16px}
+.sk-xstamp{flex:none;align-self:center;width:128px;height:128px;border-radius:50%;border:4px solid var(--sk-pink);color:var(--sk-pink);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;transform:rotate(-12deg);opacity:.88;
+  box-shadow:inset 0 0 0 3px var(--sk-paper),inset 0 0 0 5px rgba(255,46,136,.7);font-weight:700;text-align:center}
+.sk-xstamp b{font-size:20px;letter-spacing:.1em;line-height:1}
+.sk-xstamp span{font-size:9px;letter-spacing:.18em}
 .sk-xhero{flex:none;text-align:center;padding:8px 0 4px}
 .sk-xkicker{font-weight:700;font-size:13px;letter-spacing:.24em;color:var(--sk-cobalt)}
+.sk-xtitle span{display:block}
 .sk-xtitle{margin-top:6px;font-weight:700;font-size:38px;line-height:.98;letter-spacing:.06em;color:var(--sk-pink);
   text-shadow:2px 2px 0 rgba(31,63,191,.85),-1px 0 0 rgba(255,174,26,.9)}
-.sk-xgrid{flex:none;display:grid;grid-template-columns:repeat(auto-fill,minmax(98px,1fr));gap:9px;
+.sk-xgrid{flex:none;display:grid;grid-template-columns:repeat(auto-fit,108px);justify-content:center;gap:9px;
   filter:drop-shadow(2px 2px 0 rgba(27,26,46,.6)) drop-shadow(-1px 0 0 rgba(255,46,136,.5))}
 .sk-xcell{position:relative;background:var(--sk-paper);padding:9px 6px 8px;display:flex;flex-direction:column;align-items:center;gap:6px;
   border-radius:2px;--sk-cw:16px;opacity:.5;
@@ -142,7 +152,7 @@ const CSS = `
 
 /* Rotate card */
 .sk-rotate{position:absolute;inset:0;z-index:12;pointer-events:auto;align-items:center;justify-content:center;touch-action:none;
-  background:${DOTS},var(--sk-ink)}
+  background:radial-gradient(circle,rgba(31,63,191,.55) 1.3px,transparent 1.8px) 0 0/8px 8px,var(--sk-ink)}
 .sk-rotate.sk-on{display:flex}
 .sk-rotcard{display:flex;flex-direction:column;align-items:center;gap:6px;padding:16px 26px 18px 44px;text-align:center;
   filter:drop-shadow(3px 3px 0 rgba(31,63,191,.8))}

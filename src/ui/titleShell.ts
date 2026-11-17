@@ -279,6 +279,8 @@ export class Shell {
   private setScreen(s: Screen): void {
     this.screen = s;
     this.titleOn.set(s === 'title');
+    // The HUD hides behind the title so the wordmark reads alone over the city.
+    this.title.el.parentElement?.classList.toggle('sk-titling', s === 'title');
     this.pauseOn.set(s === 'pause');
     if (s === 'title') {
       this.title.open(

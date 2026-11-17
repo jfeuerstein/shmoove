@@ -177,7 +177,7 @@ export class SettingsScreen {
 
     const credits = el('div', 'sk-scredits');
     credits.append(
-      el('div', 'sk-scredhead', `Skitch ${host.version}`),
+      el('div', 'sk-scredhead', `Skitch v${host.version}`),
       el('div', 'sk-scredbody', 'Santa Rampa Transit Authority. Every shape, colour and sound is made in code.'),
     );
     body.append(sound, play, app, credits);
