@@ -8,6 +8,7 @@ import { angleDiff, clamp, datan2 } from '../../src/sim/math';
 import { Rng } from '../../src/sim/rng';
 import { Sim } from '../../src/sim/sim';
 import { CITY, buildCity, type City } from '../../src/sim/city';
+import { FUNI_X, MERCADO_STAIRS, PLAZA_BODA, SPINE_X } from '../../src/sim/city/layout';
 import { Mode, type SimEvent } from '../../src/sim/types';
 import {
   Surface,
@@ -16,8 +17,10 @@ import {
   makeWallHit,
   sampleTerrain,
   terrainHeight,
+  terrainSurface,
   topHeight,
   worldHash,
+  type Solid,
   type World,
 } from '../../src/sim/world';
 import { teleport } from './helpers';
@@ -69,6 +72,67 @@ function cellCovered(w: World, ix: number, iz: number): boolean {
     if (Math.abs(lx) <= o.hx + 0.01 && Math.abs(lz) <= o.hz + 0.01) return true;
   }
   return false;
+}
+
+/**
+ * Plan distance from (x, z) to a solid's footprint (0 inside), computed directly: no spatial hash,
+ * so a query radius larger than the hash's margin cannot miss a solid in a neighbouring bucket.
+ */
+function footprintDistance(o: Solid, x: number, z: number): number {
+  const dx = x - o.cx;
+  const dz = z - o.cz;
+  const lx = Math.abs(dx * o.cosR + dz * o.sinR) - o.hx;
+  const lz = Math.abs(-dx * o.sinR + dz * o.cosR) - o.hz;
+  return Math.hypot(Math.max(lx, 0), Math.max(lz, 0));
+}
+
+/** The nearest solid that would stop a body of this height standing at (x, y, z), within `radius`. */
+function solidWithin(w: World, x: number, y: number, z: number, radius: number, height: number, stepUp: number): Solid | null {
+  for (const o of w.solids) {
+    if (o.oneWay || y >= o.yTop - stepUp || y + height <= o.yBase) continue;
+    if (footprintDistance(o, x, z) < radius) return o;
+  }
+  return null;
+}
+
+/** Grade of the plane fitted to the open ground (not under a solid) of a 6 m patch centred on (x, z). */
+function patchGrade(w: World, x: number, z: number): number {
+  let n = 0;
+  let sx = 0;
+  let sz = 0;
+  let sh = 0;
+  let sxx = 0;
+  let szz = 0;
+  let sxz = 0;
+  let sxh = 0;
+  let szh = 0;
+  for (let i = -3; i <= 3; i++) {
+    for (let j = -3; j <= 3; j++) {
+      const h = terrainHeight(w, x + i, z + j);
+      if (topHeight(w, x + i, z + j) > h + 0.05) continue;
+      n++;
+      sx += i;
+      sz += j;
+      sh += h;
+      sxx += i * i;
+      szz += j * j;
+      sxz += i * j;
+      sxh += i * h;
+      szh += j * h;
+    }
+  }
+  if (n < 6) return 0;
+  const mx = sx / n;
+  const mz = sz / n;
+  const mh = sh / n;
+  const cxx = sxx / n - mx * mx;
+  const czz = szz / n - mz * mz;
+  const cxz = sxz / n - mx * mz;
+  const det = cxx * czz - cxz * cxz;
+  if (Math.abs(det) < 1e-9) return 0;
+  const cxh = sxh / n - mx * mh;
+  const czh = szh / n - mz * mh;
+  return Math.hypot((cxh * czz - czh * cxz) / det, (czh * cxx - cxh * cxz) / det);
 }
 
 describe('determinism and cost', () => {
@@ -135,6 +199,28 @@ describe('shape of the hill', () => {
     }
     expect(bad.slice(0, 10)).toEqual([]);
   });
+
+  it('has no cliff where nothing is built: not along the side edges, nor across any band boundary', () => {
+    // Over the whole grid: the strips along both side edges (where the ground curls up) and the
+    // rows of cells that straddle each band boundary carry no street edge, so nothing there may
+    // be steeper than 100%, covered by a wall or not.
+    const w = city.world;
+    const bad: string[] = [];
+    const bounds = [CITY.bands.mercado, CITY.bands.terraces, CITY.bands.antenna];
+    for (let iz = 0; iz < w.nz; iz++) {
+      const z0 = w.minZ + iz * w.cell;
+      const onBoundary = bounds.some((b) => z0 <= b && z0 + w.cell >= b);
+      for (let ix = 0; ix < w.nx; ix++) {
+        if (w.surfaces[iz * w.nx + ix] === Surface.WATER) continue;
+        const x0 = w.minX + ix * w.cell;
+        const nearEdge = x0 < w.minX + 9 || x0 + w.cell > w.maxX - 9;
+        if (!onBoundary && !nearEdge) continue;
+        const g = cellGrade(w, ix, iz);
+        if (g > 1) bad.push(`${x0},${z0}: ${(g * 100).toFixed(0)}%`);
+      }
+    }
+    expect(bad.slice(0, 10)).toEqual([]);
+  });
 });
 
 describe('the spine', () => {
@@ -168,8 +254,8 @@ describe('the spine', () => {
           expect(ok.has(TS.surface), `surface ${TS.surface} at ${x},${z} side ${side}`).toBe(true);
         }
         // Nothing solid within 2 m of that width.
-        collideSolids(w, x, y, z, 3.5 + 2, 2.5, 0.05, WH);
-        expect(WH.hit, `solid ${WH.solid} near spine at ${x},${z}`).toBe(false);
+        const o = solidWithin(w, x, y, z, 3.5 + 2, 2.5, 0.05);
+        expect(o, `${o?.kind} ${o?.index} near spine at ${x},${z}`).toBeNull();
       }
     }
     expect(rises).toBe(0);
@@ -234,6 +320,32 @@ describe('zones', () => {
       collideSolids(w, z.x, y, z.z - d, 1, 1.7, 0.4, WH);
       expect(WH.hit).toBe(false);
     }
+  });
+
+  it('a new skater at the spawn rolls off by itself and is below the first flight within 20 s', () => {
+    const w = city.world;
+    // The first flight below the spawn: walking straight downhill, the first stretch steeper than
+    // 20%, and the point where the ground eases off below it again.
+    let z = w.spawn.z;
+    while (terrainHeight(w, w.spawn.x, z) - terrainHeight(w, w.spawn.x, z - 1) < 0.2) z -= 1;
+    while (terrainHeight(w, w.spawn.x, z) - terrainHeight(w, w.spawn.x, z - 1) >= 0.1) z -= 1;
+    const flightFoot = z;
+    expect(w.spawn.z - flightFoot).toBeGreaterThan(10);
+    const sim = newSim(w);
+    teleport(sim, w.spawn.x, w.spawn.z, w.spawn.heading);
+    let fast = -1;
+    let below = -1;
+    let bails = 0;
+    for (let t = 0; t < 20 * 60; t++) {
+      sim.step({ steer: 0, hold: false, hop: false });
+      for (const e of sim.events) if (e.type === 'bail') bails++;
+      if (fast < 0 && sim.player.speed > 3) fast = t;
+      if (below < 0 && sim.player.z < flightFoot) below = t;
+    }
+    expect(fast, 'faster than 3 m/s').toBeGreaterThanOrEqual(0);
+    expect(fast).toBeLessThan(5 * 60);
+    expect(below, 'below the first flight').toBeGreaterThanOrEqual(0);
+    expect(bails).toBe(0);
   });
 
   it('every spawn sits on open ground, clear of water', () => {
@@ -436,12 +548,15 @@ describe('what stands on the hill', () => {
 });
 
 describe('no traps', () => {
-  it('a skater left anywhere above the docks rolls somewhere sensible', () => {
+  it('a skater left anywhere above the docks rolls down, rests on flat ground or keeps rolling: 400 drops', () => {
+    // The strict rule: every run ends 15 m or more below where it started, or at rest on ground
+    // flatter than 1.5% over a 6 m patch (the open ground round it), or still rolling. None at rest
+    // on a slope, none rocking on the spot, at most one bail each, and bails in under 5% of runs.
     const w = city.world;
     const rng = new Rng(4242);
     const ok = new Set<number>([Surface.STREET, Surface.PLAZA, Surface.STAIRS]);
-    const starts: [number, number][] = [];
-    while (starts.length < 60) {
+    const starts: [number, number, number][] = [];
+    while (starts.length < 400) {
       const ix = rng.int(w.nx);
       const iz = rng.int(w.nz);
       const x = w.minX + (ix + 0.5) * w.cell;
@@ -450,14 +565,13 @@ describe('no traps', () => {
       if (topHeight(w, x, z) > terrainHeight(w, x, z) + 0.05) continue;
       collideSolids(w, x, terrainHeight(w, x, z), z, 0.4, 1.7, 0.4, WH);
       if (WH.hit) continue;
-      starts.push([x, z]);
+      starts.push([x, z, rng.range(-Math.PI, Math.PI)]);
     }
-    let good = 0;
-    const report: string[] = [];
     const problems: string[] = [];
-    for (const [x0, z0] of starts) {
+    let bailRuns = 0;
+    for (const [x0, z0, h0] of starts) {
       const sim = newSim(w);
-      teleport(sim, x0, z0, rng.range(-Math.PI, Math.PI));
+      teleport(sim, x0, z0, h0);
       const y0 = sim.player.y;
       let bails = 0;
       const hist: [number, number][] = [];
@@ -479,20 +593,106 @@ describe('no traps', () => {
         }
       }
       const p = sim.player;
-      if (bails > 1) problems.push(`${bails} bails from ${x0},${z0}`);
+      const from = `from ${x0},${z0} heading ${h0.toFixed(3)}`;
+      if (bails > 0) bailRuns++;
+      if (bails > 1) problems.push(`${bails} bails ${from}`);
       const back = hist[hist.length - 11];
       const moved = Math.hypot(p.x - back[0], p.z - back[1]);
-      if (p.speed > 0.5 && moved < 1) problems.push(`oscillating at ${p.x.toFixed(0)},${p.z.toFixed(0)} from ${x0},${z0}`);
-      sampleTerrain(w, p.x, p.z, TS);
-      const grade = p.onSolid >= 0 ? 0 : Math.hypot(TS.gx, TS.gz);
-      const descended = y0 - p.y >= 15;
-      const rests = p.mode === Mode.GROUND && p.speed < 0.3 && grade < 0.015;
-      if (descended || rests) good++;
-      else report.push(`${x0.toFixed(0)},${z0.toFixed(0)} -> ${p.x.toFixed(0)},${p.z.toFixed(0)} v${p.speed.toFixed(1)} g${grade.toFixed(3)}`);
+      if (p.speed > 0.5 && moved < 1) problems.push(`rocking at ${p.x.toFixed(1)},${p.z.toFixed(1)} ${from}`);
+      if (y0 - p.y >= 15) continue;
+      if (p.mode === Mode.GROUND && p.speed < 0.3) {
+        const grade = p.onSolid >= 0 ? 0 : patchGrade(w, p.x, p.z);
+        if (grade >= 0.015) problems.push(`at rest on ${(grade * 100).toFixed(1)}% at ${p.x.toFixed(1)},${p.z.toFixed(1)} ${from}`);
+      }
     }
     expect(problems).toEqual([]);
-    expect(good / starts.length, report.join('\n')).toBeGreaterThanOrEqual(0.85);
-  }, 60_000);
+    expect(bailRuns / starts.length).toBeLessThan(0.05);
+  }, 120_000);
+
+  it('a skater at rest in the middle of any landing on a stair street starts rolling again', () => {
+    // Landings found by walking each stair street's axis: a stretch of at least 4 m flatter than
+    // 10% between two flights steeper than 20%. The wedding plaza (level by design) is left out.
+    const w = city.world;
+    const axes = [SPINE_X, FUNI_X, ...MERCADO_STAIRS];
+    const landings: [number, number][] = [];
+    const paved = new Set<number>([Surface.STAIRS, Surface.STREET, Surface.PLAZA]);
+    for (const x of axes) {
+      let inFlight = false;
+      let flatFrom = -1;
+      let flatTo = -1;
+      for (let z = CITY.bands.mercado; z < CITY.bands.antenna + 10; z += 0.5) {
+        if (!paved.has(terrainSurface(w, x, z))) {
+          inFlight = false;
+          flatFrom = -1;
+          continue;
+        }
+        const g = terrainHeight(w, x, z + 0.5) - terrainHeight(w, x, z - 0.5);
+        if (g > 0.2) {
+          if (inFlight && flatFrom >= 0 && flatTo - flatFrom >= 4) landings.push([x, (flatFrom + flatTo) / 2]);
+          inFlight = true;
+          flatFrom = -1;
+        } else if (g < 0.1) {
+          if (flatFrom < 0) flatFrom = z;
+          flatTo = z;
+        }
+      }
+    }
+    const plaza = (x: number, z: number): boolean => x > PLAZA_BODA.x0 && x < PLAZA_BODA.x1 && z > PLAZA_BODA.z0 && z < PLAZA_BODA.z1 + 3;
+    // A landing with a building standing below it (where a stair street begins again behind the
+    // church) has no flight to roll down to.
+    const flightBelow = (x: number, z: number): boolean => {
+      for (let d = 8; d <= 16; d += 1) if (topHeight(w, x, z - d) > terrainHeight(w, x, z - d) + 0.5) return false;
+      return true;
+    };
+    const list = landings.filter(([x, z]) => !plaza(x, z) && flightBelow(x, z));
+    expect(list.length).toBeGreaterThanOrEqual(40);
+    const slow: string[] = [];
+    for (const [x, z] of list) {
+      for (const heading of [Math.PI, Math.PI / 2]) {
+        const sim = newSim(w);
+        teleport(sim, x, z, heading);
+        let moving = false;
+        for (let t = 0; t < 6 * 60 && !moving; t++) {
+          sim.step({ steer: 0, hold: false, hop: false });
+          if (sim.player.speed > 1.5) moving = true;
+        }
+        if (!moving) slow.push(`${x},${z.toFixed(1)} facing ${heading.toFixed(2)}: ${sim.player.speed.toFixed(2)} m/s`);
+      }
+    }
+    expect(slow).toEqual([]);
+  });
+
+  it('the summit is crowned: every point of it falls at least 3% toward the spine or down the hill', () => {
+    const w = city.world;
+    const top = CITY.bands.top - 30;
+    const flat: string[] = [];
+    for (let iz = 0; iz < w.nz; iz++) {
+      const zc = w.minZ + (iz + 0.5) * w.cell;
+      if (zc < top) continue;
+      for (let ix = 0; ix < w.nx; ix++) {
+        const xc = w.minX + (ix + 0.5) * w.cell;
+        sampleTerrain(w, xc, zc, TS);
+        const g = Math.hypot(TS.gx, TS.gz);
+        // Downhill is (-gx, -gz): it must lead south or toward the spine.
+        const toward = -TS.gz < 0 || -TS.gx * Math.sign(xc) < 0;
+        if (g < 0.03 || !toward) flat.push(`${xc},${zc}: ${(g * 100).toFixed(1)}%`);
+      }
+    }
+    expect(flat.slice(0, 10)).toEqual([]);
+    // And a slow skater left up there anywhere rolls off it.
+    const stuck: string[] = [];
+    for (let x = -165; x <= 165; x += 30) {
+      for (let z = top + 5; z < w.maxZ - 3; z += 12) {
+        if (topHeight(w, x, z) > terrainHeight(w, x, z) + 0.05) continue;
+        const sim = newSim(w);
+        teleport(sim, x, z, 0);
+        const y0 = sim.player.y;
+        for (let t = 0; t < 60 * 60; t++) sim.step({ steer: 0, hold: false, hop: false });
+        if (y0 - sim.player.y < 15) stuck.push(`${x},${z} -> ${sim.player.x.toFixed(0)},${sim.player.z.toFixed(0)}`);
+      }
+    }
+    expect(stuck).toEqual([]);
+  });
 });
 
 describe('stairs and rails in the real city', () => {

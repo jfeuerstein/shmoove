@@ -7,16 +7,21 @@ import { Rng } from '../rng';
 import { Surface, addRail, addSolid, terrainHeight, type World } from '../world';
 import {
   CITY,
+  FUNI_X,
   FUNI_X0,
   FUNI_X1,
   HILL_STATION,
   LEVELS,
+  MERCADO_STAIRS,
   NEEDLE,
   PAD_DEPTH,
   PLAZA_BODA,
+  PLAZA_LEVEL_Z,
+  SPINE_HALF,
   baseHeight,
   docksHeight,
   levelHeight,
+  streetHeight,
   type Level,
 } from './layout';
 import { PARAPET, ROAD_HALF, SPINE_X, STAIR_HALF } from './layout';
@@ -201,40 +206,65 @@ function dressDocks(w: World, rng: Rng): void {
 // ---------------------------------------------------------------------------------------------
 // Mercado Steps
 
-/** Building blocks between the N-S streets (stairs at -84, -56, 28, 56, 84, run-out -28, spine 0). */
+/**
+ * Building blocks between the N-S streets (stairs at -84, -56, 28, 56, 84, run-out -28, spine 0):
+ * each block's side walls stand 2 m off the stair street beside it.
+ */
 const BLOCK_X: readonly [number, number][] = [
-  [-100, -89],
-  [-79, -61],
-  [-51, -35],
-  [-21, -9],
-  [9, 23],
-  [33, 51],
-  [61, 79],
-  [89, 100],
+  [-100, -90],
+  [-78, -62],
+  [-50, -36],
+  [-20, -8],
+  [8, 22],
+  [34, 50],
+  [62, 78],
+  [90, 100],
 ];
+
+/** Stair streets of the Mercado as [axis, half width], the spine and the funicular run-out included. */
+const MERCADO_CROSSINGS: readonly (readonly [number, number])[] = [[SPINE_X, SPINE_HALF], [FUNI_X, 6], ...MERCADO_STAIRS.map((x) => [x, STAIR_HALF] as const)];
+
+/** Market stalls along each landing's back edge either side of the spine (x ranges). */
+const STALL_RUNS: readonly [number, number][] = [
+  [-21.5, -9],
+  [9, 21.5],
+];
+const STALL_STEP = 3.2;
+/** The landing the funicular's bottom turn-round sweeps (no stalls on its west side). */
+const FUNI_TRACK_LEVEL = 566;
+const STALL_HALF = 1.1;
+const STALL_DEPTH = 1.4;
 
 interface Gap {
   zA: number;
   zB: number;
+  /** Height of the lower street's back edge and of the upper street's front edge at x. */
   yLow: (x: number) => number;
   yUp: (x: number) => number;
   /** Awnings over the lower street. */
   awnings: boolean;
 }
 
+/** A one-way awning over [x0, x1] x [z0, z1] whose underside is 2.3-3.0 m above every point beneath, if one fits. */
+function awning(w: World, rng: Rng, x0: number, x1: number, z0: number, z1: number): boolean {
+  const ag = groundRange(w, x0, x1, z0, z1);
+  const room = ag.lo + 2.95 - (ag.hi + 2.35);
+  if (room < 0) return false;
+  const yA = ag.hi + 2.35 + rng.range(0, room);
+  box(w, x0, x1, z0, z1, yA, yA + 0.2, 'awning', rng.int(6), Surface.AWNING, true);
+  return true;
+}
+
 function dressMercado(w: World, rng: Rng, firstTerrace: number): number {
   const merc = LEVELS.slice(0, firstTerrace);
-  const gaps: Gap[] = [
-    { zA: CITY.bands.mercado + 3, zB: merc[0].z0, yLow: () => docksHeight(CITY.bands.mercado), yUp: (x) => levelHeight(merc[0], x), awnings: true },
-  ];
-  for (let i = 0; i + 1 < merc.length; i++) {
-    const a = merc[i];
-    const b = merc[i + 1];
-    gaps.push({ zA: a.z1, zB: b.z0, yLow: (x) => levelHeight(a, x), yUp: (x) => levelHeight(b, x), awnings: true });
-  }
+  const back = (L: Level) => (x: number) => streetHeight(L, x, L.z1);
+  const front = (L: Level) => (x: number) => streetHeight(L, x, L.z0);
+  const gaps: Gap[] = [{ zA: CITY.bands.mercado + 3, zB: merc[0].z0, yLow: () => docksHeight(CITY.bands.mercado), yUp: front(merc[0]), awnings: true }];
+  for (let i = 0; i + 1 < merc.length; i++) gaps.push({ zA: merc[i].z1, zB: merc[i + 1].z0, yLow: back(merc[i]), yUp: front(merc[i + 1]), awnings: true });
   const top = merc[merc.length - 1];
   const pad = LEVELS[firstTerrace];
-  gaps.push({ zA: top.z1, zB: pad.z0 - 3, yLow: (x) => levelHeight(top, x), yUp: (x) => levelHeight(pad, x), awnings: true });
+  gaps.push({ zA: top.z1, zB: pad.z0 - 3, yLow: back(top), yUp: front(pad), awnings: true });
+  const stallAt = (x0: number, x1: number): boolean => STALL_RUNS.some(([a, b]) => x1 > a && x0 < b);
 
   let awnings = 0;
   for (const gap of gaps) {
@@ -277,27 +307,54 @@ function dressMercado(w: World, rng: Rng, firstTerrace: number): number {
             const xc = (x0 + x1) / 2;
             let yTop: number;
             if (north) {
-              const yUp = Math.min(gap.yUp(x0), gap.yUp(x1));
-              yTop = rng.chance(0.55) ? yUp + rng.range(-0.9, 0.9) : yUp + rng.range(2.0, 3.5);
+              // The uphill row: low roofs a step below the front edge of the street above, so a
+              // skater rolling off that street lands on them instead of meeting a wall.
+              yTop = Math.max(Math.min(gap.yUp(x0), gap.yUp(x1)) - rng.range(0.1, 0.6), g.hi + 0.05);
             } else {
-              yTop = gap.yLow(xc) + rng.range(6.5, 8.5);
+              // The downhill row: the tall street wall over the lower street.
+              yTop = gap.yLow(xc) + rng.range(9, 14);
+              yTop = Math.max(yTop, terrainHeight(w, xc, (z0 + z1) / 2) + 5, g.hi + 2.5);
             }
-            yTop = Math.max(yTop, g.hi + 2.5);
             box(w, x0, x1, z0, z1, g.lo - 1, yTop, 'building', rng.int(8));
             paintUnder(w, x0, x1, z0, z1, Surface.PLAZA);
-            // Awnings over the street below the front of the lowest row.
-            if (gap.awnings && z0 === gap.zA && rng.chance(0.88)) {
-              // Underside 2.35-2.95 m above every point of the street beneath.
-              const ag = groundRange(w, x0 + 0.4, x1 - 0.4, z0 - 3.2, z0 - 0.4);
-              const room = ag.lo + 2.95 - (ag.hi + 2.35);
-              if (room >= 0) {
-                const yA = ag.hi + 2.35 + rng.range(0, room);
-                box(w, x0 + 0.4, x1 - 0.4, z0 - 3.2, z0 - 0.4, yA, yA + 0.2, 'awning', rng.int(6), Surface.AWNING, true);
-                awnings++;
-              }
-            }
+            // Awnings over the street below the front of the lowest row (not where stalls stand).
+            const lowest = z0 === gap.zA && gap.zA > CITY.bands.mercado + 5;
+            if (gap.awnings && lowest && !stallAt(x0, x1) && rng.chance(0.88) && awning(w, rng, x0 + 0.4, x1 - 0.4, z0 - 3.2, z0 - 0.4)) awnings++;
           }
         }
+      }
+    }
+  }
+
+  // Where a flight comes down onto a landing (and where the next one leaves it), awnings over the
+  // outer thirds of the stair street, underside within reach of the landing: what a skater coming
+  // off the flight or its handrail lands on.
+  for (const L of merc) {
+    const third = (L.z1 - L.z0) / 3;
+    for (const [a, h] of MERCADO_CROSSINGS) {
+      if (L.z === PLAZA_LEVEL_Z && a > PLAZA_BODA.x0 && a < PLAZA_BODA.x1) continue;
+      // The funicular's bottom turn-round and stop are on this crossing.
+      if (L.z === FUNI_TRACK_LEVEL && a === FUNI_X) continue;
+      for (const [z0, z1] of [
+        [L.z1 - third, L.z1 - 0.3],
+        [L.z0 + 0.3, L.z0 + third],
+      ] as const) {
+        for (const [x0, x1] of [
+          [a - h, a - h / 3],
+          [a + h / 3, a + h],
+        ] as const) {
+          if (awning(w, rng, x0, x1, z0, z1)) awnings++;
+        }
+      }
+    }
+    // Market stalls along the back edge either side of the spine, clear of its width, backed onto
+    // the building wall behind (not where the wedding parade or the funicular turns).
+    for (const [r0, r1] of STALL_RUNS) {
+      if (L.z === PLAZA_LEVEL_Z && r0 > 0) continue;
+      if (L.z === FUNI_TRACK_LEVEL && r0 < 0) continue;
+      for (let x = r0 + STALL_HALF; x + STALL_HALF <= r1 + 1e-6; x += STALL_STEP) {
+        const ys = streetHeight(L, x, L.z1);
+        box(w, x - STALL_HALF, x + STALL_HALF, L.z1 - STALL_DEPTH, L.z1, ys - 0.2, ys + 2.4, 'stall', rng.int(6));
       }
     }
   }
@@ -313,11 +370,12 @@ function dressMercado(w: World, rng: Rng, firstTerrace: number): number {
     box(w, x - 1.1, x + 1.1, P.z1 - 2.0, P.z1 - 0.4, yP - 0.2, yP + 2.4, 'stall', rng.int(6));
   }
   box(w, 38.5, 41.5, 467.5, 470.5, yP - 0.2, yP + 1.0, 'kiosk', 1);
-  // Spice row: stalls along the south side of the landing at 514.
+  // Spice row: stalls along the back of the landing at 514, clear of the stair streets.
   const spice = merc[4];
   for (let x = -100; x <= -64; x += 6) {
-    const ys = levelHeight(spice, x);
-    box(w, x - 1.1, x + 1.1, spice.z - 7.2, spice.z - 5.6, ys - 0.2, ys + 2.4, 'stall', rng.int(6));
+    if (MERCADO_CROSSINGS.some(([a, h]) => Math.abs(x - a) < h + STALL_HALF + 1)) continue;
+    const ys = streetHeight(spice, x, spice.z1);
+    box(w, x - STALL_HALF, x + STALL_HALF, spice.z1 - STALL_DEPTH, spice.z1, ys - 0.2, ys + 2.4, 'stall', rng.int(6));
   }
   return awnings;
 }

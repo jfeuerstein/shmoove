@@ -137,71 +137,45 @@ export function levelHeight(L: Level, x: number): number {
     if (x <= PLAZA_FLAT_X1) return flat;
     return L.yEnd + ((flat - L.yEnd) * (APEX_X - ax)) / (APEX_X - PLAZA_FLAT_X1);
   }
-  return L.yEnd + PAD_TILT * (APEX_X - ax);
+  return L.yEnd + (L === LEVELS[0] ? FIRST_TILT : PAD_TILT) * (APEX_X - ax);
 }
 
+/** The first landing crests lower, so the flight up to it from the docks stays under 45%. */
+const FIRST_TILT = 0.0175;
+
 /**
- * Where a level is crossed by a stair street (or the funicular bed), its street also falls toward
- * the flight below, so a skater who has come to rest on the stair street's path rolls on down.
+ * Every level also falls across its width toward its front (downhill) edge, the edge the flights
+ * below leave from, so a skater who has come to rest anywhere on it rolls on: down a flight where
+ * a stair street crosses, onto the low roofs that line the front edge between them.
  */
 export const CROSS_FALL = 0.033;
-/** The spawn lookout's fall: steeper, so a new skater rolls off without a push. */
+/** The top Mercado landing is the spawn's lookout apron: steeper, so a new skater rolls off without a push. */
 export const SPAWN_FALL = 0.05;
-/** The new-game spawn: on the spine's apron at the top landing of the Mercado, facing downhill. */
+/** The new-game spawn: on the spine at the top landing of the Mercado, facing downhill. */
 export const SPAWN_LEVEL_Z = 566;
 export const SPAWN_Z = 570;
-/**
- * The cross fall is full to CROSS_PAD beyond a stair street's edge (negative: inside it) and fades
- * out over the next CROSS_FADE, before the building rows that flank the street begin.
- */
-const CROSS_PAD = -0.5;
-const CROSS_FADE = 2;
+/** Over this x range the plaza landing (the wedding plaza) and the landing above it (whose front edge is the church) keep no cross fall. */
+const NO_FALL_FADE = 4;
 
-/** Axis and half width of every stair street (and the funicular bed) crossing a level. */
-export function crossings(L: Level): readonly (readonly [number, number])[] {
-  if (L.terrace) return [[SPINE_X, SPINE_HALF], [(FUNI_X0 + FUNI_X1) / 2, (FUNI_X1 - FUNI_X0) / 2]];
-  const out: [number, number][] = [[SPINE_X, SPINE_HALF], [FUNI_X, 6]];
-  for (const x of MERCADO_STAIRS) {
-    // The stair streets that open onto the wedding plaza arrive at its level floor, and resume
-    // at the next landing up with no flight below it (the church stands there).
-    if ((L.z === PLAZA_LEVEL_Z || L.z === PLAZA_LEVEL_Z + 52) && x > PLAZA_FLAT_X0 && x < PLAZA_FLAT_X1) continue;
-    out.push([x, STAIR_HALF]);
-  }
-  return out;
-}
-
-/** Weight (0..1) of the cross fall at x on level L. */
+/** Weight (0..1) of a level's cross fall at x. */
 export function crossWeight(L: Level, x: number): number {
-  let wt = 0;
-  for (const [a, h] of crossings(L)) {
-    const d = Math.abs(x - a) - h - CROSS_PAD;
-    if (d <= 0) return 1;
-    if (d < CROSS_FADE) {
-      const t = 1 - d / CROSS_FADE;
-      wt = Math.max(wt, t * t * (3 - 2 * t));
-    }
-  }
-  return wt;
+  if (L.z !== PLAZA_LEVEL_Z && L.z !== PLAZA_LEVEL_Z + 52) return 1;
+  const d = Math.max(PLAZA_FLAT_X0 - x, x - PLAZA_FLAT_X1);
+  if (d <= 0) return 0;
+  if (d >= NO_FALL_FADE) return 1;
+  const t = d / NO_FALL_FADE;
+  return t * t * (3 - 2 * t);
 }
 
 /**
- * Height of a level's street at (x, z): its profile along x, plus the fall toward the flight below
- * at crossings. The fall hangs from the street's back edge, so a crossing is a shallow trough:
- * rolling into one from the street beside it is always downhill.
+ * Height of a level's street at (x, z): its profile along x, plus its cross fall. The fall hangs
+ * from the street's back edge, which keeps the height of the profile.
  */
 export function streetHeight(L: Level, x: number, z: number): number {
-  const wt = crossWeight(L, x);
   const zz = z < L.z0 ? L.z0 : z > L.z1 ? L.z1 : z;
-  // Away from the crossings a Mercado landing dishes toward its centre line, so a skater rolling
-  // slowly along it drifts off the stalls and walls at its edges rather than being held there.
-  const dish = L.terrace || (L.z === PLAZA_LEVEL_Z && x > PLAZA_FLAT_X0 && x < PLAZA_FLAT_X1) ? 0 : LANDING_DISH * (1 - wt) * Math.abs(zz - L.z);
-  if (wt <= 0) return levelHeight(L, x) + dish;
-  const fall = L.z === SPAWN_LEVEL_Z && Math.abs(x - SPINE_X) <= SPINE_HALF + CROSS_PAD + CROSS_FADE ? SPAWN_FALL : CROSS_FALL;
-  return levelHeight(L, x) + dish + wt * fall * (zz - L.z1);
+  const fall = L.z === SPAWN_LEVEL_Z ? SPAWN_FALL : CROSS_FALL;
+  return levelHeight(L, x) + crossWeight(L, x) * fall * (zz - L.z1);
 }
-
-/** Cross fall of a Mercado landing toward its centre line. */
-export const LANDING_DISH = 0;
 
 // ---------------------------------------------------------------------------------------------
 // Strips and stair streets.
