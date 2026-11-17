@@ -34,14 +34,22 @@ export function rgb(hex: number, out: THREE.Color = new THREE.Color()): THREE.Co
   return out.setRGB(((hex >> 16) & 255) / 255, ((hex >> 8) & 255) / 255, (hex & 255) / 255);
 }
 
+/**
+ * Distance haze, m of view depth: clear to FOG_NEAR, the horizon colour by FOG_FAR. The far end sits
+ * just past where the streamed city stops (`STREAM.FAR_R` in cityView.ts), so the furthest chunks
+ * arrive already in the haze instead of appearing half-faded against an empty band.
+ */
+export const FOG_NEAR = 190;
+export const FOG_FAR = 350;
+
 /** Uniforms shared by every ink material, sky and shadow. Set by `applyTimeOfDay` and `setViewport`. */
 export const LOOK = {
   uSunDir: { value: new THREE.Vector3(0.45, 0.75, 0.48).normalize() },
   uLitTint: { value: new THREE.Color(1, 1, 1) },
   uShadowInk: { value: new THREE.Color(0.56, 0.55, 0.88) },
   uFogColor: { value: rgb(INK.paper) },
-  uFogNear: { value: 140 },
-  uFogFar: { value: 520 },
+  uFogNear: { value: FOG_NEAR },
+  uFogFar: { value: FOG_FAR },
   uNight: { value: 0 },
   uGlowColor: { value: rgb(INK.mango) },
   uSkyTop: { value: new THREE.Color(0.44, 0.78, 0.85) },
@@ -283,14 +291,14 @@ interface Key {
 
 /** Sky and ink ramps through the 12-minute day. 0 = midnight. */
 const KEYS: Key[] = [
-  { t: 0.0, top: 0x0b1447, horizon: 0x243a9e, tint: [0.5, 0.58, 0.92], shadow: [0.42, 0.45, 0.8], night: 1 },
-  { t: 0.2, top: 0x0f1a55, horizon: 0x2c44aa, tint: [0.52, 0.6, 0.93], shadow: [0.42, 0.45, 0.8], night: 1 },
+  { t: 0.0, top: 0x0b1447, horizon: 0x243a9e, tint: [0.36, 0.43, 0.84], shadow: [0.46, 0.48, 0.8], night: 1 },
+  { t: 0.2, top: 0x0f1a55, horizon: 0x2c44aa, tint: [0.38, 0.45, 0.85], shadow: [0.46, 0.48, 0.8], night: 1 },
   { t: 0.255, top: 0x5b6bd6, horizon: 0xff8fb5, tint: [1.0, 0.84, 0.88], shadow: [0.58, 0.48, 0.82], night: 0.35 },
   { t: 0.31, top: 0x6fc7d9, horizon: 0xf3ebdd, tint: [1, 1, 1], shadow: [0.56, 0.55, 0.88], night: 0 },
   { t: 0.69, top: 0x62bfd6, horizon: 0xf3ebdd, tint: [1, 1, 1], shadow: [0.56, 0.55, 0.88], night: 0 },
   { t: 0.755, top: 0x7a4fc9, horizon: 0xffae1a, tint: [1.0, 0.86, 0.7], shadow: [0.62, 0.45, 0.78], night: 0.3 },
-  { t: 0.81, top: 0x141c5e, horizon: 0x3a3aa8, tint: [0.55, 0.6, 0.92], shadow: [0.42, 0.45, 0.8], night: 1 },
-  { t: 1.0, top: 0x0b1447, horizon: 0x243a9e, tint: [0.5, 0.58, 0.92], shadow: [0.42, 0.45, 0.8], night: 1 },
+  { t: 0.81, top: 0x141c5e, horizon: 0x3a3aa8, tint: [0.4, 0.46, 0.86], shadow: [0.46, 0.48, 0.8], night: 1 },
+  { t: 1.0, top: 0x0b1447, horizon: 0x243a9e, tint: [0.36, 0.43, 0.84], shadow: [0.46, 0.48, 0.8], night: 1 },
 ];
 
 const _c0 = new THREE.Color();

@@ -55,7 +55,8 @@ export function createView(canvas: HTMLCanvasElement, world: World, opts: ViewOp
   const scene = new THREE.Scene();
   const chase = new ChaseCamera();
   const riso = createRiso();
-  scene.add(createSky());
+  const sky = createSky();
+  scene.add(sky);
 
   const worldView = (opts.worldView ?? createStaticWorldView)(world);
   scene.add(worldView.group);
@@ -221,6 +222,10 @@ export function createView(canvas: HTMLCanvasElement, world: World, opts: ViewOp
       worldView.dispose();
       vehicles.dispose();
       skater.dispose();
+      strap.geometry.dispose();
+      aim.geometry.dispose();
+      sky.geometry.dispose();
+      (sky.material as THREE.Material).dispose();
       riso.dispose();
       renderer.dispose();
     },

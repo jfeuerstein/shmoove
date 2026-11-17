@@ -227,3 +227,14 @@ Decisions made without the owner in the room, newest last. Cuts are marked **CUT
     on a segment with no horizontal extent, so the same lookup could return different headings: a
     latent determinism bug since M1, exposed when the blimp's new descent met the vehicle memo.
     Segment directions are now precomputed, a vertical segment borrowing its neighbour's.
+
+## M6d — Independent check of the drawn city, vehicles, city fixes and perf pass
+
+69. **Haze ends where the streamed city ends.** The furthest chunks arrive 290–345 m out, where the
+    old haze (140–520 m) was only 40% deep, so they appeared half-faded against an empty band. Haze
+    now runs 190–350 m: the middle distance is clearer than before and the far ring arrives already
+    in the horizon colour. The distances are named constants in `look.ts` beside the reason.
+70. **Night prints in cobalt.** The verifier found night reading as a dimmed day. The night ink tint
+    went from about half strength to a third, so the hill is cobalt and lit windows, signs and cabin
+    lights carry the picture. Whether a rail can still be read at speed at night is on the playtest
+    list.

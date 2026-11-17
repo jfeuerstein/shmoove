@@ -30,6 +30,11 @@ function wrap(a: number): number {
   return a - Math.PI * 2 * Math.floor((a + Math.PI) / (Math.PI * 2));
 }
 
+/** Fraction of the way to a target covered in `dt` at an exponential `rate`. */
+function ease(dt: number, rate: number): number {
+  return 1 - Math.exp(-rate * dt);
+}
+
 export class ChaseCamera {
   readonly camera = new THREE.PerspectiveCamera(FEEL.CAM_FOV, 9 / 19.5, 0.3, 1200);
   private yaw = 0;
@@ -80,30 +85,29 @@ export class ChaseCamera {
     const F = FEEL;
     if (!this.started) this.snap(t);
     this.time += dt;
-    const ease = (rate: number): number => 1 - Math.exp(-rate * dt);
 
     // Swing behind the direction of travel.
-    this.yaw = wrap(this.yaw + wrap(this.wantedYaw(t) - this.yaw) * ease(F.CAM_YAW_RATE));
+    this.yaw = wrap(this.yaw + wrap(this.wantedYaw(t) - this.yaw) * ease(dt, F.CAM_YAW_RATE));
     const fx = Math.sin(this.yaw);
     const fz = Math.cos(this.yaw);
 
     // Follow height tightly on the ground, loosely in the air so hops read as hops.
     const air = t.mode === Mode.AIR || t.mode === Mode.WALL;
-    this.followY += (t.y - this.followY) * ease(air ? F.CAM_POS_RATE * F.CAM_AIR_FOLLOW : F.CAM_POS_RATE);
+    this.followY += (t.y - this.followY) * ease(dt, air ? F.CAM_POS_RATE * F.CAM_AIR_FOLLOW : F.CAM_POS_RATE);
 
     // Climb rate along the travel direction: look up the hill when going up it.
     const sh = Math.hypot(t.vx, t.vz);
     const climb = dt > 0 && sh > 1 ? (t.y - this.lastY) / dt / sh : 0;
     this.lastY = t.y;
-    this.slope += (Math.max(-0.5, Math.min(0.5, climb)) - this.slope) * ease(F.CAM_CLIMB_RATE);
+    this.slope += (Math.max(-0.5, Math.min(0.5, climb)) - this.slope) * ease(dt, F.CAM_CLIMB_RATE);
 
     const speedK = Math.min(1, t.speed / F.CAM_TOP_SPEED);
     const hitched = t.mode === Mode.HITCH;
     const wantDist = speedK * F.CAM_SPEED_DIST + (hitched ? F.CAM_HITCH_DIST : 0);
     const wantHeight =
       (hitched ? F.CAM_HITCH_HEIGHT : 0) + (air ? F.CAM_AIR_HEIGHT : 0) + Math.max(0, this.slope) * F.CAM_UPHILL_GAIN * F.CAM_UPHILL_HEIGHT;
-    this.extraDist += (wantDist - this.extraDist) * ease(F.CAM_EXTRA_RATE);
-    this.extraHeight += (wantHeight - this.extraHeight) * ease(F.CAM_EXTRA_RATE);
+    this.extraDist += (wantDist - this.extraDist) * ease(dt, F.CAM_EXTRA_RATE);
+    this.extraHeight += (wantHeight - this.extraHeight) * ease(dt, F.CAM_EXTRA_RATE);
     const dist = F.CAM_DIST + this.extraDist;
     const height = F.CAM_HEIGHT + this.extraHeight;
 
@@ -120,7 +124,7 @@ export class ChaseCamera {
         break;
       }
     }
-    this.pull += (clear - this.pull) * ease(clear < this.pull ? F.CAM_PULL_IN_RATE : F.CAM_PULL_OUT_RATE);
+    this.pull += (clear - this.pull) * ease(dt, clear < this.pull ? F.CAM_PULL_IN_RATE : F.CAM_PULL_OUT_RATE);
 
     let cx = t.x - fx * dist * this.pull;
     let cz = t.z - fz * dist * this.pull;
@@ -144,12 +148,12 @@ export class ChaseCamera {
     const far = F.CAM_LOOK_FAR;
     const ahead = terrainHeight(world, t.x + fx * far, t.z + fz * far) - terrainHeight(world, t.x, t.z);
     const wantTilt = Math.max(-F.CAM_LOOK_TILT_MAX, Math.min(F.CAM_LOOK_TILT_MAX, ahead * F.CAM_LOOK_SLOPE));
-    this.tilt += (wantTilt - this.tilt) * ease(F.CAM_TILT_RATE);
+    this.tilt += (wantTilt - this.tilt) * ease(dt, F.CAM_TILT_RATE);
     _look.set(t.x + fx * F.CAM_LOOK_AHEAD, this.followY + F.CAM_LOOK_UP + this.tilt, t.z + fz * F.CAM_LOOK_AHEAD);
     this.camera.lookAt(_look);
 
     const wantFov = F.CAM_FOV + F.CAM_FOV_SPEED * speedK;
-    this.fov += (wantFov - this.fov) * ease(F.CAM_FOV_RATE);
+    this.fov += (wantFov - this.fov) * ease(dt, F.CAM_FOV_RATE);
     if (Math.abs(this.camera.fov - this.fov) > 0.01) {
       this.camera.fov = this.fov;
       this.camera.updateProjectionMatrix();
