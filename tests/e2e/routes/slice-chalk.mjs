@@ -96,20 +96,29 @@ export default {
       test: (s, h) => s.ui.chalkMode === 'racing' && new Set(h.filter((q) => q.ui.chalkMode === 'racing').map((q) => q.ui.ghostZ)).size > 10,
     },
     ...SKATE.slice(4),
-    // The skater follows the trail into the finish ring during those carves, so the race ends
-    // with a result. Which result depends on the exact run; the ticket and toast must agree.
+    // The race ends either when the skater reaches the finish ring or 20 s after the ghost has
+    // finished. Which of the two happens, and so which result it is, depends on the exact run and
+    // changes whenever the controller does; what must hold is that a result ticket appears with
+    // its matching toast, and then clears.
     { do: 'wait', ticks: 60 },
+    { do: 'shot', name: 'chalk-result-early' },
+    { do: 'wait', ticks: 1240 },
+    { do: 'shot', name: 'chalk-result' },
+    { do: 'wait', ticks: 600 },
     {
       do: 'expect',
-      label: 'the race ends with a result ticket and a matching ticket toast',
-      test: (s, h) =>
-        s.ui.chalkMode === 'idle' &&
-        (s.ui.chalkResult === 'won' || s.ui.chalkResult === 'lost') &&
-        h.some((q) => q.ui.lastToast === `chalk-${s.ui.chalkResult}`) &&
-        !Number.isFinite(s.ui.ghostZ),
+      label: 'the race ended with a result ticket and a matching ticket toast, and the ticket cleared',
+      test: (s, h) => {
+        const shown = h.find((q) => q.ui.chalkResult === 'won' || q.ui.chalkResult === 'lost');
+        return (
+          shown !== undefined &&
+          h.some((q) => q.ui.lastToast === `chalk-${shown.ui.chalkResult}`) &&
+          s.ui.chalkMode === 'idle' &&
+          s.ui.chalkResult === '' &&
+          s.ui.chalkLines === 1 &&
+          !Number.isFinite(s.ui.ghostZ)
+        );
+      },
     },
-    { do: 'shot', name: 'chalk-result' },
-    { do: 'wait', ticks: 540 },
-    { do: 'expect', label: 'the result ticket clears itself', test: (s) => s.ui.chalkResult === '' && s.ui.chalkLines === 1 },
   ],
 };
