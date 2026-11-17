@@ -13,15 +13,14 @@ import { testLine } from './helpers';
  * A flat plaza with the test tram circuit (60 m square, anticlockwise from (30, -30), two trams)
  * and its stops at the middle of each side, plus a second line far away on another circuit.
  */
-function world(): World {
+function world(stops = [
+  { s: 30, name: 'East' },
+  { s: 90, name: 'North' },
+  { s: 150, name: 'West' },
+  { s: 210, name: 'South' },
+]): World {
   const w = createWorld({ seed: 1, minX: -100, minZ: -100, cell: 4, nx: 50, nz: 50 });
   fillSurfaces(w, () => Surface.PLAZA);
-  const stops = [
-    { s: 30, name: 'East' },
-    { s: 90, name: 'North' },
-    { s: 150, name: 'West' },
-    { s: 210, name: 'South' },
-  ];
   w.lines = [
     compileLine(testLine({ vehicles: 2, stops }), 0),
     compileLine(testLine({ id: 'X2', path: [80, 0, -80, 80, 0, -40, 50, 0, -40, 50, 0, -80, 80, 0, -80] }), 1),
@@ -37,6 +36,9 @@ function world(): World {
   ];
   at.forEach(([x, z], k) => addZone(w, { id: `stop_X1_${k}`, name: `stop ${k}`, kind: 'stop', x, y: 0, z, r: 6 }));
   addZone(w, { id: 'pad', name: 'pad', kind: 'landmark', x: 60, y: 0, z: 40, r: 5 });
+  // Another line's stop zone lying across X1's east side, where X1 itself has no stop when the
+  // world is built without its East stop.
+  addZone(w, { id: 'stop_X2_1', name: 'X2 stop on the tram tracks', kind: 'stop', x: 30, y: 0, z: 10, r: 6 });
   return w;
 }
 
@@ -44,9 +46,9 @@ interface Log {
   events: GameEvent[];
 }
 
-function newGame(task: ConductorTask, stop = 0, extra: ConductorDef[] = []): Game {
+function newGame(task: ConductorTask, stop = 0, extra: ConductorDef[] = [], w: World = world()): Game {
   resetFeel();
-  return new Game(world(), { seed: 1, startDayFrac: 0.3, errands: [], conductors: [{ line: 'X1', stop, task }, ...extra] });
+  return new Game(w, { seed: 1, startDayFrac: 0.3, errands: [], conductors: [{ line: 'X1', stop, task }, ...extra] });
 }
 
 function step(game: Game, log: Log, input: Partial<InputFrame> = {}, n = 1): void {
@@ -91,7 +93,8 @@ function catchAt(game: Game, log: Log, li: number, veh: number, x: number, z: nu
 }
 
 /** Catch tram `veh` of X1 17 m past its terminus (conductor stop 0 at (30, -30)). */
-const catchNear = (game: Game, log: Log, veh = 0): void => catchAt(game, log, 0, veh, 30, -13);
+const catchNear = (game: Game, log: Log, veh = 0, chain: { links: number; line: number; veh: number } | null = null): void =>
+  catchAt(game, log, 0, veh, 30, -13, chain);
 
 /** Ride, then let go; returns once the skater touches down (or `max` ticks). */
 function releaseAndLand(game: Game, log: Log, max = 600): void {
@@ -159,6 +162,25 @@ describe('challenge types', () => {
     expect(kinds(log)).toEqual(['conductorStart', 'conductorPunch']);
   });
 
+  it('chainFrom: when the conductor hitch is already link 2 of a chain, progress counts from that hitch (link 2 shows 1) and links: 2 punches only at chain 3', () => {
+    const game = newGame({ kind: 'chainFrom', links: 2 });
+    const log: Log = { events: [] };
+    // Arrive slung off line X2: this catch is link 2 of the chain.
+    catchNear(game, log, 0, { links: 1, line: 1, veh: 0 });
+    expect(game.sim.player.chain).toBe(2);
+    expect(kinds(log)).toEqual(['conductorStart']);
+    expect(game.conductors.active?.progress).toBe(1);
+    step(game, log, { hold: true }, 20);
+    expect(kinds(log)).toEqual(['conductorStart']);
+    step(game, log, { hold: false });
+    expect(game.sim.player.chainAlive).toBe(1);
+    expect(kinds(log)).toEqual(['conductorStart']);
+    // The other tram: chain 3, the second link counted from the conductor's hitch.
+    catchAt(game, log, 0, 1, 30, 10, { links: 2, line: 0, veh: 0 });
+    expect(game.sim.player.chain).toBe(3);
+    expect(kinds(log)).toEqual(['conductorStart', 'conductorPunch']);
+  });
+
   it('slingDistance: plan distance from the release to the first touch down', () => {
     for (const [metres, result] of [
       [2, 'conductorPunch'],
@@ -179,6 +201,26 @@ describe('challenge types', () => {
       expect(flown).toBeLessThan(40);
       expect(kinds(log)).toEqual(['conductorStart', result]);
     }
+  });
+
+  it('slingDistance: a flight that ends in a bail fails, however far it went', () => {
+    const game = newGame({ kind: 'slingDistance', metres: 2 });
+    const log: Log = { events: [] };
+    catchNear(game, log);
+    step(game, log, { hold: true }, 30);
+    const p = game.sim.player;
+    step(game, log, { hold: false });
+    const rx = p.x;
+    const rz = p.z;
+    for (let i = 0; i < 600 && p.mode === Mode.AIR && Math.hypot(p.x - rx, p.z - rz) < 2.2; i++) step(game, log);
+    expect(p.mode).toBe(Mode.AIR);
+    expect(Math.hypot(p.x - rx, p.z - rz)).toBeGreaterThan(2);
+    // Slam into the ground.
+    p.y = 1;
+    p.vy = -26;
+    step(game, log, {}, 3);
+    expect(p.mode).toBe(Mode.BAIL);
+    expect(kinds(log)).toEqual(['conductorStart', 'conductorFail']);
   });
 
   it('slingAir: time from the release to the first touch down', () => {
@@ -224,6 +266,30 @@ describe('challenge types', () => {
     expect(Math.hypot(VS.x, VS.z - 30)).toBeLessThan(0.1);
   });
 
+  it('stayOn: a stop counts only when the vehicle stands at one of its own line\'s stops; rolling through a stop zone does not count', () => {
+    // X1 with only the North stop: on the way there the tram rolls through stop_X2_1 at (30, 10).
+    const w = world([{ s: 90, name: 'North' }]);
+    const game = newGame({ kind: 'stayOn', segments: 1 }, 0, [], w);
+    const log: Log = { events: [] };
+    catchNear(game, log);
+    const zx = w.zones.find((z) => z.id === 'stop_X2_1');
+    expect(zx).toBeDefined();
+    const L = game.sim.world.lines[0];
+    let through = 0;
+    for (let i = 0; i < 3000 && game.conductors.active; i++) {
+      step(game, log, { hold: true });
+      vehicleAt(L, game.sim.player.hVeh, game.sim.tick, VS);
+      if (Math.hypot(VS.x - 30, VS.z - 10) < 6) {
+        through++;
+        expect(game.conductors.active?.progress, 'rolling through a stop zone').toBe(0);
+      }
+    }
+    expect(through).toBeGreaterThan(10);
+    expect(kinds(log)).toEqual(['conductorStart', 'conductorPunch']);
+    // The punch came at North (0, 30), where the tram stands.
+    expect(Math.hypot(VS.x, VS.z - 30)).toBeLessThan(0.1);
+  });
+
   it('stopToStop: let go inside the from stop, reach the to stop on your own, in time', () => {
     const task: ConductorTask = { kind: 'stopToStop', from: 1, to: 3, seconds: 5 };
     /** Ride until the skater is inside the East stop zone (30, 0), then let go. */
@@ -248,6 +314,14 @@ describe('challenge types', () => {
     rideToEast(b, bl);
     step(b, bl, {}, 5 * 60 + 2);
     expect(kinds(bl)).toEqual(['conductorStart', 'conductorFail']);
+    // Let go in the from stop, then catch another ride: not under your own momentum, fails at once.
+    const d = newGame(task);
+    const dl: Log = { events: [] };
+    rideToEast(d, dl);
+    step(d, dl, {}, 10);
+    expect(kinds(dl)).toEqual(['conductorStart']);
+    catchAt(d, dl, 1, 0, 80, -70);
+    expect(kinds(dl)).toEqual(['conductorStart', 'conductorFail']);
     // Let go outside the from stop: fails at once.
     const c = newGame(task);
     const cl: Log = { events: [] };
