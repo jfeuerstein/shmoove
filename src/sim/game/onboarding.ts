@@ -61,6 +61,10 @@ export type HintId = OnboardingStep | 'map' | 'lift';
 
 /** Ticks rolling on the ground before the carve hint shows (1 s). */
 export const CARVE_SHOW_TICKS = 60;
+/** ...and going at least this fast (or rolling for CARVE_LATE_TICKS): a carve at walking pace on the lookout would turn them off the way down, m/s. */
+export const CARVE_SPEED = 4;
+/** Rolling this long shows the carve hint whatever the speed (6 s). */
+export const CARVE_LATE_TICKS = 360;
 /** Steer the skater must carve past, each way. */
 export const CARVE_STEER = 0.4;
 /** Rolling: faster than this, m/s. */
@@ -89,6 +93,16 @@ export const LEAD_ABOVE = 1;
 export const LEAD_TICKS = 20 * 60;
 /** A lead already shown holds while a ride reaches its stop within this many ticks (45 s). */
 export const LEAD_KEEP_TICKS = 45 * 60;
+/** A skater slower than this on flat ground has no hill to take them: stops further off can be led to, m/s. */
+export const LEAD_SLOW = 2.5;
+/** How far off a stop can be led to for a slow skater on flat ground, metres. */
+export const LEAD_FAR = 120;
+/** How far above a slow skater on flat ground that stop can be, metres. */
+export const LEAD_FAR_ABOVE = 2.5;
+/** Its ride may be this far off (45 s): there is a way to go. */
+export const LEAD_FAR_TICKS = 45 * 60;
+/** A spot across another ride's lane from the skater counts as this much further, metres. */
+export const LANE_CROSS_COST = 30;
 /** Rolling faster than this, a stop must be ahead to be on the skater's way, m/s. */
 export const LEAD_MOVING = 1.5;
 /** Ahead: within this cosine of the direction of travel (60 degrees), unless closer than LEAD_CLOSE. */
@@ -107,9 +121,11 @@ export const SLING_SHOW_TICKS = 90;
 export const WHIP_RATIO = 1.15;
 /** Another line's ride this close at a release introduces the chain, metres. */
 export const CHAIN_NEAR = 25;
-/** Standing: slower than this, m/s. */
-export const STAND_SPEED = 0.3;
-/** Standing this long on flat ground without holding shows the roll hint (3 s). */
+/** Stalled: slower than this, m/s (a skater rocking on the spot is still stalled). */
+export const STAND_SPEED = 1.5;
+/** ...and staying within this of where the stall began, metres. */
+export const STAND_RANGE = 3;
+/** Stalled this long on flat ground without holding shows the roll hint (3 s). */
 export const ROLL_STAND_TICKS = 180;
 /** Ground this flat (rise over run) has no slope to take a standing skater. */
 export const ROLL_FLAT = 0.06;
@@ -462,6 +478,8 @@ export class OnboardingReducer implements GameReducer {
   private closing = 0;
   /** Ticks standing on flat ground without holding, and whether the roll hint's situation is on. */
   private standTicks = 0;
+  private standX = 0;
+  private standZ = 0;
   private rollArmed = false;
   /** Last tick each step's situation held. */
   private readonly lastHeld: Record<OnboardingStep, number> = {
@@ -483,6 +501,8 @@ export class OnboardingReducer implements GameReducer {
   private leadSpot = 0;
   private leadLine = -1;
   private leadVeh = -1;
+  /** The lead was found for a slow skater on flat ground, with the far limits. */
+  private leadFar = false;
   private readonly arrive = { veh: -1 };
   /** Ticks until the ride reaches the stop, as the last leadWorks found it. */
   private leadEta = 0;
@@ -653,7 +673,7 @@ export class OnboardingReducer implements GameReducer {
     const ground = p.mode === Mode.GROUND;
     const rolling = ground && p.speed > ROLLING_SPEED;
     const free = ground || p.mode === Mode.AIR || p.mode === Mode.GRIND;
-    if (lesson && !d.carve && rolling && this.groundTicks >= CARVE_SHOW_TICKS) this.lastHeld.carve = tick;
+    if (lesson && !d.carve && rolling && this.groundTicks >= CARVE_SHOW_TICKS && (p.speed >= CARVE_SPEED || this.groundTicks >= CARVE_LATE_TICKS)) this.lastHeld.carve = tick;
     if (d.carve && !d.hop) {
       if (scan) this.hopAhead = rolling && p.speed > 1 && this.scanAhead(p.x, p.y, p.z, p.heading, p.surface);
       if (this.hopAhead && rolling) this.lastHeld.hop = tick;
@@ -746,16 +766,29 @@ export class OnboardingReducer implements GameReducer {
       }
       return;
     }
-    if (this.state.done.roll || p.mode !== Mode.GROUND || holding || p.speed >= STAND_SPEED || this.atSpot(p.x, p.z)) {
+    const dx = p.x - this.standX;
+    const dz = p.z - this.standZ;
+    if (
+      this.state.done.roll ||
+      p.mode !== Mode.GROUND ||
+      holding ||
+      p.speed >= STAND_SPEED ||
+      dx * dx + dz * dz > STAND_RANGE * STAND_RANGE ||
+      this.atSpot(p.x, p.z) ||
+      !this.flat(p.x, p.y, p.z)
+    ) {
       this.standTicks = 0;
-      return;
-    }
-    sampleGround(this.world, p.x, p.y, p.z, FEEL.STEP_UP, GS);
-    if (GS.gx * GS.gx + GS.gz * GS.gz > ROLL_FLAT * ROLL_FLAT) {
-      this.standTicks = 0;
+      this.standX = p.x;
+      this.standZ = p.z;
       return;
     }
     if (++this.standTicks >= ROLL_STAND_TICKS) this.rollArmed = true;
+  }
+
+  /** No slope under (x, y, z) to take a standing skater anywhere. */
+  private flat(x: number, y: number, z: number): boolean {
+    sampleGround(this.world, x, y, z, FEEL.STEP_UP, GS);
+    return GS.gx * GS.gx + GS.gz * GS.gz <= ROLL_FLAT * ROLL_FLAT;
   }
 
   /** Waiting at the spot the pointer leads to (a skater waiting there is not stalled). */
@@ -774,31 +807,41 @@ export class OnboardingReducer implements GameReducer {
     const chain = p.chainAlive === 1 ? p.chain : 0;
     const allowHop = this.state.done.hitch;
     // Keep the stop being led to while it still works, with the looser keep limits.
-    if (this.leadSite >= 0 && !this.leadWorks(this.leadSite, sim.tick, p.x, p.y, p.z, chain, LEAD_KEEP_NEAR, LEAD_KEEP_TICKS)) this.leadSite = -1;
+    if (this.leadSite >= 0 && !this.leadWorks(this.leadSite, sim.tick, p.x, p.y, p.z, chain, Math.max(LEAD_KEEP_NEAR, this.leadFar ? LEAD_FAR + 10 : 0), LEAD_KEEP_TICKS, this.leadFar ? LEAD_FAR_ABOVE : LEAD_ABOVE)) this.leadSite = -1;
     if (this.leadSite < 0) {
       let best = Infinity;
       const sp = len2(p.vx, p.vz);
+      // A slow skater on flat ground has no hill to take them anywhere: look further.
+      const far = p.mode === Mode.GROUND && sp < LEAD_SLOW && this.flat(p.x, p.y, p.z);
+      const near = far ? LEAD_FAR : LEAD_NEAR;
+      const above = far ? LEAD_FAR_ABOVE : LEAD_ABOVE;
+      const ticks = far ? LEAD_FAR_TICKS : LEAD_TICKS;
       const S = this.sites;
       for (let i = 0; i < S.n; i++) {
         const dx = S.x[i] - p.x;
         const dz = S.z[i] - p.z;
-        if (dx > LEAD_NEAR || dx < -LEAD_NEAR || dz > LEAD_NEAR || dz < -LEAD_NEAR) continue;
+        if (dx > near || dx < -near || dz > near || dz < -near) continue;
         const dist = Math.sqrt(dx * dx + dz * dz);
-        if (dist > LEAD_NEAR) continue;
+        if (dist > near) continue;
         // On the skater's way: ahead of them when they are rolling, unless it is close.
         if (sp > LEAD_MOVING && dist > LEAD_CLOSE && (dx * p.vx + dz * p.vz) / (dist * sp) < LEAD_COS) continue;
-        const spot = this.nearSpot(i, p.x, p.z);
-        if (spot < 0) continue;
-        if (!this.leadWorks(i, sim.tick, p.x, p.y, p.z, chain, LEAD_NEAR, LEAD_TICKS)) continue;
-        const k = i * 2 + spot;
-        const ds = Math.sqrt((S.sx[k] - p.x) * (S.sx[k] - p.x) + (S.sz[k] - p.z) * (S.sz[k] - p.z));
-        const score = ds + this.leadEta / 60;
-        if (score >= best) continue;
-        best = score;
-        this.leadSite = i;
-        this.leadSpot = spot;
-        this.leadLine = S.line[i];
-        this.leadVeh = this.arrive.veh;
+        for (let j = 0; j < 2; j++) {
+          const k = i * 2 + j;
+          if (S.ok[k] === 0) continue;
+          const ds = Math.sqrt((S.sx[k] - p.x) * (S.sx[k] - p.x) + (S.sz[k] - p.z) * (S.sz[k] - p.z));
+          if (ds >= best) continue;
+          if (!this.leadWorks(i, sim.tick, p.x, p.y, p.z, chain, near, ticks, above)) break;
+          let score = ds + this.leadEta / 60;
+          if (score >= best) continue;
+          if (this.crossesLane(p.x, p.z, S.sx[k], S.sz[k])) score += LANE_CROSS_COST;
+          if (score >= best) continue;
+          best = score;
+          this.leadSite = i;
+          this.leadSpot = j;
+          this.leadFar = far;
+          this.leadLine = S.line[i];
+          this.leadVeh = this.arrive.veh;
+        }
       }
     } else {
       this.leadVeh = this.arrive.veh;
@@ -808,11 +851,11 @@ export class OnboardingReducer implements GameReducer {
   }
 
   /** Whether site i can be led to from (x, y, z) now: near enough, no higher, a ride due in time. Sets leadEta and arrive.veh. */
-  private leadWorks(i: number, tick: number, x: number, y: number, z: number, chain: number, near: number, ticks: number): boolean {
+  private leadWorks(i: number, tick: number, x: number, y: number, z: number, chain: number, near: number, ticks: number, above: number): boolean {
     const S = this.sites;
     const L = this.world.lines[S.line[i]];
     if (chain + 1 < L.minChainN) return false;
-    if (S.y[i] > y + LEAD_ABOVE) return false;
+    if (S.y[i] > y + above) return false;
     const dx = S.x[i] - x;
     const dz = S.z[i] - z;
     if (dx * dx + dz * dz > near * near) return false;
@@ -822,21 +865,29 @@ export class OnboardingReducer implements GameReducer {
     return true;
   }
 
-  /** The site's spot nearest to (x, z), or -1 if it has none. */
-  private nearSpot(i: number, x: number, z: number): number {
-    const S = this.sites;
-    let best = -1;
-    let bd = Infinity;
-    for (let j = 0; j < 2; j++) {
-      const k = i * 2 + j;
-      if (S.ok[k] === 0) continue;
-      const d = (S.sx[k] - x) * (S.sx[k] - x) + (S.sz[k] - z) * (S.sz[k] - z);
-      if (d < bd) {
-        bd = d;
-        best = j;
+  /** Whether going straight from (ax, az) to (bx, bz) crosses a ground ride's lane. */
+  private crossesLane(ax: number, az: number, bx: number, bz: number): boolean {
+    const w = this.world;
+    for (let li = 0; li < w.lines.length; li++) {
+      const L = w.lines[li];
+      if (L.overhead) continue;
+      if ((ax < L.minX && bx < L.minX) || (ax > L.maxX && bx > L.maxX) || (az < L.minZ && bz < L.minZ) || (az > L.maxZ && bz > L.maxZ)) continue;
+      const p = L.pathPts;
+      for (let i = 3; i < p.length; i += 3) {
+        const cx = p[i - 3];
+        const cz = p[i - 1];
+        const dx = p[i];
+        const dz = p[i + 2];
+        if ((cx < ax && cx < bx && dx < ax && dx < bx) || (cx > ax && cx > bx && dx > ax && dx > bx)) continue;
+        if ((cz < az && cz < bz && dz < az && dz < bz) || (cz > az && cz > bz && dz > az && dz > bz)) continue;
+        const d1 = (bx - ax) * (cz - az) - (bz - az) * (cx - ax);
+        const d2 = (bx - ax) * (dz - az) - (bz - az) * (dx - ax);
+        const d3 = (dx - cx) * (az - cz) - (dz - cz) * (ax - cx);
+        const d4 = (dx - cx) * (bz - cz) - (dz - cz) * (bx - cx);
+        if (d1 * d2 < 0 && d3 * d4 < 0) return true;
       }
     }
-    return best;
+    return false;
   }
 
   /** Every tick: drop rides gone out of service. */

@@ -225,7 +225,8 @@ class Player {
     }
     this.holding = false;
     out.steer = this.toward(s, s.pointer.x, s.pointer.z, t);
-    if (s.onGround && s.speed < 1 && this.knowsWiggle) out.steer = clamp(out.steer + this.wiggle(t, 12), -1, 1);
+    // Too slow to get there on a flat: tic-tac toward it, as the roll hint taught.
+    if (s.onGround && s.speed < 2.2 && this.knowsWiggle) out.steer = clamp(0.4 * out.steer + this.wiggle(t, 10), -1, 1);
   }
 }
 
@@ -312,7 +313,10 @@ function tally(profile: Profile): Tally {
   const times = outcomes.filter((o) => o.complete).map((o) => o.seconds);
   const median = times.length ? times.sort((a, b) => a - b)[Math.floor(times.length / 2)] : 0;
   const report = `${profile.name}: ${completed}/${SEEDS} complete (median ${median.toFixed(0)} s)\n${rest}`;
-  if (ENV?.SKITCH_PLAYERS_REPORT) console.info(report);
+  if (ENV?.SKITCH_PLAYERS_REPORT) {
+    console.info(report);
+    console.info(outcomes.map((o, i) => `${i + 1}: ${o.complete ? 'OK ' : 'NO '}${o.seconds.toFixed(0)}s first ${o.log.find((l) => l.includes(' hitch ')) ?? '-'}`).join('\n'));
+  }
   if (TRACE.startsWith(profile.name + ':')) console.info(outcomes[Number(TRACE.split(':')[1]) - 1].log.join('\n'));
   return { completed, outcomes, report };
 }
