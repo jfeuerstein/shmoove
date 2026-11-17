@@ -30,8 +30,9 @@ const CSS = `
 .sk-maphead.sk-chalkhead{padding-left:calc(var(--sk-sl) + 10px)}
 .sk-chalkbody{position:relative;flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:10px;touch-action:pan-y;
   padding:14px calc(var(--sk-sr) + 10px) 14px calc(var(--sk-sl) + 10px);
-  background:repeating-linear-gradient(-8deg,rgba(31,63,191,.035) 0 2px,transparent 2px 9px)}
-.sk-chalkbody>.sk-ticket{flex:none;filter:drop-shadow(2px 2px 0 rgba(27,26,46,.6)) drop-shadow(-1px 0 0 rgba(255,46,136,.5))}
+  background:repeating-linear-gradient(-8deg,rgba(31,63,191,.05) 0 2px,transparent 2px 9px),#E2D6C1}
+.sk-clist{flex:none;display:flex;flex-direction:column;gap:10px;
+  filter:drop-shadow(2px 2px 0 rgba(27,26,46,.6)) drop-shadow(-1px 0 0 rgba(255,46,136,.5))}
 .sk-cticket,.sk-ccard{padding:9px 10px 10px 32px}
 .sk-cticket .sk-op,.sk-ccard .sk-op{font-size:17px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 .sk-cfacts,.sk-cresrows{display:flex;align-items:baseline;gap:6px;margin-top:5px;color:var(--sk-ink)}
@@ -51,7 +52,7 @@ const CSS = `
 .sk-cbtn.sk-cdraw{flex:1.4;min-height:54px;background:var(--sk-mango);color:var(--sk-ink);font-size:18px;letter-spacing:.16em}
 .sk-cbtn.sk-cimport{min-height:54px;background:transparent;color:var(--sk-paper);box-shadow:inset 0 0 0 2px var(--sk-paper);font-size:15px}
 .sk-creason{margin-top:7px;color:var(--sk-pink);font-size:12px;font-weight:700;letter-spacing:.12em}
-.sk-cempty{margin:auto 8px;text-align:center;color:var(--sk-ink);padding:24px 10px;border:2px dashed rgba(27,26,46,.25);border-radius:4px}
+.sk-cempty{margin:auto 8px;background:var(--sk-paper);text-align:center;color:var(--sk-ink);padding:24px 10px;border:2px dashed rgba(27,26,46,.25);border-radius:4px}
 .sk-cemptyhead{font-weight:700;font-size:20px;letter-spacing:.14em;color:var(--sk-pink);text-shadow:1px 1px 0 rgba(31,63,191,.7)}
 .sk-cemptybody{margin-top:8px;font-size:13px;letter-spacing:.06em;line-height:1.4;text-transform:none;color:rgba(27,26,46,.8)}
 .sk-cnote{margin-top:6px;font-size:11px;font-weight:700;letter-spacing:.1em;color:var(--sk-cobalt)}

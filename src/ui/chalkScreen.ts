@@ -174,7 +174,9 @@ export class ChalkScreen {
       this.body.appendChild(empty);
       return;
     }
-    lines.forEach((line, i) => this.body.appendChild(this.ticket(line, i)));
+    const list = el('div', 'sk-clist');
+    lines.forEach((line, i) => list.appendChild(this.ticket(line, i)));
+    this.body.appendChild(list);
   }
 
   private ticket(line: ChalkLine, i: number): HTMLElement {
@@ -227,7 +229,9 @@ export class ChalkScreen {
     const head = el('div', 'sk-thead');
     head.append(el('span', 'sk-op', boardText(title)));
     c.appendChild(head);
-    this.body.appendChild(c);
+    const list = el('div', 'sk-clist');
+    list.appendChild(c);
+    this.body.appendChild(list);
     return c;
   }
 
