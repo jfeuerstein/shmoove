@@ -11,12 +11,12 @@
  * and builds through hooks, so it is tested without WebGL.
  */
 import * as THREE from 'three';
-import type { World } from '../sim/world';
+import { terrainHeight, type World } from '../sim/world';
 import { Lod } from './dress/kit';
 import { createSea } from './dress/sea';
 import { MeshBuilder } from './geom';
 import { inkMaterial } from './look';
-import { meshRail, meshSolid, meshTerrain, meshZoneProps } from './worldMesh';
+import { meshRail, meshSolid, meshTerrain, meshTerrainGround, meshTerrainPaint, meshTerrainTreads, meshZoneProps } from './worldMesh';
 import type { WorldView } from './worldView';
 
 export const STREAM = {
@@ -97,17 +97,30 @@ export function bucketWorld(w: World, g: ChunkGrid): ChunkBuckets {
   return out;
 }
 
-/** Terrain rows meshed per piece of an incremental chunk build. */
-const ROWS_PER_PIECE = 4;
+/** The phases of an incremental chunk build, in order. Each piece does one item of one phase. */
+const PH_GROUND = 0;
+const PH_PAINT = 1;
+const PH_TREADS = 2;
+const PH_SOLIDS = 3;
+const PH_RAILS = 4;
+const PH_ZONES = 5;
+const PH_BUILD = 6;
 
 /**
- * One chunk being built at one level of detail, in small pieces (a few terrain rows, one solid,
- * one rail, one zone), so the work can stop at a deadline and resume on a later frame.
+ * One chunk being built at one level of detail, in small pieces so the work can stop at a deadline
+ * and resume on a later frame: one terrain row of ground, of paint or of stair treads, one solid,
+ * one rail, one zone, and last the typed arrays of the geometry. The pieces run in the order
+ * `meshChunk` meshes, so the finished geometry is identical to an uninterrupted build.
  */
 export class ChunkJob {
   readonly b = new MeshBuilder();
-  /** Time spent on this chunk so far, ms (kept by the caller). */
+  /** The finished geometry, once the last piece has run. */
+  geometry: THREE.BufferGeometry | null = null;
+  /** Time spent on this chunk so far, and its longest piece, ms (measured by run()). */
   ms = 0;
+  worstPieceMs = 0;
+  /** Pieces done so far. */
+  pieces = 0;
   private readonly w: World;
   private readonly bk: ChunkBuckets;
   private readonly ci: number;
@@ -116,7 +129,7 @@ export class ChunkJob {
   private readonly ix1: number;
   private readonly iz0: number;
   private readonly iz1: number;
-  private phase = 0;
+  private phase = PH_GROUND;
   private i = 0;
 
   constructor(w: World, g: ChunkGrid, bk: ChunkBuckets, ci: number, lod: Lod) {
@@ -130,41 +143,88 @@ export class ChunkJob {
     this.iz1 = Math.min(w.nz, this.iz0 + g.cells);
   }
 
-  /** Do one piece of work; true when the chunk is complete. */
+  /** Do one piece of work; true when the chunk is complete (its geometry built). */
   step(): boolean {
     const w = this.w;
+    const b = this.b;
     const ci = this.ci;
-    switch (this.phase) {
-      case 0: {
-        const z0 = this.iz0 + this.i;
-        const z1 = Math.min(this.iz1, z0 + ROWS_PER_PIECE);
-        meshTerrain(this.b, w, this.ix0, z0, this.ix1, z1, this.lod);
-        this.i += ROWS_PER_PIECE;
-        if (z1 >= this.iz1) this.next();
-        return false;
+    const near = this.lod === Lod.NEAR;
+    const rows = this.iz1 - this.iz0;
+    for (;;) {
+      const i = this.i;
+      const z0 = this.iz0 + i;
+      switch (this.phase) {
+        case PH_GROUND:
+          if (i < rows) {
+            meshTerrainGround(b, w, this.ix0, z0, this.ix1, z0 + 1, this.lod);
+            break;
+          }
+          this.next();
+          continue;
+        case PH_PAINT:
+          if (near && i < rows) {
+            meshTerrainPaint(b, w, this.ix0, z0, this.ix1, z0 + 1, this.lod);
+            break;
+          }
+          this.next();
+          continue;
+        case PH_TREADS:
+          if (near && i < rows) {
+            meshTerrainTreads(b, w, this.ix0, z0, this.ix1, z0 + 1, this.lod);
+            break;
+          }
+          this.next();
+          continue;
+        case PH_SOLIDS:
+          if (i < this.bk.solids[ci].length) {
+            meshSolid(b, w, w.solids[this.bk.solids[ci][i]], this.lod);
+            break;
+          }
+          this.next();
+          continue;
+        case PH_RAILS:
+          if (i < this.bk.rails[ci].length) {
+            meshRail(b, w, w.rails[this.bk.rails[ci][i]], this.lod);
+            break;
+          }
+          this.next();
+          continue;
+        case PH_ZONES:
+          if (near && i < this.bk.zones[ci].length) {
+            meshZoneProps(b, w, w.zones[this.bk.zones[ci][i]], this.lod);
+            break;
+          }
+          this.next();
+          continue;
+        case PH_BUILD:
+          this.geometry = b.build();
+          this.phase++;
+          this.pieces++;
+          return true;
+        default:
+          return true;
       }
-      case 1:
-        if (this.i < this.bk.solids[ci].length) meshSolid(this.b, w, w.solids[this.bk.solids[ci][this.i++]], this.lod);
-        else this.next();
-        return false;
-      case 2:
-        if (this.i < this.bk.rails[ci].length) meshRail(this.b, w, w.rails[this.bk.rails[ci][this.i++]], this.lod);
-        else this.next();
-        return false;
-      case 3:
-        if (this.i < this.bk.zones[ci].length) meshZoneProps(this.b, w, w.zones[this.bk.zones[ci][this.i++]], this.lod);
-        else this.next();
-        return false;
-      default:
-        return true;
+      this.i++;
+      this.pieces++;
+      return false;
     }
   }
 
-  /** Work until done (true) or until `clock()` reaches `deadline` (false). Always does one piece. */
+  /**
+   * Work until done (true) or until `clock()` reaches `deadline` (false). Always does one piece;
+   * the clock is read once before and once after each piece.
+   */
   run(clock: () => number, deadline: number): boolean {
+    let t0 = clock();
     for (;;) {
-      if (this.step()) return true;
-      if (clock() >= deadline) return false;
+      const done = this.step();
+      const t1 = clock();
+      const d = t1 - t0;
+      this.ms += d;
+      if (d > this.worstPieceMs) this.worstPieceMs = d;
+      if (done) return true;
+      if (t1 >= deadline) return false;
+      t0 = t1;
     }
   }
 
@@ -197,9 +257,15 @@ export interface StreamHooks<T> {
   /**
    * Build (or keep building) a chunk. Work may be split across calls: return null when `clock()`
    * passes `deadline` before the chunk is done, and the streamer calls again on a later frame.
-   * The first piece of work of a call always runs.
+   * The first piece of work of a call always runs, so a frame overruns its budget by at most one
+   * piece (pieces are small: see ChunkJob).
    */
   build(chunk: number, lod: Lod, clock: () => number, deadline: number): T | null;
+  /**
+   * Whether the camera can see a chunk. Asked only on the update after a teleport, for chunks
+   * within NEAR_R: those are built at once with the 3x3 under the camera. Without it, only the 3x3.
+   */
+  inView?(chunk: number): boolean;
   /** Make a built item visible / invisible. */
   show(item: T): void;
   hide(item: T): void;
@@ -300,7 +366,8 @@ export class ChunkStreamer<T> {
     }
     this.nCand = nc;
 
-    // Appearing somewhere new: the chunk under the camera and its neighbours, right now.
+    // Appearing somewhere new: the chunk under the camera and its neighbours, and every chunk the
+    // camera can see within the near radius, right now.
     const here = chunkOf(g, camX, camZ);
     const hx = here % g.ncx;
     const hz = Math.floor(here / g.ncx);
@@ -325,7 +392,8 @@ export class ChunkStreamer<T> {
       if (this.items[slot] === null) {
         const cxk = ci % g.ncx;
         const czk = Math.floor(ci / g.ncx);
-        const urgent = teleport && Math.abs(cxk - hx) <= 1 && Math.abs(czk - hz) <= 1;
+        const urgent =
+          teleport && ((Math.abs(cxk - hx) <= 1 && Math.abs(czk - hz) <= 1) || (d < STREAM.NEAR_R && this.hooks.inView !== undefined && this.hooks.inView(ci)));
         if (!urgent && (spent || this.builtLast >= STREAM.MAX_BUILDS)) continue; // keep showing what it has
         const item = this.hooks.build(ci, want, clock, urgent ? Infinity : deadline);
         if (item === null) {
@@ -407,18 +475,37 @@ export class ChunkStreamer<T> {
   }
 }
 
+export interface CityStreamStats {
+  shown: number;
+  resident: number;
+  builtTotal: number;
+  /** Longest whole chunk build (all its pieces), longest single piece, longest frame of building, ms. */
+  worstChunkMs: number;
+  worstPieceMs: number;
+  worstFrameBuildMs: number;
+  triangles: number;
+}
+
 export interface CityView extends WorldView {
   /** Streaming statistics, for the perf report. */
-  stats(): { shown: number; resident: number; builtTotal: number; worstChunkMs: number; worstFrameBuildMs: number; triangles: number };
+  stats(): CityStreamStats;
+  /** Chunk meshes finished since the view was made (no allocation: read every frame by the harness). */
+  built(): number;
 }
 
 /** Partly built chunks kept while nearer ones jump the queue. */
 const MAX_PARTIAL = 6;
+/** Height the dressing can stand above the highest solid in a chunk (masts, signs, clutter), m. */
+const DRESS_HEADROOM = 30;
 
 const now = (): number => performance.now();
 
-/** The streaming, dressed world view for a big world. */
-export function createCityView(world: World): CityView {
+/**
+ * The streaming, dressed world view for a big world. `camera`, when given, is the camera the world
+ * is drawn with: after a teleport, every chunk within the near radius that it can see is built at
+ * once (otherwise only the 3x3 under it, and the rest would stream in over several frames).
+ */
+export function createCityView(world: World, camera?: () => THREE.Camera): CityView {
   const group = new THREE.Group();
   group.name = 'city';
   const mat = inkMaterial();
@@ -428,6 +515,34 @@ export function createCityView(world: World): CityView {
   const partial: number[] = [];
   let triangles = 0;
   let worstChunkMs = 0;
+  let worstPieceMs = 0;
+
+  // Visibility after a teleport: each chunk's box (ground to the top of its tallest solid plus
+  // headroom, found once) against the camera's frustum.
+  const frustum = new THREE.Frustum();
+  const projScreen = new THREE.Matrix4();
+  const box = new THREE.Box3();
+  const yLo = new Float32Array(g.ncx * g.ncz).fill(NaN);
+  const yHi = new Float32Array(g.ncx * g.ncz);
+  let frustumFrame = -1;
+  let frame = 0;
+  const chunkHeights = (ci: number): void => {
+    const x0 = g.minX + (ci % g.ncx) * g.size;
+    const z0 = g.minZ + Math.floor(ci / g.ncx) * g.size;
+    let lo = Infinity;
+    let hi = -Infinity;
+    for (let a = 0; a <= 4; a++) {
+      for (let c = 0; c <= 4; c++) {
+        const h = terrainHeight(world, Math.min(world.maxX, x0 + (a * g.size) / 4), Math.min(world.maxZ, z0 + (c * g.size) / 4));
+        if (h < lo) lo = h;
+        if (h > hi) hi = h;
+      }
+    }
+    for (const si of bk.solids[ci]) hi = Math.max(hi, world.solids[si].yTop);
+    yLo[ci] = lo - 2;
+    yHi[ci] = hi + DRESS_HEADROOM;
+  };
+
   const streamer = new ChunkStreamer<THREE.Mesh>(g, {
     build(ci, lod, clock, deadline) {
       const slot = ci * 2 + lod - 1;
@@ -441,23 +556,39 @@ export function createCityView(world: World): CityView {
         jobs[slot] = job;
         partial.push(slot);
       }
-      const t0 = clock();
       const done = job.run(clock, deadline);
-      job.ms += clock() - t0;
-      if (!done) return null;
+      if (job.worstPieceMs > worstPieceMs) worstPieceMs = job.worstPieceMs;
+      if (!done || job.geometry === null) return null;
       jobs[slot] = null;
       partial.splice(partial.indexOf(slot), 1);
       if (job.ms > worstChunkMs) worstChunkMs = job.ms;
-      const b = job.b;
-      const mesh = new THREE.Mesh(b.build(), mat);
+      const tris = job.b.triangleCount;
+      const mesh = new THREE.Mesh(job.geometry, mat);
       mesh.name = `chunk_${ci}_${lod === Lod.NEAR ? 'near' : 'far'}`;
       mesh.matrixAutoUpdate = false;
       mesh.visible = false;
-      triangles += b.triangleCount;
-      mesh.userData.tris = b.triangleCount;
+      triangles += tris;
+      mesh.userData.tris = tris;
       group.add(mesh);
       return mesh;
     },
+    inView: camera
+      ? (ci) => {
+          if (frustumFrame !== frame) {
+            const cam = camera();
+            cam.updateMatrixWorld();
+            projScreen.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
+            frustum.setFromProjectionMatrix(projScreen);
+            frustumFrame = frame;
+          }
+          if (Number.isNaN(yLo[ci])) chunkHeights(ci);
+          const x0 = g.minX + (ci % g.ncx) * g.size;
+          const z0 = g.minZ + Math.floor(ci / g.ncx) * g.size;
+          box.min.set(x0, yLo[ci], z0);
+          box.max.set(x0 + g.size, yHi[ci], z0 + g.size);
+          return frustum.intersectsBox(box);
+        }
+      : undefined,
     show(m) {
       m.visible = true;
     },
@@ -476,6 +607,7 @@ export function createCityView(world: World): CityView {
   return {
     group,
     update(camX, camZ, dayFrac) {
+      frame++;
       streamer.update(camX, camZ, now(), now);
       sea?.setTime(dayFrac * 720);
     },
@@ -485,9 +617,13 @@ export function createCityView(world: World): CityView {
         resident: streamer.residentCount(),
         builtTotal: streamer.builtTotal,
         worstChunkMs,
+        worstPieceMs,
         worstFrameBuildMs: streamer.worstFrameBuildMs,
         triangles,
       };
+    },
+    built() {
+      return streamer.builtTotal;
     },
     dispose() {
       streamer.clear();

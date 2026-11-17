@@ -34,6 +34,16 @@ export interface SkitchPerfStats {
   parts?: Record<string, number[]>;
   /** Milliseconds of each game step (sim + reducers) in those frames, in order. */
   stepMs?: number[];
+  /**
+   * Where each frame was, one entry per frame like `workMs`: `tick` (route ticks played after the
+   * frame), `x`, `z`, `district`, `chunk` (streaming chunk under the skater), `hitches` (in the
+   * frame) and `built` (chunk meshes the world view finished in the frame).
+   */
+  track?: Record<string, number[]>;
+  /** The route's timed windows, in route ticks (src/app/routes.ts `routeWindows`). */
+  windows?: { name: string; from: number; to: number }[];
+  /** Streaming totals of the city view since load (absent for a world drawn whole). */
+  stream?: { shown: number; resident: number; builtTotal: number; worstChunkMs: number; worstFrameBuildMs: number; worstPieceMs: number; triangles: number };
 }
 
 export interface SkitchHook {

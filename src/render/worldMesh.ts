@@ -11,7 +11,7 @@ import type { MeshBuilder } from './geom';
 import { Lod } from './dress/kit';
 import { meshRailFar, meshRailNear } from './dress/rails';
 import { meshSolidFar, meshSolidNear } from './dress/solids';
-import { meshGround, meshGroundDecor } from './dress/terrain';
+import { meshGround, meshGroundDecor, meshGroundPaint, meshStairTreads } from './dress/terrain';
 import { meshZone } from './dress/zones';
 
 export { Lod } from './dress/kit';
@@ -21,6 +21,23 @@ export { surfaceColor } from './dress/terrain';
 export function meshTerrain(b: MeshBuilder, w: World, ix0: number, iz0: number, ix1: number, iz1: number, lod: Lod = Lod.NEAR): void {
   meshGround(b, w, ix0, iz0, ix1, iz1, lod !== Lod.NEAR);
   if (lod === Lod.NEAR) meshGroundDecor(b, w, ix0, iz0, ix1, iz1);
+}
+
+/**
+ * The three parts of `meshTerrain`, for builds done a row at a time: all the ground, then (near
+ * only) all the paint, then all the stair treads, in that order, give exactly `meshTerrain`'s
+ * geometry, and so does calling each on one row after another.
+ */
+export function meshTerrainGround(b: MeshBuilder, w: World, ix0: number, iz0: number, ix1: number, iz1: number, lod: Lod): void {
+  meshGround(b, w, ix0, iz0, ix1, iz1, lod !== Lod.NEAR);
+}
+
+export function meshTerrainPaint(b: MeshBuilder, w: World, ix0: number, iz0: number, ix1: number, iz1: number, lod: Lod): void {
+  if (lod === Lod.NEAR) meshGroundPaint(b, w, ix0, iz0, ix1, iz1);
+}
+
+export function meshTerrainTreads(b: MeshBuilder, w: World, ix0: number, iz0: number, ix1: number, iz1: number, lod: Lod): void {
+  if (lod === Lod.NEAR) meshStairTreads(b, w, ix0, iz0, ix1, iz1);
 }
 
 /** A solid: its plain box when far, dressed by kind when near. */
