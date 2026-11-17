@@ -26,7 +26,13 @@ const LOOK_AHEAD = 14;
 const CARVE_AMP = 4;
 const CARVE_PERIOD = 45;
 const STEER_GAIN = 2.5;
-/** Hold when a ride's grab point is this close (m, horizontal); ride it this long, then sling. */
+/**
+ * A ride whose grab point is within SEEK (m, horizontal, and within SEEK_Y vertically) draws the
+ * skater off the lane toward it; the touch is held once it is within HOLD_NEAR. Ride it RIDE_TICKS,
+ * then let go to sling, and leave rides alone for RELEASE_TICKS.
+ */
+const SEEK = 30;
+const SEEK_Y = 4;
 const HOLD_NEAR = 9;
 const RIDE_TICKS = 150;
 const RELEASE_TICKS = 90;
@@ -62,23 +68,41 @@ function wrap(a: number): number {
 const _v = makeVehicleState();
 const _g = { x: 0, y: 0, z: 0 };
 
-/** Is an active ride's grab point within `range` of (x, z)? */
-function rideNear(sim: Sim, x: number, z: number, range: number): boolean {
+const _near = { x: 0, z: 0, d: 0 };
+
+/**
+ * The nearest grab point of an active ride the skater could catch (minimum chain met) within
+ * `range` horizontally and SEEK_Y vertically, into `_near`. false when there is none.
+ */
+function nearestRide(sim: Sim, range: number): boolean {
+  const p = sim.player;
   const lines = sim.world.lines;
+  const chain = p.chainAlive === 1 ? p.chain : 0;
+  let best = range * range;
+  let found = false;
   for (let li = 0; li < lines.length; li++) {
     const L = lines[li];
+    if (chain + 1 < L.minChainN) continue;
     const m = range + L.anchorBack + 1;
-    if (x < L.minX - m || x > L.maxX + m || z < L.minZ - m || z > L.maxZ + m) continue;
+    if (p.x < L.minX - m || p.x > L.maxX + m || p.z < L.minZ - m || p.z > L.maxZ + m) continue;
     for (let vi = 0; vi < L.vehicles; vi++) {
       vehicleAt(L, vi, sim.tick, _v);
       if (!_v.active) continue;
       grabPoint(L, _v, _g);
-      const dx = _g.x - x;
-      const dz = _g.z - z;
-      if (dx * dx + dz * dz < range * range) return true;
+      if (Math.abs(_g.y - p.y - 1.2) > SEEK_Y) continue;
+      const dx = _g.x - p.x;
+      const dz = _g.z - p.z;
+      const d2 = dx * dx + dz * dz;
+      if (d2 < best) {
+        best = d2;
+        found = true;
+        _near.x = _g.x;
+        _near.z = _g.z;
+        _near.d = Math.sqrt(d2);
+      }
     }
   }
-  return false;
+  return found;
 }
 
 function createPerf(): RouteScript {
@@ -115,14 +139,12 @@ function createPerf(): RouteScript {
       released = 0;
     }
 
-    // Steer for a point ahead on the lane, swung side to side so the board carves.
+    // Steer for a point ahead on the lane, swung side to side so the board carves; or for a ride
+    // that comes within reach.
     const along = (p.x - laneX) * dirX + (p.z - laneZ) * dirZ + LOOK_AHEAD;
     const side = CARVE_AMP * Math.sin(i / CARVE_PERIOD);
-    const tx = laneX + dirX * along + dirZ * side;
-    const tz = laneZ + dirZ * along - dirX * side;
-    const want = Math.atan2(tx - p.x, tz - p.z);
-    // The sim turns heading by -steer.
-    out.steer = Math.max(-1, Math.min(1, -wrap(want - p.heading) * STEER_GAIN));
+    let tx = laneX + dirX * along + dirZ * side;
+    let tz = laneZ + dirZ * along - dirX * side;
 
     // Catch rides that come past, ride a while, then let go to sling.
     if (p.mode === Mode.HITCH) {
@@ -132,8 +154,16 @@ function createPerf(): RouteScript {
     } else {
       riding = 0;
       if (released > 0) released--;
-      out.hold = released === 0 && rideNear(sim, p.x, p.z, HOLD_NEAR);
+      const seek = released === 0 && nearestRide(sim, SEEK);
+      if (seek) {
+        tx = _near.x;
+        tz = _near.z;
+      }
+      out.hold = seek && _near.d < HOLD_NEAR;
     }
+    const want = Math.atan2(tx - p.x, tz - p.z);
+    // The sim turns heading by -steer.
+    out.steer = Math.max(-1, Math.min(1, -wrap(want - p.heading) * STEER_GAIN));
     out.hop = p.mode !== Mode.HITCH && i % 97 === 0;
   };
 }
