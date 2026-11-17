@@ -4,6 +4,7 @@ import { compileLine, makeVehicleState, ticksToArrival, vehicleAt } from '../../
 import { buildSlice } from '../../../src/sim/slice';
 import { District } from '../../../src/sim/world';
 import {
+  arrivalTicks,
   boardRows,
   followingStop,
   inService,
@@ -118,10 +119,34 @@ describe('stop board rows', () => {
     expect(rows[0].ticks).toBeLessThanOrEqual(rows[1].ticks);
     for (const r of rows) {
       expect(r.service).toBe(true);
+      expect(r.ticks).toBe(arrivalTicks(tram, r.stop, t));
       expect(r.ticks).toBe(ticksToArrival(tram, r.stop, t));
       expect(r.next).toBe((r.stop + 1) % tram.allStops.length);
     }
     expect(nearbyStops(stops, esc.x, esc.z, 14, (li) => li !== 0)).toEqual([]);
+  });
+
+  it('counts a vehicle waiting out its lap at a loop terminus as standing there', () => {
+    for (const line of world.lines) {
+      let shorter = 0;
+      for (let t = 0; t < DAY_TICKS; t += 211) {
+        for (let stop = 1; stop < line.allStops.length; stop++) {
+          expect(arrivalTicks(line, stop, t)).toBe(ticksToArrival(line, stop, t));
+        }
+        const k = arrivalTicks(line, 0, t);
+        const plain = ticksToArrival(line, 0, t);
+        expect(k).toBeLessThanOrEqual(plain);
+        if (k < plain) shorter++;
+        let standing = false;
+        for (let v = 0; v < line.vehicles; v++) {
+          vehicleAt(line, v, t + k, vs);
+          const there = vs.s < 1e-3 || Math.abs(vs.s - line.length) < 1e-3;
+          if (vs.active && there && vs.vx === 0 && vs.vz === 0) standing = true;
+        }
+        expect(standing).toBe(true);
+      }
+      expect(shorter).toBeGreaterThan(0);
+    }
   });
 
   it('caps at four rows and puts lines out of service last', () => {

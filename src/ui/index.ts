@@ -123,7 +123,8 @@ export function createUi(root: HTMLElement, game: Game, sound: UiSound | null): 
   window.addEventListener('keydown', onKey);
 
   hud.append(board.el, chain.el, toasts.el, stopBoard.el, hold, map.el, mapBtn);
-  root.appendChild(hud);
+  // Under anything already in the root (the debug panel stays on top and readable).
+  root.prepend(hud);
 
   const segmentToast = (line: number, segment: number): void => {
     const L = lines[line];

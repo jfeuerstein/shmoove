@@ -1,6 +1,7 @@
 /**
  * Pure timetable queries for the boards, read from the lines' lap tables (never simulated).
  */
+import { DAY_TICKS } from '../sim/constants';
 import {
   dayFrac,
   inWindows,
@@ -136,6 +137,33 @@ export function nearbyStops(
   return out;
 }
 
+/**
+ * Ticks until a vehicle of `line` is standing at stop `stop`: ticksToArrival, except at a loop's
+ * terminus, where a vehicle also stands while it waits out the end of its lap (at s = length,
+ * which ticksToArrival does not count). That wait is when riders see it there.
+ */
+export function arrivalTicks(line: CompiledLine, stop: number, tick: number): number {
+  const best = ticksToArrival(line, stop, tick);
+  if (!line.loop || stop !== 0 || line.allStops[0].s >= STOP_EPS) return best;
+  const S = line.lapS;
+  const end = line.length;
+  const day = ((tick % DAY_TICKS) + DAY_TICKS) % DAY_TICKS;
+  let out = best;
+  for (let i = 0; i < line.vehicles; i++) {
+    const lt0 = lapTickOf(line, i, tick);
+    for (let k = 0; k < line.period && k < out; k++) {
+      const lt = (lt0 + k) % line.period;
+      if (Math.abs(S[lt] - end) >= 0.05 || S[lt] !== S[lt + 1]) continue;
+      const lapStart = (((day + k - lt) % DAY_TICKS) + DAY_TICKS) % DAY_TICKS;
+      if (!inWindows(line.windows, lapStart / DAY_TICKS)) continue;
+      if (line.parkHidden === true && lt >= line.runTicks) continue;
+      out = k;
+      break;
+    }
+  }
+  return out;
+}
+
 export interface BoardRow {
   line: number;
   stop: number;
@@ -152,7 +180,7 @@ export function boardRows(lines: readonly CompiledLine[], near: readonly StopPos
   for (const n of near) {
     const line = lines[n.line];
     const service = inService(line, tick);
-    const ticks = service ? ticksToArrival(line, n.stop, tick) : Infinity;
+    const ticks = service ? arrivalTicks(line, n.stop, tick) : Infinity;
     rows.push({ line: n.line, stop: n.stop, next: followingStop(line, n.stop, tick, ticks), ticks, service: service && Number.isFinite(ticks) });
   }
   rows.sort((a, b) => (a.service === b.service ? a.ticks - b.ticks || a.line - b.line : a.service ? -1 : 1));

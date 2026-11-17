@@ -80,10 +80,10 @@ const CSS = `
 .sk-stopup .sk-hold{bottom:calc(var(--sk-sb) + 30px + (var(--sk-ch) + 3px) * 5 + 12px)}
 
 /* Ticket stubs */
-.sk-toasts{position:absolute;top:var(--sk-top2);left:calc(var(--sk-sl) + var(--sk-gap));width:min(62vw,270px);
-  display:flex;flex-direction:column;gap:6px}
+.sk-toasts{position:absolute;top:var(--sk-top2);left:calc(var(--sk-sl) + var(--sk-gap));width:min(calc(100vw - 96px),270px);
+  display:flex;flex-direction:column;gap:6px;
+  filter:drop-shadow(2px 2px 0 rgba(27,26,46,.6)) drop-shadow(-1px 0 0 rgba(255,46,136,.5))}
 .sk-ticket{position:relative;background:var(--sk-paper);color:var(--sk-ink);padding:7px 10px 8px 30px;
-  filter:drop-shadow(2px 2px 0 rgba(27,26,46,.35));
   -webkit-mask:radial-gradient(circle at 0 5px,#0000 3.4px,#000 4px) 0 0/100% 10px repeat-y,radial-gradient(circle at 15px 50%,#0000 5px,#000 5.7px);
   -webkit-mask-composite:source-in;
   mask:radial-gradient(circle at 0 5px,#0000 3.4px,#000 4px) 0 0/100% 10px repeat-y,radial-gradient(circle at 15px 50%,#0000 5px,#000 5.7px);
