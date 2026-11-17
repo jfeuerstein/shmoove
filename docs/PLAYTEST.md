@@ -34,9 +34,12 @@ Automated tests only prove the mechanics work; they cannot say whether they feel
 | Does the rail magnet catch honest attempts and ignore near misses? | `RAIL_SNAP`, `RAIL_SNAP_UP`, `RAIL_SNAP_DOWN`, `RAIL_ENTRY_VY`, `GRIND_ALIGN` |
 | Is a grind fast and does it throw you off the end nicely? | `GRIND_MIN_SPEED`, `GRIND_ENTRY_BOOST`, `GRIND_FRICTION`, `GRIND_EXIT_POP`, `GRIND_HOP_SIDE` |
 | Do wallrides trigger when you mean them and last long enough to use? | `WALL_ALIGN`, `WALL_MIN_SPEED`, `WALL_TIME`, `WALL_GRAVITY`, `WALL_ENTRY_UP`, `WALL_JUMP_OUT`, `WALL_JUMP_UP` |
-| Do awnings feel like trampolines? | `AWNING_BOUNCE`, `AWNING_KEEP` |
+| Do awnings feel like trampolines? | `AWNING_BOUNCE`, `AWNING_KEEP`, `AWNING_ROLL_THROW` |
 | Are bails rare, fair and short? | `WALL_BAIL_SPEED`, `BAIL_IMPACT`, `RIDE_BAIL_SPEED`, `BAIL_TIME`, `BAIL_FRICTION` |
+| Does a bail by a vehicle or a wall throw you clear without looking silly? | `BAIL_KNOCK_CARRY`, `BAIL_KNOCK_SIDE`, `BAIL_KNOCK_UP`, `AIR_BONK_BAIL` |
 | Does brushing a wall cost the right amount of speed? | `WALL_SCRUB`, `WALL_BOUNCE` |
+| Does clipping a wall in the air (or another wall mid-wallride) feel like a bonk, not a stop or a launch? | `AIR_BONK` |
+| Does stalling on a nearly flat rail step you off when it should? | `GRIND_STALL_SPEED`, `GRIND_FLAT_SLOPE` |
 
 ## Hitching and chains
 
@@ -47,6 +50,9 @@ Automated tests only prove the mechanics work; they cannot say whether they feel
 | Do links make you feel faster without breaking the city? | `LINK_BONUS`, `SLING_CAP`, `SLING_MIN` |
 | Does hanging under an overhead ride feel like flying? | `HITCH_Y_RATE`, per-line `hang` |
 | Does bouncing off a vehicle roof feel deliberate? | `RIDE_ROOF_BOUNCE` |
+| Does the swing feel alive behind slow rides and not frantic behind fast ones? | `SWING_REF_SPEED`, `SWING_REF_MIN`, `SWING_REF_MAX` |
+| Does getting towed into a wall feel fair: a knock, and a slip only when really dragged round a corner? | `HITCH_WALL_BOUNCE`, `STRAP_SLIP` |
+| Behind a ground ride, do small bumps keep you on the ground instead of floating? | `TOW_SNAP_HEIGHT` |
 
 ## Camera
 
@@ -56,7 +62,10 @@ Automated tests only prove the mechanics work; they cannot say whether they feel
 | Does speed feel fast? | `CAM_FOV_SPEED`, `CAM_SPEED_DIST` |
 | Does the camera turn with you without making you seasick? | `CAM_YAW_RATE`, `CAM_POS_RATE` |
 | Can you read the swing and the aim arrow while hitched? | `CAM_HITCH_DIST`, `CAM_HITCH_HEIGHT` |
-| Can you see where you will land, and the hill while climbing? | `CAM_AIR_HEIGHT`, `CAM_UPHILL_HEIGHT`, `CAM_MIN_CLEAR` |
+| Can you see where you will land, and the hill while climbing? | `CAM_AIR_HEIGHT`, `CAM_UPHILL_HEIGHT`, `CAM_UPHILL_GAIN`, `CAM_CLIMB_RATE`, `CAM_AIR_FOLLOW`, `CAM_MIN_CLEAR` |
+| Do the camera's moves (pulling back for speed or a hitch, tilting for the ground, widening the view) ease rather than lurch? | `CAM_EXTRA_RATE`, `CAM_TILT_RATE`, `CAM_FOV_RATE` |
+| When a wall or roof blocks the view, does the camera duck in quickly and back out calmly? | `CAM_PULL_IN_RATE`, `CAM_PULL_OUT_RATE`, `CAM_PULL_MIN`, `CAM_PULL_DROP` |
+| Do stairs rattle and do hits shake for about the right time? | `CAM_STAIR_RATTLE`, `CAM_STAIR_SPEED`, `CAM_SHAKE_DECAY`, `CAM_SHAKE` |
 
 ## Only on a real phone
 
@@ -80,7 +89,9 @@ An ear has to judge the rest. Mute with `?mute`.
 - The stem fade-in on a hitch (starts on the next beat), the one-beat cross-fade between district
   tracks at different tempos, and the two-bar fade after landing.
 - Is the hard cut on a bail satisfying or just abrupt?
-- City pop bar 2: the lead holds F over C7 (a minor ninth against the E in the chord). Colour or clash?
+- City pop bar 2: the lead's sigh now lands on E over C7 (it held F, a minor ninth against the E).
+  Does the hook still read? Funk bars 2 and 6 and highlife bars 3, 7 and 8 have the harmony voiced
+  under the horns: does the clav or guitar sound too thin or too low there?
 - Wheel noise character, the stairs clatter rate, wind, the three motor timbres, the grind scrape.
 - CPU cost of the synth on a real phone.
 

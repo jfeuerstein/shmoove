@@ -42,6 +42,8 @@ export const FEEL_DEFS = {
   BAIL_IMPACT: [19, 5, 60, 'Air', 'Landing speed into the surface that bails you, m/s'],
   AWNING_BOUNCE: [11, 2, 25, 'Air', 'Minimum bounce speed off an awning, m/s'],
   AWNING_KEEP: [0.75, 0, 1.2, 'Air', 'Fraction of fall speed returned by an awning'],
+  AWNING_ROLL_THROW: [0.6, 0, 1.5, 'Air', 'Rolling onto an awning throws you up at AWNING_BOUNCE x this'],
+  AIR_BONK: [1.2, 1, 2, 'Air', 'Bonk off a wall in the air or mid-wallride: speed into it is reversed x (this - 1)'],
 
   // --- Grind
   RAIL_SNAP: [0.9, 0.2, 3, 'Grind', 'Horizontal magnet radius onto a rail, m'],
@@ -56,6 +58,7 @@ export const FEEL_DEFS = {
   GRIND_HOP_SIDE: [2.8, 0, 8, 'Grind', 'Sideways speed from steer when hopping off a rail, m/s'],
   GRIND_STALL_SPEED: [0.6, 0, 3, 'Grind', 'Below this speed on a flat rail you step off, m/s'],
   GRIND_COOLDOWN: [0.3, 0, 1, 'Grind', 'Time before the same rail can be re-snapped, s'],
+  GRIND_FLAT_SLOPE: [0.03, 0, 0.2, 'Grind', 'A rail flatter than this (rise per metre) is flat: stall on it and you step off'],
 
   // --- Wall
   WALL_ALIGN: [0.5, 0, 0.95, 'Wall', 'Minimum alignment (cos) with the wall to wallride'],
@@ -93,6 +96,11 @@ export const FEEL_DEFS = {
   SWING_STOP: [60, 5, 200, 'Hitch', 'Stiffness of the soft stop at SWING_MAX, 1/s^2'],
   SWING_MAX: [1.3, 0.3, 1.55, 'Hitch', 'Widest swing angle, rad'],
   HITCH_Y_RATE: [11, 1, 40, 'Hitch', 'How fast height follows the strap, 1/s'],
+  STRAP_SLIP: [4.5, 0.5, 15, 'Hitch', 'A wall dragging you this far past the strap length makes it slip, m'],
+  HITCH_WALL_BOUNCE: [0.3, 0, 1, 'Hitch', 'Swing rate kept, reversed, when the towed skater hits a wall'],
+  SWING_REF_MIN: [0.15, 0, 1, 'Hitch', 'Least share of SWING_FREQ^2 a slow ride swings with'],
+  SWING_REF_MAX: [1.6, 1, 4, 'Hitch', 'Most share of SWING_FREQ^2 a fast ride swings with'],
+  TOW_SNAP_HEIGHT: [0.5, 0, 2, 'Hitch', 'Behind a ground ride, within this of the ground you are held on it, m'],
 
   // --- Slingshot and chain
   SLING_GAIN: [1.14, 0.8, 2, 'Sling', 'Exit speed = release speed x this'],
@@ -110,6 +118,10 @@ export const FEEL_DEFS = {
   RIDE_SIDE_NUDGE: [1.5, 0, 6, 'Bail', 'Least speed a vehicle flank pushes you away with, m/s'],
   RIDE_SIDE_DRAG: [0.35, 0, 1, 'Bail', 'Share of a vehicle\'s speed it brushes onto you on side contact'],
   RIDE_ROOF_BOUNCE: [8.5, 0, 20, 'Bail', 'Bounce speed off a vehicle roof, m/s'],
+  AIR_BONK_BAIL: [1.3, 1, 2, 'Bail', 'Hitting a wall hard enough in the air to bail knocks you back: speed into it reversed x (this - 1)'],
+  BAIL_KNOCK_CARRY: [0.6, 0, 1.5, 'Bail', "Share of a vehicle's velocity it knocks you on with when it bails you"],
+  BAIL_KNOCK_SIDE: [4, 0, 12, 'Bail', 'Sideways speed a vehicle knocks you clear with when it bails you, m/s'],
+  BAIL_KNOCK_UP: [3, 0, 10, 'Bail', 'Upward speed a vehicle knocks you with when it bails you, m/s'],
   SAFE_MARGIN: [6, 0, 20, 'Bail', 'A respawn point must be this far from water, m'],
   BAIL_TIME: [1.3, 0.3, 4, 'Bail', 'Length of the tumble, s'],
   BAIL_FRICTION: [10, 1, 40, 'Bail', 'Slide deceleration while bailed, m/s^2'],
@@ -141,6 +153,19 @@ export const FEEL_DEFS = {
   CAM_MIN_CLEAR: [1.2, 0.2, 5, 'Camera', 'Minimum camera height above ground and roofs, m'],
   CAM_TOP_SPEED: [28, 10, 50, 'Camera', 'Speed at which the speed effects are at full, m/s'],
   CAM_SHAKE: [0.12, 0, 1, 'Camera', 'Shake scale on stairs, landings and bails'],
+  CAM_AIR_FOLLOW: [0.45, 0.05, 1, 'Camera', 'Height follow in the air and on walls, as a share of CAM_POS_RATE (hops read as hops)'],
+  CAM_CLIMB_RATE: [2.5, 0.2, 15, 'Camera', 'How fast the measured climb settles, 1/s'],
+  CAM_UPHILL_GAIN: [5, 0, 20, 'Camera', 'Climb (rise per metre) x this = share of CAM_UPHILL_HEIGHT added'],
+  CAM_EXTRA_RATE: [2.2, 0.2, 15, 'Camera', 'How fast the extra distance and height (speed, hitch, air, uphill) ease in and out, 1/s'],
+  CAM_PULL_IN_RATE: [14, 1, 60, 'Camera', 'How fast the camera pulls in when something blocks the view, 1/s'],
+  CAM_PULL_OUT_RATE: [2.5, 0.2, 15, 'Camera', 'How fast it backs out again once the view is clear, 1/s'],
+  CAM_PULL_MIN: [0.22, 0.05, 1, 'Camera', 'Closest it pulls in, as a share of its distance'],
+  CAM_PULL_DROP: [0.55, 0, 1, 'Camera', 'Share of its height the camera drops by when fully pulled in'],
+  CAM_SHAKE_DECAY: [7, 0.5, 30, 'Camera', 'How fast an impact shake dies away, 1/s'],
+  CAM_STAIR_RATTLE: [0.35, 0, 1.5, 'Camera', 'Shake on stairs at full rattle (before CAM_SHAKE)'],
+  CAM_STAIR_SPEED: [6, 0.5, 20, 'Camera', 'Speed on stairs at which the rattle is full, m/s'],
+  CAM_TILT_RATE: [2, 0.2, 15, 'Camera', 'How fast the look target tilts for the ground ahead, 1/s'],
+  CAM_FOV_RATE: [3, 0.2, 15, 'Camera', 'How fast the field of view follows speed, 1/s'],
 } as const satisfies Record<string, Def>;
 
 export type FeelKey = keyof typeof FEEL_DEFS;
