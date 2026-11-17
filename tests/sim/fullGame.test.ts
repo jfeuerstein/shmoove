@@ -67,11 +67,13 @@ function play(save?: SavePoint): Played {
   let savedAt = -1;
   let fromEvent = 0;
   const mapDone = (): boolean => game.progress.mapComplete;
-  // A save resumes the skater at their last safe spot, which the game refreshes every half second
-  // on the ground: take it once that spot is where they are waiting, not where they last got on a ride.
+  // A save resumes the skater standing at their last safe spot, which the game refreshes every half
+  // second on the ground: take it once they are standing where they wait, not in the air off a
+  // ride or where they last got on one. (A load is a fresh start from rest; it only plays on
+  // identically from a moment that already was one.)
   const settled = (): boolean => {
     const p = game.sim.player;
-    return Math.hypot(p.x - p.safeX, p.z - p.safeZ) < 2;
+    return p.mode === Mode.GROUND && p.speed < 0.5 && Math.hypot(p.x - p.safeX, p.z - p.safeZ) < 2;
   };
   const saveDue = (): boolean => save !== undefined && savedAt < 0 && save.when(game) && bot.waiting && settled();
   // Up to the save (if any), then to the map, then to the end of the plan.
