@@ -12,8 +12,10 @@ const CSS = `
 /* Slides up into place and back down, on twos. */
 .sk-hint.sk-in1,.sk-hint.sk-out2{transform:translate(-50%,130%)}
 .sk-hint.sk-in2,.sk-hint.sk-out1{transform:translate(-50%,45%)}
-/* Above the hold cue, wherever the stop board has pushed it. */
-.sk-stopup .sk-hint{bottom:calc(var(--sk-sb) + 30px + (var(--sk-ch) + 3px) * 5 + 46px)}
+/* A hint up hides the stop timetable board (as an errand offer does), so the stub stays low, clear
+   of the skater and the ride it is about; the hold cue goes back under it. */
+.sk-hinting .sk-stop{visibility:hidden}
+.sk-hinting.sk-stopup .sk-hold{bottom:calc(var(--sk-sb) + 16px)}
 .sk-titling .sk-hint,.sk-titling .sk-hmapptr{visibility:hidden}
 .sk-hticket{display:flex;align-items:center;gap:8px;padding:5px 38px 5px 31px;min-height:54px}
 .sk-hglyph{flex:none;width:44px;height:44px}
@@ -24,7 +26,7 @@ const CSS = `
 .sk-htitle{font-weight:700;font-size:17px;line-height:1.05;letter-spacing:.08em;color:var(--sk-ink);white-space:nowrap;
   text-shadow:1px 1px 0 rgba(255,46,136,.45)}
 .sk-hlong .sk-htitle{font-size:14px;letter-spacing:.06em}
-.sk-hsub{font-weight:700;font-size:12px;line-height:1.15;letter-spacing:.1em;color:var(--sk-cobalt);max-width:232px;
+.sk-hsub{font-weight:700;font-size:12px;line-height:1.15;letter-spacing:.1em;color:var(--sk-cobalt);text-wrap:balance;
   text-shadow:-1px 0 0 rgba(255,46,136,.35)}
 .sk-hsub:empty{display:none}
 /* The punched hole: an empty ring until the step is learnt, then punched through. */

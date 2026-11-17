@@ -222,6 +222,7 @@ export function createUi(root: HTMLElement, game: Game, sound: UiSound | null, s
   const conductorHud = new ConductorHud(game, twos);
   const errandOn = new ClassSlot(hud, 'sk-errand');
   const offering = new ClassSlot(hud, 'sk-offering');
+  const hinting = new ClassSlot(hud, 'sk-hinting');
   const ledger = new LedgerScreen(game, twos, {
     close: () => setLedgerOpen(false),
     tap: () => sound?.ui('tick'),
@@ -540,6 +541,7 @@ export function createUi(root: HTMLElement, game: Game, sound: UiSound | null, s
       conductorHud.update(f.dt);
       shell?.frame(f.dt, f.gameEvents);
       hint.update(f.dt, mapOpen || chalkOpen || ledgerOpen || (shell !== null && shell.paused));
+      hinting.set(hint.hint !== '');
       twos.update(f.dt);
     },
     get paused(): boolean {

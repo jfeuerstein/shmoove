@@ -30,16 +30,18 @@ const OUTLINE_Y = 0.06;
 
 /** A downward chevron with its point at (0, lift, 0): two crossed V's so it reads from any side. */
 function chevron(b: MeshBuilder, lift: number): void {
-  const w = 0.42;
-  const h = 0.46;
-  const t = 0.075;
+  const w = 0.55;
+  const h = 0.6;
+  const t = 0.1;
+  // An ink stroke printed a little under the mango one, like the UI's off-register shadow: it
+  // reads on bright concrete and on dark asphalt alike without hiding the mango.
+  const sh = 0.12;
   for (const [ax, az] of [
     [1, 0],
     [0, 1],
   ]) {
-    // Ink under-stroke a touch wider, then the mango stroke: reads on bright and dark ground.
-    b.beam(0, lift, 0, ax * w, lift + h, az * w, t * 1.45, INK.ink, 0);
-    b.beam(0, lift, 0, -ax * w, lift + h, -az * w, t * 1.45, INK.ink, 0);
+    b.beam(0, lift - sh, 0, ax * w, lift + h - sh, az * w, t * 0.7, INK.ink, 0);
+    b.beam(0, lift - sh, 0, -ax * w, lift + h - sh, -az * w, t * 0.7, INK.ink, 0);
     b.beam(0, lift, 0, ax * w, lift + h, az * w, t, INK.mango, 1);
     b.beam(0, lift, 0, -ax * w, lift + h, -az * w, t, INK.mango, 1);
   }
