@@ -58,11 +58,14 @@ const CSS = `
 .sk-cchiphole{display:none;width:14px;height:14px;border-radius:50%;background:var(--sk-paper);box-shadow:0 0 0 2px var(--sk-pink)}
 .sk-cchip.sk-punched{background:var(--sk-pink)}
 .sk-cchip.sk-punched .sk-cchiptext{color:var(--sk-paper)}
+.sk-cchip.sk-punched .sk-cchiplabel{display:none}
 .sk-cchip.sk-punched .sk-cchiphole{display:block;background:var(--sk-ink);box-shadow:0 0 0 2px var(--sk-paper)}
 
 /* Ticket toasts: conductor tickets in the line's livery, stamped and torn errand results, secrets */
 .sk-ticket[data-kind='conductor'],.sk-ticket[data-kind='conductor-punch']{background:
-  linear-gradient(var(--sk-lbase,#F3EBDD) 0 70%,var(--sk-lstripe,#F3EBDD) 70% 82%,var(--sk-lbase,#F3EBDD) 82% 100%)}
+  linear-gradient(var(--sk-lbase,#F3EBDD) 0 86%,var(--sk-lstripe,#F3EBDD) 86% 94%,var(--sk-lbase,#F3EBDD) 94% 100%);padding-bottom:13px}
+.sk-ticket[data-kind='conductor'] .sk-serial,.sk-ticket[data-kind='conductor-punch'] .sk-serial,.sk-ticket[data-kind='errand-done'] .sk-serial,
+.sk-ticket[data-kind='errand-fail'] .sk-serial,.sk-ticket[data-kind='secret'] .sk-serial{white-space:nowrap;flex:none}
 .sk-ticket[data-kind='conductor'] .sk-op,.sk-ticket[data-kind='conductor-punch'] .sk-op{color:var(--sk-ltext,#FF2E88)}
 .sk-ticket[data-kind='conductor'] .sk-tbody,.sk-ticket[data-kind='conductor-punch'] .sk-tbody{color:var(--sk-ltext,#1B1A2E);white-space:normal;line-height:1.15}
 .sk-ticket[data-kind='conductor'] .sk-serial,.sk-ticket[data-kind='conductor-punch'] .sk-serial{color:var(--sk-ltext,#1F3FBF);opacity:.8}
@@ -71,7 +74,7 @@ const CSS = `
 .sk-ticket[data-kind='errand-done'] .sk-stamp{width:auto;height:auto;padding:3px 6px 2px;border-radius:3px;line-height:1;font-size:12px;
   letter-spacing:.14em;border-color:var(--sk-pink);color:var(--sk-pink);bottom:8px;right:8px}
 .sk-ticket[data-kind='errand-done'] .sk-tbody,.sk-ticket[data-kind='errand-fail'] .sk-tbody{padding-right:72px}
-.sk-ebest{display:inline-block;margin-left:6px;padding:1px 4px;background:var(--sk-mango);color:var(--sk-ink);border-radius:2px;font-size:11px;letter-spacing:.12em}
+.sk-ebest{display:block;width:max-content;margin-top:4px;padding:1px 4px;background:var(--sk-mango);color:var(--sk-ink);border-radius:2px;font-size:11px;letter-spacing:.12em}
 /* Torn: a ragged right edge and the reason struck in pink */
 .sk-ticket[data-kind='errand-fail']{clip-path:polygon(0 0,92% 0,96% 14%,91% 30%,97% 46%,90% 62%,96% 78%,92% 100%,0 100%)}
 .sk-ticket[data-kind='errand-fail'] .sk-op{color:var(--sk-ink);text-decoration:line-through;text-decoration-color:var(--sk-pink);text-decoration-thickness:2px}
