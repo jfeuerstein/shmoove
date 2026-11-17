@@ -6,14 +6,41 @@
 import { placePlayer } from '../sim/player';
 import type { Sim } from '../sim/sim';
 import { Mode, type InputFrame } from '../sim/types';
+import type { World } from '../sim/world';
 
 export type RouteScript = (sim: Sim, tick: number, out: InputFrame) => void;
 
+/** Metres of descent after which the perf run goes back up the hill. */
+const PERF_DROP = 60;
+
+/** Where the perf run (re)starts: the world's spawn zones in turn, or its spawn point. */
+function perfStarts(w: World): { x: number; z: number; heading: number }[] {
+  const zones = w.zones.filter((z) => z.kind === 'spawn');
+  if (zones.length === 0) return [w.spawn];
+  // Every spawn faces downhill, like the world's own.
+  return zones.map((z) => ({ x: z.x, z: z.z, heading: w.spawn.heading }));
+}
+
+let startWorld: World | null = null;
+let starts: { x: number; z: number; heading: number }[] = [];
+let next = 0;
+let startY = 0;
+
 const perf: RouteScript = (sim, i, out) => {
   const p = sim.player;
-  // Keep the skater on the hill: back to the start when the run reaches the bottom.
-  if (p.mode !== Mode.HITCH && (p.z < sim.world.spawn.z - 290 || (p.speed < 0.2 && p.mode === Mode.GROUND && i % 300 === 299))) {
-    placePlayer(sim.world, p, sim.world.spawn.x, sim.world.spawn.z, sim.world.spawn.heading);
+  const w = sim.world;
+  if (startWorld !== w) {
+    startWorld = w;
+    starts = perfStarts(w);
+    next = 0;
+    startY = p.y;
+  }
+  // Keep the skater busy: back up the hill after a long descent, or when stalled on the ground.
+  if (p.mode !== Mode.HITCH && (p.y < startY - PERF_DROP || (p.speed < 0.2 && p.mode === Mode.GROUND && i % 300 === 299))) {
+    const s = starts[next % starts.length];
+    next++;
+    placePlayer(w, p, s.x, s.z, s.heading);
+    startY = p.y;
   }
   const phase = i % 420;
   out.steer = 0.7 * Math.sin(i / 37);

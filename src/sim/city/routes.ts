@@ -3,9 +3,9 @@
  * landings and terrace streets, joined by S-bends and arcs of known radius, then draped on the
  * terrain. Overhead routes sit a set height above whatever is under them.
  */
-import { nearestArc } from '../lines';
+import { nearestArc, smoothPath } from '../lines';
 import { PI, TAU, datan2, dcos, dsin, len2, len3 } from '../math';
-import { Surface, addSolid, addZone, terrainHeight, topHeight, type World } from '../world';
+import { Surface, addSolid, addZone, terrainHeight, terrainSurface, topHeight, type World } from '../world';
 import { needleTop } from './dress';
 import type { RouteDef } from './index';
 import { BOULEVARD_Z, INNER_R, LEVELS, NEEDLE } from './layout';
@@ -131,12 +131,12 @@ function sBendRun(dz: number): number {
 }
 
 /** Resample a flat x, z polyline at about SPACING m and attach heights. */
-function resample(xz: number[], y: (x: number, z: number) => number, closed: boolean): number[] {
+function resample(xz: number[], y: (x: number, z: number) => number, closed: boolean, spacing = SPACING): number[] {
   const n = xz.length / 2;
   const cum = new Float64Array(n);
   for (let i = 1; i < n; i++) cum[i] = cum[i - 1] + len2(xz[i * 2] - xz[i * 2 - 2], xz[i * 2 + 1] - xz[i * 2 - 1]);
   const total = cum[n - 1];
-  const m = Math.max(2, Math.round(total / SPACING));
+  const m = Math.max(2, Math.round(total / spacing));
   const out: number[] = [];
   let k = 0;
   for (let j = 0; j <= m; j++) {
@@ -335,6 +335,104 @@ function smoothHeights(path: number[], passes: number, closed: boolean): void {
   }
 }
 
+/**
+ * The Antenna Hill sky, laid out so the hill can be climbed by air and the summit route works:
+ * the lower cable car starts over the top terrace yard (where the funicular and tram 5 drop you)
+ * and ends over the hill station beside the summit cable car's base, which climbs to the summit.
+ * The kites fly up beside the summit cable car's up cable, overtaking its cars, then climb to meet
+ * the king kite, which swoops down to them and rises to pass just over the needle.
+ */
+/** Cable car end points: [ax, az, bx, bz] (base, then top). */
+export const CABLES = {
+  A1: [-17, 951, 35.8, 1033],
+  A2: [37, 1044, 13, 1254],
+} as const satisfies Record<string, readonly [number, number, number, number]>;
+/** Height of the cable cars above whatever is below them. */
+const CABLE_ABOVE = 9.6;
+const CABLE_SEP = 8;
+
+/** Kite circuit control points: x, z, height above the ground. Index 0 is Campo Sur. */
+export const KITES: readonly (readonly [number, number, number])[] = [
+  [50, 1050, 12],
+  [44, 1090, 13],
+  [39, 1130, 13],
+  [34, 1166, 16.5],
+  [30, 1196, 21],
+  [24, 1222, 21],
+  [36, 1244, 18],
+  [74, 1240, 17],
+  [116, 1206, 17],
+  [142, 1134, 17],
+  [132, 1058, 16],
+  [92, 1032, 12.5],
+];
+const KITE_EAST = 8;
+/** King kite control points: x, z, absolute height. Index 0 is over the needle. */
+export const KING: readonly (readonly [number, number, number])[] = [
+  [NEEDLE.x, NEEDLE.z, -1],
+  [18, 1262, 262],
+  [40, 1248, 262],
+  [58, 1226, 258],
+  [66, 1204, 252],
+  [60, 1186, 246],
+  [46, 1182, 240],
+  [33, 1194, 237],
+  [21, 1212, 241],
+  [9, 1234, 252],
+  [-3, 1250, 261.5],
+];
+const KING_FAR = 5;
+
+function cablePath(w: World, c: readonly [number, number, number, number], above: number): number[] {
+  const path = resample(cableLoop(c[0], c[1], c[2], c[3], CABLE_SEP), () => 0, true, 2.5);
+  // Ride over the highest ground within a few metres, so the car lifts before a retaining wall
+  // rather than dragging its strap into it.
+  const n = path.length / 3;
+  const g = new Float64Array(n);
+  for (let i = 0; i < n; i++) g[i] = topHeight(w, path[i * 3], path[i * 3 + 2]);
+  for (let i = 0; i < n; i++) {
+    let m = g[i];
+    for (let k = -3; k <= 3; k++) m = Math.max(m, g[(((i + k) % (n - 1)) + (n - 1)) % (n - 1)]);
+    path[i * 3 + 1] = m + above;
+  }
+  path[(n - 1) * 3 + 1] = path[1];
+  smoothHeights(path, 3, true);
+  clampAbove(w, path, above - 0.4, 12.9);
+  return path;
+}
+
+/** Keep every point of an overhead path between lo and hi above whatever is under it. */
+function clampAbove(w: World, path: number[], lo: number, hi: number): void {
+  for (let i = 0; i < path.length; i += 3) {
+    const g = topHeight(w, path[i], path[i + 2]);
+    path[i + 1] = Math.min(Math.max(path[i + 1], g + lo), g + hi);
+  }
+}
+
+function kitePath(w: World): number[] {
+  const ctrl: number[] = [];
+  for (const k of KITES) ctrl.push(k[0], k[2], k[1]);
+  const path = smoothPath(ctrl, SPACING, true);
+  for (let i = 0; i < path.length; i += 3) path[i + 1] += topHeight(w, path[i], path[i + 2]);
+  smoothHeights(path, 2, true);
+  clampAbove(w, path, 12.3, 21.7);
+  return path;
+}
+
+function kingPath(w: World): number[] {
+  const top = needleTop() + 6;
+  const ctrl: number[] = [];
+  for (const k of KING) ctrl.push(k[0], k[2] < 0 ? top : k[2], k[1]);
+  const path = smoothPath(ctrl, SPACING, true);
+  // Over the needle the king kite is exactly 6 m above the platform; elsewhere inside its band.
+  for (let i = 0; i < path.length; i += 3) {
+    if (len2(path[i] - NEEDLE.x, path[i + 2] - NEEDLE.z) < 3) continue;
+    const g = topHeight(w, path[i], path[i + 2]);
+    path[i + 1] = Math.min(Math.max(path[i + 1], g + 6), g + 44);
+  }
+  return path;
+}
+
 // ---------------------------------------------------------------------------------------------
 
 interface Spec {
@@ -408,42 +506,31 @@ export function buildRoutes(w: World, g: Ground): Record<string, RouteDef> {
   const crane = resample([-140, 9, 140, 9], craneY, false);
   specs.push({ id: 'D1', loop: false, overhead: true, path: crane, stops: [['Grúa Oeste', -140, 9], ['Grúa Centro', 0, 9], ['Grúa Este', 140, 9]] });
   specs.push({ id: 'D2', loop: true, overhead: false, path: ground(forkliftLoop()), stops: [['Almacenes Sur', -82, 92], ['Almacenes Este', -35, 170], ['Cocheras', -82, 250], ['Almacenes Oeste', -130, 170]] });
-  specs.push({ id: 'D3', loop: true, overhead: false, path: ground(fishLoop(g)), stops: [['Lonja', -110, 32], ['Bulevar', -90, BOULEVARD_Z], ['Puerta del Mercado', 0, 306], ['Muelle', -60, 8]] });
+  specs.push({ id: 'D3', loop: true, overhead: false, path: ground(fishLoop(g)), stops: [['Lonja', -110, 32], ['Bulevar', -90, BOULEVARD_Z], ['Puerta del Mercado', 20, 306], ['Muelle', -60, 8]] });
 
   // Mercado.
-  specs.push({ id: 'M1', loop: true, overhead: false, path: ground(boulevardLoop(g, 410, true, 60)), stops: [['Bulevar', 60, BOULEVARD_Z], ['Rampa Oeste', -152, 345], ['Rellano 410', 0, 410], ['Rampa Este', 152, 345]] });
-  specs.push({ id: 'M2', loop: true, overhead: false, path: ground(levelLoop(g, 358, 410, 40)), stops: [['Rellano 358', 40, 358], ['Rampa Oeste', -152, 384], ['Rellano 410', 0, 410], ['Rampa Este', 152, 384]] });
+  specs.push({ id: 'M1', loop: true, overhead: false, path: ground(boulevardLoop(g, 410, true, 60)), stops: [['Bulevar', 60, BOULEVARD_Z], ['Rampa Oeste', -152, 345], ['Rellano 410', 20, 410], ['Rampa Este', 152, 345]] });
+  specs.push({ id: 'M2', loop: true, overhead: false, path: ground(levelLoop(g, 358, 410, 40)), stops: [['Rellano 358', 40, 358], ['Rampa Oeste', -152, 384], ['Rellano 410', 20, 410], ['Rampa Este', 152, 384]] });
   specs.push({ id: 'M3', loop: true, overhead: false, path: ground(paradeLoop()), stops: [['Iglesia', 40, 457], ['Fuente', 62, 469], ['Torre', 40, 481]] });
 
   // Terraces.
   specs.push({ id: 'T1', loop: true, overhead: false, path: ground(funicularLoop()), stops: [['Base', FUNI_TRACK.cx, FUNI_TRACK.zBottom - FUNI_TRACK.r], ['Cima', FUNI_TRACK.cx, FUNI_TRACK.zTop + FUNI_TRACK.r]] });
   const top = LEVELS[LEVELS.length - 1].z;
-  specs.push({ id: 'T2', loop: true, overhead: false, path: ground(boulevardLoop(g, top, true, 0)), stops: [['Muelle', 0, BOULEVARD_Z], ['Mercado', -152, 436], ['Terrazas', -152, 754], ['Puerta de la Antena', 0, top], ['Escuela', 152, 754], ['Mercado Este', 152, 436]] });
-  specs.push({ id: 'T3', loop: true, overhead: false, path: ground(levelLoop(g, 619, 835, 0)), stops: [['Terraza Baja', 0, 619], ['Zigzag Oeste', -152, 727], ['Terraza Alta', 0, 835], ['Zigzag Este', 152, 727]] });
-  specs.push({ id: 'T4', loop: true, overhead: false, path: ground(boulevardLoop(g, 727, false, 0)), stops: [['Garaje', 0, BOULEVARD_Z], ['Rampa Este', 152, 488], ['Terraza 727', 0, 727], ['Rampa Oeste', -152, 488]] });
+  specs.push({ id: 'T2', loop: true, overhead: false, path: ground(boulevardLoop(g, top, true, 12)), stops: [['Muelle', 12, BOULEVARD_Z], ['Mercado', -152, 436], ['Terrazas', -152, 754], ['Puerta de la Antena', -12, top], ['Escuela', 152, 754], ['Mercado Este', 152, 436]] });
+  specs.push({ id: 'T3', loop: true, overhead: false, path: ground(levelLoop(g, 619, 835, 20)), stops: [['Terraza Baja', 20, 619], ['Zigzag Oeste', -152, 727], ['Terraza Alta', 20, 835], ['Zigzag Este', 152, 727]] });
+  specs.push({ id: 'T4', loop: true, overhead: false, path: ground(boulevardLoop(g, 727, false, 12)), stops: [['Garaje', -12, BOULEVARD_Z], ['Rampa Este', 152, 488], ['Terraza 727', 20, 727], ['Rampa Oeste', -152, 488]] });
 
   // Antenna Hill.
-  const a1 = cableLoop(60, 978, 34, 1036, 8);
-  const cable = (h: number) => (x: number, z: number): number => topHeight(w, x, z) + h;
-  const A1 = resample(a1, cable(11), true);
-  smoothHeights(A1, 3, true);
-  specs.push({ id: 'A1', loop: true, overhead: true, path: A1, stops: [['Puerta', 60, 978], ['Estación del Cerro', 34, 1036]] });
-  const A2 = resample(cableLoop(40, 1046, 40, 1226, 8), cable(11), true);
-  smoothHeights(A2, 3, true);
-  specs.push({ id: 'A2', loop: true, overhead: true, path: A2, stops: [['Estación del Cerro', 40, 1046], ['Cresta', 40, 1226]] });
-  const kites = ellipse(-20, 1100, 75, 75);
-  const A3 = resample(kites, (x, z) => topHeight(w, x, z) + 17 + 3 * dsin(datan2(z - 1100, x + 20) * 4), true);
-  smoothHeights(A3, 2, true);
-  specs.push({ id: 'A3', loop: true, overhead: true, path: A3, stops: [['Campo Sur', -20, 1025], ['Campo Norte', -20, 1175]] });
+  specs.push({ id: 'A1', loop: true, overhead: true, path: cablePath(w, CABLES.A1, CABLE_ABOVE), stops: [['Puerta', CABLES.A1[0], CABLES.A1[1]], ['Estación del Cerro', CABLES.A1[2], CABLES.A1[3]]] });
+  specs.push({ id: 'A2', loop: true, overhead: true, path: cablePath(w, CABLES.A2, CABLE_ABOVE), stops: [['Estación del Cerro', CABLES.A2[0], CABLES.A2[1]], ['Cresta', CABLES.A2[2], CABLES.A2[3]]] });
+  specs.push({ id: 'A3', loop: true, overhead: true, path: kitePath(w), stops: [['Campo Sur', KITES[0][0], KITES[0][1]], ['Campo Este', KITES[KITE_EAST][0], KITES[KITE_EAST][1]]] });
 
   // Secrets.
-  specs.push({ id: 'S1', loop: true, overhead: false, path: ground(levelLoop(g, 566, 619, 75)), stops: [['Túnel', 75, 566], ['Terraza Baja', 0, 619]] });
+  specs.push({ id: 'S1', loop: true, overhead: false, path: ground(levelLoop(g, 566, 619, 75)), stops: [['Túnel', 75, 566], ['Terraza Baja', 20, 619]] });
   const blimp = resample(ellipse(0, 1110, 130, 125), (x, z) => topHeight(w, x, z) + 38, true);
   smoothHeights(blimp, 4, true);
   specs.push({ id: 'S2', loop: true, overhead: true, path: blimp, stops: [['Cumbre', 0, 1235], ['Cerro Sur', 0, 985]] });
-  const nt = needleTop();
-  const king = resample(ellipse(0, NEEDLE.z - 32, 32, 32), () => nt + 6, true);
-  specs.push({ id: 'S3', loop: true, overhead: true, path: king, stops: [['La Aguja', NEEDLE.x, NEEDLE.z], ['Cresta Sur', 0, NEEDLE.z - 64]] });
+  specs.push({ id: 'S3', loop: true, overhead: true, path: kingPath(w), stops: [['La Aguja', NEEDLE.x, NEEDLE.z], ['Cresta Sur', KING[KING_FAR][0], KING[KING_FAR][1]]] });
 
   const out: Record<string, RouteDef> = {};
   for (const s of specs) {
@@ -456,17 +543,15 @@ export function buildRoutes(w: World, g: Ground): Record<string, RouteDef> {
 // ---------------------------------------------------------------------------------------------
 // Pylons, stops and chain spots.
 
-/** Pylons between the two cables of each cable car, never under either cable. */
+/** Pylons between the two cables of each cable car, never under either cable, never on a street. */
 export function addPylons(w: World): void {
-  const lines: [number, number, number, number][] = [
-    [60, 978, 34, 1036],
-    [40, 1046, 40, 1226],
-  ];
-  for (const [ax, az, bx, bz] of lines) {
+  for (const [ax, az, bx, bz] of [CABLES.A1, CABLES.A2]) {
     const len = len2(bx - ax, bz - az);
     const n = Math.max(1, Math.floor(len / 40));
     for (let k = 1; k <= n; k++) {
-      const f = k / (n + 1);
+      let f = k / (n + 1);
+      // Slide off a street crossing (the spine) along the line.
+      while (terrainSurface(w, ax + (bx - ax) * f, az + (bz - az) * f) === Surface.STREET && f < 0.95) f += 1 / len;
       const x = ax + (bx - ax) * f;
       const z = az + (bz - az) * f;
       const g = terrainHeight(w, x, z);
@@ -480,7 +565,9 @@ export function addStopZones(w: World, routes: Record<string, RouteDef>): void {
     const r = routes[id];
     r.stops.forEach((st, n) => {
       const p = pointAt(r.path, st.s);
-      addZone(w, { id: `stop_${id}_${n}`, name: st.name, kind: 'stop', x: p[0], y: topHeight(w, p[0], p[2]), z: p[2], r: 6 });
+      // Ground stops sit on the route itself (the ghost tram's tunnel has a lid above the track).
+      const y = r.overhead ? topHeight(w, p[0], p[2]) : p[1];
+      addZone(w, { id: `stop_${id}_${n}`, name: st.name, kind: 'stop', x: p[0], y, z: p[2], r: 6 });
     });
   }
 }
