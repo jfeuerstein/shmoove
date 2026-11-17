@@ -72,6 +72,8 @@ export const ZONE_DY = 4;
 export const RIDE_ZONE_DY = 12;
 /** A `rideTo` still counts this long after letting go of the line. */
 export const RIDE_GRACE_TICKS = 3 * 60;
+/** Longest believable move along a rail in one tick, metres (60 m/s). */
+const MAX_GRIND_STEP = 1;
 /** Offers fill only below this speed, m/s. */
 export const OFFER_MAX_SPEED = 4;
 /** Hold time that takes an offer: 0.6 s. */
@@ -241,6 +243,7 @@ export class ErrandsReducer implements GameReducer {
   private px = 0;
   private py = 0;
   private pz = 0;
+  private wasGrind = false;
 
   constructor(world: World, defs: readonly ErrandDef[]) {
     this.resolved = [];
@@ -314,6 +317,7 @@ export class ErrandsReducer implements GameReducer {
     this.px = p.x;
     this.py = p.y;
     this.pz = p.z;
+    this.wasGrind = p.mode === Mode.GRIND;
   }
 
   // ------------------------------------------------------------------------------------------
@@ -383,11 +387,13 @@ export class ErrandsReducer implements GameReducer {
     }
     // Counters since the step began.
     if (p.mode === Mode.GROUND) this.ground += DT;
-    if (p.mode === Mode.GRIND) {
+    if (p.mode === Mode.GRIND && this.wasGrind) {
       const dx = p.x - this.px;
       const dy = p.y - this.py;
       const dz = p.z - this.pz;
-      this.grindM += Math.sqrt(dx * dx + dy * dy + dz * dz);
+      // A step along a rail is well under a metre; anything longer is a teleport, not grinding.
+      const d = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      if (d < MAX_GRIND_STEP) this.grindM += d;
     }
     if (p.mode === Mode.AIR) {
       this.airRun += DT;
