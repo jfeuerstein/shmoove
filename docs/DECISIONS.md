@@ -111,3 +111,18 @@ Decisions made without the owner in the room, newest last. Cuts are marked **CUT
 36. **The ghost tram shares the switchbacks;** its tunnel is a covered stretch on the top Mercado
     landing rather than a track of its own.
 37. **The ground curls up at the side edges of the world** so a skater cannot be pinned there.
+
+## M6a — App shell
+
+38. **The service worker is generated after the build** from the built file list; its cache name is a
+    hash of their contents. A new build installs and waits; the page shows a "new timetable" ticket
+    and only swaps on RELOAD. Cached files are matched ignoring `Vary` (module scripts send an
+    Origin header the precache requests lack). It never registers under `?e2e` without `sw`.
+39. **Icons are drawn and PNG-encoded in code at build time** (git-ignored output), so the repo holds
+    no binary assets.
+40. **App-only settings** (reduced motion, print pass) and total play time live under their own
+    storage key beside the sim save. RESET SAVE also resets settings; NEW GAME keeps them.
+41. **Auto-pause on blur/hide is off under `?e2e` and `?route=`** so stepped routes and the perf run
+    stay deterministic.
+42. **Haptic patterns are literals in `src/app/haptics.ts`,** not `FEEL` entries: they are not sim
+    feel and the debug panel cannot preview them on a desktop. They are on the playtest list.

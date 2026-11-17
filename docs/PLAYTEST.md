@@ -83,3 +83,12 @@ An ear has to judge the rest. Mute with `?mute`.
 - City pop bar 2: the lead holds F over C7 (a minor ninth against the E in the chord). Colour or clash?
 - Wheel noise character, the stairs clatter rate, wind, the three motor timbres, the grind scrape.
 - CPU cost of the synth on a real phone.
+
+## Haptics and shell (phone only)
+
+- Vibration patterns in `src/app/haptics.ts` (`PATTERNS`): is the hitch a firm tap, the release a
+  snap, the grind tick too busy, the bail too long? Android only; iOS Safari has no vibration API.
+- Install flow: Android Chrome's INSTALL button on the title screen; iOS "Share → Add to Home
+  Screen". Does it launch fullscreen and portrait, and does it start offline?
+- The "NEW TIMETABLE" update ticket after a redeploy.
+- Reduced motion: does it remove everything that bothers you (camera shake, flips, slides)?
