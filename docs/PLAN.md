@@ -86,8 +86,11 @@ Acceptance:
 - [x] README with deploy steps; GitHub Pages workflow deploying `develop` and the working branch
 - [x] Performance pass: frame work on the city with all rides 4.5–4.9 ms mean, 10.6–13.1 ms p95 at
       4x throttle (budget 10 / 16.6); worst view 71 draw calls, 140k triangles (budget 120 / 180k)
-- [ ] Full-game check: first launch → completed line map by a scripted skater with no teleports
-      (brief `m6e-full-game`)
+- [x] Full-game check: first launch → completed line map by a scripted skater with no teleports
+      (`tests/sim/fullGame.test.ts`, bot in `tests/sim/bot/`): map complete in 51.5 simulated
+      minutes, no bails before it; then the ghost tram, the summit chain and king kite, the blimp;
+      three save/load points end in the same state; about 7 s of test time. The blimp's first
+      segment cannot be inked (DECISIONS 79). Independent check pending
 - [ ] Final docs and audit
 
 Acceptance:
