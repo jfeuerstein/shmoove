@@ -192,9 +192,10 @@ describe('the climb', () => {
     const a2Base = stopPose(A2, 0);
     const legs: Leg[] = [
       {
-        // Tram 5 from its docks terminus: wait beside the lane at the rear bumper.
+        // Tram 5 from its docks terminus: wait beside the lane at the rear bumper, on its left,
+        // out of the mopeds' lane to its right.
         line: 'T2',
-        wait: () => [muelle.x - muelle.hx * T2.anchorBack - muelle.hz * 2.6, muelle.z - muelle.hz * T2.anchorBack + muelle.hx * 2.6],
+        wait: () => [muelle.x - muelle.hx * T2.anchorBack + muelle.hz * 2.6, muelle.z - muelle.hz * T2.anchorBack - muelle.hx * 2.6],
         // Let go at the Antenna gate stop, under the lower cable car's base.
         alight: (v) => atStop(T2, v, puerta),
       },
