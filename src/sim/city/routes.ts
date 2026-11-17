@@ -625,11 +625,11 @@ export function buildRoutes(w: World, g: Ground): Record<string, RouteDef> {
       ['Almacenes Centro', FE.west, 160],
     ],
   });
-  specs.push({ id: 'D3', loop: true, overhead: false, path: ground(fishLoop(g)), stops: [['Lonja', -110, 32], ['Bulevar', -90, BOULEVARD_Z], ['Puerta del Mercado', 20, 306], ['Muelle', -60, 8]] });
+  specs.push({ id: 'D3', loop: true, overhead: false, path: ground(fishLoop(g)), stops: [['Lonja', -110, 32], ['Bulevar', -90, BOULEVARD_Z], ['Puerta del Mercado', 14, 306], ['Muelle', -60, 8]] });
 
   // Mercado.
-  specs.push({ id: 'M1', loop: true, overhead: false, path: ground(boulevardLoop(g, 410, true, 60)), stops: [['Bulevar', 60, BOULEVARD_Z], ['Rampa Oeste', -152, 345], ['Rellano 410', 20, 410], ['Rampa Este', 152, 345]] });
-  specs.push({ id: 'M2', loop: true, overhead: false, path: ground(levelLoop(g, 358, 410, 40)), stops: [['Rellano 358', 40, 358], ['Rampa Oeste', -152, 384], ['Rellano 410', 20, 410], ['Rampa Este', 152, 384]] });
+  specs.push({ id: 'M1', loop: true, overhead: false, path: ground(boulevardLoop(g, 410, true, 60)), stops: [['Bulevar', 60, BOULEVARD_Z], ['Rampa Oeste', -152, 345], ['Rellano 410', 14, 410], ['Rampa Este', 152, 345]] });
+  specs.push({ id: 'M2', loop: true, overhead: false, path: ground(levelLoop(g, 358, 410, 40)), stops: [['Rellano 358', 40, 358], ['Rampa Oeste', -152, 384], ['Rellano 410', 14, 410], ['Rampa Este', 152, 384]] });
   specs.push({ id: 'M3', loop: true, overhead: false, path: ground(paradeLoop()), stops: [['Iglesia', 40, 457], ['Fuente', 62, 469], ['Torre', 40, 481]] });
 
   // Terraces.

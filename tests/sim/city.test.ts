@@ -8,7 +8,7 @@ import { angleDiff, clamp, datan2 } from '../../src/sim/math';
 import { Rng } from '../../src/sim/rng';
 import { Sim } from '../../src/sim/sim';
 import { CITY, buildCity, type City } from '../../src/sim/city';
-import { FUNI_X, MERCADO_STAIRS, PLAZA_BODA, SPINE_X } from '../../src/sim/city/layout';
+import { FUNI_X, LEVELS, MERCADO_STAIRS, PLAZA_BODA, SPINE_X } from '../../src/sim/city/layout';
 import { Mode, type SimEvent } from '../../src/sim/types';
 import {
   Surface,
@@ -1025,6 +1025,29 @@ describe('routes', () => {
       }
     }
     expect(worst, `farthest at ${at}`).toBeLessThanOrEqual(90);
+  });
+
+  it('no ground stop stands where the spine or a stair street crosses a landing or terrace street', () => {
+    // A vehicle waiting there would block the run downhill. Mercado landings are crossed by the
+    // spine, the stair streets and the funicular's run-out; terrace streets by the spine.
+    const w = city.world;
+    const problems: string[] = [];
+    for (const l of w.lines) {
+      if (l.overhead) continue;
+      l.allStops.forEach((_st, k) => {
+        const z = findZone(w, `stop_${l.id}_${k}`);
+        if (!z) return;
+        for (const L of LEVELS) {
+          if (z.z < L.z0 || z.z > L.z1) continue;
+          const P = PLAZA_BODA;
+          // The wedding plaza interrupts the stair streets that reach it; the funicular's own stops are on its track.
+          const onPlaza = z.x > P.x0 && z.x < P.x1 && z.z > P.z0 && z.z < P.z1;
+          const axes = L.terrace || onPlaza ? [SPINE_X] : [SPINE_X, ...MERCADO_STAIRS, ...(l.id === 'T1' ? [] : [FUNI_X])];
+          for (const a of axes) if (Math.abs(z.x - a) < 9) problems.push(`${l.id} stop ${k} at ${z.x.toFixed(1)},${z.z.toFixed(1)} is ${Math.abs(z.x - a).toFixed(1)} m from the street at x ${a}`);
+        }
+      });
+    }
+    expect(problems).toEqual([]);
   });
 
   it('every stop has a zone at it', () => {
