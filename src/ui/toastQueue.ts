@@ -3,7 +3,16 @@
 export const TOAST_MAX = 3;
 export const TOAST_LIFE = 3.5;
 
-export type ToastKind = 'inked' | 'complete' | 'discovered' | 'denied' | 'map';
+export type ToastKind =
+  | 'inked'
+  | 'complete'
+  | 'discovered'
+  | 'denied'
+  | 'map'
+  | 'chalk-saved'
+  | 'chalk-discarded'
+  | 'chalk-won'
+  | 'chalk-lost';
 
 export interface Toast<T> {
   id: number;

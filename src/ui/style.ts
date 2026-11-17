@@ -80,7 +80,8 @@ const CSS = `
 .sk-stopup .sk-hold{bottom:calc(var(--sk-sb) + 30px + (var(--sk-ch) + 3px) * 5 + 12px)}
 
 /* Ticket stubs */
-.sk-toasts{position:absolute;top:var(--sk-top2);left:calc(var(--sk-sl) + var(--sk-gap));width:min(calc(100vw - 96px),270px);
+/* Right of the map and chalk buttons. */
+.sk-toasts{position:absolute;top:var(--sk-top2);left:calc(var(--sk-sl) + 62px);width:min(calc(100vw - 150px),270px);
   display:flex;flex-direction:column;gap:6px;
   filter:drop-shadow(2px 2px 0 rgba(27,26,46,.6)) drop-shadow(-1px 0 0 rgba(255,46,136,.5))}
 .sk-ticket{position:relative;background:var(--sk-paper);color:var(--sk-ink);padding:7px 10px 8px 30px;

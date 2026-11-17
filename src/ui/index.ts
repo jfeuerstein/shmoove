@@ -6,6 +6,11 @@
 import type { Game, GameEvent } from '../sim/game/game';
 import { inkedCount, lineSegments, mapFraction, type Segment } from '../sim/game/progress';
 import { Mode, type SimEvent } from '../sim/types';
+import { DISTRICT_NAMES, districtAt } from '../sim/world';
+import { chalkClock, chalkDefaultName, chalkTime } from './chalkFormat';
+import { ChalkHud } from './chalkHud';
+import { ChalkScreen } from './chalkScreen';
+import { injectChalkStyle } from './chalkStyle';
 import { DestinationBoard } from './board';
 import { ChainMeter } from './chain';
 import { ClassSlot, el } from './dom';
@@ -33,8 +38,10 @@ export interface UiSound {
 
 export interface Ui {
   update(f: UiFrame): void;
-  /** True while a screen that pauses play is open (the line map). main.ts stops stepping the sim. */
+  /** True while a screen that pauses play is open (line map, chalk screen). main.ts stops stepping the sim. */
   readonly paused: boolean;
+  /** Open the chalk screen's import box with a code already pasted (a shared link). */
+  openChalkImport(code: string): void;
   /** Flat facts for the e2e hook. */
   testState(): Record<string, string | number | boolean>;
   dispose(): void;
@@ -51,8 +58,20 @@ const MAP_ICON =
   '<path d="M8 8 L22 22 M22 8 L8 22" stroke="#FFAE1A" stroke-width="3.4" stroke-linecap="round"/>' +
   '</svg>';
 
+const CHALK_ICON =
+  '<svg class="sk-icon" viewBox="0 0 30 30" aria-hidden="true">' +
+  '<path d="M4 25 C9 21 13 26 17 21 S24 15 27 17" stroke="#FBF6EC" stroke-width="2.6" fill="none" stroke-dasharray="1 3.6" stroke-linecap="round"/>' +
+  '<rect x="13" y="3.5" width="6" height="16" rx="1.5" transform="rotate(38 16 11.5)" fill="#FBF6EC" stroke="#1B1A2E" stroke-width="1"/>' +
+  '<rect x="13" y="3.5" width="6" height="5" rx="1.5" transform="rotate(38 16 11.5)" fill="#FF2E88"/>' +
+  '</svg>' +
+  '<span class="sk-stoptxt"><i></i>STOP</span>' +
+  '<svg class="sk-x" viewBox="0 0 30 30" aria-hidden="true">' +
+  '<path d="M8 8 L22 22 M22 8 L8 22" stroke="#FF2E88" stroke-width="3.4" stroke-linecap="round"/>' +
+  '</svg>';
+
 export function createUi(root: HTMLElement, game: Game, sound: UiSound | null): Ui {
   const releaseStyle = injectStyle();
+  const releaseChalkStyle = injectChalkStyle();
   const lines = game.sim.world.lines;
   const segs: Segment[][] = lines.map(lineSegments);
 
@@ -70,8 +89,10 @@ export function createUi(root: HTMLElement, game: Game, sound: UiSound | null): 
   const holdFull = new ClassSlot(hold, 'sk-full');
 
   let mapOpen = false;
+  let chalkOpen = false;
   const setOpen = (open: boolean): void => {
     if (open === mapOpen) return;
+    if (open) setChalkOpen(false, true);
     mapOpen = open;
     hud.classList.toggle('sk-open', open);
     mapBtn.setAttribute('aria-expanded', String(open));
@@ -85,6 +106,84 @@ export function createUi(root: HTMLElement, game: Game, sound: UiSound | null): 
   const toggle = (): void => setOpen(!mapOpen);
 
   const map = new LineMap(game, twos, () => setOpen(false), () => sound?.ui('tick'));
+
+  // Chalk lines: the button under the map button, the screen, and the in-play pieces.
+  const chalkHud = new ChalkHud(game, twos);
+  /** The name prompt is saving a recording: its chalkRecordStop is expected. */
+  let uiStopping = false;
+  const chalkScreen: ChalkScreen = new ChalkScreen(game, twos, {
+    close: () => setChalkOpen(false),
+    tap: () => sound?.ui('tick'),
+    drew: () => setChalkOpen(false, true),
+    raced: () => setChalkOpen(false, true),
+    named: (stopped) => {
+      uiStopping = stopped;
+      setChalkOpen(false, true);
+    },
+  });
+  function setChalkOpen(open: boolean, quiet = false): void {
+    if (open === chalkOpen) return;
+    if (open) setOpen(false);
+    chalkOpen = open;
+    hud.classList.toggle('sk-chalkopen', open);
+    chalkBtn.setAttribute('aria-expanded', String(open));
+    if (open) twos.play(chalkScreen.el, 'sk-r1', 'sk-r2');
+    else {
+      twos.cancel(chalkScreen.el);
+      chalkScreen.show('list');
+    }
+    if (!quiet) sound?.ui('tick');
+  }
+  const defaultName = (): string => {
+    const p = game.sim.player;
+    return chalkDefaultName(DISTRICT_NAMES[districtAt(game.sim.world, p.z)], game.sim.dayFrac);
+  };
+  const chalkAction = (): void => {
+    const mode = game.chalk.mode;
+    if (mode === 'recording') {
+      setChalkOpen(true);
+      chalkScreen.promptName(defaultName());
+    } else if (mode === 'countdown' || mode === 'racing') {
+      game.chalkAbortRace();
+      sound?.ui('tick');
+    } else if (chalkOpen) setChalkOpen(false);
+    else {
+      setChalkOpen(true);
+      chalkScreen.show('list');
+    }
+  };
+
+  const chalkBtn = el('button', 'sk-chalkbtn');
+  chalkBtn.type = 'button';
+  chalkBtn.innerHTML = CHALK_ICON;
+  chalkBtn.dataset.sk = 'chalkBtn';
+  chalkBtn.setAttribute('aria-label', 'Chalk lines');
+  chalkBtn.setAttribute('aria-expanded', 'false');
+  let chalkPointer = -1;
+  const onChalkDown = (e: PointerEvent): void => {
+    chalkPointer = e.pointerId;
+    e.preventDefault();
+    e.stopPropagation();
+  };
+  const onChalkUp = (e: PointerEvent): void => {
+    if (e.pointerId !== chalkPointer) return;
+    chalkPointer = -1;
+    e.preventDefault();
+    e.stopPropagation();
+    chalkAction();
+  };
+  const onChalkCancel = (): void => {
+    chalkPointer = -1;
+  };
+  const onChalkClick = (e: MouseEvent): void => {
+    if (e.detail === 0) chalkAction();
+  };
+  chalkBtn.addEventListener('pointerdown', onChalkDown);
+  chalkBtn.addEventListener('pointerup', onChalkUp);
+  chalkBtn.addEventListener('pointercancel', onChalkCancel);
+  chalkBtn.addEventListener('click', onChalkClick);
+  const recording = new ClassSlot(hud, 'sk-recording');
+  const racing = new ClassSlot(hud, 'sk-racing');
 
   const mapBtn = el('button', 'sk-mapbtn');
   mapBtn.type = 'button';
@@ -113,8 +212,12 @@ export function createUi(root: HTMLElement, game: Game, sound: UiSound | null): 
   };
   const onKey = (e: KeyboardEvent): void => {
     if (e.repeat) return;
+    // Typing a name or a code is not a shortcut.
+    const t = e.target;
+    if (t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement) return;
     if (e.code === 'KeyM') toggle();
     else if (e.code === 'Escape' && mapOpen) setOpen(false);
+    else if (e.code === 'Escape' && chalkOpen) setChalkOpen(false);
   };
   mapBtn.addEventListener('pointerdown', onBtnDown);
   mapBtn.addEventListener('pointerup', onBtnUp);
@@ -122,7 +225,7 @@ export function createUi(root: HTMLElement, game: Game, sound: UiSound | null): 
   mapBtn.addEventListener('click', onBtnClick);
   window.addEventListener('keydown', onKey);
 
-  hud.append(board.el, chain.el, toasts.el, stopBoard.el, hold, map.el, mapBtn);
+  hud.append(board.el, chain.el, toasts.el, stopBoard.el, hold, chalkHud.el, map.el, mapBtn, chalkBtn, chalkScreen.el);
   // Under anything already in the root (the debug panel stays on top and readable).
   root.prepend(hud);
 
@@ -151,7 +254,38 @@ export function createUi(root: HTMLElement, game: Game, sound: UiSound | null): 
       case 'mapComplete':
         toasts.show('map', { line: null, title: 'Map complete', body: 'Every line inked', serial: game.sim.tick });
         break;
+      case 'chalkRecordStop': {
+        const line = game.chalk.lines.find((l) => l.id === e.id);
+        toasts.show('chalk-saved', {
+          line: null,
+          title: 'Chalk saved',
+          body: `${line ? line.name : ''} · ${chalkClock(e.ticks)}`,
+          serial: game.sim.tick,
+        });
+        // Stopped by the length cap rather than the name prompt: ask for a name now.
+        if (!uiStopping && line) {
+          setChalkOpen(true, true);
+          chalkScreen.promptName(defaultName(), line.id);
+        }
+        uiStopping = false;
+        break;
+      }
+      case 'chalkRecordDiscard':
+        uiStopping = false;
+        toasts.show('chalk-discarded', { line: null, title: 'Chalk wiped', body: e.reason, serial: game.sim.tick });
+        break;
+      case 'chalkFinish':
+        toasts.show(e.won ? 'chalk-won' : 'chalk-lost', {
+          line: null,
+          title: e.won ? 'Ghost beaten' : 'Ghost wins',
+          body: e.ticks > 0 ? `${chalkTime(e.ticks)} vs ${chalkTime(e.ghostTicks)}` : `Ghost ${chalkTime(e.ghostTicks)}`,
+          serial: game.sim.tick,
+        });
+        break;
+      default:
+        break;
     }
+    chalkHud.onEvent(e);
   };
 
   const onSimEvent = (e: SimEvent): void => {
@@ -168,6 +302,30 @@ export function createUi(root: HTMLElement, game: Game, sound: UiSound | null): 
 
   let disposed = false;
 
+  const chalkTestState = (): Record<string, string | number | boolean> => {
+    const ch = game.chalk;
+    const ghost = ch.ghost;
+    const out: Record<string, string | number | boolean> = {
+      chalkOpen,
+      chalkView: chalkOpen ? chalkScreen.view : '',
+      chalkLines: ch.lines.length,
+      chalkMode: ch.mode,
+      chalkCountdown: chalkHud.countdown,
+      chalkResult: chalkHud.result,
+      chalkCode: chalkOpen && chalkScreen.view === 'share' ? chalkScreen.code : '',
+      chalkError: chalkScreen.error,
+      chalkElapsed: ch.elapsedTicks,
+      ghostX: ghost ? ghost.player.x : Number.NaN,
+      ghostY: ghost ? ghost.player.y : Number.NaN,
+      ghostZ: ghost ? ghost.player.z : Number.NaN,
+    };
+    const r = chalkBtn.getBoundingClientRect();
+    out.chalkBtnX = Math.round(r.left + r.width / 2);
+    out.chalkBtnY = Math.round(r.top + r.height / 2);
+    if (chalkOpen) chalkScreen.centres(out);
+    return out;
+  };
+
   return {
     update(f: UiFrame): void {
       if (disposed) return;
@@ -180,10 +338,22 @@ export function createUi(root: HTMLElement, game: Game, sound: UiSound | null): 
       const hitched = game.sim.player.mode === Mode.HITCH;
       holdOn.set(f.armed);
       holdFull.set(f.armed && hitched);
+      const cm = game.chalk.mode;
+      recording.set(cm === 'recording');
+      racing.set(cm === 'countdown' || cm === 'racing');
+      chalkBtn.setAttribute(
+        'aria-label',
+        cm === 'recording' ? 'Stop drawing' : cm === 'idle' ? 'Chalk lines' : 'Abandon the race',
+      );
+      chalkHud.update(f.dt);
       twos.update(f.dt);
     },
     get paused(): boolean {
-      return mapOpen;
+      return mapOpen || chalkOpen;
+    },
+    openChalkImport(code: string): void {
+      setChalkOpen(true, true);
+      chalkScreen.prefillImport(code);
     },
     testState() {
       const prog = game.progress;
@@ -205,6 +375,7 @@ export function createUi(root: HTMLElement, game: Game, sound: UiSound | null): 
         mapLines: mapOpen ? map.drawn : discovered,
         inkedSegments: inked,
         mapPercent: Math.floor(mapFraction(prog, lines) * 100),
+        ...chalkTestState(),
       };
     },
     dispose(): void {
@@ -215,7 +386,12 @@ export function createUi(root: HTMLElement, game: Game, sound: UiSound | null): 
       mapBtn.removeEventListener('pointercancel', onBtnCancel);
       mapBtn.removeEventListener('click', onBtnClick);
       window.removeEventListener('keydown', onKey);
+      chalkBtn.removeEventListener('pointerdown', onChalkDown);
+      chalkBtn.removeEventListener('pointerup', onChalkUp);
+      chalkBtn.removeEventListener('pointercancel', onChalkCancel);
+      chalkBtn.removeEventListener('click', onChalkClick);
       hud.remove();
+      releaseChalkStyle();
       releaseStyle();
     },
   };

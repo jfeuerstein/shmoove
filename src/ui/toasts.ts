@@ -22,6 +22,10 @@ const SOUND: Record<ToastKind, 'ink' | 'punch' | 'fanfare' | 'deny'> = {
   discovered: 'fanfare',
   denied: 'deny',
   map: 'fanfare',
+  'chalk-saved': 'punch',
+  'chalk-discarded': 'deny',
+  'chalk-won': 'fanfare',
+  'chalk-lost': 'deny',
 };
 
 export class Toasts {
@@ -63,7 +67,7 @@ export class Toasts {
   }
 
   private build(t: Toast<ToastData>): HTMLElement {
-    const big = t.kind === 'complete' || t.kind === 'map' || t.kind === 'discovered';
+    const big = t.kind === 'complete' || t.kind === 'map' || t.kind === 'discovered' || t.kind === 'chalk-won';
     const node = el('div', 'sk-ticket' + (big ? ' sk-big' : ''));
     node.dataset.kind = t.kind;
     const head = el('div', 'sk-thead');
@@ -72,7 +76,9 @@ export class Toasts {
     head.appendChild(el('span', 'sk-serial', 'Nº ' + String(t.data.serial % 1000000).padStart(6, '0')));
     node.appendChild(head);
     if (t.data.body) node.appendChild(el('div', 'sk-tbody', boardText(t.data.body)));
-    if (t.kind === 'complete' || t.kind === 'map') node.appendChild(el('span', 'sk-stamp', 'OK'));
+    if (t.kind === 'complete' || t.kind === 'map' || t.kind === 'chalk-saved' || t.kind === 'chalk-won') {
+      node.appendChild(el('span', 'sk-stamp', 'OK'));
+    }
     return node;
   }
 }
