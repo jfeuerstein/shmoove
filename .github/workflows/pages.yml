@@ -1,0 +1,49 @@
+# Builds the game and deploys dist/ to GitHub Pages on every push to develop.
+# Needs: Settings → Pages → Build and deployment → Source: GitHub Actions, and the branch allowed
+# under Settings → Environments → github-pages → Deployment branches (GitHub only allows the
+# default branch there until others are added). The working branch is listed as well because it
+# is the repository's default branch and so may already be allowed.
+name: Pages
+on:
+  push:
+    branches: [develop, claude/build-skitch-game-ntnaek]
+  workflow_dispatch:
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+      - id: deployment
+        uses: actions/deploy-pages@v4
+  # Reports on the build being tested; does not hold the deploy back.
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
