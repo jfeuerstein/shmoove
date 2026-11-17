@@ -221,6 +221,10 @@ export function buildProptown(seed = 1): World {
     const s = 0.5 + 0.12 * (k % 2);
     stand(w, 'crate', cx, cz, s, s, 2 * s, { style: k });
   }
+  // On the quay apron: the harbour clock tower, a fuel tank and crates waiting to be loaded.
+  stand(w, 'tower', -13, 21.3, 3, 2.3, 16, { style: 1 });
+  stand(w, 'tank', 24, 21.3, 2.3, 2.3, 5, { style: 0 });
+  for (let k = 0; k < 4; k++) stand(w, 'crate', 9.5 + k * 2.4, 21.2, 0.6, 0.6, 1.2 + 1.2 * (k % 2), { style: k + 2 });
   addRail(w, [-13.2, 1.0 + base(34), 34, -13.2, 1.0 + base(54), 54], 'pipe');
   addRail(w, [12.5, base(36) + 0.45, 36, 12.5, base(52) + 0.45, 52], 'ledge');
 

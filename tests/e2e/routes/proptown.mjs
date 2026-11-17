@@ -59,7 +59,7 @@ export default {
     { do: 'wait', ticks: 420 },
     { do: 'expect', label: 'down in the Mercado', test: (s) => s.z < 200 && s.z > 100 },
     { do: 'shot', name: '3' },
-    { do: 'wait', ticks: 440 },
+    { do: 'wait', ticks: 400 },
     { do: 'expect', label: 'on the docks', test: (s) => s.z < 100 },
     { do: 'shot', name: '4' },
     { do: 'expect', label: 'the skater was never inside a solid', test: (_s, h) => neverInside(h) },
