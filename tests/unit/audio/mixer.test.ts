@@ -143,6 +143,13 @@ describe('mixer: stems follow hitch, chain and bail', () => {
     const s = m.update(hitchedView(4, 1), [hitch(4, 1)], LINES, DT);
     expect(s.track).toBe(2);
     expect(s.stemTargets).toEqual([1, 0, 0, 0]);
+    // No chainEnd seen first, the earlier stems still in: a fresh link 1 still leaves exactly its own stem.
+    const m2 = new Mixer();
+    buildChain(m2, 2);
+    expect(m2.state.stemTargets).toEqual([0, 1, 1, 0]);
+    const s2 = m2.update(hitchedView(4, 1), [hitch(4, 1)], LINES, DT);
+    expect(s2.track).toBe(2);
+    expect(s2.stemTargets).toEqual([1, 0, 0, 0]);
   });
 
   it('re-latching the same vehicle (no new link) keeps the stem set', () => {
@@ -268,5 +275,9 @@ describe('mixer: noise layer and cues', () => {
     expect(m.state.grinding).toBe(true);
     expect(p2).toBeGreaterThan(p1);
     expect(m.update(view({ mode: Mode.AIR, surface: -1 }), [{ type: 'grindEnd', rail: 0 }], LINES, DT).grinding).toBe(false);
+    // grindEnd alone stops the scrape, even on a frame whose view still says grind (the view lags the events).
+    const m2 = new Mixer();
+    expect(m2.update(g, [{ type: 'grindStart', rail: 0 }], LINES, DT).grinding).toBe(true);
+    expect(m2.update(g, [{ type: 'grindEnd', rail: 0 }], LINES, DT).grinding).toBe(false);
   });
 });
