@@ -1,9 +1,12 @@
 # Builds the game and deploys dist/ to GitHub Pages on every push to develop.
-# Needs: Settings → Pages → Build and deployment → Source: GitHub Actions.
+# Needs: Settings → Pages → Build and deployment → Source: GitHub Actions, and the branch allowed
+# under Settings → Environments → github-pages → Deployment branches (GitHub only allows the
+# default branch there until others are added). The working branch is listed as well because it
+# is the repository's default branch and so may already be allowed.
 name: Pages
 on:
   push:
-    branches: [develop]
+    branches: [develop, claude/build-skitch-game-ntnaek]
   workflow_dispatch:
 permissions:
   contents: read
