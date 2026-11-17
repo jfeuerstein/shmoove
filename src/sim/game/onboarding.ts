@@ -326,6 +326,11 @@ export interface StopSites {
   ok: Uint8Array;
 }
 
+/** A waiting spot has nothing standing higher than a step this far around it, m (checked at eight points). */
+const SPOT_OPEN = 1.6;
+const SPOT_RING_X = [1, 0.7071, 0, -0.7071, -1, -0.7071, 0, 0.7071];
+const SPOT_RING_Z = [0, 0.7071, 1, 0.7071, 0, -0.7071, -1, -0.7071];
+
 export function stopSites(w: World): StopSites {
   const line: number[] = [];
   const stop: number[] = [];
@@ -371,6 +376,13 @@ export function stopSites(w: World): StopSites {
             surf !== Surface.STAIRS &&
             dy >= -FEEL.HITCH_REACH_Y &&
             dy <= FEEL.HITCH_REACH_Y;
+        }
+        // Nothing to land on by mistake around it: a stall roof beside the spot catches a player
+        // who aims for the ring, and from up there the ride passes out of reach underneath.
+        for (let a = 0; a < 8 && good; a++) {
+          const ax = qx + SPOT_OPEN * SPOT_RING_X[a];
+          const az = qz + SPOT_OPEN * SPOT_RING_Z[a];
+          if (topHeight(w, ax, az) - qy > 0.6) good = false;
         }
         if (good) {
           for (const M of ground) {

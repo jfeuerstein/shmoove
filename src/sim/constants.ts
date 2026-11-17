@@ -83,7 +83,7 @@ export const FEEL_DEFS = {
   FOOT_STEER: [0.12, 0, 1, 'Hitch', 'Carve beyond this keeps the foot up: a still finger stops you, a dragging one rides on'],
   FOOT_STAND: [0.6, 0, 3, 'Hitch', 'Slower than this you are standing: the foot stays down even as a ride comes near, m/s'],
   FOOT_BRAKE: [4, 0, 12, 'Hitch', 'How hard the planted foot brakes, m/s^2 (also the steepest ground it holds on)'],
-  FOOT_NEAR: [10, 0, 40, 'Hitch', 'A ride you could grab within this distance keeps the foot up so you coast into it, m'],
+  FOOT_NEAR: [25, 0, 60, 'Hitch', 'A ride you could grab within this distance, ahead of where you are rolling, keeps the foot up so you coast into it, m'],
   HITCH_COOLDOWN: [0.12, 0, 1, 'Hitch', 'Time after a release before anything can be caught, s'],
   HITCH_MIN_TIME: [0.18, 0, 1, 'Hitch', 'Shortest hitch before a release registers, s (never shorter than YANK_TIME)'],
   YANK_TIME: [0.28, 0, 1, 'Hitch', 'Time the strap takes to pull you into line, s'],

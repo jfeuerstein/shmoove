@@ -36,6 +36,12 @@ const DEG = Math.PI / 180;
 const CAM_PROBE_STEP = 0.4;
 /** The sight line starts this far above the board (the skater's chest), m. */
 const CAM_CHEST = 1;
+/** The second sight line ends this far above the board, m; it starts CAM_BOARD_SKIP from the skater with CAM_BOARD_MARGIN of clearance. */
+const CAM_BOARD = 0.2;
+const CAM_BOARD_SKIP = 0.9;
+const CAM_BOARD_MARGIN = 0.08;
+/** Ducked, the camera sits this far above the board: over the skater's shoulder, m. */
+const CAM_DUCK_HEIGHT = 1.35;
 /** How many distances the camera tries between full and CAM_PULL_MIN when its view is blocked. */
 const CAM_PULL_TRIES = 9;
 /** How close the sight line may pass to a surface, m. */
@@ -55,6 +61,8 @@ export class ChaseCamera {
   private extraDist = 0;
   private extraHeight = 0;
   private pull = 1;
+  /** 0 the usual height, 1 ducked to shoulder height behind the skater (under low cover). */
+  private duck = 0;
   private fov = FEEL.CAM_FOV;
   private shake = 0;
   private time = 0;
@@ -81,6 +89,7 @@ export class ChaseCamera {
     this.extraDist = 0;
     this.extraHeight = 0;
     this.pull = 1;
+    this.duck = 0;
     this.started = true;
   }
 
@@ -92,19 +101,31 @@ export class ChaseCamera {
     return t.heading;
   }
 
+  /** Camera height pulled in to share `p` of its distance and ducked by `duck` (0..1). */
+  private camHeight(t: CamTarget, height: number, p: number, duck: number): number {
+    const usual = this.followY + height * (1 - FEEL.CAM_PULL_DROP + FEEL.CAM_PULL_DROP * p);
+    return usual + (t.y + CAM_DUCK_HEIGHT - usual) * duck;
+  }
+
   /**
-   * Whether the camera, pulled in to share `p` of its distance, would see the skater's chest: the
-   * line between them sampled every CAM_PROBE_STEP or so (coarser, and a pillar slips between two
-   * samples and ends up filling the frame), the camera's own position included.
+   * Whether a camera `back` metres behind the skater at height `camY` would see them: the lines
+   * from it to their chest and to their board, sampled every CAM_PROBE_STEP or so (coarser, and a
+   * pillar slips between two samples and ends up filling the frame), the camera's own position
+   * included. The skater is where they really are (`t.y`), not where the lagging follow height
+   * has them: dropping off a ledge, it is the ledge that hides them. The board counts as well as
+   * the chest because an awning between the camera and the skater's legs fills the frame.
    */
-  private sightClear(world: World, t: CamTarget, fx: number, fz: number, dist: number, height: number, p: number): boolean {
-    const back = dist * p;
-    const camY = this.followY + height * (1 - FEEL.CAM_PULL_DROP + FEEL.CAM_PULL_DROP * p);
-    const chestY = this.followY + CAM_CHEST;
+  private sightClear(world: World, t: CamTarget, fx: number, fz: number, back: number, camY: number): boolean {
+    const chestY = t.y + CAM_CHEST;
+    const boardY = t.y + CAM_BOARD;
     const n = Math.max(3, Math.ceil(back / CAM_PROBE_STEP));
     for (let i = 1; i <= n; i++) {
       const k = i / n;
-      if (pointBlocked(world, t.x - fx * back * k, chestY + (camY - chestY) * k, t.z - fz * back * k, CAM_PROBE_MARGIN)) return false;
+      const x = t.x - fx * back * k;
+      const z = t.z - fz * back * k;
+      if (pointBlocked(world, x, chestY + (camY - chestY) * k, z, CAM_PROBE_MARGIN)) return false;
+      // The board's line hugs the ground at first: start it a stride away, with less margin.
+      if (back * k > CAM_BOARD_SKIP && pointBlocked(world, x, boardY + (camY - boardY) * k, z, CAM_BOARD_MARGIN)) return false;
     }
     return true;
   }
@@ -139,25 +160,34 @@ export class ChaseCamera {
     const dist = F.CAM_DIST + this.extraDist;
     const height = F.CAM_HEIGHT + this.extraHeight;
 
-    // Pull in if something stands between the skater and the camera: the furthest of a few
-    // distances from which the skater's chest can be seen. What counts is what the sight line
-    // passes through, not the tallest thing under it: under an awning the camera ducks under with
-    // the skater instead of climbing onto the roof.
+    // Find somewhere to see the skater from: the furthest of a few distances at the usual
+    // height, and failing all of those (a low awning between even the closest of them and the
+    // skater), the same distances ducked to shoulder height behind them. What counts is what the
+    // sight lines pass through, not the tallest thing under them: under an awning the camera
+    // goes under with the skater instead of climbing onto the roof.
     let clear = F.CAM_PULL_MIN;
-    for (let c = 0; c < CAM_PULL_TRIES; c++) {
-      const p = 1 - ((1 - F.CAM_PULL_MIN) * c) / (CAM_PULL_TRIES - 1);
-      if (this.sightClear(world, t, fx, fz, dist, height, p)) {
-        clear = p;
-        break;
+    let duck = 1;
+    search: for (let d = 0; d <= 1; d++) {
+      for (let c = 0; c < CAM_PULL_TRIES; c++) {
+        const p = 1 - ((1 - F.CAM_PULL_MIN) * c) / (CAM_PULL_TRIES - 1);
+        if (this.sightClear(world, t, fx, fz, dist * p, this.camHeight(t, height, p, d))) {
+          clear = p;
+          duck = d;
+          break search;
+        }
       }
     }
-    // In quickly, out calmly; and never left inside something while easing in.
+    // In quickly, out calmly; and never left behind something while easing.
     this.pull += (clear - this.pull) * ease(dt, clear < this.pull ? F.CAM_PULL_IN_RATE : F.CAM_PULL_OUT_RATE);
-    if (this.pull > clear && !this.sightClear(world, t, fx, fz, dist, height, this.pull)) this.pull = clear;
+    this.duck += (duck - this.duck) * ease(dt, duck > this.duck ? F.CAM_PULL_IN_RATE : F.CAM_PULL_OUT_RATE);
+    if (!this.sightClear(world, t, fx, fz, dist * this.pull, this.camHeight(t, height, this.pull, this.duck))) {
+      this.pull = clear;
+      this.duck = duck;
+    }
 
     let cx = t.x - fx * dist * this.pull;
     let cz = t.z - fz * dist * this.pull;
-    let cy = this.followY + height * (1 - F.CAM_PULL_DROP + F.CAM_PULL_DROP * this.pull);
+    let cy = this.camHeight(t, height, this.pull, this.duck);
     // Keep clear of the ground and of roofs at or below the camera (not of what is overhead).
     sampleGround(world, cx, cy, cz, 0, _floor);
     const floor = _floor.y + F.CAM_MIN_CLEAR;

@@ -86,7 +86,10 @@ export function tryHitch(ctx: SimCtx): boolean {
         if (d < best && !ahead) deniedLine = li;
         continue;
       }
-      if (d < near) near = d;
+      // Near enough to coast into: in reach, or further off at a height a standing hand reaches
+      // and in front of where the skater is heading (a ride coming up from behind, passing to the
+      // side or hanging overhead is waited for, not chased).
+      if (d < near && (d < 1 || (dy * dy < Ry * Ry && -(dx * p.vx + dz * p.vz) > 0))) near = d;
       if (d >= best || ahead) continue;
       best = d;
       bestLine = li;

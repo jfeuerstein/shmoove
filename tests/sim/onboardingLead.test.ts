@@ -30,7 +30,7 @@ import { compileLine, grabPoint, makeVehicleState, vehicleAt, type CompiledLine,
 import { placePlayer } from '../../src/sim/player';
 import { Mode, type InputFrame, type SimEvent } from '../../src/sim/types';
 import { hintCopy } from '../../src/ui/hintCopy';
-import { addSolid, createWorld, fillHeights, fillSurfaces, finalizeWorld, Surface, type World } from '../../src/sim/world';
+import { addSolid, createWorld, fillHeights, fillSurfaces, finalizeWorld, Surface, topHeight, type World } from '../../src/sim/world';
 import { seekWhen, testLine } from './helpers';
 
 const vs = makeVehicleState();
@@ -249,6 +249,14 @@ describe('the hitch hint leads to a waiting spot at the stop', () => {
           expect(pathDist(M, S.sx[k], S.sz[k]) - M.bodyHalfWid, `${L.id} stop ${S.stop[i]} by ${M.id}`).toBeGreaterThan(LANE_CLEAR);
         }
         expect(Math.abs(S.sy[k] - S.y[i])).toBeLessThan(0.6);
+        // Nothing to land on by mistake beside it: no roof or block within a stride and a half.
+        for (let a = 0; a < 16; a++) {
+          const ang = (a / 16) * Math.PI * 2;
+          for (const r of [0.8, 1.5]) {
+            const top = topHeight(w, S.sx[k] + Math.cos(ang) * r, S.sz[k] + Math.sin(ang) * r);
+            expect(top - S.sy[k], `${L.id} stop ${S.stop[i]} has something to land on beside its spot`).toBeLessThan(0.7);
+          }
+        }
       }
     }
     // Most stops have somewhere to wait.

@@ -22,7 +22,7 @@ export default {
     { do: 'wait', ticks: 45 },
     { do: 'shot', name: 'lean' },
     { do: 'move', x: 300, y: 620 },
-    { do: 'wait', ticks: 22 },
+    { do: 'wait', ticks: 44 },
     { do: 'shot', name: 'whip' },
     { do: 'up' },
     { do: 'wait', ticks: 6 },

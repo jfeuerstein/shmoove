@@ -5,7 +5,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { FEEL, resetFeel } from '../../src/sim/constants';
 import { Mode } from '../../src/sim/types';
-import { hSpeed, newSim, run, seekVehicle, slice, teleport } from './helpers';
+import { flatWorld, hSpeed, newSim, run, seekVehicle, seekWhen, slice, teleport, testLine } from './helpers';
 
 const PI = 3.141592653589793;
 const HOLD = { steer: 0, hold: true, hop: false };
@@ -76,16 +76,29 @@ describe('foot down', () => {
     expect(hSpeed(sim)).toBeGreaterThan(5);
   });
 
-  it('a ride close enough to coast into keeps the foot up', () => {
-    const near = newSim(slice());
-    const far = newSim(slice());
-    // A tram coming up behind, a few metres short of reach, against a tram nowhere near.
-    seekVehicle(near, tram(near), 0, 60, 1, 0);
-    seekVehicle(far, tram(far), 0, 60, 1, 1500);
-    for (const s of [near, far]) teleport(s, -2.5, 62, 0, 5);
-    run(near, 12, () => HOLD);
-    run(far, 12, () => HOLD);
-    // Rolling uphill both slow down, but only the one with nothing to reach for is braking.
-    expect(hSpeed(near)).toBeGreaterThan(hSpeed(far) + 0.5);
+  it('pressing early while rolling up behind a slow ride still catches it', () => {
+    // A cart at walking pace on flat ground, the skater rolling up behind it from further and further back.
+    for (const gap of [8, 12, 16, 20, 24]) {
+      const sim = newSim(flatWorld([testLine({ kind: 'handcart', cruise: 2.5 })]));
+      // Cart on the first straight (x = 30, heading +z), somewhere in the middle of it.
+      seekWhen(sim, 0, 0, (v) => v.hz > 0.9 && v.z > -10 && v.z < 0);
+      // Beside the lane, `gap` metres behind the cart's grab bar, rolling the same way, finger down from the start.
+      teleport(sim, 28, -5 - 4 - gap, 0, 7);
+      let caught = false;
+      for (let i = 0; i < 600 && !caught; i++) {
+        sim.step(HOLD);
+        caught = (sim.player.mode as number) === Mode.HITCH;
+      }
+      expect(caught, `from ${gap} m behind`).toBe(true);
+    }
+  });
+
+  it('a ride passing behind or beside the skater does not keep them rolling', () => {
+    // The same cart, but the skater is rolling away from it across its lane's far side.
+    const sim = newSim(flatWorld([testLine({ kind: 'handcart', cruise: 2.5 })]));
+    seekWhen(sim, 0, 0, (v) => v.hz > 0.9 && v.z > -10 && v.z < 0);
+    teleport(sim, 18, 0, -1.5707963267948966, 4);
+    run(sim, 120, () => HOLD);
+    expect(hSpeed(sim)).toBe(0);
   });
 });
