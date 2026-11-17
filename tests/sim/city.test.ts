@@ -834,6 +834,9 @@ const BANDS: Record<string, [number, number]> = {
   S2: [30, 45],
   S3: [5, 45],
 };
+/** Plan radius round the hill station inside which the blimp may be below its band. */
+const BLIMP_DIP = 60;
+
 
 function pathLength(p: number[]): number {
   let s = 0;
@@ -932,9 +935,16 @@ describe('routes', () => {
       if (!r || !r.overhead) continue;
       const [lo, hi] = BANDS[id];
       const p = r.path;
+      const hs = findZone(w, 'hill_station');
+      const s2 = w.lines.find((l) => l.id === 'S2');
+      // How far the blimp's ladder hangs below its path.
+      const ladder = s2 ? s2.hang - s2.anchorY : 0;
       for (let i = 0; i < p.length; i += 3) {
         const above = p[i + 1] - topHeight(w, p[i], p[i + 2]);
-        expect(above, `${id} at ${p[i].toFixed(0)},${p[i + 2].toFixed(0)}`).toBeGreaterThanOrEqual(lo);
+        // The blimp comes down to the hill station once a lap (its own test checks the low pass):
+        // within BLIMP_DIP of it, its ladder only has to stay a hop above whatever is under it.
+        const dip = id === 'S2' && hs !== null && Math.hypot(p[i] - hs.x, p[i + 2] - hs.z) < BLIMP_DIP;
+        expect(above, `${id} at ${p[i].toFixed(0)},${p[i + 2].toFixed(0)}`).toBeGreaterThanOrEqual(dip ? ladder + 2.6 : lo);
         expect(above, `${id} at ${p[i].toFixed(0)},${p[i + 2].toFixed(0)}`).toBeLessThanOrEqual(hi);
       }
     }

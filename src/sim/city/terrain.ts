@@ -99,8 +99,11 @@ export const ANTENNA_PATHS: readonly (readonly [number, number])[] = [
   [1110, 66],
   [1200, 40],
 ];
-/** The hill station's platform (dress.ts builds it), and the fall of the plaza away from it. */
-export const HILL_STATION_PLATFORM = { x0: 20, x1: 40, z0: 1035, z1: 1045 } as const;
+/**
+ * The hill station's platform (dress.ts builds it), and the fall of the plaza away from it. Its west
+ * end reaches to the plaza's edge: the blimp's ladder sweeps low across it once a day.
+ */
+export const HILL_STATION_PLATFORM = { x0: 12, x1: 40, z0: 1031, z1: 1045 } as const;
 const PLAZA_SHED = 0.03;
 
 /** Half width of the verge outside each outer hairpin. */

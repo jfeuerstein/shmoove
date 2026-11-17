@@ -3,9 +3,10 @@ import { buildCity, type City } from '../../src/sim/city';
 import { MEETINGS, buildCityLines } from '../../src/sim/city/lines';
 import { DAY_TICKS, FEEL, resetFeel } from '../../src/sim/constants';
 import { grabPoint, inWindows, makeVehicleState, vehicleAt, type CompiledLine, type VehicleState } from '../../src/sim/lines';
+import { Game, type GameEvent } from '../../src/sim/game/game';
 import { placePlayer } from '../../src/sim/player';
 import { Sim } from '../../src/sim/sim';
-import { NO_INPUT, type SimEvent } from '../../src/sim/types';
+import { Mode, NO_INPUT, type SimEvent } from '../../src/sim/types';
 import { District, Surface, collideSolids, findZone, makeWallHit, terrainSurface, topHeight } from '../../src/sim/world';
 
 let city: City;
@@ -455,4 +456,87 @@ describe('two-link chains at the meetings', () => {
       expect(run.events.some((e) => e.type === 'bail')).toBe(false);
     });
   }
+});
+
+describe('the blimp', () => {
+  it('runs only on its one pass of the day', () => {
+    const l = line('S2');
+    let on = 0;
+    for (let t = 0; t < DAY_TICKS; t++) {
+      vehicleAt(l, 0, t, vs);
+      if (!vs.active) continue;
+      on++;
+      // Active only from its 0.76 departure until its lap is done.
+      const since = t - Math.round(0.76 * DAY_TICKS);
+      expect(since, `active at ${t}`).toBeGreaterThanOrEqual(0);
+      expect(since, `active at ${t}`).toBeLessThan(l.runTicks);
+    }
+    expect(on).toBeGreaterThan(0);
+  });
+
+  it('sweeps its ladder a hop above the hill station platform for 3 s, out of standing reach', () => {
+    // Standing, a hand reaches HAND_HEIGHT + HITCH_REACH_Y above the board; a hop adds its apex.
+    const l = line('S2');
+    const hs = findZone(city.world, 'hill_station');
+    expect(hs).not.toBeNull();
+    if (!hs) return;
+    const hopApex = (FEEL.HOP_V * FEEL.HOP_V) / (2 * FEEL.GRAVITY);
+    let ticks = 0;
+    for (let t = 0; t < DAY_TICKS; t++) {
+      vehicleAt(l, 0, t, vs);
+      if (!vs.active) continue;
+      grabPoint(l, vs, gp);
+      const o = topHeight(city.world, gp.x, gp.z);
+      if (Math.abs(o - hs.y) > 0.05 || Math.hypot(gp.x - hs.x, gp.z - hs.z) > 20) continue;
+      const need = gp.y - (hs.y + FEEL.HAND_HEIGHT);
+      // Over the platform the ladder is never low enough to take standing.
+      expect(need, 'out of standing reach').toBeGreaterThan(FEEL.HITCH_REACH_Y + 0.3);
+      if (need <= FEEL.HITCH_REACH_Y + hopApex * 0.8) ticks++;
+    }
+    expect(ticks / 60).toBeGreaterThanOrEqual(3);
+  });
+
+  it('a skater waiting on the hill station platform at 0.76 hops onto its ladder, is carried high, and finds the secret', () => {
+    resetFeel();
+    const l = line('S2');
+    const w = city.world;
+    const hs = findZone(w, 'hill_station');
+    if (!hs) throw new Error('no hill_station');
+    const game = new Game(w, { seed: 1, startDayFrac: 0.76 });
+    const sim = game.sim;
+    const p = sim.player;
+    // Wait on the platform's west half, where the ladder passes.
+    placePlayer(w, p, 19, 1038.5, 0);
+    const events: GameEvent[] = [];
+    let hitched = -1;
+    let high = 0;
+    const V = makeVehicleState();
+    const G = { x: 0, y: 0, z: 0 };
+    for (let i = 0; i < 4 * 60 * 60 && (hitched < 0 || i < hitched + 60 * 60); i++) {
+      let hop = false;
+      let hold = false;
+      let steer = 0;
+      if (p.mode === Mode.HITCH) hold = true;
+      else {
+        vehicleAt(l, 0, sim.tick, V);
+        if (V.active) {
+          grabPoint(l, V, G);
+          const d = Math.hypot(G.x - p.x, G.z - p.z);
+          // Closed loop: arm as the ladder comes near, hop when its end is about to pass.
+          hold = d < 4;
+          hop = p.mode === Mode.GROUND && d < 1.6 && G.y - (p.y + FEEL.HAND_HEIGHT) > FEEL.HITCH_REACH_Y;
+          // Shuffle under the ladder's line of travel.
+          const want = Math.atan2(G.x - p.x, G.z - p.z);
+          if (d < 12 && p.mode === Mode.GROUND) steer = Math.max(-1, Math.min(1, -2 * (((want - p.heading + 3 * Math.PI) % (2 * Math.PI)) - Math.PI)));
+        }
+      }
+      game.step({ steer, hold, hop });
+      for (const e of game.events) events.push(e);
+      if (hitched < 0 && p.mode === Mode.HITCH && w.lines[p.hLine].id === 'S2') hitched = i;
+      if (hitched >= 0 && p.mode === Mode.HITCH) high = Math.max(high, p.y - topHeight(w, p.x, p.z));
+    }
+    expect(hitched, 'hitched the blimp').toBeGreaterThanOrEqual(0);
+    expect(high, 'carried above 25 m').toBeGreaterThan(25);
+    expect(events.some((e) => e.type === 'secretFound' && e.id === 'blimp')).toBe(true);
+  });
 });
