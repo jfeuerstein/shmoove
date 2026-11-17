@@ -232,6 +232,8 @@ const STALL_RUNS: readonly [number, number][] = [
 const STALL_STEP = 3.2;
 /** How far an awning off a building's side wall reaches out, m. */
 const SIDE_AWNING = 1.8;
+/** How far an awning under a roof's side edge reaches out over the stair street beside it, m. */
+const EDGE_REACH = 3;
 /** The landing the funicular's bottom turn-round sweeps (no stalls on its west side). */
 const FUNI_TRACK_LEVEL = 566;
 const STALL_HALF = 1.1;
@@ -258,7 +260,7 @@ function awning(w: World, rng: Rng, x0: number, x1: number, z0: number, z1: numb
 }
 
 /** How far below a roof edge the top of an awning under it sits, m. */
-const EDGE_DROP: readonly [number, number] = [0.3, 0.9];
+const EDGE_DROP: readonly [number, number] = [0.3, 1.5];
 /** Depth of an awning under an edge, m. */
 const EDGE_DEPTH: readonly [number, number] = [2.5, 3.5];
 
@@ -355,18 +357,19 @@ function dressMercado(w: World, rng: Rng, firstTerrace: number): number {
             }
             box(w, x0, x1, z0, z1, g.lo - 1, yTop, 'building', rng.int(8));
             paintUnder(w, x0, x1, z0, z1, Surface.PLAZA);
-            // Below the roof's side edges, where a skater rolls off it into the stair street beside
-            // (most falls off a roof go that way): awnings off the side wall a step below the roof,
-            // wherever one fits over the ground there, from the uphill end down. Into an alley,
-            // between two walls, a faller can arrive with no speed left and would bounce on the
-            // spot for ever: there, one awning halfway along, out of the way of a straight drop.
-            const zm = (z0 + z1) / 2;
-            for (const [a0, a1, alley] of [
-              [x0 - SIDE_AWNING, x0 - 0.1, parts.length > 1 && bx0p !== parts[0][0]],
-              [x1 + 0.1, x1 + SIDE_AWNING, parts.length > 1 && bx1p !== parts[parts.length - 1][1]],
+            // Below the roof's side edges, where a skater rolls off it into the stair street or
+            // alley beside (most falls off a roof go that way): awnings off each side wall a step
+            // below the roof, wherever one fits over the ground there, from the uphill end down.
+            // Over a stair street they reach EDGE_REACH out; into an alley (4 m between two walls)
+            // each side's reach not quite halfway.
+            for (const [wall, side, alley] of [
+              [x0, -1, parts.length > 1 && bx0p !== parts[0][0]],
+              [x1, 1, parts.length > 1 && bx1p !== parts[parts.length - 1][1]],
             ] as const) {
-              if (!alley) awnings += edgeAwnings(w, rng, a0, a1, z0, z1, yTop);
-              else if (awning(w, rng, a0, a1, zm - 0.9, zm + 0.9)) awnings++;
+              const reach = alley ? SIDE_AWNING : EDGE_REACH;
+              const near = wall + side * 0.1;
+              const far = wall + side * reach;
+              awnings += edgeAwnings(w, rng, Math.min(near, far), Math.max(near, far), z0, z1, yTop);
             }
             // Awnings over the street below the front of the lowest row (not where stalls stand).
             const lowest = z0 === gap.zA && gap.zA > CITY.bands.mercado + 5;
