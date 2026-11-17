@@ -260,8 +260,7 @@ export function buildProptown(seed = 1): World {
     addSolid(w, { cx: 60 + k * 16, cz: 110.6, hx: 5, hz: 1.4, yBase: g + 2.5, yTop: g + 2.7, surface: Surface.AWNING, oneWay: true, kind: 'awning', style: k });
   }
   // High landing: houses and a kiosk.
-  stand(w, 'church', 44, 188, 7, 9, 12, { style: 0 });
-  for (let k = 1; k < 6; k++) {
+  for (let k = 0; k < 6; k++) {
     stand(w, 'building', 44 + k * 17, 190, 7, 8, 6 + ((k * 5) % 7), { style: nextStyle() });
   }
   stand(w, 'kiosk', 122, 110, 2, 2, 0.8, { style: 1 }); // a fountain block
@@ -270,7 +269,9 @@ export function buildProptown(seed = 1): World {
   // West side: a street wall of shops with awnings over the sidewalk.
   for (let k = 0; k < 8; k++) {
     const cz = 106 + k * 12;
-    stand(w, 'building', -21, cz, 7.5, 5.6, 6 + ((k * 7) % 6), { style: nextStyle() });
+    // The church fronts the street from the west row.
+    if (k === 0) stand(w, 'church', -21, cz, 7.5, 5.6, 12, { style: 0 });
+    else stand(w, 'building', -21, cz, 7.5, 5.6, 6 + ((k * 7) % 6), { style: nextStyle() });
     if (k % 2 === 0) {
       const g = terrainHeight(w, -11.6, cz);
       addSolid(w, { cx: -11.4, cz, hx: 1.6, hz: 3.2, yBase: g + 2.4, yTop: g + 2.6, surface: Surface.AWNING, oneWay: true, kind: 'awning', style: k });
@@ -311,11 +312,11 @@ export function buildProptown(seed = 1): World {
   stand(w, 'kiosk', 40.5, 232, 2.2, 1.5, 2.6, { style: 4 });
   // A street wall of houses and shops on the east side.
   for (let k = 0; k < 8; k++) {
-    stand(w, k % 3 === 1 ? 'building' : 'house', 20.2, 210 + k * 12.5, 6.5, 5.4, 5 + ((k * 5) % 5), { style: nextStyle() });
+    if (k === 1) stand(w, 'school', 20.2, 210 + k * 12.5, 6.5, 5.4, 7, { style: 0 }); // its roof is a landmark
+    else stand(w, k % 3 === 2 ? 'building' : 'house', 20.2, 210 + k * 12.5, 6.5, 5.4, 5 + ((k * 5) % 5), { style: nextStyle() });
   }
-  stand(w, 'school', 78, 222, 9, 6, 7, { style: 0 });
   for (let k = 0; k < 4; k++) {
-    if (k > 0) stand(w, 'house', 75 + k * 18 + 4, 222, 6, 5, 5 + k, { style: nextStyle() });
+    stand(w, 'house', 75 + k * 18, 222, 6, 5, 5 + k, { style: nextStyle() });
     stand(w, 'house', 75 + k * 18, 286, 6, 5, 7 - k, { style: nextStyle() });
   }
   addZone(w, { id: 'stop_terrazas', name: 'Terrazas', kind: 'stop', x: -5, y: base(262), z: 262, r: 4 });
@@ -342,7 +343,7 @@ export function buildProptown(seed = 1): World {
   addSolid(w, { cx: -20, cz: 318, hx: 2, hz: 2, yBase: top, yTop: top + 0.6, kind: 'needle', style: 0 });
   stand(w, 'platform', -62, 376, 5, 3, 1, { style: 1 }); // the hill station
   stand(w, 'dish', 30, 334, 1.8, 1.8, 4.2, { style: 1 });
-  stand(w, 'dish', -38, 352, 1.0, 1.0, 2.4, { style: 0 });
+  stand(w, 'dish', -14, 362, 1.0, 1.0, 2.4, { style: 0 });
   stand(w, 'pylon', 52, 330, 0.4, 0.4, 14, { style: 0 });
   stand(w, 'pylon', -60, 345, 0.4, 0.4, 14, { style: 0 });
   stand(w, 'pylon', 70, 132, 0.4, 0.4, 12, { style: 0 });
