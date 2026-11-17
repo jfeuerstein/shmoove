@@ -459,6 +459,35 @@ under **Cut** at the end.
      `roofClutter`, `cellColor` and two test helpers). About 200 exports are used only inside their
      own file; they were left exported.
 
+## M6i — Last independent check
+
+106. **The camera looks for a clear line to the skater.** It used to ask for the tallest thing at
+     each point between itself and the skater, so under an awning it climbed onto the roof and
+     showed the awning, and a pillar between two of its six samples filled the frame. It now takes
+     the furthest of nine distances from which both the skater's chest and board can be seen (from
+     where the skater really is, not the lagging follow height), sampling the lines every 0.4 m,
+     and when every one of those is blocked (a low awning between even the closest and the skater)
+     it ducks to shoulder height behind them. It keeps clear only of ground and roofs below it.
+     `CAM_FRAME_MAX` keeps the skater off the bottom edge in every case (item 76).
+107. **A ride ahead keeps you rolling from 25 m.** The check found that pressing early while
+     rolling up behind a ride (the natural thing to do) planted the foot 3–20 m short of it: the
+     first version of item 77 only spared rides within 10 m. Now a ride whose grab point is within
+     standing reach height, in front of where the skater is travelling and within `FOOT_NEAR`
+     (25 m) keeps the foot up; a ride coming from behind, passing to the side or hanging overhead
+     is waited for. The cost that remains: pressing early for a ride you will not reach still
+     slows you once it is out of that cone.
+108. **Waiting spots have nothing to land on beside them.** A quarter of one group of test players
+     landed on a stall roof half a metre from the first stop's waiting ring and stood there while
+     rides passed underneath. A spot now needs nothing standing higher than a step within 1.6 m.
+109. **Chalk lines do not survive a change to the movement rules, and the format version does not
+     change before release.** A line is a recording of inputs; the foot rule changed what inputs
+     do, so lines recorded on earlier test builds replay differently. Nothing has shipped, so
+     `CHALK_VERSION` stays 1. After release, any change to `src/sim` that alters movement must
+     bump it, so old codes are refused with a reason rather than replayed wrong.
+110. **Left for a thumb:** a faint pop is possible where a far chunk's near corner arrives at
+     about two-thirds haze; the hill station deck cannot be reached standing from the lawn east
+     of its run-in steps; stair edges are low in contrast at night. All three are in PLAYTEST.
+
 ## Cut
 
 What the original design promised and the game does not have, or has smaller, with why.

@@ -3,7 +3,8 @@
  * hint shows while its situation holds (and a moment after, so it does not flicker) and comes back
  * the next time the situation does.
  *
- * The lesson is four things: carve, hitch, sling, ink. Once they are done, two closing tickets follow
+ * The lesson is four things, taught in this order: carve, hitch, ink, sling (stay on to the next
+ * stop first; the whip comes once a segment is inked). Once they are done, two closing tickets follow
  * ('map': where the map is; 'lift': no pushing, everything that moves is a lift) and the lesson is
  * complete. Four more hints show in their situations until each has been done once, before or after
  * completion, and hold nothing back: hop, grind, chain and roll (the rescue for a stalled skater).
@@ -13,8 +14,8 @@
  * | hop   | rolling at a ledge, stair top or rail within 12 m ahead (after carve)   | a hop                         |
  * | grind | within 8 m of a handrail's run-in, rolling or airborne (after hop)       | a grind starts                |
  * | hitch | a ride to catch: see below (after carve)                                | a hitch                       |
- * | sling | hitched for 1.5 s (after hitch)                                         | the player lets go in a whip  |
- * | ink   | hitched, or a ride to catch (after sling)                               | a segment inked               |
+ * | ink   | hitched, or a ride to catch (after hitch)                               | a segment inked               |
+ * | sling | hitched, once a segment is inked (after ink)                            | the player lets go in a whip  |
  * | chain | released with another line's ride within 25 m (after sling)             | a hitch as the 2nd link       |
  * | roll  | standing on flat ground for 3 s without holding                         | pumped above 2 m/s            |
  *

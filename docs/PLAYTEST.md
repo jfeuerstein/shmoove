@@ -33,10 +33,11 @@ The ten things most likely to be wrong, most likely first.
    thumb, does the camera duck under an awning with you rather than showing its roof, and does it
    back out calmly? `CAM_PULL_IN_RATE`, `CAM_PULL_OUT_RATE`, `CAM_PULL_MIN`, `CAM_PULL_DROP`,
    `CAM_FRAME_MAX`, `CAM_MIN_CLEAR`, `CAM_STAIR_RATTLE`; the sight-line sampling (`CAM_PROBE_STEP`,
-   `CAM_CHEST`, `CAM_PULL_TRIES`) in `src/render/camera.ts`.
+   `CAM_CHEST`, `CAM_BOARD`, `CAM_PULL_TRIES`, `CAM_DUCK_HEIGHT`) in `src/render/camera.ts`. Under the
+   Mercado's low awnings the camera ducks to the skater's shoulder: is that readable or lurching?
 6. **Waiting at a stop with a planted foot.** Holding a still finger plants a foot and stops you
-   (below `FOOT_SPEED`, braking at `FOOT_BRAKE`, unless a ride you could grab is within `FOOT_NEAR`
-   or you are carving past `FOOT_STEER`; once slower than `FOOT_STAND` you stay put as the ride
+   (below `FOOT_SPEED`, braking at `FOOT_BRAKE`, unless a ride you could grab is ahead of you within
+   `FOOT_NEAR` or you are carving past `FOOT_STEER`; once slower than `FOOT_STAND` you stay put as the ride
    comes). Does stopping feel like a choice or an accident? Does pressing early while chasing a ride
    from behind ever brake you out of a catch? Standing beside the lane, does the ride pick you up
    cleanly, and how close is too close (`RIDE_SIDE_BOUNCE`)?

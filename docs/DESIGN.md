@@ -30,7 +30,7 @@ scripted touch replays identically.
 | --- | --- |
 | Touch and drag left/right | **Carve.** `steer` = horizontal offset from the anchor / `STEER_RANGE_PX`. The anchor follows a finger dragged past full lock, so reversing responds at once. |
 | Touch and keep the finger still for `HOLD_ARM_TIME` | **Hold** arms. While armed, the skater hitches to the nearest ride in reach the moment one is in reach. Dragging after arming still steers (leans the swing while hitched). |
-| Hold a still finger with no ride near | **Plant a foot.** Below `FOOT_SPEED`, with steer under `FOOT_STEER`, the board brakes at `FOOT_BRAKE` and holds, even on a slope, until the finger lifts or a grab point comes into reach (then it latches). A ride you could grab within `FOOT_NEAR` keeps a rolling skater rolling so they coast into it; one already slower than `FOOT_STAND` stays put and lets it come. It only ever removes speed. This is how you stop and wait at a stop. |
+| Hold a still finger with no ride near | **Plant a foot.** Below `FOOT_SPEED`, with steer under `FOOT_STEER`, the board brakes at `FOOT_BRAKE` and holds, even on a slope, until the finger lifts or a grab point comes into reach (then it latches). A ride you could grab at standing height, ahead of where you are rolling and within `FOOT_NEAR`, keeps a rolling skater rolling so they coast into it; one already slower than `FOOT_STAND` stays put and lets it come. It only ever removes speed. This is how you stop and wait at a stop. |
 | Drag past `DRAG_DEADZONE_PX` before arming | That touch is a pure carve; it never hitches. Lift and press again to grab. |
 | Lift the finger while hitched | **Release**: slingshot. |
 | Swipe up (`SWIPE_UP_PX` within `SWIPE_UP_TIME`) | **Hop.** On the ground: ollie. On a rail or wall: jump off. While hitched: release with extra height. The touch stays armed if the finger stays down, so *swipe-up-and-hold* hops into an overhead ride. |
@@ -278,8 +278,10 @@ A chase camera for a portrait screen (`src/render/camera.ts`). It sits behind th
 (behind the ride while hitched, so the swing reads against a steady frame), keeps the skater low in
 the frame, widens and backs off with speed, lifts when hitched, airborne or climbing, and tilts its
 look target with the ground ahead (`CAM_LOOK_FAR`). When something blocks the view it pulls in to the
-furthest of nine distances from which the skater's chest can be seen, sampling the sight line every
-0.4 m: under an awning it ducks under with the skater instead of climbing onto the roof. It keeps
+furthest of nine distances from which the skater's chest and board can both be seen, sampling the
+sight lines every 0.4 m from where the skater really is; when all nine are blocked (a low awning
+between even the closest and the skater) it ducks to shoulder height behind them. Under an awning
+it goes under with the skater instead of climbing onto the roof. It keeps
 `CAM_MIN_CLEAR` above the ground and roofs below it, never lets the skater sit more than
 `CAM_FRAME_MAX` degrees below the centre of the view, rattles on stairs, shakes on impacts, and cuts
 instead of flying after a teleport.

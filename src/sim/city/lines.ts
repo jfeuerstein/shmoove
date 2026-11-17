@@ -20,7 +20,7 @@ export const HOURS = {
   day: [[0.3, 0.72]],
   dusk: [[0.72, 0.8]],
   night: [[0.8, 0.22]],
-  /** The night bus's laps leave from 0.80 to midnight: each is done in a quarter of a day, home by 0.24. */
+  /** The night bus's laps leave from 0.80 to midnight: each is done in under a quarter of a day, the last one home by about 0.19. */
   nightBus: [[0.8, 1]],
   dayDusk: [[0.3, 0.8]],
   dawnNoon: [[0.22, 0.5]],

@@ -349,7 +349,7 @@ export function buildProptown(seed = 1): World {
   stand(w, 'pylon', 70, 132, 0.4, 0.4, 12, { style: 0 });
   stand(w, 'tank', 34, 364, 2.5, 2.5, 6, { style: 0 });
   stand(w, 'shed', -46, 330, 3, 2.4, 3, { style: 1 }); // the radio shack
-  stand(w, 'building', 19, 322, 4, 3, 3.5, { style: nextStyle() }); // the radio shack
+  stand(w, 'building', 19, 322, 4, 3, 3.5, { style: nextStyle() });
   addZone(w, { id: 'stop_antena', name: 'Antena', kind: 'stop', x: 5, y: base(345), z: 345, r: 4 });
   addZone(w, { id: 'stop_muelle', name: 'Muelle', kind: 'stop', x: 5, y: base(76), z: 76, r: 4 });
 
