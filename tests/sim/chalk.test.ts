@@ -432,7 +432,7 @@ describe('share codes', () => {
     const reasons = new Set<string>();
     const add = (c: string): void => {
       const e = expectError(decodeChalk(c));
-      expect(reasons.has(e), e).toBe(false);
+    expect(reasons.has(e), e).toBe(false);
       reasons.add(e);
     };
     add('XK2-' + code.slice(4));
@@ -442,8 +442,19 @@ describe('share codes', () => {
     add(reforge(code, (b) => ((b[0] = 1), b)));
     const nameLen = packChalk(line)[1];
     const ticksAt = 2 + nameLen + 2 + 32 + 12;
-    // An input stream that does not decode to exactly `ticks` frames: claim one tick fewer.
-    add(reforge(code, (b) => ((b[ticksAt] = (line.ticks - 1) & 255), (b[ticksAt + 1] = (line.ticks - 1) >> 8), b)));
+    // An input stream that is not exactly what encoding produces: zeros after its last byte decode
+    // to the same frames (bytes past the end read as zero) but are not the one code of that line.
+    add(reforgeStream(code, (st) => [...st, 0, 0]));
+    // A forged tick count is either caught the same way or is the one code of a shorter line.
+    for (const forged of [line.ticks - 1, line.ticks >> 1]) {
+      const c = reforge(code, (b) => ((b[ticksAt] = forged & 255), (b[ticksAt + 1] = forged >> 8), b));
+      const r = decodeChalk(c);
+      if (isChalkError(r)) expect(r.error).toBe('bad input stream');
+      else {
+        expect(r.ticks).toBe(forged);
+        expect(encodeChalk(r)).toBe(c);
+      }
+    }
     // Ticks out of range (also breaks the stream, but the range is checked first).
     add(reforge(code, (b) => ((b[ticksAt] = 1), (b[ticksAt + 1] = 0), b)));
     // A non-finite number: x = NaN.

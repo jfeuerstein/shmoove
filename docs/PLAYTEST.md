@@ -112,9 +112,11 @@ An ear has to judge the rest. Mute with `?mute`.
   edge and an approaching ride at speed at night? If not, raise the night tint toward 0.5.
 - Distance haze runs 190–350 m (`FOG_NEAR`, `FOG_FAR` in `src/render/look.ts`). Does the hill feel
   big enough from the summit, and does anything visibly appear out of the haze?
-- Waiting at a stop: landings fall a few percent so nobody gets stuck, which also means you cannot
-  stand still for a ride. Is circling or leaning on a wall fine, or do stops want a flat pad
-  (city generator, `src/sim/city/carve.ts`) or a board that holds on gentle ground?
+- Waiting at a stop: holding a still finger plants a foot and stops you (below `FOOT_SPEED`, braking
+  at `FOOT_BRAKE`, unless a ride you could grab is within `FOOT_NEAR` or you are carving past
+  `FOOT_STEER`). Does stopping feel like a choice or an accident? Does pressing early while chasing
+  a ride from behind ever brake you out of a catch? Standing beside the lane, does the ride pick
+  you up cleanly, and how close is too close (`RIDE_SIDE_BOUNCE`)?
 - Tram 5 runs at 13 m/s and the night bus at 18 m/s (`src/sim/city/lines.ts`). Is being towed that
   fast up or down the switchbacks fun or uncontrollable? Per-line `cruise`, `rope`.
 - The summit route (lower cable car → summit cable car → kite → king kite → needle): a verifier

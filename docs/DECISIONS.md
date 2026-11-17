@@ -268,3 +268,21 @@ Decisions made without the owner in the room, newest last. Cuts are marked **CUT
 Known and left: a hands-off skater from the lookout comes to rest on a plaza block 13 m short of the
 first stop (the hints carry a player past it); landings fall, so you cannot stand and wait at a stop
 without leaning on a wall (see PLAYTEST); a save from before onboarding starts the lesson once.
+
+## M6 — Onboarding verification
+
+77. **Holding a still finger plants a foot.** The independent check of onboarding found that a
+    clumsy first-timer never caught a ride: by the time they reacted to the hint they had rolled
+    past the stop, and nothing in the game let them stop or go back. Landings fall, so nobody could
+    stand and wait at a stop at all, in a game about catching scheduled rides. Now a held, still
+    finger with no ride near brakes the board to a stop and holds it there, even on a slope, until
+    the finger lifts or a ride's grab point comes past (then it latches as before). It is not a
+    push: it only ever removes speed. It does nothing above `FOOT_SPEED` (a hand out at speed is
+    not a brake), nothing while carving (a dragging finger is reaching on the move), and nothing
+    while rolling with a grabbable ride within `FOOT_NEAR` (coast into it). "Press and hold still"
+    now means what it says.
+78. **A forged chalk tick count is not always damage.** The test that claimed one tick fewer and
+    expected an error depended on the recorded run: when the dropped frame costs under a bit, the
+    shorter line has the same bytes and that code is simply the one code of a shorter line. The
+    test now asserts what the format guarantees: a forged count either fails as a bad stream or
+    decodes to a line whose one code is the forged code; trailing bytes always fail.
