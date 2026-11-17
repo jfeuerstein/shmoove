@@ -119,6 +119,8 @@ export class ChunkJob {
   /** Time spent on this chunk so far, and its longest piece, ms (measured by run()). */
   ms = 0;
   worstPieceMs = 0;
+  /** Longest piece of the latest run() call, ms. */
+  lastRunWorstMs = 0;
   /** Pieces done so far. */
   pieces = 0;
   private readonly w: World;
@@ -216,12 +218,14 @@ export class ChunkJob {
    */
   run(clock: () => number, deadline: number): boolean {
     let t0 = clock();
+    this.lastRunWorstMs = 0;
     for (;;) {
       const done = this.step();
       const t1 = clock();
       const d = t1 - t0;
       this.ms += d;
       if (d > this.worstPieceMs) this.worstPieceMs = d;
+      if (d > this.lastRunWorstMs) this.lastRunWorstMs = d;
       if (done) return true;
       if (t1 >= deadline) return false;
       t0 = t1;
@@ -491,6 +495,8 @@ export interface CityView extends WorldView {
   stats(): CityStreamStats;
   /** Chunk meshes finished since the view was made (no allocation: read every frame by the harness). */
   built(): number;
+  /** Longest single build piece in the latest update, ms (0 when nothing was built). */
+  framePieceMs(): number;
 }
 
 /** Partly built chunks kept while nearer ones jump the queue. */
@@ -516,6 +522,7 @@ export function createCityView(world: World, camera?: () => THREE.Camera): CityV
   let triangles = 0;
   let worstChunkMs = 0;
   let worstPieceMs = 0;
+  let framePiece = 0;
 
   // Visibility after a teleport: each chunk's box (ground to the top of its tallest solid plus
   // headroom, found once) against the camera's frustum.
@@ -558,6 +565,7 @@ export function createCityView(world: World, camera?: () => THREE.Camera): CityV
       }
       const done = job.run(clock, deadline);
       if (job.worstPieceMs > worstPieceMs) worstPieceMs = job.worstPieceMs;
+      if (job.lastRunWorstMs > framePiece) framePiece = job.lastRunWorstMs;
       if (!done || job.geometry === null) return null;
       jobs[slot] = null;
       partial.splice(partial.indexOf(slot), 1);
@@ -608,6 +616,7 @@ export function createCityView(world: World, camera?: () => THREE.Camera): CityV
     group,
     update(camX, camZ, dayFrac) {
       frame++;
+      framePiece = 0;
       streamer.update(camX, camZ, now(), now);
       sea?.setTime(dayFrac * 720);
     },
@@ -624,6 +633,9 @@ export function createCityView(world: World, camera?: () => THREE.Camera): CityV
     },
     built() {
       return streamer.builtTotal;
+    },
+    framePieceMs() {
+      return framePiece;
     },
     dispose() {
       streamer.clear();

@@ -52,9 +52,10 @@ const VIEW_PART0 = PART[VIEW_PARTS[0]];
 /**
  * Where each frame was, for the perf harness to cut a run into windows and check it went
  * somewhere: route tick after the frame, skater x/z, district, streaming chunk, hitches in the
- * frame, and chunk meshes the world view finished in the frame.
+ * frame, chunk meshes the world view finished in the frame, the frame's draw calls and triangles,
+ * ride releases (slings) in the frame, and the longest chunk-build piece of the frame (ms).
  */
-const TRACK = ['tick', 'x', 'z', 'district', 'chunk', 'hitches', 'built'] as const;
+const TRACK = ['tick', 'x', 'z', 'district', 'chunk', 'hitches', 'built', 'draws', 'tris', 'slings', 'piece'] as const;
 
 function boot(): void {
   const params = getParams();
@@ -197,6 +198,7 @@ function boot(): void {
   const trackBuf: Float64Array[] = TRACK.map(() => new Float64Array(STATS_CAP));
   const grid = chunkGrid(world);
   let frameHitches = 0;
+  let frameSlings = 0;
   let lastBuilt = 0;
   // Time each reducer where Game.step calls it (wrapped once here; one clock read per boundary).
   for (let ri = 0; ri < game.reducers.length && ri < REDUCER_PARTS.length; ri++) {
@@ -239,6 +241,7 @@ function boot(): void {
       pending.push(e);
       if (eventLog.length < 4096) eventLog.push(e.type);
       if (e.type === 'hitch') frameHitches++;
+      else if (e.type === 'release') frameSlings++;
     }
     for (const e of game.events) pendingGame.push(e);
   };
@@ -320,9 +323,15 @@ function boot(): void {
       trackBuf[5][statFrames] = frameHitches;
       trackBuf[6][statFrames] = built - lastBuilt;
       lastBuilt = built;
+      const info = view.info();
+      trackBuf[7][statFrames] = info.drawCalls;
+      trackBuf[8][statFrames] = info.triangles;
+      trackBuf[9][statFrames] = frameSlings;
+      trackBuf[10][statFrames] = cityView === null ? 0 : cityView.framePieceMs();
       statFrames++;
     }
     frameHitches = 0;
+    frameSlings = 0;
   };
 
   const audioState = (): { running: boolean; track: number; stems: number; fullBand: boolean; wheel: number } => {
@@ -388,6 +397,7 @@ function boot(): void {
       statSteps = 0;
       frames = 0;
       frameHitches = 0;
+      frameSlings = 0;
     },
   });
 

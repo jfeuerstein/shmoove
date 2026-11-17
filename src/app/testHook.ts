@@ -37,7 +37,9 @@ export interface SkitchPerfStats {
   /**
    * Where each frame was, one entry per frame like `workMs`: `tick` (route ticks played after the
    * frame), `x`, `z`, `district`, `chunk` (streaming chunk under the skater), `hitches` (in the
-   * frame) and `built` (chunk meshes the world view finished in the frame).
+   * frame), `built` (chunk meshes the world view finished in the frame), `draws` and `tris` (the
+   * frame's draw calls and triangles), `slings` (ride releases in the frame) and `piece` (the
+   * longest chunk-build piece of the frame, ms).
    */
   track?: Record<string, number[]>;
   /** The route's timed windows, in route ticks (src/app/routes.ts `routeWindows`). */
