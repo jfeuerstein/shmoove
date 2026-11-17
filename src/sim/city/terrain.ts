@@ -208,6 +208,9 @@ export function buildGround(w: World): Ground {
   // The summit plaza at the top of the spine.
   C.rect({ x0: -10, x1: 10, z0: SPINE_TOP_Z, z1: SPINE_TOP_Z + 8, bx: 4, bz: 4, h: (_x, z) => Math.max(gateTop, baseHeight(z)), surf: () => Surface.PLAZA });
 
+  // The docks stay at the docks grade under everything (the roads leave them level across).
+  C.rect({ x0: CITY.minX, x1: CITY.maxX, z0: 0, z1: B.mercado - 1, bx: 0, bz: 0, h: (_x, z) => docksHeight(z), surf: () => -1 });
+
   return { carver: C, east, west, spine, funicular, stairs, firstTerrace };
 }
 

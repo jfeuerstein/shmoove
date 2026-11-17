@@ -222,6 +222,20 @@ export class Carver {
     out.hi = Math.max(a, b, c, d);
   }
 
+  /** Steepest grade of the cell's two triangles (the split world.ts uses). */
+  cellGrade(ix: number, iz: number): number {
+    const h = this.w.heights;
+    const k = iz * this.row + ix;
+    const h00 = h[k];
+    const h10 = h[k + 1];
+    const h01 = h[k + this.row];
+    const h11 = h[k + this.row + 1];
+    const c = this.w.cell;
+    const a = Math.sqrt((h10 - h00) * (h10 - h00) + (h11 - h10) * (h11 - h10)) / c;
+    const b = Math.sqrt((h11 - h01) * (h11 - h01) + (h01 - h00) * (h01 - h00)) / c;
+    return a > b ? a : b;
+  }
+
   /**
    * Turn flagged steps and every uncovered cell steeper than 100% into wall solids, merged along
    * rows. Returns the number of walls added.
@@ -238,7 +252,7 @@ export class Carver {
         if (w.surfaces[ci] === Surface.WATER) continue;
         this.cellRange(ix, iz, r);
         const dh = r.hi - r.lo;
-        if ((this.cliff[ci] && dh > 0.5) || dh > w.cell * 0.98) {
+        if ((this.cliff[ci] && dh > 0.5) || this.cellGrade(ix, iz) > 0.98) {
           isWall[ci] = 1;
           lo[ci] = r.lo;
           hi[ci] = r.hi;
