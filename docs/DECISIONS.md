@@ -146,3 +146,20 @@ Decisions made without the owner in the room, newest last. Cuts are marked **CUT
 49. **A deploy must not be served from the HTTP cache.** The service worker precaches with
     `cache: 'reload'`: on hosts that cache `index.html` (GitHub Pages) the old page could be stored
     beside new scripts and white-screen after the next eviction. Found and fixed by the verifier.
+
+## M5b — Errands, conductors, secrets
+
+50. **Hold still to accept.** The only verb beyond the four gestures: inside an offer's zone, slow,
+    not hitched, with the touch armed and no ride in reach, an offer fills in 0.6 s. After an errand
+    starts or ends the touch must lift before another offer can fill.
+51. **13 errands, 13 conductor challenges, 4 secrets** (ghost tram, blimp, needle, tunnel). Finished
+    errands can be replayed for a better time. Feasibility is asserted from geometry and the
+    timetable for all of them; four errands and two conductor challenges are also played end to end
+    by closed-loop bots. The rest have not been played by anything yet.
+52. **Conductor numbers are measured, not guessed:** each sling distance or air time is 0.75 x the
+    best a scripted whip achieves off that ride, re-measured by a test.
+53. **Riders hang:** a `rideTo` target allows 12 m of height difference so cable cars and the crane
+    count when their rider passes over a zone.
+54. **e2e routes assert what the game shows, not which way a race went.** The chalk route's skater
+    used to lose its race; a controller change made it win. The route now requires a result ticket
+    and a matching toast, whichever it is.

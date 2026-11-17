@@ -96,12 +96,17 @@ export default {
       test: (s, h) => s.ui.chalkMode === 'racing' && new Set(h.filter((q) => q.ui.chalkMode === 'racing').map((q) => q.ui.ghostZ)).size > 10,
     },
     ...SKATE.slice(4),
-    // The ghost finishes after 8 s; this skater never reaches the ring, so 20 s later the race is lost.
-    { do: 'wait', ticks: 1224 },
+    // The skater follows the trail into the finish ring during those carves, so the race ends
+    // with a result. Which result depends on the exact run; the ticket and toast must agree.
+    { do: 'wait', ticks: 60 },
     {
       do: 'expect',
-      label: 'the race ends with a result ticket and a ticket toast',
-      test: (s, h) => s.ui.chalkMode === 'idle' && s.ui.chalkResult === 'lost' && h.some((q) => q.ui.lastToast === 'chalk-lost') && !Number.isFinite(s.ui.ghostZ),
+      label: 'the race ends with a result ticket and a matching ticket toast',
+      test: (s, h) =>
+        s.ui.chalkMode === 'idle' &&
+        (s.ui.chalkResult === 'won' || s.ui.chalkResult === 'lost') &&
+        h.some((q) => q.ui.lastToast === `chalk-${s.ui.chalkResult}`) &&
+        !Number.isFinite(s.ui.ghostZ),
     },
     { do: 'shot', name: 'chalk-result' },
     { do: 'wait', ticks: 540 },
