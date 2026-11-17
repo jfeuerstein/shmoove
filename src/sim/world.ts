@@ -470,6 +470,22 @@ export function topHeight(w: World, x: number, z: number): number {
   return y;
 }
 
+/**
+ * Whether the point (x, y, z) is inside something, grown by `margin`: under the terrain, or within
+ * a solid's box between its base and its top. For sight lines: unlike `topHeight`, a point under
+ * an awning or a bridge is not blocked by it.
+ */
+export function pointBlocked(w: World, x: number, y: number, z: number, margin: number): boolean {
+  sampleTerrain(w, x, z, _ts);
+  if (y < _ts.y + margin) return true;
+  const b = bucketOf(w, x, z);
+  for (let k = w.solidStart[b]; k < w.solidStart[b + 1]; k++) {
+    const o = w.solids[w.solidItems[k]];
+    if (y > o.yBase - margin && y < o.yTop + margin && insideSolid(o, x, z)) return true;
+  }
+  return false;
+}
+
 export interface WallHit {
   hit: boolean;
   /** Push-out direction (unit, horizontal), pointing out of the solid. */

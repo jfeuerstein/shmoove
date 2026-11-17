@@ -7,7 +7,7 @@
 import * as THREE from 'three';
 import { FEEL } from '../sim/constants';
 import { Mode } from '../sim/types';
-import { Surface, terrainHeight, topHeight, type World } from '../sim/world';
+import { Surface, makeGroundSample, pointBlocked, sampleGround, terrainHeight, type World } from '../sim/world';
 
 export interface CamTarget {
   /** Interpolated skater position. */
@@ -25,12 +25,21 @@ export interface CamTarget {
 }
 
 const _look = new THREE.Vector3();
+const _floor = makeGroundSample();
 
 function wrap(a: number): number {
   return a - Math.PI * 2 * Math.floor((a + Math.PI) / (Math.PI * 2));
 }
 
 const DEG = Math.PI / 180;
+/** Spacing of the obstruction samples between skater and camera, m. Thinner things than this are too thin to hide the skater. */
+const CAM_PROBE_STEP = 0.4;
+/** The sight line starts this far above the board (the skater's chest), m. */
+const CAM_CHEST = 1;
+/** How many distances the camera tries between full and CAM_PULL_MIN when its view is blocked. */
+const CAM_PULL_TRIES = 9;
+/** How close the sight line may pass to a surface, m. */
+const CAM_PROBE_MARGIN = 0.25;
 
 /** Fraction of the way to a target covered in `dt` at an exponential `rate`. */
 function ease(dt: number, rate: number): number {
@@ -83,6 +92,23 @@ export class ChaseCamera {
     return t.heading;
   }
 
+  /**
+   * Whether the camera, pulled in to share `p` of its distance, would see the skater's chest: the
+   * line between them sampled every CAM_PROBE_STEP or so (coarser, and a pillar slips between two
+   * samples and ends up filling the frame), the camera's own position included.
+   */
+  private sightClear(world: World, t: CamTarget, fx: number, fz: number, dist: number, height: number, p: number): boolean {
+    const back = dist * p;
+    const camY = this.followY + height * (1 - FEEL.CAM_PULL_DROP + FEEL.CAM_PULL_DROP * p);
+    const chestY = this.followY + CAM_CHEST;
+    const n = Math.max(3, Math.ceil(back / CAM_PROBE_STEP));
+    for (let i = 1; i <= n; i++) {
+      const k = i / n;
+      if (pointBlocked(world, t.x - fx * back * k, chestY + (camY - chestY) * k, t.z - fz * back * k, CAM_PROBE_MARGIN)) return false;
+    }
+    return true;
+  }
+
   update(t: CamTarget, world: World, dt: number): void {
     const F = FEEL;
     if (!this.started) this.snap(t);
@@ -113,25 +139,28 @@ export class ChaseCamera {
     const dist = F.CAM_DIST + this.extraDist;
     const height = F.CAM_HEIGHT + this.extraHeight;
 
-    // Pull in if something stands between the skater and the camera.
-    let clear = 1;
-    const steps = 6;
-    for (let i = 1; i <= steps; i++) {
-      const k = i / steps;
-      const sx = t.x - fx * dist * k;
-      const sz = t.z - fz * dist * k;
-      const sy = this.followY + height * k;
-      if (topHeight(world, sx, sz) + 0.4 > sy) {
-        clear = Math.max(F.CAM_PULL_MIN, (i - 1) / steps);
+    // Pull in if something stands between the skater and the camera: the furthest of a few
+    // distances from which the skater's chest can be seen. What counts is what the sight line
+    // passes through, not the tallest thing under it: under an awning the camera ducks under with
+    // the skater instead of climbing onto the roof.
+    let clear = F.CAM_PULL_MIN;
+    for (let c = 0; c < CAM_PULL_TRIES; c++) {
+      const p = 1 - ((1 - F.CAM_PULL_MIN) * c) / (CAM_PULL_TRIES - 1);
+      if (this.sightClear(world, t, fx, fz, dist, height, p)) {
+        clear = p;
         break;
       }
     }
+    // In quickly, out calmly; and never left inside something while easing in.
     this.pull += (clear - this.pull) * ease(dt, clear < this.pull ? F.CAM_PULL_IN_RATE : F.CAM_PULL_OUT_RATE);
+    if (this.pull > clear && !this.sightClear(world, t, fx, fz, dist, height, this.pull)) this.pull = clear;
 
     let cx = t.x - fx * dist * this.pull;
     let cz = t.z - fz * dist * this.pull;
     let cy = this.followY + height * (1 - F.CAM_PULL_DROP + F.CAM_PULL_DROP * this.pull);
-    const floor = topHeight(world, cx, cz) + F.CAM_MIN_CLEAR;
+    // Keep clear of the ground and of roofs at or below the camera (not of what is overhead).
+    sampleGround(world, cx, cy, cz, 0, _floor);
+    const floor = _floor.y + F.CAM_MIN_CLEAR;
     if (cy < floor) cy = floor;
 
     // Shake: stairs rattle continuously, impacts decay.
