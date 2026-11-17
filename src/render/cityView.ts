@@ -35,7 +35,7 @@ export const STREAM = {
   /** A hidden chunk beyond the cache is disposed after this long out of range, ms. */
   EVICT_MS: 4000,
   /** Build time allowed per frame, ms (the first build of a frame always runs). */
-  BUILD_MS: 4,
+  BUILD_MS: 2,
   /** Most chunk builds per frame. */
   MAX_BUILDS: 2,
 } as const;

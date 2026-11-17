@@ -126,3 +126,23 @@ Decisions made without the owner in the room, newest last. Cuts are marked **CUT
     stay deterministic.
 42. **Haptic patterns are literals in `src/app/haptics.ts`,** not `FEEL` entries: they are not sim
     feel and the debug panel cannot preview them on a desktop. They are on the playtest list.
+
+## M3a — Ride data on the city
+
+43. **Lanes.** Ground lines that share a road each run a lane to the right of the route centreline
+    (narrowing where a wall is close), resampled every half metre so a bumper tracks smoothly round
+    hairpins. Stops sit off the spine crossings so waiting vehicles do not block the run downhill.
+44. **Tram 5's loop is 3.9 km,** so one lap fills the 12-minute day. With three trams that is one
+    every four minutes; the city-fix task raises it to six. DESIGN's "tram ×3" becomes ×6.
+45. **The king kite lets go by itself.** S3 vanishes at the end of its lap 1.8 m above the needle, so
+    the rider drops onto the platform. A manual release cannot land there: the slingshot's minimum
+    exit speed throws the skater about ten metres. The route is lower cable car → summit cable car →
+    kite → king kite, one four-link chain.
+46. **"Dawn–afternoon" for the handcarts is 0.22–0.65.**
+47. **Vehicle flanks bounce.** Side contact reflects half the skater's speed and adds a share of the
+    vehicle's, instead of stopping them; a full-speed T-bone is a bail.
+48. **Chunk builds get 2 ms of each frame,** not 4: with all rides running the city's p95 frame work
+    at 4x throttle was 19 ms against a 16.6 ms budget; at 2 ms it is 14 ms.
+49. **A deploy must not be served from the HTTP cache.** The service worker precaches with
+    `cache: 'reload'`: on hosts that cache `index.html` (GitHub Pages) the old page could be stored
+    beside new scripts and white-screen after the next eviction. Found and fixed by the verifier.
