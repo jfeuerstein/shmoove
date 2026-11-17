@@ -39,7 +39,7 @@ export type Cue =
   | { type: 'bail' };
 
 /** Bail cuts music this fast (s). The brief allows at most 0.06. */
-export const BAIL_FADE = 0.05;
+export const BAIL_FADE = 0.04;
 /** Pause ducks everything over this long (s). */
 export const PAUSE_FADE = 0.15;
 /** Ride motors are heard inside this radius (m). */

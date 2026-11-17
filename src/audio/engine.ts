@@ -59,6 +59,8 @@ export class Engine {
   private readonly tone: BiquadFilterNode;
   private readonly delay: DelayNode;
   private readonly delayIn: GainNode;
+  /** Delay return, closed on a bail so echoes cannot outlive the cut. */
+  private readonly delayOut: GainNode;
   private readonly persistent: AudioScheduledSourceNode[] = [];
 
   private readonly sMaster: Smooth;
@@ -76,12 +78,12 @@ export class Engine {
   private readonly sGrind1: Smooth;
   private readonly sGrind2: Smooth;
   private readonly sMotor: Smooth;
-  private readonly sMotorA: Smooth;
-  private readonly sMotorB: Smooth;
   private readonly sMotorCut: Smooth;
   private readonly sMotorNoise: Smooth;
-  private readonly motorA: OscillatorNode;
-  private readonly motorB: OscillatorNode;
+  private readonly motorLP: BiquadFilterNode;
+  /** Motor oscillators exist only while a ride is in range (they cost two voices). */
+  private motor: { a: OscillatorNode; b: OscillatorNode; sA: Smooth; sB: Smooth } | null = null;
+  private motorIdle = 0;
   private motorKind: MotorKind | null = null;
 
   private players: Player[] = [];
@@ -141,7 +143,9 @@ export class Engine {
     fb.gain.value = 0.32;
     this.delayIn.connect(this.delay).connect(dTone);
     dTone.connect(fb).connect(this.delay);
-    dTone.connect(this.musicBus);
+    this.delayOut = ctx.createGain();
+    this.delayOut.gain.value = 1;
+    dTone.connect(this.delayOut).connect(this.musicBus);
 
     // Noise layer, all fed by one looping noise source.
     const noise = s.noiseSource();
@@ -191,11 +195,8 @@ export class Engine {
     noise.connect(g2).connect(grindGain);
     grindGain.connect(this.sfxBus);
 
-    this.motorA = ctx.createOscillator();
-    this.motorB = ctx.createOscillator();
-    this.sMotorA = new Smooth(this.motorA.frequency, 50, 0.5);
-    this.sMotorB = new Smooth(this.motorB.frequency, 75, 0.5);
     const motorLP = ctx.createBiquadFilter();
+    this.motorLP = motorLP;
     motorLP.type = 'lowpass';
     motorLP.Q.value = 1.5;
     this.sMotorCut = new Smooth(motorLP.frequency, 300, 10);
@@ -206,14 +207,9 @@ export class Engine {
     motorNoiseLP.frequency.value = 380;
     const motorNoise = ctx.createGain();
     this.sMotorNoise = new Smooth(motorNoise.gain, 0, 1e-3);
-    this.motorA.connect(motorLP);
-    this.motorB.connect(motorLP);
     motorLP.connect(motorGain);
     noise.connect(motorNoiseLP).connect(motorNoise).connect(motorGain);
     motorGain.connect(this.sfxBus);
-    s.hold(this.motorA, now);
-    s.hold(this.motorB, now);
-    this.persistent.push(this.motorA, this.motorB);
   }
 
   resume(): void {
@@ -370,9 +366,17 @@ export class Engine {
       maxFade = Math.max(maxFade, m.stemFades[s]);
       if (m.stemTargets[s] > 0) anyOn = true;
     }
-    // A bail-fast cut also silences a track still cross-fading out.
+    // A bail-fast cut also silences a track still cross-fading out, and the echoes.
+    const dg = this.delayOut.gain;
     if (!anyOn && maxFade <= 0.06) {
       for (const q of this.players) if (q !== p) this.kill(q, now, maxFade);
+      dg.cancelScheduledValues(now);
+      dg.setValueAtTime(dg.value, now);
+      dg.linearRampToValueAtTime(0, now + Math.max(0.005, maxFade));
+    } else if (anyOn) {
+      dg.cancelScheduledValues(now);
+      dg.setValueAtTime(dg.value, now);
+      dg.linearRampToValueAtTime(1, now + 0.02);
     }
     if (!p) return;
     for (let s = 0; s < 4; s++) {
@@ -499,23 +503,54 @@ export class Engine {
     this.sGrind1.set(m.grindPitch, now, 0.05);
     this.sGrind2.set(m.grindPitch * 1.47, now, 0.05);
 
-    if (m.motorKind !== null && m.motorKind !== this.motorKind && m.motorLevel > 0) {
-      this.motorKind = m.motorKind;
-      const k = m.motorKind;
-      this.motorA.type = k === 'hum' ? 'sine' : 'sawtooth';
-      this.motorB.type = k === 'hum' ? 'sine' : k === 'engine' ? 'square' : 'sawtooth';
+    if (m.motorLevel > 0) {
+      this.motorIdle = 0;
+      if (!this.motor) {
+        const a = this.ctx.createOscillator();
+        const b = this.ctx.createOscillator();
+        a.connect(this.motorLP);
+        b.connect(this.motorLP);
+        this.synth.hold(a, now);
+        this.synth.hold(b, now);
+        this.motor = { a, b, sA: new Smooth(a.frequency, m.motorPitch, 0.5), sB: new Smooth(b.frequency, m.motorPitch * 1.5, 0.5) };
+        this.motorKind = null;
+      }
+      if (m.motorKind !== null && m.motorKind !== this.motorKind) {
+        this.motorKind = m.motorKind;
+        const k = m.motorKind;
+        this.motor.a.type = k === 'hum' ? 'sine' : 'sawtooth';
+        this.motor.b.type = k === 'hum' ? 'sine' : k === 'engine' ? 'square' : 'sawtooth';
+      }
+    } else if (this.motor) {
+      this.motorIdle += dt;
+      if (this.motorIdle > 1.5) {
+        this.stopMotor();
+      }
     }
     const k = this.motorKind;
     const pitch = m.motorPitch;
-    this.sMotorA.set(pitch, now, 0.3);
-    this.sMotorB.set(k === 'engine' ? pitch * 1.012 : k === 'hum' ? pitch * 1.5 + 0.7 : pitch * 1.5, now, 0.3);
+    if (this.motor) {
+      this.motor.sA.set(pitch, now, 0.3);
+      this.motor.sB.set(k === 'engine' ? pitch * 1.012 : k === 'hum' ? pitch * 1.5 + 0.7 : pitch * 1.5, now, 0.3);
+    }
     this.sMotorCut.set(k === 'hum' ? 1800 : k === 'engine' ? 650 : 230, now, 0.1);
     this.sMotorNoise.set(k === 'rail' ? 0.9 : k === 'engine' ? 0.2 : 0, now, 0.1);
     const motorGain = k === 'hum' ? 0.07 : 0.2;
     this.sMotor.set(m.motorLevel * motorGain, now, 0.12);
   }
 
+  private stopMotor(): void {
+    const mo = this.motor;
+    if (!mo) return;
+    this.motor = null;
+    for (const o of [mo.a, mo.b]) {
+      this.synth.unhold(o);
+      o.disconnect();
+    }
+  }
+
   dispose(): void {
+    this.stopMotor();
     for (const p of this.players) p.out.disconnect();
     this.players = [];
     for (const n of this.persistent) {
