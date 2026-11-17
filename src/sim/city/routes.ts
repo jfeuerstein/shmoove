@@ -8,7 +8,7 @@ import { PI, TAU, datan2, dcos, dsin, len2, len3 } from '../math';
 import { Surface, addSolid, addZone, terrainHeight, terrainSurface, topHeight, type World } from '../world';
 import { needleTop } from './dress';
 import type { RouteDef } from './index';
-import { BOULEVARD_Z, INNER_R, LEVELS, NEEDLE } from './layout';
+import { BOULEVARD_Z, INNER_R, LEVELS, NEEDLE, levelHeight } from './layout';
 import { Turtle, type Road } from './roads';
 import type { Ground } from './terrain';
 
@@ -472,7 +472,8 @@ export const GHOST_CUT = { x0: 56, x1: 94, level: 566 } as const;
 
 export function addRouteStructures(w: World): void {
   const L = LEVELS[levelIndex(GHOST_CUT.level)];
-  const y = L.yEnd;
+  // The street falls toward the hairpin: the lid sits over its highest end.
+  const y = Math.max(levelHeight(L, GHOST_CUT.x0), levelHeight(L, GHOST_CUT.x1));
   addSolid(w, {
     cx: (GHOST_CUT.x0 + GHOST_CUT.x1) / 2,
     cz: L.z,

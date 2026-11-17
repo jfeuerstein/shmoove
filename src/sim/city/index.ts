@@ -6,7 +6,7 @@
  */
 import { PI } from '../math';
 import { District, addZone, createWorld, finalizeWorld, terrainHeight, type World } from '../world';
-import { CITY, GRID, LEVELS } from './layout';
+import { CITY, GRID, LEVELS, SPAWN_Z } from './layout';
 import { GHOST_CUT, addChainZones, addPylons, addRouteStructures, addStopZones, buildRoutes } from './routes';
 import { dressCity, needleTop } from './dress';
 import { buildGround, spinePolyline } from './terrain';
@@ -53,7 +53,7 @@ export function buildCity(seed = 1): City {
   for (let i = 0; i < spine.length; i += 3) spine[i + 1] = terrainHeight(w, spine[i], spine[i + 2]);
 
   addRouteStructures(w);
-  w.spawn = { x: 0, z: 566, heading: PI };
+  w.spawn = { x: 0, z: SPAWN_Z, heading: PI };
   finalizeWorld(w);
   addZones(w, needleTop());
 

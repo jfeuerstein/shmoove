@@ -225,16 +225,16 @@ interface Gap {
 function dressMercado(w: World, rng: Rng, firstTerrace: number): number {
   const merc = LEVELS.slice(0, firstTerrace);
   const gaps: Gap[] = [
-    { zA: CITY.bands.mercado + 3, zB: merc[0].z0, yLow: () => docksHeight(CITY.bands.mercado), yUp: () => merc[0].yEnd, awnings: true },
+    { zA: CITY.bands.mercado + 3, zB: merc[0].z0, yLow: () => docksHeight(CITY.bands.mercado), yUp: (x) => levelHeight(merc[0], x), awnings: true },
   ];
   for (let i = 0; i + 1 < merc.length; i++) {
     const a = merc[i];
     const b = merc[i + 1];
-    gaps.push({ zA: a.z1, zB: b.z0, yLow: () => a.yEnd, yUp: () => b.yEnd, awnings: true });
+    gaps.push({ zA: a.z1, zB: b.z0, yLow: (x) => levelHeight(a, x), yUp: (x) => levelHeight(b, x), awnings: true });
   }
   const top = merc[merc.length - 1];
   const pad = LEVELS[firstTerrace];
-  gaps.push({ zA: top.z1, zB: pad.z0 - 3, yLow: () => top.yEnd, yUp: (x) => levelHeight(pad, x), awnings: true });
+  gaps.push({ zA: top.z1, zB: pad.z0 - 3, yLow: (x) => levelHeight(top, x), yUp: (x) => levelHeight(pad, x), awnings: true });
 
   let awnings = 0;
   for (const gap of gaps) {
@@ -304,7 +304,7 @@ function dressMercado(w: World, rng: Rng, firstTerrace: number): number {
 
   // The wedding plaza: church and clock tower behind, stalls along its back, a fountain.
   const P = PLAZA_BODA;
-  const yP = merc[3].yEnd;
+  const yP = levelHeight(merc[3], (P.x0 + P.x1) / 2);
   const cg = groundRange(w, P.x0 + 2, P.x1 - 2, P.z1 + 3, merc[4].z0 - 1);
   box(w, P.x0 + 2, P.x1 - 2, P.z1 + 3, merc[4].z0 - 1, cg.lo - 1, cg.hi + 7, 'church', 0);
   paintUnder(w, P.x0 - 4, P.x1 + 4, P.z0, merc[4].z0, Surface.PLAZA);
@@ -316,7 +316,8 @@ function dressMercado(w: World, rng: Rng, firstTerrace: number): number {
   // Spice row: stalls along the south side of the landing at 514.
   const spice = merc[4];
   for (let x = -100; x <= -64; x += 6) {
-    box(w, x - 1.1, x + 1.1, spice.z - 7.2, spice.z - 5.6, spice.yEnd - 0.2, spice.yEnd + 2.4, 'stall', rng.int(6));
+    const ys = levelHeight(spice, x);
+    box(w, x - 1.1, x + 1.1, spice.z - 7.2, spice.z - 5.6, ys - 0.2, ys + 2.4, 'stall', rng.int(6));
   }
   return awnings;
 }
@@ -470,6 +471,35 @@ function dressHandrails(w: World, g: Ground): void {
   }
 }
 
+/**
+ * The strips between a stair street and the buildings that flank it are part of the flight: give
+ * every cell there that a building does not wholly cover the stair surface, so a skater sliding
+ * down beside a wall is slowed by the steps like one on them (paintUnder claims the cells whose
+ * centres a footprint covers, which include the open edge of a cell beside the wall).
+ */
+function paintFlightStrips(w: World, g: Ground): void {
+  const blocks = w.solids.filter((o) => !o.oneWay && o.rot === 0 && o.cz > CITY.bands.mercado && o.cz < CITY.bands.terraces + 40);
+  const covered = (x0: number, x1: number, z0: number, z1: number): boolean =>
+    blocks.some((o) => x0 >= o.cx - o.hx - 1e-6 && x1 <= o.cx + o.hx + 1e-6 && z0 >= o.cz - o.hz - 1e-6 && z1 <= o.cz + o.hz + 1e-6);
+  const streets = [...g.stairs.map((st) => ({ x: st.x, half: st.half, stepper: st.stepper })), { x: SPINE_X, half: 6, stepper: g.spine }];
+  for (const st of streets) {
+    const reach = st.half + 4.5;
+    const ix0 = Math.max(0, Math.floor((st.x - reach - w.minX) / w.cell));
+    const ix1 = Math.min(w.nx - 1, Math.floor((st.x + reach - w.minX) / w.cell));
+    for (let iz = 0; iz < w.nz; iz++) {
+      const zc = w.minZ + (iz + 0.5) * w.cell;
+      if (zc < st.stepper.z0 || zc > Math.min(st.stepper.z1, CITY.bands.terraces) || !st.stepper.isFlight(zc)) continue;
+      for (let ix = ix0; ix <= ix1; ix++) {
+        const ci = iz * w.nx + ix;
+        if (w.surfaces[ci] !== Surface.PLAZA) continue;
+        const xl = w.minX + ix * w.cell;
+        const zl = w.minZ + iz * w.cell;
+        if (!covered(xl, xl + w.cell, zl, zl + w.cell)) w.surfaces[ci] = Surface.STAIRS;
+      }
+    }
+  }
+}
+
 export interface DressStats {
   awnings: number;
 }
@@ -480,6 +510,7 @@ export function dressCity(w: World, g: Ground, seed: number): DressStats {
   const awnings = dressMercado(w, rng.fork('mercado'), g.firstTerrace);
   dressTerraces(w, rng.fork('terraces'), g.firstTerrace);
   dressAntenna(w, rng.fork('antenna'));
+  paintFlightStrips(w, g);
   dressHandrails(w, g);
   return { awnings };
 }

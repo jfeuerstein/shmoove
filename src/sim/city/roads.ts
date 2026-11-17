@@ -5,7 +5,7 @@
  * true arc of known radius; heights are linear in arc length between knots.
  */
 import { PI, dcos, dsin } from '../math';
-import { APEX_X, BOULEVARD_Z, INNER_R, LEVELS, OUTER_X, docksHeight } from './layout';
+import { APEX_X, BOULEVARD_Z, INNER_R, LEVELS, OUTER_X, PAD_TILT, docksHeight } from './layout';
 
 export class Turtle {
   /** Flat x, z pairs at about `step` spacing. */
@@ -71,6 +71,8 @@ export interface Road {
 
 /** Where the climb starts: the road keeps the docks grade until it is this far up the hill. */
 const CLIMB_START_Z = 286;
+/** Arc length past each apex over which the road rises at the cross streets' gentle grade. */
+const APEX_EASE = 12;
 
 /** The east road; the west road is its mirror image (x -> -x). */
 export function buildRoad(mirror: boolean): Road {
@@ -113,6 +115,13 @@ export function buildRoad(mirror: boolean): Road {
   for (let i = 0; i < LEVELS.length; i++) {
     knotS.push(s[apexIdx[i]]);
     knotY.push(LEVELS[i].yEnd);
+    // Past the apex the road rises only as gently as the street that meets it for a few metres,
+    // so the street's fall carries on round the apex into the descending leg instead of meeting
+    // the next climb head-on (which leaves a flat pocket at the street's end).
+    if (i < LEVELS.length - 1) {
+      knotS.push(s[apexIdx[i]] + APEX_EASE);
+      knotY.push(LEVELS[i].yEnd + PAD_TILT * APEX_EASE);
+    }
   }
   const pts: number[] = [];
   let k = 0;

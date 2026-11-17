@@ -19,6 +19,7 @@ import {
   OUTER_X,
   PAD_DEPTH,
   PLAZA_BODA,
+  PLAZA_LEVEL_Z,
   ROAD_HALF,
   SPINE_BOTTOM_Z,
   SPINE_HALF,
@@ -29,6 +30,7 @@ import {
   baseHeight,
   docksHeight,
   levelHeight,
+  streetHeight,
   type Level,
 } from './layout';
 import { buildRoad, type Road } from './roads';
@@ -62,6 +64,7 @@ function gridCeil(z: number): number {
 /** Where the ground starts to curl up at the east and west edges of the world. */
 const BERM_X = 172;
 const BERM_K = 0.06;
+const BERM_RAMP = 24;
 
 /**
  * Curl the ground up near the world's side edges (above the docks), so the fall line never points
@@ -72,26 +75,39 @@ function berm(w: World): void {
   for (let iz = 0; iz <= w.nz; iz++) {
     const z = w.minZ + iz * w.cell;
     if (z < CITY.bands.mercado) continue;
+    // The curl grows in over BERM_RAMP above the docks, so it does not start as a cliff at their edge.
+    const t = Math.min(1, (z - CITY.bands.mercado) / BERM_RAMP);
+    const k = BERM_K * t * t * (3 - 2 * t);
     for (let ix = 0; ix <= w.nx; ix++) {
       const d = Math.abs(w.minX + ix * w.cell) - BERM_X;
-      if (d > 0) w.heights[iz * row + ix] += BERM_K * d * d;
+      if (d > 0) w.heights[iz * row + ix] += k * d * d;
     }
   }
 }
 
+/** Antenna Hill's paved paths off the spine: z and far end x. */
+export const ANTENNA_PATHS: readonly (readonly [number, number])[] = [
+  [1150, -66],
+  [1110, 66],
+  [1200, 40],
+];
+/** Fall of the Antenna paths toward the spine. */
+const PATH_FALL = 0.03;
+
 /** Grade of a terrace yard up from its street. */
 export const YARD_RISE = 0.025;
 
-/** Height of a terrace pad (street or yard) at (x, z). */
+/** Height of a terrace pad (street or yard) at (x, z). The yard rises from the street's back edge. */
 export function padHeight(L: Level, x: number, z: number): number {
-  return levelHeight(L, x) + YARD_RISE * Math.max(0, z - L.z1);
+  if (z <= L.z1) return streetHeight(L, x, z);
+  return streetHeight(L, x, L.z1) + YARD_RISE * (z - L.z1);
 }
 
 /** The last level: the Antenna gate street. */
 export const GATE = LEVELS[LEVELS.length - 1];
 
 function levelSpan(L: Level, surf: number): Span {
-  return { z0: L.z0, z1: L.z1, h: (x) => levelHeight(L, x), surf };
+  return { z0: L.z0, z1: L.z1, h: (x, z) => streetHeight(L, x, z), surf };
 }
 
 function baseSurface(x: number, z: number): Surface {
@@ -136,7 +152,7 @@ export function buildGround(w: World): Ground {
         z1: gridCeil(L.z1),
         bx: 4,
         bz: 3,
-        h: (x) => levelHeight(L, x),
+        h: (x, z) => streetHeight(L, x, z),
         surf: () => Surface.STREET,
       });
     } else {
@@ -148,7 +164,7 @@ export function buildGround(w: World): Ground {
         bx: 6,
         bz: 3,
         // The yard rises gently from the street so it drains onto it.
-        h: (x, z) => levelHeight(L, x) + YARD_RISE * Math.max(0, z - L.z1),
+        h: (x, z) => padHeight(L, x, z),
         surf: (_x, z) => (z <= L.z1 ? Surface.STREET : Surface.PLAZA),
         cliffZ: true,
         cliffLo: -APEX_X + 4,
@@ -158,8 +174,9 @@ export function buildGround(w: World): Ground {
   }
 
   // --- Wedding plaza: flat at the level of its landing.
-  const boda = LEVELS.find((L) => L.z === 462);
+  const boda = LEVELS.find((L) => L.z === PLAZA_LEVEL_Z);
   if (boda) {
+    const yPlaza = levelHeight(boda, (PLAZA_BODA.x0 + PLAZA_BODA.x1) / 2);
     C.rect({
       x0: PLAZA_BODA.x0,
       x1: PLAZA_BODA.x1,
@@ -167,7 +184,7 @@ export function buildGround(w: World): Ground {
       z1: PLAZA_BODA.z1,
       bx: 4,
       bz: 4,
-      h: () => boda.yEnd,
+      h: () => yPlaza,
       surf: () => Surface.PLAZA,
     });
   }
@@ -233,7 +250,7 @@ export function buildGround(w: World): Ground {
   // --- The spine: docks -> stairs through every level -> antenna street -> summit.
   const spineSpans: Span[] = [{ z0: SPINE_BOTTOM_Z, z1: B.mercado + 3, h: (_x, z) => docksHeight(z), surf: Surface.STREET }];
   for (const L of LEVELS) spineSpans.push(levelSpan(L, Surface.STREET));
-  const gateTop = levelHeight(GATE, SPINE_X);
+  const gateTop = streetHeight(GATE, SPINE_X, GATE.z1);
   spineSpans.push({ z0: GATE.z1, z1: SPINE_TOP_Z, h: (_x, z) => Math.max(gateTop, baseHeight(z)), surf: Surface.STREET });
   const spine = new Stepper(spineSpans, { axis: SPINE_X, ...STAIR_OPTS });
   C.rect({
@@ -253,10 +270,11 @@ export function buildGround(w: World): Ground {
   // --- Antenna Hill: the hill station plaza and paved paths off the spine.
   const hs = HILL_STATION;
   C.rect({ x0: hs.x0, x1: hs.x1, z0: hs.z0, z1: hs.z1, bx: 8, bz: 8, h: () => baseHeight((hs.z0 + hs.z1) / 2), surf: () => Surface.PLAZA });
-  for (const [z, x1] of [[1150, -66], [1110, 66], [1200, 40]] as const) {
+  // Each path falls toward the spine along its length, so it drains onto the spine.
+  for (const [z, x1] of ANTENNA_PATHS) {
     const pts: number[] = [];
     const n = Math.ceil(Math.abs(x1) / 2);
-    for (let i = 0; i <= n; i++) pts.push((x1 * i) / n, baseHeight(z), z);
+    for (let i = 0; i <= n; i++) pts.push((x1 * i) / n, baseHeight(z) + PATH_FALL * Math.abs((x1 * i) / n), z);
     C.path({ pts, half: 3.5, blend: 4, surf: Surface.STREET });
   }
 

@@ -29,6 +29,8 @@ interface Piece {
   f0: number;
   f1: number;
   surf: number;
+  /** A mid landing between two flights. */
+  mid: boolean;
 }
 
 export interface StepperOpts {
@@ -41,6 +43,8 @@ export interface StepperOpts {
   midLen: number;
   minGrade: number;
   maxGrade: number;
+  /** Grade of the mid landings, falling toward the flight below. */
+  midFall?: number;
 }
 
 export class Stepper {
@@ -56,7 +60,7 @@ export class Stepper {
     this.z1 = spans[spans.length - 1].z1;
     for (let i = 0; i < spans.length; i++) {
       const s = spans[i];
-      this.pieces.push({ z0: s.z0, z1: s.z1, span: i, a: i, f0: 0, f1: 0, surf: s.surf });
+      this.pieces.push({ z0: s.z0, z1: s.z1, span: i, a: i, f0: 0, f1: 0, surf: s.surf, mid: false });
       if (i === spans.length - 1) break;
       const n = spans[i + 1];
       const zA = s.z1;
@@ -80,16 +84,23 @@ export class Stepper {
         }
       }
       const run = (zB - zA - o.midLen * (best - 1)) / best;
+      // Mid landings fall gently toward the flight below them; the flights share the rest of the rise.
+      const rise = yB - yA;
+      const fm = rise > 1e-6 ? Math.min(0.5 / best, ((o.midFall ?? 0) * o.midLen) / rise) : 0;
+      const ff = (1 - (best - 1) * fm) / best;
       let z = zA;
+      let f = 0;
       for (let k = 0; k < best; k++) {
-        const fa = k / best;
-        const fb = (k + 1) / best;
-        this.pieces.push({ z0: z, z1: z + run, span: -1, a: i, f0: fa, f1: fb, surf: o.flightSurf });
+        const fa = f;
+        const fb = k === best - 1 ? 1 : f + ff;
+        this.pieces.push({ z0: z, z1: z + run, span: -1, a: i, f0: fa, f1: fb, surf: o.flightSurf, mid: false });
         this.flights.push({ zLo: z, zHi: z + run, yLo: yA + (yB - yA) * fa, yHi: yA + (yB - yA) * fb });
         z += run;
+        f = fb;
         if (k < best - 1) {
-          this.pieces.push({ z0: z, z1: z + o.midLen, span: -1, a: i, f0: fb, f1: fb, surf: o.midSurf });
+          this.pieces.push({ z0: z, z1: z + o.midLen, span: -1, a: i, f0: f, f1: f + fm, surf: o.midSurf, mid: true });
           z += o.midLen;
+          f += fm;
         }
       }
     }
@@ -125,7 +136,12 @@ export class Stepper {
 
   isFlight(z: number): boolean {
     const p = this.piece(z);
-    return p.span < 0 && p.f1 > p.f0;
+    return p.span < 0 && !p.mid;
+  }
+
+  /** The mid landings between two flights of one run, as z ranges. */
+  midLandings(): { z0: number; z1: number }[] {
+    return this.pieces.filter((p) => p.mid).map((p) => ({ z0: p.z0, z1: p.z1 }));
   }
 }
 
@@ -135,4 +151,5 @@ export const STAIR_OPTS: Omit<StepperOpts, 'axis'> = {
   midLen: 8,
   minGrade: 0.25,
   maxGrade: 0.45,
+  midFall: 0.033,
 };

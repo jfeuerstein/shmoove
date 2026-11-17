@@ -115,11 +115,81 @@ export const LEVELS: readonly Level[] = [
   })),
 ];
 
-/** Height of a level's street (and pad) at x. Terraces crest at x = 0 and fall PAD_TILT to the ends. */
+/** The landing the wedding plaza opens off, and the x range it holds level (the plaza plus its blend). */
+export const PLAZA_LEVEL_Z = 462;
+const PLAZA_FLAT_X0 = 8;
+const PLAZA_FLAT_X1 = 72;
+
+/**
+ * Height of a level's street (and pad) at x, along its length. Every level crests at x = 0 and
+ * falls PAD_TILT to the hairpin apexes, so a skater at rest on a cross street rolls off to a road
+ * and down it. The plaza landing holds the wedding plaza level and falls more steeply east of it.
+ */
 export function levelHeight(L: Level, x: number): number {
-  if (!L.terrace) return L.yEnd;
   const ax = Math.min(Math.abs(x), APEX_X);
+  if (L.z === PLAZA_LEVEL_Z && x > PLAZA_FLAT_X0) {
+    const flat = L.yEnd + PAD_TILT * (APEX_X - PLAZA_FLAT_X0);
+    if (x <= PLAZA_FLAT_X1) return flat;
+    return L.yEnd + ((flat - L.yEnd) * (APEX_X - ax)) / (APEX_X - PLAZA_FLAT_X1);
+  }
   return L.yEnd + PAD_TILT * (APEX_X - ax);
+}
+
+/**
+ * Where a level is crossed by a stair street (or the funicular bed), its street also falls toward
+ * the flight below, so a skater who has come to rest on the stair street's path rolls on down.
+ */
+export const CROSS_FALL = 0.033;
+/** The spawn lookout's fall: steeper, so a new skater rolls off without a push. */
+export const SPAWN_FALL = 0.05;
+/** The new-game spawn: on the spine's apron at the top landing of the Mercado, facing downhill. */
+export const SPAWN_LEVEL_Z = 566;
+export const SPAWN_Z = 570;
+/**
+ * The cross fall is full to CROSS_PAD beyond a stair street's edge (negative: inside it) and fades
+ * out over the next CROSS_FADE, before the building rows that flank the street begin.
+ */
+const CROSS_PAD = -0.5;
+const CROSS_FADE = 2;
+
+/** Axis and half width of every stair street (and the funicular bed) crossing a level. */
+export function crossings(L: Level): readonly (readonly [number, number])[] {
+  if (L.terrace) return [[SPINE_X, SPINE_HALF], [(FUNI_X0 + FUNI_X1) / 2, (FUNI_X1 - FUNI_X0) / 2]];
+  const out: [number, number][] = [[SPINE_X, SPINE_HALF], [FUNI_X, 6]];
+  for (const x of MERCADO_STAIRS) {
+    // The stair streets that open onto the wedding plaza arrive at its level floor, and resume
+    // at the next landing up with no flight below it (the church stands there).
+    if ((L.z === PLAZA_LEVEL_Z || L.z === PLAZA_LEVEL_Z + 52) && x > PLAZA_FLAT_X0 && x < PLAZA_FLAT_X1) continue;
+    out.push([x, STAIR_HALF]);
+  }
+  return out;
+}
+
+/** Weight (0..1) of the cross fall at x on level L. */
+export function crossWeight(L: Level, x: number): number {
+  let wt = 0;
+  for (const [a, h] of crossings(L)) {
+    const d = Math.abs(x - a) - h - CROSS_PAD;
+    if (d <= 0) return 1;
+    if (d < CROSS_FADE) {
+      const t = 1 - d / CROSS_FADE;
+      wt = Math.max(wt, t * t * (3 - 2 * t));
+    }
+  }
+  return wt;
+}
+
+/**
+ * Height of a level's street at (x, z): its profile along x, plus the fall toward the flight below
+ * at crossings. The fall hangs from the street's back edge, so a crossing is a shallow trough:
+ * rolling into one from the street beside it is always downhill.
+ */
+export function streetHeight(L: Level, x: number, z: number): number {
+  const wt = crossWeight(L, x);
+  if (wt <= 0) return levelHeight(L, x);
+  const fall = L.z === SPAWN_LEVEL_Z && Math.abs(x - SPINE_X) <= SPINE_HALF + CROSS_PAD + CROSS_FADE ? SPAWN_FALL : CROSS_FALL;
+  const zz = z < L.z0 ? L.z0 : z > L.z1 ? L.z1 : z;
+  return levelHeight(L, x) + wt * fall * (zz - L.z1);
 }
 
 // ---------------------------------------------------------------------------------------------

@@ -3,6 +3,7 @@
  * Every zone's y is the ground (or roof / platform top) under it, read from the finished world.
  */
 import { addZone, topHeight, type World } from '../world';
+import { SPAWN_Z } from './layout';
 
 interface ZoneSpec {
   id: string;
@@ -14,7 +15,7 @@ interface ZoneSpec {
 }
 
 export const SPAWNS: readonly ZoneSpec[] = [
-  { id: 'spawn', name: 'Mirador del Mercado', kind: 'spawn', x: 0, z: 566, r: 5 },
+  { id: 'spawn', name: 'Mirador del Mercado', kind: 'spawn', x: 0, z: SPAWN_Z, r: 5 },
   { id: 'spawn_docks', name: 'Muelle', kind: 'spawn', x: -40, z: 150, r: 6 },
   { id: 'spawn_mercado', name: 'Escalones', kind: 'spawn', x: -14, z: 410, r: 5 },
   { id: 'spawn_terraces', name: 'Terrazas', kind: 'spawn', x: -70, z: 727, r: 5 },
