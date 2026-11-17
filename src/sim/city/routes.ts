@@ -647,15 +647,61 @@ export function buildRoutes(w: World, g: Ground): Record<string, RouteDef> {
   // Secrets.
   specs.push({ id: 'S1', loop: true, overhead: false, path: ground(levelLoop(g, 566, 619, 75)), stops: [['Túnel', 75, 566], ['Terraza Baja', 20, 619]] });
   const blimp = blimpPath(w);
-  specs.push({ id: 'S2', loop: true, overhead: true, path: blimp, stops: [['Cumbre', 0, 1235], ['Cerro Sur', 0, 985]] });
-  specs.push({ id: 'S3', loop: true, overhead: true, path: kingPath(w), stops: [['La Aguja', NEEDLE.x, NEEDLE.z], ['Cresta Sur', KING[KING_FAR][0], KING[KING_FAR][1]]] });
+  // The blimp's one lap of the day starts and ends over the hill station platform, where it
+  // waits with its ladder a hop above the deck: caught there, it carries a rider the whole circuit
+  // (every segment) and brings them back over the deck before it goes.
+  const [px0, pz0, px1, pz1] = BLIMP.pass;
+  specs.push({
+    id: 'S2',
+    loop: true,
+    overhead: true,
+    path: blimp,
+    stops: [
+      ['Estación del Cerro', (px0 + px1) / 2, (pz0 + pz1) / 2],
+      ['Cerro Sur', 0, 985],
+      ['Cumbre', 0, 1235],
+    ],
+  });
 
   const out: Record<string, RouteDef> = {};
   for (const s of specs) {
     const path = s.loop ? startAt(s.path, s.stops[0][1], s.stops[0][2]) : s.path;
     out[s.id] = { id: s.id, loop: s.loop, overhead: s.overhead, path, stops: stopsOf(path, s.stops) };
   }
+  out.S3 = kingRoute(w);
   return out;
+}
+
+/**
+ * The king kite flies its circuit from the needle round by Cresta Sur, down past the kites and back
+ * up onto the needle, perches there, then flies the same circuit back the other way and perches on
+ * the needle again before it goes: a shuttle on the closed circuit, with the needle at both ends.
+ * The way out is the lap the summit chain was built on (its timing is the same tick for tick);
+ * the summit chain catches it after Cresta Sur on the way out, and a rider who holds on is carried
+ * back over the whole circuit, which inks every segment, and set down on the needle.
+ */
+function kingRoute(w: World): RouteDef {
+  const path = startAt(kingPath(w), NEEDLE.x, NEEDLE.z);
+  // The arc length of the whole circuit, summed as the line compiler sums it.
+  let len = 0;
+  for (let i = 3; i < path.length; i += 3) {
+    const dx = path[i] - path[i - 3];
+    const dy = path[i + 1] - path[i - 2];
+    const dz = path[i + 2] - path[i - 1];
+    len += Math.sqrt(dx * dx + dy * dy + dz * dz);
+  }
+  const far = nearestArc(path, KING[KING_FAR][0], KING[KING_FAR][1]);
+  return {
+    id: 'S3',
+    loop: false,
+    overhead: true,
+    path,
+    stops: [
+      { name: 'La Aguja', s: 0 },
+      { name: 'Cresta Sur', s: far },
+      { name: 'La Aguja', s: len },
+    ],
+  };
 }
 
 // ---------------------------------------------------------------------------------------------

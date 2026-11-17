@@ -44,10 +44,28 @@ export const LANDMARKS: readonly ZoneSpec[] = [
   { id: 'summit', name: 'La Cumbre', kind: 'landmark', x: 12, z: 1262, r: 6 },
 ];
 
-/** Add the spawns, landmarks and the needle. Call after the world is finalized. */
+/**
+ * Where errand givers stand when the place they are named for is a stop (or right beside one):
+ * holding a still finger at a stop stands you there to wait for a ride, so a giver's spot must
+ * not take in a stop's waiting area (the stop's zone and 4 m round it), or waiting for a ride
+ * takes the errand. Each is clear of every stop on the same level by at least 2.5 m more than
+ * that, off the vehicles' lanes, on flat open ground, and keeps the name of the place.
+ */
+export const GIVERS: readonly ZoneSpec[] = [
+  { id: 'giver_lonja', name: 'Mercado de Pescado', kind: 'giver', x: -90.6, z: 23.6, r: 8 },
+  { id: 'giver_bulevar', name: 'Bulevar', kind: 'giver', x: 75.5, z: 270.7, r: 6 },
+  { id: 'giver_torre', name: 'Torre del Reloj', kind: 'giver', x: 23.4, z: 470.9, r: 5 },
+  { id: 'giver_terraza_baja', name: 'Terraza Baja', kind: 'giver', x: 40.3, z: 627.4, r: 6 },
+  { id: 'giver_terraza_727', name: 'Terraza 727', kind: 'giver', x: 39.1, z: 730.9, r: 6 },
+  { id: 'giver_funicular', name: 'Funicular (Cima)', kind: 'giver', x: -24, z: 965, r: 5 },
+  { id: 'giver_cumbre', name: 'La Cumbre', kind: 'giver', x: 19.5, z: 1276.1, r: 6 },
+];
+
+/** Add the spawns, landmarks, errand givers' spots and the needle. Call after the world is finalized. */
 export function addZones(w: World, needleTop: number): void {
   for (const s of SPAWNS) addZone(w, { ...s, y: topHeight(w, s.x, s.z) });
   for (const s of LANDMARKS) addZone(w, { ...s, y: topHeight(w, s.x, s.z) });
+  for (const s of GIVERS) addZone(w, { ...s, y: topHeight(w, s.x, s.z) });
   addZone(w, { id: 'needle', name: 'La Aguja', kind: 'secret', x: 0, y: needleTop, z: 1262, r: 4 });
 }
 

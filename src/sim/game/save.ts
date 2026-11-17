@@ -11,7 +11,7 @@ import { Surface, makeGroundSample, sampleGround, terrainSurface, type World } f
 import type { Game } from './game';
 import { ONBOARDING_STEPS, type OnboardingData } from './onboarding';
 
-export const SAVE_VERSION = 1;
+export const SAVE_VERSION = 2;
 
 export interface SaveSettings {
   /** 0..1 */
@@ -25,10 +25,10 @@ export interface SaveSettings {
 export const DEFAULT_SETTINGS: Readonly<SaveSettings> = Object.freeze({ music: 1, sfx: 1, haptics: true, hints: true });
 
 export interface SaveData {
-  version: 1;
+  version: 2;
   savedAtTick: number;
-  /** Where the skater resumes (their last safe spot) and the time of day. */
-  player: { x: number; z: number; heading: number; dayTick: number };
+  /** Where the skater resumes (their last safe spot), the time of day and the day count (from 0). */
+  player: { x: number; z: number; heading: number; dayTick: number; day: number };
   settings: SaveSettings;
   reducers: Record<string, unknown>;
 }
@@ -50,9 +50,9 @@ export function exportSave(game: Game, settings: SaveSettings): SaveData {
   const reducers: Record<string, unknown> = {};
   for (const r of game.reducers) if (r.exportState) reducers[r.key] = r.exportState();
   return {
-    version: 1,
+    version: 2,
     savedAtTick: sim.tick,
-    player: { x: p.safeX, z: p.safeZ, heading: p.safeHeading, dayTick: dayTickOf(sim.tick) },
+    player: { x: p.safeX, z: p.safeZ, heading: p.safeHeading, dayTick: dayTickOf(sim.tick), day: Math.max(0, Math.floor(sim.tick / DAY_TICKS)) },
     settings: cleanSettings(settings),
     reducers,
   };
@@ -78,7 +78,7 @@ export function isRestingSpot(w: World, x: number, z: number): boolean {
 
 /**
  * Put a (migrated) save into a game: every reducer's state, the skater at rest at the saved spot
- * (the world spawn if that spot is not safe ground), and the clock at the saved time of day.
+ * (the world spawn if that spot is not safe ground), and the clock at the saved day and time of day.
  * Returns the saved settings.
  */
 export function importSave(game: Game, data: SaveData): SaveSettings {
@@ -105,7 +105,7 @@ export function importSave(game: Game, data: SaveData): SaveSettings {
     heading = w.spawn.heading;
   }
   placePlayer(w, sim.player, x, z, heading);
-  sim.tick = Math.floor(sim.tick / DAY_TICKS) * DAY_TICKS + data.player.dayTick;
+  sim.tick = data.player.day * DAY_TICKS + data.player.dayTick;
   return cleanSettings(data.settings);
 }
 
@@ -125,11 +125,17 @@ function cleanSettings(s: unknown): SaveSettings {
 
 type Upgrade = (d: Record<string, unknown>) => Record<string, unknown> | null;
 
+/** Most days a save may claim (a clock this far on would lose precision long before). */
+const MAX_DAY = 1e6;
+
 /**
- * UPGRADES[v] turns a version-v save into a version v+1 save (or null if it cannot). Only version
- * 1 exists so far; version 2 adds `2: ...` here, bumps SAVE_VERSION and the SaveData type.
+ * UPGRADES[v] turns a version-v save into a version v+1 save (or null if it cannot). A new version
+ * adds its step here, bumps SAVE_VERSION and the SaveData type.
  */
-const UPGRADES: Record<number, Upgrade> = {};
+const UPGRADES: Record<number, Upgrade> = {
+  // Version 2 saves the day count; a version 1 save kept only the time of day, so it loads on day 0.
+  1: (d) => (isRecord(d.player) ? { ...d, version: 2, player: { ...d.player, day: 0 } } : null),
+};
 
 /** Validate the current version's shape. Required: version and player; the rest defaults. */
 function validate(d: Record<string, unknown>): SaveData | null {
@@ -139,15 +145,17 @@ function validate(d: Record<string, unknown>): SaveData | null {
   if (!finite(p.x) || !finite(p.z) || !finite(p.heading)) return null;
   const dt = p.dayTick;
   if (typeof dt !== 'number' || !Number.isInteger(dt) || dt < 0 || dt >= DAY_TICKS) return null;
+  const day = p.day;
+  if (typeof day !== 'number' || !Number.isInteger(day) || day < 0 || day > MAX_DAY) return null;
   const at = d.savedAtTick;
   const reducers: Record<string, unknown> = {};
   if (isRecord(d.reducers)) for (const k of Object.keys(d.reducers)) reducers[k] = d.reducers[k];
   // A save from before onboarding with anything in it is a player who has learnt the game: no lesson.
   if (reducers.onboarding === undefined && hasProgress(reducers)) reducers.onboarding = learntOnboarding();
   return {
-    version: 1,
+    version: 2,
     savedAtTick: typeof at === 'number' && Number.isInteger(at) && at >= 0 ? at : 0,
-    player: { x: p.x, z: p.z, heading: p.heading, dayTick: dt },
+    player: { x: p.x, z: p.z, heading: p.heading, dayTick: dt, day },
     settings: cleanSettings(d.settings),
     reducers,
   };

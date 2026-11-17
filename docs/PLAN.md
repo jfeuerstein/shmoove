@@ -97,7 +97,11 @@ Acceptance:
       segment cannot be inked (DECISIONS 79). Independent check pending
 - [~] Onboarding fixes from verification (brief `m6g-onboarding-fixes`): clumsy players must get
       through the first minute
-- [~] Secrets a player can finish, rides that set you down (brief `m6h-secrets-finishable`)
+- [x] Secrets a player can finish (M6h): the blimp is caught at the hill station and sets you down
+      there, the summit chain's king-kite ride inks S3, a guy wire down from the needle, run-in
+      steps onto the hill station platform, quieter errand givers clear of stops, saves keep the
+      day. Full-game run: every line complete, no bails, map at 51.5 min, all secrets at 67.3 min
+      (DECISIONS 94–99). Independent check pending
 - [ ] Final docs and audit
 
 Acceptance:

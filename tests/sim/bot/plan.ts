@@ -3,7 +3,7 @@
  */
 import { Mode } from '../../../src/sim/types';
 import type { Task } from './skater';
-import { needleLap, summitRun } from './secrets';
+import { summitRun } from './secrets';
 import { act, go, ride } from './tasks';
 
 export function mapPlan(): Task[] {
@@ -73,7 +73,7 @@ export function mapPlan(): Task[] {
   ];
 }
 
-/** After the map: the ghost tram at midnight, the summit chain onto the king kite, the blimp. */
+/** After the map: the ghost tram at midnight, the summit chain onto the king kite, the guy wire down, the blimp. */
 export function secretPlan(): Task[] {
   return [
     // Night 4: down the spine to the lookout's landing and along it into the ghost tram's covered
@@ -94,22 +94,21 @@ export function secretPlan(): Task[] {
       [-20, 566],
     ]),
     ride('T1 to the gate', { line: 'T1', at: 'Base', to: 'Cima', segs: [] }),
+    // The summit chain onto the king kite, held on its way out, over the needle and all the way
+    // back round its circuit (that inks the line) until it sets the skater down on the needle.
     summitRun('summit chain'),
-    needleLap('king kite lap'),
-    // Off the needle (a long drop), down the hill to the hill station's platform for the blimp.
-    act('off the needle', 90, (b, out, i) => {
-      b.steerTo(out, 0, 1240, 0);
-      out.hop = i === 5;
+    // Roll off the needle's south edge onto its guy wire and grind down to the summit lawn.
+    act('onto the guy wire', 120, (b, out) => {
+      if (b.p.mode === Mode.GROUND) b.steerTo(out, 0.8, 1250, 0);
     }),
-    // Down the summit stairs (they hold the speed down, where the grass would let it run away) to
-    // the hill station, and up onto its platform from the west end.
+    // Down the lawn and the hill station's run-in steps onto its platform, for the blimp, which
+    // waits there with its ladder low at the start of its one lap of the day.
     go('down to the hill station', [
-      [1, 1235],
-      [1, 1100],
-      [2, 1041],
-      [16, 1040],
+      [16, 1120],
+      [19, 1064],
+      [19, 1046],
     ]),
-    ride('S2 pass', { line: 'S2', at: 'Cumbre', to: 'Cumbre', segs: [1], anywhere: true, wait: [19, 1038.4] }),
+    ride('S2 lap', { line: 'S2', at: 'Estación del Cerro' }),
   ];
 }
 

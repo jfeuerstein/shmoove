@@ -207,3 +207,10 @@ export const HILL_STATION = { x0: 12, x1: 48, z0: 1030, z1: 1050 } as const;
 
 /** The summit antenna: mast foot and the needle platform's top above the summit ground. */
 export const NEEDLE = { x: 0, z: 1262, height: 26, half: 2 } as const;
+
+/**
+ * The needle's guy wire, the way down: from just off the south edge of the needle's platform (a
+ * little below its top, so a skater rolling or hopping off that edge drops onto it) down to the
+ * summit lawn east of the spine stairs. Plan positions of its two ends; heights come from the world.
+ */
+export const NEEDLE_WIRE = { x0: 0.8, z0: 1259.6, below: 0.3, x1: 9, z1: 1180, foot: 0.3 } as const;

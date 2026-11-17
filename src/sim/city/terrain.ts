@@ -105,6 +105,17 @@ export const ANTENNA_PATHS: readonly (readonly [number, number])[] = [
  */
 export const HILL_STATION_PLATFORM = { x0: 12, x1: 40, z0: 1031, z1: 1045 } as const;
 const PLAZA_SHED = 0.03;
+/**
+ * The platform's run-in: a flight of steps on its uphill (north) side, from the summit lawn and
+ * the spine stairs down flush onto the deck, so a skater coming down from the summit rolls onto
+ * the platform instead of meeting its lip, and the steps' drag takes the speed down to where a
+ * planted foot stops them on the deck. It stays west of the cable cars' station (x < 29 with its
+ * blend), so nothing under their cables changes. x0..x1 and the north end z1; it starts at the
+ * deck's north edge.
+ */
+export const HILL_STATION_RUNIN = { x0: 6, x1: 27, z1: 1062 } as const;
+/** Height of the hill station platform's deck above the plaza's level. */
+export const HILL_STATION_DECK = 1.0;
 
 /** Half width of the verge outside each outer hairpin. */
 const VERGE_HALF = 2.4;
@@ -496,6 +507,21 @@ export function buildGround(w: World): Ground {
       return yHs - shed - PLAZA_SHED * Math.max(0, pf.z0 - z) + side * PLAZA_SHED * 1.5 * (z - pf.z1);
     },
     surf: () => Surface.PLAZA,
+  });
+
+  // The platform's run-in: steps from the hill straight down onto the deck, flush with it.
+  const ri = HILL_STATION_RUNIN;
+  const yDeck = yHs + HILL_STATION_DECK;
+  const yTop = baseHeight(ri.z1);
+  C.rect({
+    x0: ri.x0,
+    x1: ri.x1,
+    z0: pf.z1,
+    z1: ri.z1,
+    bx: 2,
+    bz: 3,
+    h: (_x, z) => yDeck + ((yTop - yDeck) * (z - pf.z1)) / (ri.z1 - pf.z1),
+    surf: () => Surface.STAIRS,
   });
 
   // The docks stay at the docks grade under everything (the roads leave them level across).
