@@ -74,9 +74,10 @@ export const OUTER_X = 152;
 /**
  * The low parapet round the outside of each outer hairpin: height above the road, how far its top
  * may stand above the verge outside it, its offset beyond the road's edge, segment length, half
- * thickness, and the share of the bend it runs round from the bottom.
+ * thickness, and the share of the bend it runs round from the bottom. A segment is left open where
+ * the bank `open` metres beyond it stands more than `openRise` above its top.
  */
-export const PARAPET = { height: 0.8, flush: 0.25, out: 0.9, seg: 4, half: 0.3, sweep: 0.75 } as const;
+export const PARAPET = { height: 0.8, flush: 0.25, out: 0.9, seg: 4, half: 0.3, sweep: 0.75, open: 4, openRise: 0.6 } as const;
 /** The docks boulevard: the bottom of both switchback roads. */
 export const BOULEVARD_Z = 258;
 

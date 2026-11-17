@@ -33,7 +33,7 @@ interface Script {
  * the needle and drops the rider onto the platform.
  */
 const SUMMIT: Script = {
-  start: 26790,
+  start: 27540,
   x: -15.557336845398943,
   z: 947.2993933173871,
   keys: [

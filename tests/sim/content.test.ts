@@ -493,7 +493,8 @@ describe('errands played for real', () => {
   });
 
   it('two cable cars as one chain: a kite spool from the funicular top to the ridge', () => {
-    const game = newGame(0.4);
+    // Started when the car the skater catches reaches the hill station as a summit car waits.
+    const game = newGame(0.43);
     acceptAt(game, 'kite_spool');
     const A1 = line('A1');
     const A2 = line('A2');

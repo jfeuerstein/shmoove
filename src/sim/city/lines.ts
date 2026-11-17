@@ -62,21 +62,21 @@ const D = District;
 /** The roster. Order is the line index in the world. */
 export const CITY_LINES: readonly CityLineSpec[] = [
   { id: 'D1', name: 'Grúa Uno', kind: 'crane', district: D.DOCKS, stem: 0, vehicles: 1, cruise: 4, accel: 1.5, dwell: 4, windows: HOURS.allDay, phase: 0, lane: 0 },
-  { id: 'D2', name: 'Montacargas', kind: 'forklift', district: D.DOCKS, stem: 1, vehicles: 3, cruise: 5, accel: 2.5, dwell: 3, windows: HOURS.day, phase: 6407, lane: 2 },
+  { id: 'D2', name: 'Montacargas', kind: 'forklift', district: D.DOCKS, stem: 1, vehicles: 3, cruise: 7, accel: 3, dwell: 2, windows: HOURS.day, phase: 1250, lane: 2 },
   { id: 'D3', name: 'Pescado Express', kind: 'truck', district: D.DOCKS, stem: 2, vehicles: 2, cruise: 8, accel: 2.5, dwell: 4, windows: HOURS.dawnNoon, phase: 4327, lane: 1.6 },
   { id: 'M1', name: 'Las Motos', kind: 'moped', district: D.MERCADO, stem: 0, vehicles: 4, cruise: 11, accel: 3.5, dwell: 3, windows: HOURS.dayDusk, phase: 1080, lane: 4.4 },
-  { id: 'M2', name: 'Carretillas', kind: 'handcart', district: D.MERCADO, stem: 1, vehicles: 3, cruise: 3.5, accel: 1.5, dwell: 2, windows: HOURS.dawnAfternoon, phase: 4320, lane: 1.6 },
+  { id: 'M2', name: 'Carretillas', kind: 'handcart', district: D.MERCADO, stem: 1, vehicles: 3, cruise: 3.5, accel: 1.5, dwell: 2, windows: HOURS.dawnAfternoon, phase: 2180, lane: 1.6 },
   { id: 'M3', name: 'La Boda', kind: 'parade', district: D.MERCADO, stem: 2, vehicles: 1, cruise: 2.2, accel: 1.5, dwell: 2, windows: HOURS.boda, phase: 0, lane: 0 },
   { id: 'T1', name: 'Funicular', kind: 'funicular', district: D.TERRACES, stem: 0, vehicles: 2, cruise: 11, accel: 3, dwell: 5, windows: HOURS.allDay, phase: 440, lane: 0 },
-  { id: 'T2', name: 'Tranvía 5', kind: 'tram', district: D.TERRACES, stem: 1, vehicles: 3, cruise: 9, accel: 2.5, dwell: 6, windows: HOURS.allDay, phase: 11284, lane: 1.6 },
-  { id: 'T3', name: 'Tranvía 9', kind: 'tram', district: D.TERRACES, stem: 2, vehicles: 2, cruise: 10, accel: 3, dwell: 3, windows: HOURS.dayDusk, phase: 80, lane: 1.6 },
+  { id: 'T2', name: 'Tranvía 5', kind: 'tram', district: D.TERRACES, stem: 1, vehicles: 3, cruise: 13, accel: 3, dwell: 4, windows: HOURS.allDay, phase: 6480, lane: 1.6 },
+  { id: 'T3', name: 'Tranvía 9', kind: 'tram', district: D.TERRACES, stem: 2, vehicles: 2, cruise: 10, accel: 3, dwell: 3, windows: HOURS.dayDusk, phase: 5250, lane: 1.6 },
   { id: 'T4', name: 'Nocturno', kind: 'bus', district: D.TERRACES, stem: 3, vehicles: 2, cruise: 11, accel: 3, dwell: 4, windows: HOURS.night, phase: 2268, lane: 3.5 },
-  { id: 'A1', name: 'Teleférico Bajo', kind: 'cablecar', district: D.ANTENNA, stem: 0, vehicles: 4, cruise: 7, accel: 3.5, dwell: 4, windows: HOURS.allDay, phase: 152, lane: 0, hang: 1.8 },
-  { id: 'A2', name: 'Teleférico Cumbre', kind: 'cablecar', district: D.ANTENNA, stem: 1, vehicles: 3, cruise: 7, accel: 1.5, dwell: 4, windows: HOURS.dayDusk, phase: 4239, lane: 0, hang: 3.2 },
-  { id: 'A3', name: 'Cometas', kind: 'kite', district: D.ANTENNA, stem: 2, vehicles: 5, cruise: 8, accel: 2, dwell: 3, windows: HOURS.windy, phase: 3883, lane: 0 },
+  { id: 'A1', name: 'Teleférico Bajo', kind: 'cablecar', district: D.ANTENNA, stem: 0, vehicles: 4, cruise: 7, accel: 3.5, dwell: 4, windows: HOURS.allDay, phase: 2102, lane: 0, hang: 1.8 },
+  { id: 'A2', name: 'Teleférico Cumbre', kind: 'cablecar', district: D.ANTENNA, stem: 1, vehicles: 3, cruise: 7, accel: 1.5, dwell: 4, windows: HOURS.dayDusk, phase: 3489, lane: 0, hang: 3.2 },
+  { id: 'A3', name: 'Cometas', kind: 'kite', district: D.ANTENNA, stem: 2, vehicles: 5, cruise: 8, accel: 2, dwell: 3, windows: HOURS.windy, phase: 3133, lane: 0 },
   { id: 'S1', name: 'Tranvía Fantasma', kind: 'ghosttram', district: D.TERRACES, stem: 3, vehicles: 1, cruise: 12, accel: 2.5, dwell: 4, windows: HOURS.ghost, phase: 0, lane: 1.6, parkHidden: true, secret: true },
   { id: 'S2', name: 'El Dirigible', kind: 'blimp', district: D.ANTENNA, stem: 3, vehicles: 1, cruise: 6, accel: 1, dwell: 5, windows: [[BLIMP_START, BLIMP_START + 0.01]], phase: 0, lane: 0, parkHidden: true, secret: true, departAt: BLIMP_START },
-  { id: 'S3', name: 'Cometa Rey', kind: 'kite', district: D.ANTENNA, stem: 3, vehicles: 1, cruise: 11, accel: 2, dwell: 5, windows: HOURS.windy, phase: 1620, lane: 0, secret: true, minChain: 4, hang: 3.5, anchorBack: 0, parkHidden: true },
+  { id: 'S3', name: 'Cometa Rey', kind: 'kite', district: D.ANTENNA, stem: 3, vehicles: 1, cruise: 11, accel: 2, dwell: 5, windows: HOURS.windy, phase: 870, lane: 0, secret: true, minChain: 4, hang: 3.5, anchorBack: 0, parkHidden: true },
 ];
 
 /** Clearance a ground vehicle's origin keeps from solid walls beyond its half width, metres. */
@@ -233,11 +233,13 @@ export function buildCityLines(w: World, routes: Record<string, RouteDef>): Comp
     const route = routes[spec.id];
     if (!route) throw new Error(`no route for line ${spec.id}`);
     const def = cityLineDef(w, spec, route);
-    if (spec.departAt === undefined) return compileLine(def, i);
-    // Phase the lap so that it leaves the terminus exactly at departAt.
-    const probe = compileLine(def, i);
-    const at = Math.round(spec.departAt * DAY_TICKS) % probe.period;
-    return compileLine({ ...def, phase: (probe.period - at) % probe.period }, i);
+    const line = compileLine(def, i);
+    if (spec.departAt === undefined) return line;
+    // Phase the lap so that it leaves the terminus exactly at departAt. The phase only shifts the
+    // lap, so the compiled tables stand as they are.
+    const at = Math.round(spec.departAt * DAY_TICKS) % line.period;
+    const phase = (line.period - at) % line.period;
+    return { ...line, phase, phaseTicks: phase };
   });
 }
 

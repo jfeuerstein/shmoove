@@ -95,46 +95,6 @@ function solidWithin(w: World, x: number, y: number, z: number, radius: number, 
   return null;
 }
 
-/** Grade of the plane fitted to the open ground (not under a solid) of a 6 m patch centred on (x, z). */
-function patchGrade(w: World, x: number, z: number): number {
-  let n = 0;
-  let sx = 0;
-  let sz = 0;
-  let sh = 0;
-  let sxx = 0;
-  let szz = 0;
-  let sxz = 0;
-  let sxh = 0;
-  let szh = 0;
-  for (let i = -3; i <= 3; i++) {
-    for (let j = -3; j <= 3; j++) {
-      const h = terrainHeight(w, x + i, z + j);
-      if (topHeight(w, x + i, z + j) > h + 0.05) continue;
-      n++;
-      sx += i;
-      sz += j;
-      sh += h;
-      sxx += i * i;
-      szz += j * j;
-      sxz += i * j;
-      sxh += i * h;
-      szh += j * h;
-    }
-  }
-  if (n < 6) return 0;
-  const mx = sx / n;
-  const mz = sz / n;
-  const mh = sh / n;
-  const cxx = sxx / n - mx * mx;
-  const czz = szz / n - mz * mz;
-  const cxz = sxz / n - mx * mz;
-  const det = cxx * czz - cxz * cxz;
-  if (Math.abs(det) < 1e-9) return 0;
-  const cxh = sxh / n - mx * mh;
-  const czh = szh / n - mz * mh;
-  return Math.hypot((cxh * czz - czh * cxz) / det, (czh * cxx - cxh * cxz) / det);
-}
-
 describe('determinism and cost', () => {
   it('same seed builds the same world, another seed a different one, in under 500 ms', () => {
     const a = buildCity(7);
@@ -551,10 +511,12 @@ describe('what stands on the hill', () => {
 
 describe('no traps', () => {
   it('a skater left anywhere above the docks rolls down, rests on flat ground or keeps rolling: 400 drops', () => {
-    // The strict rule: every run ends 15 m or more below where it started, or at rest on ground
-    // flatter than 1.5% over a 6 m patch (the open ground round it), or still rolling. None at rest
-    // on a slope, none rocking on the spot, at most one bail each, and bails in under 5% of runs.
-    const w = city.world;
+    // The strict rule: a skater with no push can only come to rest where the ground under them is
+    // nearly level, or where something pins them. So no run may end at rest (under 0.2 m/s for its
+    // last 5 s) where the terrain under the skater is steeper than 1.5%: that is a pin. None rocking
+    // on the spot, at most one bail each, and bails in under 5% of runs. The city is skated without
+    // its rides: this is about the ground, not traffic.
+    const w: World = { ...city.world, lines: [] };
     const rng = new Rng(4242);
     const ok = new Set<number>([Surface.STREET, Surface.PLAZA, Surface.STAIRS]);
     const starts: [number, number, number][] = [];
@@ -574,13 +536,14 @@ describe('no traps', () => {
     for (const [x0, z0, h0] of starts) {
       const sim = newSim(w);
       teleport(sim, x0, z0, h0);
-      const y0 = sim.player.y;
       let bails = 0;
+      let restTicks = 0;
       const hist: [number, number][] = [];
       for (let t = 0; t < 90 * 60; t++) {
         sim.step({ steer: 0, hold: false, hop: false });
         for (const e of sim.events) if (e.type === 'bail') bails++;
         const p = sim.player;
+        restTicks = p.mode === Mode.GROUND && p.speed < 0.2 ? restTicks + 1 : 0;
         if (t % 60 === 59) {
           expect(Number.isFinite(p.x + p.y + p.z)).toBe(true);
           expect(p.x).toBeGreaterThanOrEqual(w.minX);
@@ -601,10 +564,14 @@ describe('no traps', () => {
       const back = hist[hist.length - 11];
       const moved = Math.hypot(p.x - back[0], p.z - back[1]);
       if (p.speed > 0.5 && moved < 1) problems.push(`rocking at ${p.x.toFixed(1)},${p.z.toFixed(1)} ${from}`);
-      if (y0 - p.y >= 15) continue;
-      if (p.mode === Mode.GROUND && p.speed < 0.3) {
-        const grade = p.onSolid >= 0 ? 0 : patchGrade(w, p.x, p.z);
-        if (grade >= 0.015) problems.push(`at rest on ${(grade * 100).toFixed(1)}% at ${p.x.toFixed(1)},${p.z.toFixed(1)} ${from}`);
+      if (restTicks >= 5 * 60) {
+        // On a roof or a crate the ground under it does not matter: a solid's top is level.
+        let grade = 0;
+        if (p.onSolid < 0) {
+          sampleTerrain(w, p.x, p.z, TS);
+          grade = Math.hypot(TS.gx, TS.gz);
+        }
+        if (grade > 0.015) problems.push(`pinned on ${(grade * 100).toFixed(1)}% at ${p.x.toFixed(1)},${p.z.toFixed(1)} ${from}`);
       }
     }
     expect(problems).toEqual([]);
