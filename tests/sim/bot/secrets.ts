@@ -1,6 +1,6 @@
 /**
- * The secret lines' tasks: the summit route's four-link chain onto the king kite, keeping the chain
- * alive on the needle for the king kite's next lap, and stepping off the needle.
+ * The secret lines' tasks: the summit route's four-link chain onto the king kite, ridden until it
+ * sets the skater down on the needle.
  */
 import { DAY_TICKS } from '../../../src/sim/constants';
 import { Mode } from '../../../src/sim/types';
@@ -39,7 +39,8 @@ export const SUMMIT = {
 
 /**
  * Stand under the lower cable car's strap until the route's window opens, play the route's touches
- * against the clock, and hold on to the king kite until it sets the skater down on the needle.
+ * against the clock, and hold on to the king kite out, over the needle and back round its circuit
+ * until it sets the skater down on the needle with its line inked.
  * A link missed (the chain did not reach the next ride) fails the task with where it broke.
  */
 export function summitRun(label: string): Task {
@@ -100,53 +101,18 @@ export function summitRun(label: string): Task {
         if (i >= 3260) phase = 'king';
         return 'run';
       }
-      // On the king kite: hold on until it perches on the needle and lets go.
-      if (p.mode === Mode.HITCH) {
-        out.hold = true;
-        return 'run';
-      }
-      return 'done';
-    },
-  };
-}
-
-/**
- * Set down on the needle with the four-link chain still alive: keep it alive by hopping on the spot
- * (air does not use up the chain's ground grace) until the king kite comes back to the needle for
- * its next lap, catch it there, ride the whole lap, and be set down on the needle again.
- */
-export function needleLap(label: string): Task {
-  let phase: 'hop' | 'ride' = 'hop';
-  return {
-    label,
-    step(b, out) {
-      const p = b.p;
-      const S3 = lineById(b.w, 'S3');
-      const needle = findZone(b.w, 'needle');
-      if (!needle) return b.fail('no needle');
-      if (phase === 'hop') {
-        if (p.mode === Mode.HITCH) {
-          if (p.hLine !== S3.index) return b.fail(`caught ${b.w.lines[p.hLine].id} on the needle`);
-          phase = 'ride';
-          b.note(`caught S3 at the needle, chain ${p.chain}`);
-          out.hold = true;
-          return 'run';
-        }
-        if (p.chainAlive !== 1) return b.fail('the chain died on the needle');
-        if (b.taskTicks > 60 * 20) return b.fail('the king kite did not come back');
-        // Lean back toward the middle of the platform in the air; hop the moment the board lands.
-        b.steerTo(out, needle.x, needle.z, 0);
-        out.hop = p.mode === Mode.GROUND || (p.mode === Mode.AIR && p.vy < 0);
-        out.hold = true;
-        return 'run';
-      }
+      // On the king kite: hold on over the needle and all the way back round its circuit, until it
+      // perches on the needle again and goes, setting the skater down there.
       if (p.mode === Mode.HITCH) {
         out.hold = true;
         b.quiet(out);
         return 'run';
       }
+      const S3 = lineById(w, 'S3');
       const prog = b.game.progress.lines[S3.index];
-      if (!prog.complete) return b.fail(`the king kite's lap did not ink (${prog.inked.join(',')})`);
+      if (!prog.complete) return b.fail(`the king kite's ride did not ink its line (${prog.inked.join(',')})`);
+      const needle = findZone(w, 'needle');
+      if (!needle || Math.hypot(p.x - needle.x, p.z - needle.z) > needle.r) return b.fail('the king kite did not set the skater down on the needle');
       return 'done';
     },
   };

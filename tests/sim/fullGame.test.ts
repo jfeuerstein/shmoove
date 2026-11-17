@@ -177,7 +177,7 @@ describe('the full game, by play alone', () => {
     expect(atMap.ticks).toBe(mapTick - book.startTick);
   });
 
-  it('then the secrets: the ghost tram at night, the summit chain onto the king kite and the needle, the blimp', () => {
+  it('then the secrets: the ghost tram at night, the summit chain onto the king kite, the guy wire down from the needle, the blimp', () => {
     const { game, bot, book } = full;
     expect(bot.failure, bot.log.slice(-15).join('\n')).toBe('');
     expect(bot.done).toBe(true);
@@ -185,23 +185,17 @@ describe('the full game, by play alone', () => {
     const found = book.events.flatMap((x) => (x.e.type === 'secretFound' ? [x.e.id] : []));
     expect(found.slice().sort()).toEqual([...SECRET_IDS].sort());
     for (const id of SECRET_IDS) expect(game.secrets.found[id], id).toBeDefined();
-    // The summit route is a four-link chain ending on the king kite.
+    // The summit route is a four-link chain ending on the king kite, caught once: the bot holds on
+    // until it is set down on the needle and fails the run unless that one ride inked the line.
     const links = bot.log.filter((l) => l.includes('] link '));
     expect(links.map((l) => l.split('] link ')[1].split(' @')[0])).toEqual(['A1 chain 1', 'A2 chain 2', 'A3 chain 3', 'S3 chain 4']);
-    // The ghost tram's and the king kite's laps ink their whole lines.
     const byId = (id: string) => game.progress.lines[world.lines.findIndex((l) => l.id === id)];
-    expect(byId('S1').complete).toBe(true);
-    expect(byId('S3').complete).toBe(true);
-    // The blimp is ridden and inks the leg it can be caught on: it is caught as its ladder sweeps
-    // the hill station platform, already past its first segment, which starts 28 m above the
-    // summit with nothing under it to reach from (a finding: S2 can never be completed).
-    const s2 = byId('S2');
-    expect(s2.discovered).toBe(true);
-    expect(s2.inked).toEqual([false, true]);
-    // Every line but the blimp is complete.
-    for (const l of world.lines) if (l.id !== 'S2') expect(game.progress.lines[l.index].complete, l.id).toBe(true);
-    // A modest number of bails, all after the map: the drop off the needle and the blimp's.
-    expect(book.bails, book.bailLog.join('; ')).toBeLessThanOrEqual(3);
+    // The ghost tram's lap, the king kite's ride and the blimp's lap each ink their whole line.
+    for (const id of ['S1', 'S2', 'S3']) expect(byId(id).complete, id).toBe(true);
+    // Every line is complete at the end.
+    for (const l of world.lines) expect(game.progress.lines[l.index].complete, l.id).toBe(true);
+    // The way down from the needle is the guy wire: a grind, not a fall. No bails in the whole run.
+    expect(book.bails, book.bailLog.join('; ')).toBe(0);
     expect(book.jumps, book.jumps.join('; ')).toEqual([]);
   });
 
