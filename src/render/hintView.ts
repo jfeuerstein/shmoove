@@ -45,27 +45,38 @@ const LIFT_B = 0.7;
 const CHEV_H = 1.35;
 const CHEV_W = 0.85;
 const CHEV_T = 0.17;
+/** The chevron over a rail's run-in, as a share of the full size. */
+const RAIL_K = 0.5;
 /** Clearance above the top of a vehicle, metres. */
 const ROOF_CLEAR = 0.45;
 /** Height of the rail outline above the rail, metres. */
 const OUTLINE_Y = 0.06;
+/** A skater this close to the waiting spot is standing on it: the ring alone, no chevron over their head, metres. */
+const ON_SPOT = 2.5;
 /** The waiting spot's ring on the ground: radius and stroke, metres. */
 const RING_R = 0.85;
 const RING_T = 0.09;
 
-/** A downward chevron with its point at (0, lift, 0): two crossed V's so it reads from any side. */
-function chevron(b: MeshBuilder, lift: number): void {
+/**
+ * A downward chevron with its point at (0, lift, 0): two crossed V's so it reads from any side.
+ * `k` scales it: full size over rides and spots; smaller over a rail, which is outlined in mango too
+ * and is passed close by the camera.
+ */
+function chevron(b: MeshBuilder, lift: number, k = 1): void {
   // An ink stroke printed a little under the mango one, like the UI's off-register shadow: it
   // reads on bright concrete and on dark asphalt alike without hiding the mango.
   const sh = 0.16;
+  const w = CHEV_W * k;
+  const h = CHEV_H * k;
+  const t = CHEV_T * k;
   for (const [ax, az] of [
     [1, 0],
     [0, 1],
   ]) {
-    b.beam(0, lift - sh, 0, ax * CHEV_W, lift + CHEV_H - sh, az * CHEV_W, CHEV_T * 0.75, INK.ink, 0);
-    b.beam(0, lift - sh, 0, -ax * CHEV_W, lift + CHEV_H - sh, -az * CHEV_W, CHEV_T * 0.75, INK.ink, 0);
-    b.beam(0, lift, 0, ax * CHEV_W, lift + CHEV_H, az * CHEV_W, CHEV_T, INK.mango, 1);
-    b.beam(0, lift, 0, -ax * CHEV_W, lift + CHEV_H, -az * CHEV_W, CHEV_T, INK.mango, 1);
+    b.beam(0, lift - sh * k, 0, ax * w, lift + h - sh * k, az * w, t * 0.75, INK.ink, 0);
+    b.beam(0, lift - sh * k, 0, -ax * w, lift + h - sh * k, -az * w, t * 0.75, INK.ink, 0);
+    b.beam(0, lift, 0, ax * w, lift + h, az * w, t, INK.mango, 1);
+    b.beam(0, lift, 0, -ax * w, lift + h, -az * w, t, INK.mango, 1);
   }
 }
 
@@ -75,10 +86,10 @@ function chevronGeo(lift: number): THREE.BufferGeometry {
   return b.build();
 }
 
-/** Chevron over a mango ring on the ground (the waiting spot), the ring at y = 0. */
+/** Chevron over a mango ring on the ground (the waiting spot), the ring at y = 0; `lift` < 0: the ring alone. */
 function spotGeo(lift: number): THREE.BufferGeometry {
   const b = new MeshBuilder();
-  chevron(b, lift);
+  if (lift >= 0) chevron(b, lift);
   const n = 16;
   for (let i = 0; i < n; i++) {
     const a0 = (i / n) * Math.PI * 2;
@@ -91,7 +102,7 @@ function spotGeo(lift: number): THREE.BufferGeometry {
 /** Chevron plus the whole rail outlined, relative to the run-in point (ox, oy, oz). */
 function railGeo(world: World, rail: number, ox: number, oy: number, oz: number, lift: number): THREE.BufferGeometry {
   const b = new MeshBuilder();
-  chevron(b, lift);
+  chevron(b, lift, RAIL_K);
   const p = world.rails[rail].pts;
   for (let i = 3; i < p.length; i += 3) {
     b.beam(p[i - 3] - ox, p[i - 2] - oy + OUTLINE_Y, p[i - 1] - oz, p[i] - ox, p[i + 1] - oy + OUTLINE_Y, p[i + 2] - oz, 0.07, INK.mango, 1);
@@ -102,6 +113,7 @@ function railGeo(world: World, rail: number, ox: number, oy: number, oz: number,
 export function createHintView(scene: THREE.Scene, world: World, camera: THREE.Camera | null = null): HintView {
   const vehicleGeo = [chevronGeo(LIFT_A), chevronGeo(LIFT_B)];
   const spotGeos = [spotGeo(LIFT_A + 0.3), spotGeo(LIFT_B + 0.3)];
+  const ringGeo = spotGeo(-1);
   let railGeos: THREE.BufferGeometry[] = [];
   let railFor = -1;
   const mesh = new THREE.Mesh(vehicleGeo[0], inkMaterial());
@@ -156,7 +168,9 @@ export function createHintView(scene: THREE.Scene, world: World, camera: THREE.C
         mesh.geometry = railGeos[frame];
         mesh.position.set(t.x, t.y, t.z);
       } else if (t.kind === 'spot') {
-        mesh.geometry = spotGeos[frame];
+        const pl = game.sim.player;
+        const on = (pl.x - t.x) * (pl.x - t.x) + (pl.z - t.z) * (pl.z - t.z) < ON_SPOT * ON_SPOT;
+        mesh.geometry = on ? ringGeo : spotGeos[frame];
         mesh.position.set(t.x, t.y, t.z);
       } else {
         const L = world.lines[t.line];
@@ -189,6 +203,7 @@ export function createHintView(scene: THREE.Scene, world: World, camera: THREE.C
       scene.remove(mesh);
       for (const g of vehicleGeo) g.dispose();
       for (const g of spotGeos) g.dispose();
+      ringGeo.dispose();
       for (const g of railGeos) g.dispose();
     },
   };

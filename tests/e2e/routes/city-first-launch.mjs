@@ -117,6 +117,8 @@ const toSteps = (t) => {
     case 's':
       return [
         { do: 'expect', label: `the ${t[1]} hint is up with ${t[2]} steps learnt`, test: (s) => s.ui.hint === t[1] && s.ui.hintsDone === t[2] },
+        // A hint about something in the world shows where it is: the chevron in sight, or the edge arrow.
+        { do: 'expect', label: `the ${t[1]} hint's pointer can be seen`, test: (s) => s.ui.hintTarget === 'none' || s.ui.hintPointer === 'world' || s.ui.hintPointer === 'edge' },
         { do: 'shot', name: `hint-${t[1]}${t[3] ? '-' + t[3] : ''}` },
       ];
     default:
@@ -137,7 +139,7 @@ export default {
     },
     // Rolling off the lookout, inside the funicular errand giver's zone: no offer until the hitch is learnt.
     ...TOUCHES.slice(0, 2).flatMap(toSteps),
-    { do: 'expect', label: 'still at the lookout, and the funicular errand is not offered yet', test: (s) => s.z > 560 && s.ui.errandOffered === '' },
+    { do: 'expect', label: 'still at the lookout, and the funicular errand is not offered yet', test: (s) => s.z > 555 && s.y > 64 && s.ui.errandOffered === '' },
     ...TOUCHES.slice(2).flatMap(toSteps),
     { do: 'wait', ticks: 12 },
     {
