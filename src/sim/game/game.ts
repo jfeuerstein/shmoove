@@ -13,7 +13,7 @@
 import { Sim, type SimOpts } from '../sim';
 import type { InputFrame } from '../types';
 import type { World } from '../world';
-import { ChalkReducer, type ChalkState, type CommandResult } from './chalk';
+import { ChalkReducer, STEER_LEVELS, type ChalkState, type CommandResult } from './chalk';
 import { ProgressReducer, createProgress, type Progress } from './progress';
 
 export type GameEvent =
@@ -41,10 +41,15 @@ export interface GameReducer {
   importState?(data: unknown): void;
 }
 
-/** Steer levels each side of centre: the sim only ever sees steer as a multiple of 1/127. */
-export const STEER_LEVELS = 127;
+/**
+ * Steer levels each side of centre (defined beside the chalk frames that store them): the sim only
+ * ever sees steer as a multiple of 1/31, 63 levels in all. Coarse enough that a thumb's jitter mostly
+ * lands on one level, so chalk codes stay short; fine enough (1.6% of full lock) that no thumb can
+ * feel the steps.
+ */
+export { STEER_LEVELS };
 
-/** The steer the sim gets for a raw steer, as a signed integer level -127..127. */
+/** The steer the sim gets for a raw steer, as a signed integer level -31..31. */
 export function quantiseSteer(steer: number): number {
   if (!(steer === steer) || steer === Infinity || steer === -Infinity) return 0;
   const s = steer < -1 ? -1 : steer > 1 ? 1 : steer;

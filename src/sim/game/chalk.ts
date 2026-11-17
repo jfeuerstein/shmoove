@@ -8,13 +8,20 @@
  * the clock forward to the recording's time of day (minus a countdown) and steps a second skater,
  * the ghost, in the same world with the recorded frames while the player skates against it.
  *
- * Frames are run-length encoded as (steerByte, flags, runLength) triples: steerByte is the
- * quantised steer + 127 (0..254), flags bit 0 is hold and bit 1 hop, runLength 1..255.
+ * In memory a line keeps its frames decoded, one byte per tick: the steer level + 31 (0..62) in
+ * bits 0-5, hold in bit 6, hop in bit 7. Only the share code (and so the save) is packed densely.
  *
- * Share code: `SK1-` + base64url (no padding) of version u8, name (u8 length + UTF-8),
- * startDayTick u16, x/z/heading/speed f64, endX/endY/endZ f32, ticks u16, input byte count u16,
- * input bytes, CRC-32 of everything before it. All little-endian. base64url and UTF-8 are written
- * here by hand: the sim has no DOM helpers.
+ * Share code: `SK2-` + base64url (no padding) of version u8 (2), name (u8 length + UTF-8),
+ * startDayTick u16, x/z/heading/speed f64, endX/endY/endZ f32, ticks u16, input byte count
+ * (LEB128, minimal), input bytes, CRC-32 of everything before it. All little-endian. base64url and
+ * UTF-8 are written here by hand: the sim has no DOM helpers.
+ *
+ * Input bytes are one stream from an adaptive binary arithmetic coder (32-bit integer interval,
+ * carry-less, 12-bit probabilities that adapt per context). Three sections follow each other in it:
+ * every tick's steer as a delta from the previous tick's level, modelled on the previous delta (or,
+ * after a zero delta, on how long steer has been still); then the gaps between hold toggles; then the
+ * gaps between hops, each gap Elias-gamma binarised. Decoding is bounded by `ticks` and re-encodes
+ * what it decoded to check the stream byte for byte, so every line has exactly one code.
  */
 import { DAY_TICKS } from '../constants';
 import { createPlayer, placePlayer, stepPlayer } from '../player';
@@ -35,7 +42,7 @@ export interface ChalkLine {
   z: number;
   heading: number;
   speed: number;
-  /** Run-length encoded frames. */
+  /** Decoded frames, one byte per tick (see `packFrame`); `ticks` long. */
   inputs: Uint8Array;
   /** Length of the recording, ticks. */
   ticks: number;
@@ -57,11 +64,18 @@ export const CHALK_MAX_LINES = 20;
 /** A race is lost this long after the ghost finishes. */
 export const CHALK_TIMEOUT_TICKS = 20 * 60;
 export const CHALK_NAME_MAX = 24;
-export const CHALK_CODE_PREFIX = 'SK1-';
+export const CHALK_CODE_PREFIX = 'SK2-';
+const CHALK_V1_PREFIX = 'SK1-';
 /** Path samples for drawing and progress: one every this many ticks. */
 export const CHALK_PATH_STRIDE = 6;
 
-export const CHALK_VERSION = 1;
+export const CHALK_VERSION = 2;
+
+/**
+ * Steer levels each side of centre. `Game.step` quantises steer to these (the sim only ever sees a
+ * multiple of 1/STEER_LEVELS), and a recorded frame stores the level.
+ */
+export const STEER_LEVELS = 31;
 
 export type CommandResult = { ok: true } | { ok: false; reason: string };
 
@@ -265,7 +279,285 @@ function getF32(b: Uint8Array, at: number): number {
 }
 
 // ---------------------------------------------------------------------------------------------
+// Frames
+
+/** One recorded tick as a byte: steer level + 31 in bits 0-5, hold bit 6, hop bit 7. */
+export function packFrame(steerQ: number, hold: boolean, hop: boolean): number {
+  return (steerQ + STEER_LEVELS) | (hold ? 64 : 0) | (hop ? 128 : 0);
+}
+
+// ---------------------------------------------------------------------------------------------
+// Arithmetic coder
+//
+// A carry-less binary arithmetic coder over a 32-bit integer interval [x1, x2] (the lpaq scheme).
+// Each decision splits the interval at x1 + (x2 - x1) / 4096 * p, where p is the context's 12-bit
+// estimate that the bit is 1, and emits leading bytes once x1 and x2 agree on them. Probabilities
+// are 16-bit integers that move toward each coded bit by a shift that starts fast and settles. All
+// values are integers below 2^32, so every engine computes the same bytes.
+//
+// The same routines encode, decode and verify: a binarisation is written once against `bit(ctx, y)`,
+// which codes `y` when encoding and returns the decoded bit when decoding (ignoring `y`).
+
+/** Context layout. */
+const STEER_CTX = 16;
+const UNARY_MAX = 10;
+const CTX_ZERO = 0;
+const CTX_SIGN = CTX_ZERO + STEER_CTX;
+const CTX_MAG = CTX_SIGN + STEER_CTX;
+const CTX_ESC = CTX_MAG + STEER_CTX * UNARY_MAX;
+const ESC_BITS = 6;
+const GAP_UNARY = 15;
+const GAP_MODEL = GAP_UNARY + GAP_UNARY * GAP_UNARY;
+const CTX_GAP = CTX_ESC + (1 << ESC_BITS);
+/** Gap models: hold off -> on, hold on -> off, hops. */
+const GAP_HOLD_ON = CTX_GAP;
+const GAP_HOLD_OFF = CTX_GAP + GAP_MODEL;
+const GAP_HOP = CTX_GAP + 2 * GAP_MODEL;
+const CTX_COUNT = CTX_GAP + 3 * GAP_MODEL;
+/** Adaptation shift by how often a context has been used: fast at first, then steady. */
+const RATE = Uint8Array.from([1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 4, 4, 5]);
+const RATE_LAST = RATE.length - 1;
+
+const ENCODE = 0;
+const DECODE = 1;
+const VERIFY = 2;
+
+class Coder {
+  mode = ENCODE;
+  private x1 = 0;
+  private x2 = 0xffffffff;
+  private x = 0;
+  /** Decode / verify: the stream. */
+  private src: Uint8Array = new Uint8Array(0);
+  private srcAt = 0;
+  private srcEnd = 0;
+  /** Encode: output bytes (grown as needed). Verify: bytes compared so far. */
+  out: Uint8Array = new Uint8Array(4096);
+  n = 0;
+  /** Verify: a byte differed from the stream. */
+  mismatch = false;
+  private readonly p = new Uint16Array(CTX_COUNT);
+  private readonly uses = new Uint8Array(CTX_COUNT);
+
+  private reset(mode: number): void {
+    this.mode = mode;
+    this.x1 = 0;
+    this.x2 = 0xffffffff;
+    this.x = 0;
+    this.n = 0;
+    this.mismatch = false;
+    this.p.fill(32768);
+    this.uses.fill(0);
+  }
+
+  startEncode(): void {
+    this.reset(ENCODE);
+  }
+
+  /** Decode `src[at, end)`, or with `verify`, check that encoding reproduces exactly those bytes. */
+  startRead(src: Uint8Array, at: number, end: number, verify: boolean): void {
+    this.reset(verify ? VERIFY : DECODE);
+    this.src = src;
+    this.srcAt = at;
+    this.srcEnd = end;
+    if (!verify) for (let i = 0; i < 4; i++) this.x = ((this.x << 8) | this.read(i)) >>> 0;
+  }
+
+  get decoding(): boolean {
+    return this.mode === DECODE;
+  }
+
+  /** Stream byte i, or 0 past the end (the encoder's final byte implies zeros after it). */
+  private read(i: number): number {
+    const at = this.srcAt + i;
+    return at < this.srcEnd ? this.src[at] : 0;
+  }
+
+  private emit(b: number): void {
+    if (this.mode === VERIFY) {
+      if (this.srcAt + this.n >= this.srcEnd || this.src[this.srcAt + this.n] !== b) this.mismatch = true;
+      this.n++;
+      return;
+    }
+    if (this.n === this.out.length) {
+      const grown = new Uint8Array(this.out.length * 2);
+      grown.set(this.out);
+      this.out = grown;
+    }
+    this.out[this.n++] = b;
+  }
+
+  /** Code one binary decision in context `ctx`; returns the bit (decoded, or `y`). */
+  bit(ctx: number, y: number): number {
+    let p12 = this.p[ctx] >>> 4;
+    if (p12 < 1) p12 = 1;
+    else if (p12 > 4095) p12 = 4095;
+    const xmid = this.x1 + ((this.x2 - this.x1) >>> 12) * p12;
+    if (this.mode === DECODE) y = this.x <= xmid ? 1 : 0;
+    if (y) this.x2 = xmid;
+    else this.x1 = xmid + 1;
+    const u = this.uses[ctx];
+    const r = RATE[u];
+    if (u < RATE_LAST) this.uses[ctx] = u + 1;
+    const pv = this.p[ctx];
+    this.p[ctx] = y ? pv + ((65535 - pv) >> r) : pv - (pv >> r);
+    while (((this.x1 ^ this.x2) & 0xff000000) === 0) {
+      if (this.mode !== DECODE) this.emit(this.x2 >>> 24);
+      else this.x = ((this.x << 8) | this.read(this.n++ + 4)) >>> 0;
+      this.x1 = (this.x1 << 8) >>> 0;
+      this.x2 = ((this.x2 << 8) | 255) >>> 0;
+    }
+    return y;
+  }
+
+  /** Encode / verify: the final byte, the shortest that pins a value inside [x1, x2]. */
+  finish(): void {
+    if (this.mode === DECODE) return;
+    const top = this.x1 >>> 24;
+    this.emit((this.x1 & 0xffffff) === 0 ? top : top + 1);
+  }
+
+  /** Verify: the stream was exactly what encoding produces. */
+  verified(): boolean {
+    return !this.mismatch && this.n === this.srcEnd - this.srcAt;
+  }
+}
+
+const coder = new Coder();
+
+/** Steer context from the previous delta, or, after a zero delta, from how long steer has been still. */
+function steerCtx(prevDelta: number, still: number): number {
+  if (prevDelta === 0) {
+    // 0, 1, 2, 3-4, 5-8, 9-16, 17-32, 33+ ticks unchanged.
+    if (still < 3) return still;
+    if (still <= 4) return 3;
+    if (still <= 8) return 4;
+    if (still <= 16) return 5;
+    if (still <= 32) return 6;
+    return 7;
+  }
+  // -4..-1 -> 8..11, 1..4 -> 12..15.
+  const d = prevDelta < -4 ? -4 : prevDelta > 4 ? 4 : prevDelta;
+  return d < 0 ? 12 + d : 11 + d;
+}
+
+/**
+ * Code every tick's steer level as a delta from the previous tick (the first from 0). Decoding writes
+ * the level into bits 0-5 of `frames`. Returns false if a decoded level leaves -31..31.
+ */
+function codeSteer(c: Coder, frames: Uint8Array, ticks: number): boolean {
+  const dec = c.decoding;
+  let prev = 0;
+  let prevDelta = 0;
+  let still = 0;
+  for (let t = 0; t < ticks; t++) {
+    const want = dec ? 0 : (frames[t] & 63) - STEER_LEVELS - prev;
+    const ctx = steerCtx(prevDelta, still);
+    let d = 0;
+    if (!c.bit(CTX_ZERO + ctx, want === 0 ? 1 : 0)) {
+      const neg = c.bit(CTX_SIGN + ctx, want < 0 ? 1 : 0);
+      const mag = want < 0 ? -want : want;
+      // Unary up to UNARY_MAX, then the excess in ESC_BITS bits through a binary tree.
+      let m = 1;
+      while (m <= UNARY_MAX && c.bit(CTX_MAG + ctx * UNARY_MAX + (m - 1), mag > m ? 1 : 0)) m++;
+      if (m > UNARY_MAX) {
+        const extra = mag - UNARY_MAX - 1;
+        let node = 1;
+        for (let b = ESC_BITS - 1; b >= 0; b--) node = (node << 1) | c.bit(CTX_ESC + node, (extra >> b) & 1);
+        m = UNARY_MAX + 1 + (node - (1 << ESC_BITS));
+      }
+      d = neg ? -m : m;
+    }
+    const level = prev + d;
+    if (level < -STEER_LEVELS || level > STEER_LEVELS) return false;
+    if (dec) frames[t] = level + STEER_LEVELS;
+    still = d === 0 ? still + 1 : 0;
+    prevDelta = d;
+    prev = level;
+  }
+  return true;
+}
+
+/** Code a gap >= 1 with model `base`: Elias-gamma, every bit adaptive. Decoding returns the gap. */
+function codeGap(c: Coder, base: number, gap: number): number {
+  let len = 1;
+  while (len < GAP_UNARY && c.bit(base + len - 1, gap >= 1 << len ? 1 : 0)) len++;
+  let v = 1;
+  const m = base + GAP_UNARY + (len - 1) * GAP_UNARY;
+  for (let b = len - 2; b >= 0; b--) v = (v << 1) | c.bit(m + b, (gap >> b) & 1);
+  return v;
+}
+
+/**
+ * Code the ticks where `mask` (hold 64, hop 128) changes, as gaps from the previous event (the first
+ * from tick -1), ending with the gap to tick `ticks`. Hold is coded as toggles from off, hop as the
+ * ticks it is set. Decoding ORs the bit into `frames`. Returns false on a gap past the end.
+ */
+function codeEvents(c: Coder, frames: Uint8Array, ticks: number, mask: number): boolean {
+  const dec = c.decoding;
+  const toggle = mask === 64;
+  let last = -1;
+  let on = false;
+  for (;;) {
+    let next = ticks;
+    if (!dec) {
+      for (let t = last + 1; t < ticks; t++) {
+        const set = (frames[t] & mask) !== 0;
+        if (toggle ? set !== on : set) {
+          next = t;
+          break;
+        }
+      }
+    }
+    const base = !toggle ? GAP_HOP : on ? GAP_HOLD_OFF : GAP_HOLD_ON;
+    const at = last + codeGap(c, base, next - last);
+    if (at > ticks) return false;
+    // A hold that went on at `last` lasts until this toggle (or the end).
+    if (dec && on) for (let t = last; t < at; t++) frames[t] |= mask;
+    if (at === ticks) return true;
+    if (toggle) on = !on;
+    else if (dec) frames[at] |= mask;
+    last = at;
+  }
+}
+
+/** Run the three sections through the coder. */
+function codeFrames(c: Coder, frames: Uint8Array, ticks: number): boolean {
+  return codeSteer(c, frames, ticks) && codeEvents(c, frames, ticks, 64) && codeEvents(c, frames, ticks, 128);
+}
+
+/** The packed input stream of a line's frames (a view into scratch: copy before keeping). */
+function encodeFrames(frames: Uint8Array, ticks: number): Uint8Array {
+  coder.startEncode();
+  codeFrames(coder, frames, ticks);
+  coder.finish();
+  return coder.out.subarray(0, coder.n);
+}
+
+/**
+ * Decode `ticks` frames from `src[at, end)`; null unless the bytes are exactly the canonical stream
+ * of those frames. Bounded by `ticks` (at most CHALK_MAX_TICKS) and never throws.
+ */
+export function decodeFrames(src: Uint8Array, at: number, end: number, ticks: number): Uint8Array | null {
+  const frames = new Uint8Array(ticks);
+  coder.startRead(src, at, end, false);
+  if (!codeFrames(coder, frames, ticks)) return null;
+  coder.startRead(src, at, end, true);
+  codeFrames(coder, frames, ticks);
+  coder.finish();
+  return coder.verified() ? frames : null;
+}
+
+// ---------------------------------------------------------------------------------------------
 // Packing
+
+function putVarint(out: number[], v: number): void {
+  while (v >= 128) {
+    out.push((v & 127) | 128);
+    v >>>= 7;
+  }
+  out.push(v);
+}
 
 /** The route part of the packing (everything after the name, before the CRC). */
 function packRoute(line: ChalkLine, out: number[]): void {
@@ -278,8 +570,9 @@ function packRoute(line: ChalkLine, out: number[]): void {
   putF32(out, line.endY);
   putF32(out, line.endZ);
   putU16(out, line.ticks);
-  putU16(out, line.inputs.length);
-  for (let i = 0; i < line.inputs.length; i++) out.push(line.inputs[i]);
+  const stream = encodeFrames(line.inputs, line.ticks);
+  putVarint(out, stream.length);
+  for (let i = 0; i < stream.length; i++) out.push(stream[i]);
 }
 
 function hex8(v: number): string {
@@ -323,22 +616,13 @@ export function encodeChalk(line: ChalkLine): string {
   return codeFromBytes(packChalk(line));
 }
 
-/** Sum of run lengths, or -1 if the runs are malformed (bad length, steer or flags). */
-export function runTotal(inputs: Uint8Array): number {
-  if (inputs.length % 3 !== 0) return -1;
-  let total = 0;
-  for (let i = 0; i < inputs.length; i += 3) {
-    if (inputs[i] > 254 || inputs[i + 1] > 3 || inputs[i + 2] < 1) return -1;
-    total += inputs[i + 2];
-  }
-  return total;
-}
-
 /** Parse a share code. Never throws; every failure is a short distinct reason. */
 export function decodeChalk(code: string): ChalkLine | { error: string } {
   if (typeof code !== 'string') return { error: 'not a code' };
   const s = code.replace(/\s+/g, '');
   if (s.length === 0) return { error: 'empty code' };
+  // Version 1 codes (run-length frames, 255 steer levels) were only ever made before release.
+  if (s.startsWith(CHALK_V1_PREFIX)) return { error: 'unknown version' };
   if (!s.startsWith(CHALK_CODE_PREFIX)) return { error: 'not a chalk code' };
   const b = base64urlDecode(s.slice(CHALK_CODE_PREFIX.length));
   if (b === null) return { error: 'bad characters' };
@@ -349,8 +633,8 @@ export function decodeChalk(code: string): ChalkLine | { error: string } {
   const nameLen = b[at++];
   const nameAt = at;
   at += nameLen;
-  // startDayTick 2, 4 x f64 32, 3 x f32 12, ticks 2, count 2.
-  if (at + 50 > b.length) return { error: 'truncated' };
+  // startDayTick 2, 4 x f64 32, 3 x f32 12, ticks 2, count at least 1.
+  if (at + 49 > b.length) return { error: 'truncated' };
   const startDayTick = b[at] | (b[at + 1] << 8);
   at += 2;
   const x = getF64(b, at);
@@ -363,10 +647,22 @@ export function decodeChalk(code: string): ChalkLine | { error: string } {
   const endZ = getF32(b, at + 8);
   at += 12;
   const ticks = b[at] | (b[at + 1] << 8);
-  const count = b[at + 2] | (b[at + 3] << 8);
-  at += 4;
+  at += 2;
+  // Minimal LEB128, at most three bytes (the stream is far below 2^21 bytes).
+  let count = 0;
+  let shift = 0;
+  for (let k = 0; ; k++) {
+    if (k === 3 || at >= b.length) return { error: 'truncated' };
+    const v = b[at++];
+    count |= (v & 127) << shift;
+    shift += 7;
+    if ((v & 128) === 0) {
+      if (v === 0 && k > 0) return { error: 'bad input stream' };
+      break;
+    }
+  }
   if (at + count + 4 > b.length) return { error: 'truncated' };
-  const inputs = b.slice(at, at + count);
+  const streamAt = at;
   at += count;
   if (at + 4 !== b.length) return { error: 'trailing bytes' };
   const crc = (b[at] | (b[at + 1] << 8) | (b[at + 2] << 16) | (b[at + 3] << 24)) >>> 0;
@@ -379,9 +675,8 @@ export function decodeChalk(code: string): ChalkLine | { error: string } {
     if (!Number.isFinite(v)) return { error: 'bad number' };
   }
   if (speed < 0) return { error: 'bad number' };
-  const total = runTotal(inputs);
-  if (total < 0) return { error: 'bad runs' };
-  if (total !== ticks) return { error: 'run total mismatch' };
+  const inputs = decodeFrames(b, streamAt, streamAt + count, ticks);
+  if (inputs === null) return { error: 'bad input stream' };
   const line: ChalkLine = {
     v: 1,
     id: '',
@@ -406,35 +701,25 @@ export function isChalkError(r: ChalkLine | { error: string }): r is { error: st
   return 'error' in r;
 }
 
-// ---------------------------------------------------------------------------------------------
-// Frames
-
-/** Reads RLE frames one tick at a time. */
+/** Reads a line's frames one tick at a time. */
 export class FrameReader {
   private at = 0;
-  private left = 0;
-  private inputs: Uint8Array = new Uint8Array(0);
+  private frames: Uint8Array = new Uint8Array(0);
   readonly frame: InputFrame = { steer: 0, hold: false, hop: false };
 
-  reset(inputs: Uint8Array): void {
-    this.inputs = inputs;
+  reset(frames: Uint8Array): void {
+    this.frames = frames;
     this.at = 0;
-    this.left = inputs.length >= 3 ? inputs[2] : 0;
   }
 
   /** The next frame, or null when the recording has run out. */
   next(): InputFrame | null {
-    while (this.left === 0) {
-      this.at += 3;
-      if (this.at + 2 >= this.inputs.length) return null;
-      this.left = this.inputs[this.at + 2];
-    }
-    this.left--;
+    if (this.at >= this.frames.length) return null;
+    const b = this.frames[this.at++];
     const f = this.frame;
-    f.steer = (this.inputs[this.at] - 127) / 127;
-    const fl = this.inputs[this.at + 1];
-    f.hold = (fl & 1) !== 0;
-    f.hop = (fl & 2) !== 0;
+    f.steer = ((b & 63) - STEER_LEVELS) / STEER_LEVELS;
+    f.hold = (b & 64) !== 0;
+    f.hop = (b & 128) !== 0;
     return f;
   }
 }
@@ -518,11 +803,7 @@ export class ChalkReducer implements GameReducer {
     activeId: null,
   };
   // Recording.
-  private readonly rle = new Uint8Array(CHALK_MAX_TICKS * 3);
-  private rleLen = 0;
-  private runSteer = -1;
-  private runFlags = 0;
-  private runLen = 0;
+  private readonly frames = new Uint8Array(CHALK_MAX_TICKS);
   private recX = 0;
   private recZ = 0;
   private recHeading = 0;
@@ -565,9 +846,6 @@ export class ChalkReducer implements GameReducer {
     this.recSpeed = p.speed;
     this.recDayTick = ((game.sim.tick % DAY_TICKS) + DAY_TICKS) % DAY_TICKS;
     placeAtStart(this.world, game.sim, { x: this.recX, z: this.recZ, heading: this.recHeading, speed: this.recSpeed });
-    this.rleLen = 0;
-    this.runSteer = -1;
-    this.runLen = 0;
     this.state.mode = 'recording';
     this.state.elapsedTicks = 0;
     game.queueEvent({ type: 'chalkRecordStart' });
@@ -696,24 +974,9 @@ export class ChalkReducer implements GameReducer {
 
   // ------------------------------------------------------------------------------------------
 
-  private flushRun(): void {
-    if (this.runLen === 0) return;
-    this.rle[this.rleLen++] = this.runSteer;
-    this.rle[this.rleLen++] = this.runFlags;
-    this.rle[this.rleLen++] = this.runLen;
-    this.runLen = 0;
-  }
-
   private stepRecording(game: Game): void {
     const a = game.applied;
-    const sb = a.steerQ + 127;
-    const fl = (a.hold ? 1 : 0) | (a.hop ? 2 : 0);
-    if (this.runLen > 0 && (sb !== this.runSteer || fl !== this.runFlags || this.runLen === 255)) this.flushRun();
-    if (this.runLen === 0) {
-      this.runSteer = sb;
-      this.runFlags = fl;
-    }
-    this.runLen++;
+    this.frames[this.state.elapsedTicks] = packFrame(a.steerQ, a.hold, a.hop);
     this.state.elapsedTicks++;
     const p = game.sim.player;
     if (p.mode === Mode.BAIL && p.bailWater === 1) {
@@ -745,7 +1008,6 @@ export class ChalkReducer implements GameReducer {
       emit({ type: 'chalkRecordDiscard', reason: 'list full' });
       return fail('list full');
     }
-    this.flushRun();
     const p = game.sim.player;
     const line: ChalkLine = {
       v: 1,
@@ -756,7 +1018,7 @@ export class ChalkReducer implements GameReducer {
       z: this.recZ,
       heading: this.recHeading,
       speed: this.recSpeed,
-      inputs: this.rle.slice(0, this.rleLen),
+      inputs: this.frames.slice(0, ticks),
       ticks,
       endX: Math.fround(p.x),
       endY: Math.fround(p.y),

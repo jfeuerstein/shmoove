@@ -50,11 +50,13 @@ function getStorage(): Storage | null {
   }
 }
 
-function read(s: Storage, key: string): SaveData | null {
+/** A stored save and the exact string it was read from, or null if missing or unreadable. */
+function read(s: Storage, key: string): { data: SaveData; raw: string } | null {
   try {
     const raw = s.getItem(key);
     if (raw === null) return null;
-    return migrate(JSON.parse(raw));
+    const data = migrate(JSON.parse(raw));
+    return data ? { data, raw } : null;
   } catch (_e) {
     return null;
   }
@@ -66,13 +68,19 @@ export function createSaveGlue(game: Game, opts: { e2e: boolean }): SaveGlue {
   let settings: SaveSettings = { ...DEFAULT_SETTINGS };
   let loaded = false;
   let sinceSave = 0;
+  /**
+   * The last save known to be good: the string read at boot, then each string this session wrote.
+   * It becomes the backup on the next write, so autosaves never read storage back or re-parse it.
+   */
+  let lastGood: string | null = null;
 
   if (storage) {
-    const data = read(storage, SAVE_KEY) ?? read(storage, BACKUP_KEY);
-    if (data) {
+    const found = read(storage, SAVE_KEY) ?? read(storage, BACKUP_KEY);
+    if (found) {
       try {
-        settings = importSave(game, data);
+        settings = importSave(game, found.data);
         loaded = true;
+        lastGood = found.raw;
       } catch (_e) {
         // A save that cannot be applied is ignored; the game starts fresh.
       }
@@ -85,11 +93,9 @@ export function createSaveGlue(game: Game, opts: { e2e: boolean }): SaveGlue {
     try {
       const json = JSON.stringify(exportSave(game, settings));
       // Keep the last good save before overwriting it.
-      if (read(storage, SAVE_KEY)) {
-        const prev = storage.getItem(SAVE_KEY);
-        if (prev !== null) storage.setItem(BACKUP_KEY, prev);
-      }
+      if (lastGood !== null) storage.setItem(BACKUP_KEY, lastGood);
       storage.setItem(SAVE_KEY, json);
+      lastGood = json;
       return true;
     } catch (_e) {
       return false;
@@ -150,6 +156,7 @@ export function createSaveGlue(game: Game, opts: { e2e: boolean }): SaveGlue {
       }
       settings = { ...DEFAULT_SETTINGS };
       sinceSave = 0;
+      lastGood = null;
     },
     dispose() {
       document.removeEventListener('visibilitychange', onHide);
