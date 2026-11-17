@@ -15,8 +15,10 @@ import { fileURLToPath } from 'node:url';
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 export const SW_FILE = 'sw.js';
 export const CACHE_PREFIX = 'skitch-';
+/** Host configuration files: in dist/ but never served, so precaching them would fail the install. */
+export const NOT_SERVED = ['_headers', '_redirects'];
 
-/** Every file under `dir` as a sorted list of '/'-separated relative paths, sw.js excluded. */
+/** Every file under `dir` as a sorted list of '/'-separated relative paths, sw.js and host config excluded. */
 export function listFiles(dir) {
   const out = [];
   const walk = (d) => {
@@ -27,7 +29,7 @@ export function listFiles(dir) {
     }
   };
   walk(dir);
-  return out.filter((f) => f !== SW_FILE).sort();
+  return out.filter((f) => f !== SW_FILE && !NOT_SERVED.includes(f)).sort();
 }
 
 /** Cache name from the paths and contents of `files` under `dir`. */

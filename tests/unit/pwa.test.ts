@@ -175,6 +175,8 @@ describe('service worker generator', () => {
     'assets/index-abc.js': 'console.log(1)',
     'manifest.webmanifest': '{}',
     'icon-192.png': 'png',
+    // Netlify / Cloudflare Pages header rules: shipped in dist/ but never served.
+    _headers: '/sw.js\n  Cache-Control: no-cache\n',
   };
 
   it('lists exactly the built files (not itself), with relative URLs', () => {
