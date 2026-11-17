@@ -4,7 +4,8 @@
  * steer, a held touch, a swipe up). It never writes to the sim or the game.
  *
  * A plan is a list of tasks run in order. Each task is a small controller: roll along waypoints,
- * wait for a named line at a stop (circling, since landings fall away) and catch it, ride it
+ * wait for a named line at a stop (standing on a planted foot, or circling where holding still
+ * would take an errand) and catch it, ride it
  * until a stop and let go. A task that cannot go on (the ride it was on is gone, a catch was missed
  * past retrying) fails the run with a note saying where and when, rather than trying something else:
  * the plan is a test of the game, and a failure is a finding.
@@ -14,7 +15,8 @@ import type { Game } from '../../../src/sim/game/game';
 import { grabPoint, makeVehicleState, vehicleAt } from '../../../src/sim/lines';
 import { angleDiff, clamp, datan2, dcos, dsin } from '../../../src/sim/math';
 import { Mode, type InputFrame, type PlayerState } from '../../../src/sim/types';
-import { topHeight, type World } from '../../../src/sim/world';
+import { inZone } from '../../../src/sim/game/errands';
+import { findZone, topHeight, type World, type Zone } from '../../../src/sim/world';
 import { frac } from './geo';
 
 export type Status = 'run' | 'done' | 'fail';
@@ -31,6 +33,7 @@ export interface Task {
 
 const V = makeVehicleState();
 const G = { x: 0, y: 0, z: 0 };
+const NG2 = { line: -1, veh: -1, d: 0, dy: 0 };
 
 export class Skater {
   game: Game;
@@ -142,6 +145,28 @@ export class Skater {
     vehicleAt(L, p.hVeh, this.tick, V);
     if (V.vx * V.vx + V.vz * V.vz > 16) out.steer = clamp(-(1.5 * angleDiff(p.psi, p.psiRest) + 0.5 * p.omega), -1, 1);
   }
+
+  /**
+   * May the bot hold a still finger here to stand and wait for `line`? Not when a different line's
+   * grab point is close enough to latch by mistake, and not inside an errand giver's spot, where
+   * holding still with no ride in reach takes the errand.
+   */
+  canPlantFoot(line: number): boolean {
+    this.nearestGrab(FEEL.HITCH_REACH + 3, NG2);
+    if (NG2.line >= 0 && NG2.line !== line) return false;
+    const p = this.p;
+    if (this.givers === null) {
+      this.givers = [];
+      for (const d of this.game.errands.list) {
+        const z = findZone(this.w, d.giver);
+        if (z) this.givers.push(z);
+      }
+    }
+    for (const z of this.givers) if (inZone(z, p.x, p.y, p.z)) return false;
+    return true;
+  }
+
+  private givers: Zone[] | null = null;
 
   /**
    * The nearest active grab point of any line (what a held touch would latch first), as

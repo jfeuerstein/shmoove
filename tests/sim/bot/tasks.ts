@@ -203,7 +203,12 @@ export function ride(label: string, spec: RideSpec): Task {
             return 'run';
           }
         } else {
-          b.steerTo(out, wx, wz);
+          const dw = Math.hypot(wx - p.x, wz - p.z);
+          if (p.mode === Mode.GROUND && (dw < 1.5 || (dw < 4 && p.speed < 0.6)) && b.canPlantFoot(line.index)) {
+            // At the spot: hold a still finger and stand (a planted foot), beside the lane.
+            out.steer = 0;
+            out.hold = true;
+          } else b.steerTo(out, wx, wz);
           // Arm when the fresh vehicle of this line at the stop is the nearest grab point around.
           b.nearestGrab(9, NG);
           if (NG.line === line.index && (spec.anywhere === true || fresh(line, NG.veh, b.tick, kAt, slackAt))) {
