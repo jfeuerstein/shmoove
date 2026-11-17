@@ -17,7 +17,7 @@ import { ConductorHud } from './conductorHud';
 import { ClassSlot, el } from './dom';
 import { SECRET_INFO, failText, taskText, ticksClock } from './errandFormat';
 import { ErrandHud } from './errandHud';
-import { HintStub } from './hint';
+import { HintStub, type HintPointerScreen } from './hint';
 import { injectHintStyle } from './hintStyle';
 import { injectErrandStyle } from './errandStyle';
 import { LedgerScreen } from './ledgerScreen';
@@ -40,6 +40,8 @@ export interface UiFrame {
   gameEvents: readonly GameEvent[];
   /** Seconds since the last frame. */
   dt: number;
+  /** Where the onboarding pointer's world target is on screen (the hint view's projection), if any. */
+  pointer?: HintPointerScreen;
 }
 
 export interface UiSound {
@@ -333,6 +335,7 @@ export function createUi(root: HTMLElement, game: Game, sound: UiSound | null, s
     chalkBtn,
     ledgerBtn,
     hint.mapPointer,
+    hint.edge,
     chalkScreen.el,
     ledger.el,
   );
@@ -540,7 +543,7 @@ export function createUi(root: HTMLElement, game: Game, sound: UiSound | null, s
       offering.set(errandHud.offering);
       conductorHud.update(f.dt);
       shell?.frame(f.dt, f.gameEvents);
-      hint.update(f.dt, mapOpen || chalkOpen || ledgerOpen || (shell !== null && shell.paused));
+      hint.update(f.dt, mapOpen || chalkOpen || ledgerOpen || (shell !== null && shell.paused), f.pointer ?? null);
       hinting.set(hint.hint !== '');
       twos.update(f.dt);
     },
@@ -573,6 +576,8 @@ export function createUi(root: HTMLElement, game: Game, sound: UiSound | null, s
         mapPercent: Math.floor(mapFraction(prog, lines) * 100),
         hint: hint.hint,
         hintsDone: hint.doneCount,
+        hintTarget: hint.hint === '' ? 'none' : game.onboarding.target.kind,
+        hintPointer: hint.pointer,
         onboardingComplete: game.onboarding.complete,
         ...chalkTestState(),
         ...ledgerTestState(),

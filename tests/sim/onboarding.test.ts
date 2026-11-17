@@ -116,7 +116,7 @@ describe('each hint shows in its situation, after its prerequisites', () => {
   it('carve never shows while the skater stands still', () => {
     const game = plazaGame(plaza([]));
     const run = steps(game, 300);
-    expect(run.shown).toEqual(new Set(['']));
+    expect(run.shown.has('carve')).toBe(false);
   });
 
   it('hop: only after carve, rolling toward a ledge, stair top or rail; done on a hop', () => {
@@ -205,10 +205,20 @@ describe('each hint shows in its situation, after its prerequisites', () => {
     }
   });
 
-  it('sling: after 1.5 s hitched; done by a whip release', () => {
+  it('sling: once the first ride has inked a segment, after 1.5 s hitched', () => {
     const w = plaza();
+    const before = plazaGame(w);
+    teach(before, ['carve']);
+    seekWhen(before.sim, 0, 0, (v) => v.active && Math.abs(v.x - 30) < 0.5 && v.z > -26 && v.z < -25 && v.vz > 1);
+    placePlayer(w, before.sim.player, 28, -8, 0);
+    // Before the ink, a ride says stay on, not let go.
+    const riding = steps(before, 400, () => ({ hold: true }));
+    expect(before.sim.player.mode).toBe(Mode.HITCH);
+    expect(riding.shown.has('ink')).toBe(true);
+    expect(riding.shown.has('sling')).toBe(false);
+
     const game = plazaGame(w);
-    teach(game, ['carve']);
+    teach(game, ['carve', 'ink']);
     seekWhen(game.sim, 0, 0, (v) => v.active && Math.abs(v.x - 30) < 0.5 && v.z > -26 && v.z < -25 && v.vz > 1);
     placePlayer(w, game.sim.player, 28, -8, 0);
     let hitchedAt = -1;
@@ -683,32 +693,17 @@ function policy(game: Game, m: BotMemo, i: number, out: Want): void {
     if (ob.shown === 'hop' && seen && p.mode === Mode.GROUND) out.hop = true;
     if (ob.shown === 'grind' && p.mode === Mode.GROUND && Math.abs(p.z - (RUN_IN_Z + 2)) < 0.5) out.hop = true;
   } else {
-    // The stop's landing: the ride the pointer is over, else (after the sling) the nearest ride
-    // close by, else wait at the stop with a shoulder to the wall north of it.
-    let tl = ob.target.kind === 'vehicle' ? ob.target.line : -1;
-    let tv = ob.target.veh;
-    if (ob.done.sling) {
-      let best = 15;
-      for (const M of w.lines) {
-        if (M.minChainN > 1) continue;
-        for (let k = 0; k < M.vehicles; k++) {
-          vehicleAt(M, k, sim.tick, bv);
-          if (!bv.active) continue;
-          grabPoint(M, bv, bg);
-          const d = Math.hypot(bg.x - p.x, bg.z - p.z);
-          if (d < best && Math.abs(bg.y - p.y) < 3) {
-            best = d;
-            tl = M.index;
-            tv = k;
-          }
-        }
-      }
-    }
+    // The stop's landing: the spot or the ride the pointer is over, else wait at the stop with a
+    // shoulder to the wall north of it.
     let tx = m.stop.x - 5;
     let tz = m.stop.z + 4.5;
-    if (tl >= 0) {
-      const L = w.lines[tl];
-      vehicleAt(L, tv, sim.tick, bv);
+    if (ob.target.kind === 'spot') {
+      tx = ob.target.x;
+      tz = ob.target.z;
+      out.hold = Math.hypot(tx - p.x, tz - p.z) < 1.5;
+    } else if (ob.target.kind === 'vehicle') {
+      const L = w.lines[ob.target.line];
+      vehicleAt(L, ob.target.veh, sim.tick, bv);
       grabPoint(L, bv, bg);
       tx = bg.x - bv.hx * 0.8;
       tz = bg.z - bv.hz * 0.8;
@@ -995,13 +990,13 @@ function replay(frac: number, script: readonly Touch[]): Replay {
 }
 
 describe('the first launch', () => {
-  it('a new player who follows the hints learns all six in order, in under 4 minutes, at the new-game clock', () => {
+  it('a new player who follows the hints learns the lesson in order (with the hop and grind on the way), in under 4 minutes, at the new-game clock', () => {
     expect(NEW_GAME_DAY_FRAC).toBeGreaterThanOrEqual(0.3);
     expect(NEW_GAME_DAY_FRAC).toBeLessThanOrEqual(0.45);
     const run = firstLaunch(NEW_GAME_DAY_FRAC);
     const ev = run.log.join('\n');
     expect(run.game.onboarding.complete, ev).toBe(true);
-    expect(run.log.filter((l) => l.endsWith('hintDone ' + l.split(' ').pop())).map((l) => l.split(' ').pop()), ev).toEqual([...LESSON_STEPS]);
+    expect(logDone(run.log), ev).toEqual(FIRST_LAUNCH_ORDER);
     expect(run.log.some((l) => l.endsWith('onboardingComplete'))).toBe(true);
     expect(run.bails).toBe(0);
     // Each hint was shown before it was learnt, except carve, which can be learnt at once.
@@ -1057,14 +1052,17 @@ describe('the first launch', () => {
 
 
 describe('one thumb on glass', () => {
-  it('the hint-following player, through the real gesture recogniser, learns all six in order in under 4 minutes', () => {
+  it('the hint-following player, through the real gesture recogniser, learns the lesson in order in under 4 minutes', () => {
     const run = touchLaunch(NEW_GAME_DAY_FRAC);
     const ev = run.log.join('\n');
     expect(run.game.onboarding.complete, ev).toBe(true);
-    expect(logDone(run.log), ev).toEqual([...LESSON_STEPS]);
+    expect(logDone(run.log), ev).toEqual(FIRST_LAUNCH_ORDER);
     expect(run.bails).toBe(0);
     // The recording replays to the same end, open-loop.
     expect(replay(NEW_GAME_DAY_FRAC, run.script).game.sim.hash()).toBe(run.game.sim.hash());
+    // SKITCH_PRINT_ROUTE=1 prints the recording as the e2e route's TOUCHES, to paste in when the sim changes.
+    const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env;
+    if (env?.SKITCH_PRINT_ROUTE) console.info(formatTouches(run.script));
   });
 
   it('the e2e route plays its touches to every hint it photographs, and to the end of the lesson', async () => {
@@ -1077,10 +1075,31 @@ describe('one thumb on glass', () => {
     for (const t of touches) expect(isTouch(t), JSON.stringify(t)).toBe(true);
     const back = replay(NEW_GAME_DAY_FRAC, touches as Touch[]);
     for (const mk of back.marks) expect({ shown: mk.shown, done: mk.done }, mk.want).toEqual({ shown: mk.want, done: mk.wantDone });
-    expect([...new Set(back.marks.map((mk) => mk.want))]).toEqual(['carve', 'hop', 'grind', 'hitch', 'sling', 'ink', 'map', 'lift']);
+    expect([...new Set(back.marks.map((mk) => mk.want))]).toEqual(['carve', 'hop', 'grind', 'hitch', 'ink', 'sling', 'map', 'lift']);
     expect(back.game.onboarding.complete, back.log.join('\n')).toBe(true);
   });
 });
+
+/**
+ * What the hint-following player learns, in order: the lesson's four (carve, hitch, then stay on to
+ * the next stop and let go there) with the hop and the grind the stairs offer on the way down.
+ */
+const FIRST_LAUNCH_ORDER = ['carve', 'hop', 'grind', 'hitch', 'ink', 'sling'];
+
+/** A touch script as the e2e route file holds it: a few tuples a line, a new line after each marker. */
+function formatTouches(script: readonly Touch[]): string {
+  const lines: string[] = [];
+  let cur: string[] = [];
+  for (const t of script) {
+    cur.push(JSON.stringify(t).replace(/"/g, `'`));
+    if (t[0] === 's' || cur.length >= 10) {
+      lines.push(`  ${cur.join(', ')},`);
+      cur = [];
+    }
+  }
+  if (cur.length > 0) lines.push(`  ${cur.join(', ')},`);
+  return `export const TOUCHES = [\n${lines.join('\n')}\n];`;
+}
 
 function logDone(log: string[]): string[] {
   return log.filter((l) => l.includes(' hintDone ')).map((l) => l.split(' ')[2]);

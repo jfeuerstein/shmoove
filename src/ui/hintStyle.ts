@@ -42,6 +42,12 @@ const CSS = `
 .sk-debug .sk-hmapptr{left:calc(var(--sk-sl) - 5px);width:54px;height:54px}
 .sk-hmapptr.sk-on{display:block}
 .sk-hmapptr.sk-b1{transform:scale(1.12)}
+/* The edge arrow: turned toward a world target the player cannot see. Placed by transform. */
+.sk-hedge{position:absolute;left:0;top:0;z-index:3;display:none;width:52px;height:52px;margin:-26px 0 0 -26px;
+  pointer-events:none;will-change:transform}
+.sk-hedge svg{display:block;width:100%;height:100%;overflow:visible}
+.sk-hedge.sk-on{display:block}
+.sk-titling .sk-hedge{visibility:hidden}
 .sk-reduced .sk-hglyph .sk-fr{display:none}
 .sk-reduced .sk-hglyph .sk-frs{display:inline}
 .sk-reduced .sk-hint.sk-in1,.sk-reduced .sk-hint.sk-in2,.sk-reduced .sk-hint.sk-out1,.sk-reduced .sk-hint.sk-out2{transform:translateX(-50%)}

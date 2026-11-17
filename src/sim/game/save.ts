@@ -9,6 +9,7 @@ import { DAY_TICKS, FEEL } from '../constants';
 import { placePlayer } from '../player';
 import { Surface, makeGroundSample, sampleGround, terrainSurface, type World } from '../world';
 import type { Game } from './game';
+import { ONBOARDING_STEPS, type OnboardingData } from './onboarding';
 
 export const SAVE_VERSION = 2;
 
@@ -149,6 +150,8 @@ function validate(d: Record<string, unknown>): SaveData | null {
   const at = d.savedAtTick;
   const reducers: Record<string, unknown> = {};
   if (isRecord(d.reducers)) for (const k of Object.keys(d.reducers)) reducers[k] = d.reducers[k];
+  // A save from before onboarding with anything in it is a player who has learnt the game: no lesson.
+  if (reducers.onboarding === undefined && hasProgress(reducers)) reducers.onboarding = learntOnboarding();
   return {
     version: 2,
     savedAtTick: typeof at === 'number' && Number.isInteger(at) && at >= 0 ? at : 0,
@@ -156,6 +159,25 @@ function validate(d: Record<string, unknown>): SaveData | null {
     settings: cleanSettings(d.settings),
     reducers,
   };
+}
+
+/** Anything a player can only have by playing: an inked segment, an errand, a conductor's ticket, a chalk line. */
+function hasProgress(reducers: Record<string, unknown>): boolean {
+  const prog = reducers.progress;
+  if (isRecord(prog) && Array.isArray(prog.lines)) {
+    for (const l of prog.lines) if (isRecord(l) && Array.isArray(l.inked) && l.inked.some((b) => b === true)) return true;
+  }
+  const errands = reducers.errands;
+  if (isRecord(errands) && isRecord(errands.done) && Object.keys(errands.done).length > 0) return true;
+  const conductors = reducers.conductors;
+  if (isRecord(conductors) && Array.isArray(conductors.punched) && conductors.punched.length > 0) return true;
+  const chalk = reducers.chalk;
+  return isRecord(chalk) && Array.isArray(chalk.lines) && chalk.lines.length > 0;
+}
+
+/** The onboarding section of a player who knows the game: every step learnt, the lesson complete. */
+function learntOnboarding(): OnboardingData {
+  return { v: 1, done: [...ONBOARDING_STEPS], complete: true, releases: 0 };
 }
 
 /** Parse anything into a current SaveData, upgrading older versions; null if unrecognisable. */

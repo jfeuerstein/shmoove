@@ -84,18 +84,24 @@ Acceptance:
 - [x] PWA: manifest, icons generated in code, service worker, offline, portrait lock. Verified,
       including the update flow and a stale-cache bug the verifier found and fixed
 - [x] README with deploy steps; GitHub Pages workflow deploying `develop` and the working branch
-- [x] Performance pass: frame work on the city with all rides 4.5–4.9 ms mean, 10.6–13.1 ms p95 at
-      4x throttle (budget 10 / 16.6); worst view 71 draw calls, 140k triangles (budget 120 / 180k)
+- [x] Performance pass, then made honest: the gate times five windows across all four districts
+      with hitches, slings and chunk streaming at speed (it used to time 8 s on the summit lawn).
+      Pooled frame work at 4x throttle 5.0 ms mean, 14.0 ms p95 (budget 10 / 16.6) with two other
+      jobs on the machine; over budget at p95 when the machine is heavily loaded, all of it waiting
+      on the software rasteriser. Worst view 71 draw calls, 139k triangles (budget 120 / 180k).
+      Chunk builds are one row, solid or rail at a time
 - [x] Full-game check: first launch → completed line map by a scripted skater with no teleports
       (`tests/sim/fullGame.test.ts`, bot in `tests/sim/bot/`): map complete in 51.5 simulated
       minutes, no bails before it; then the ghost tram, the summit chain and king kite, the blimp;
       three save/load points end in the same state; about 7 s of test time. The blimp's first
       segment cannot be inked (DECISIONS 79). Independent check pending
+- [~] Onboarding fixes from verification (brief `m6g-onboarding-fixes`): clumsy players must get
+      through the first minute
 - [x] Secrets a player can finish (M6h): the blimp is caught at the hill station and sets you down
       there, the summit chain's king-kite ride inks S3, a guy wire down from the needle, run-in
       steps onto the hill station platform, quieter errand givers clear of stops, saves keep the
       day. Full-game run: every line complete, no bails, map at 51.5 min, all secrets at 67.3 min
-      (DECISIONS 88–93). Independent check pending
+      (DECISIONS 94–99). Independent check pending
 - [ ] Final docs and audit
 
 Acceptance:

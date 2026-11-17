@@ -9,7 +9,7 @@ import { chunkGrid, chunkOf, createCityView, type CityView } from '../render/cit
 import { createHintView } from '../render/hintView';
 import { createMarkersView } from '../render/markersView';
 import { VIEW_PARTS, createView } from '../render/view';
-import { DT, FEEL } from '../sim/constants';
+import { DT, FEEL, START_DAY_FRAC } from '../sim/constants';
 import { Game, type GameEvent } from '../sim/game/game';
 import { placePlayer } from '../sim/player';
 import { MODE_NAMES, type InputFrame, type SimEvent } from '../sim/types';
@@ -66,7 +66,9 @@ function boot(): void {
 
   const world = buildWorld(params);
   // A fresh boot is a new game at the new-game clock; a stored save puts its own clock back below.
-  const game = new Game(world, { seed: params.seed, startDayFrac: params.t ?? NEW_GAME_DAY_FRAC });
+  // A scripted route (perf, tour) keeps the sim's own start clock: its legs were found on it.
+  const startDayFrac = params.t ?? (params.route !== null ? START_DAY_FRAC : NEW_GAME_DAY_FRAC);
+  const game = new Game(world, { seed: params.seed, startDayFrac });
   const sim = game.sim;
   // Before anything reads game state: a stored save puts progress, chalk lines and the skater back.
   const saves = createSaveGlue(game, { e2e: params.e2e });
@@ -76,7 +78,7 @@ function boot(): void {
   const view = createView(canvas, world, isStreamed(params) ? { worldView: (w) => (cityView = createCityView(w, () => view.chase.camera)) } : {});
   const chalkView = createChalkView(view.scene, world);
   const markersView = createMarkersView(view.scene, world, game);
-  const hintView = createHintView(view.scene, world);
+  const hintView = createHintView(view.scene, world, view.chase.camera);
   const route = getRoute(params.route);
   const panel: DebugPanel | null = params.debug ? createDebugPanel(uiRoot) : null;
   // After the panel, so the UI can keep its controls clear of it.
@@ -260,7 +262,7 @@ function boot(): void {
 
   let frames = 0;
   let lastWork = 0;
-  const uiFrame = { game, armed: false, simEvents: pending, gameEvents: pendingGame, dt: 0 };
+  const uiFrame = { game, armed: false, simEvents: pending, gameEvents: pendingGame, dt: 0, pointer: hintView.screen };
   const draw = (alpha: number, dt: number): void => {
     let t0 = performance.now();
     chalkView.update(game, alpha, dt);

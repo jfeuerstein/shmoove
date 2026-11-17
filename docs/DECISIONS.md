@@ -246,7 +246,7 @@ Decisions made without the owner in the room, newest last. Cuts are marked **CUT
     lift." Nothing blocks; a step counts whenever it happens, even before its hint has shown. Chains
     are taught later, the first time a second ride is in reach after a release, and are not part of
     completion.
-72. **A new game starts at 10:41 on the hill's clock** (`NEW_GAME_DAY_FRAC = 0.4036`), chosen so a
+72. **A new game starts at 09:41 on the hill's clock** (`NEW_GAME_DAY_FRAC = 0.4036`), chosen so a
     handcart reaches Rellano 410, the first stop below the lookout, as a player who follows the hints
     gets there (about 24 s in), with a moped behind it. The property tested: arrive anywhere from
     15 s early to 15 s late, dawdle up to 20 s more, and a ride is at the stop or due within 12 s.
@@ -365,16 +365,57 @@ without leaning on a wall (see PLAYTEST); a save from before onboarding starts t
     once at load 2.6) for the same reason. Submit cost is set by the renderer and the look, not by
     the code this task owned; budgets were not raised and the route was not shortened.
 
+## M6g — A first minute that clumsy players get through
+
+88. **The lesson is carve, hitch, ink, sling (corrects 71).** Hop and grind are hints that show in
+    their situations until each is done once, before or after completion, like the chain; a fourth
+    such hint, `roll` ("WIGGLE TO ROLL"), shows after 3 s stalled on flat ground without holding
+    (stalled: under 1.5 m/s and within 3 m of where the stall began) and is done above 2 m/s. On the
+    first ride the player is told to stay on to the next stop first and only then to drag and let
+    go: with the sling first, players were thrown off their first ride and then needed a whole second
+    stop-to-stop ride to ink, which most of the remaining failures came down to. A ride that lets go
+    of the player (out of service, strap slip) never counts as the sling; only a lifted finger or a
+    flick does.
+89. **The hitch hint leads to a waiting spot.** Stops of ground rides each get up to two spots,
+    beside the grab point where the ride stands, 1.2 m clear of its body, more than 1 m clear of
+    every other ride's lane, on level ground that is not stairs or water. The hint shows when the
+    skater is heading for such a stop (within 45 m, no more than 1 m above them, ahead within 60
+    degrees unless within 15 m) and a ride of that line stands at or passes it within 20 s (kept
+    while one is due within 45 s); the pointer is on the spot until that ride is within 30 m, then on
+    its grab bar. A slow skater on flat ground (under 2.5 m/s) is led to stops up to 120 m off and
+    2.5 m above, rides due within 45 s: landings, terraces and docks are flat and nothing else would
+    get them moving. A spot across another lane from the skater counts 30 m further. The ink hint
+    uses the same lead when the player is not on a ride ("PRESS AND HOLD STILL / RIDE IT TO THE NEXT
+    STOP"). Before the hitch is learnt no ride that needs a hop is pointed at; after it, such a ride
+    is, with "FLICK UP, THEN HOLD".
+90. **The carve hint waits until the skater is doing 4 m/s (or has rolled 6 s).** A carve at walking
+    pace on the lookout swung players east onto the x = 30 stairs and a flat landing at y = 55, about
+    100 m from the first stop: first rides at about 95 s for attentive players; with the wait, 35-55 s.
+91. **The pointer.** A 1.35 m chevron, clear above the vehicle's drawn geometry (roof, parasol) over
+    its grab point; a ring on the ground at a waiting spot (the ring alone once the skater stands on
+    it); a half-size chevron over a rail, which is outlined. When the target is off-screen, behind
+    the camera, above the bottom of the top board or below the top of the stub, a mango arrow at the
+    edge of the clear part of the screen turns toward it (from the hint view's projection each frame).
+92. **Old saves.** A save with no onboarding section but with an inked segment, an errand, a
+    conductor's ticket or a chalk line migrates to every step learnt and the lesson complete (errands
+    open). An empty one gets the lesson.
+93. **Players, not a perfect bot.** `tests/sim/onboardingPlayers.test.ts`: bots that see only the hint,
+    its copy, the pointer and themselves. At the time of writing attentive 30/30, clumsy 30/30 and
+    fast (never hops onto a rail) 30/30 complete within 5 minutes (medians 95-100 s) against
+    thresholds of 27, 20 and 27. Their first ride is still at 35-55 s rather than about 24 s: the
+    new-game clock (item 72) has a moped at Rellano 410 at 20-23 s, before any of them is down there;
+    the next rides are the handcart at 40 s and a moped at 56 s. The clock was left alone.
+
 ## M6h — Secrets a player can finish, rides that set you down
 
-88. **The blimp's lap starts and ends over the hill station platform.** Its first segment could
+94. **The blimp's lap starts and ends over the hill station platform.** Its first segment could
     never be inked (it started 28 m above the summit) and it vanished with its rider on the ladder.
     Its one lap now leaves at 0.76 from a stop over the platform (Estación del Cerro: it waits 5 s,
     ladder 4.2 m above the deck, out of standing reach and in a hop's), runs by Cerro Sur and the
     summit (Cumbre) and arrives back over the deck at 0.9965, where it goes and the rider drops 3 m
     onto the deck. Cruise went from 6 to 6.5 m/s so the lap with its third stop still ends before
     midnight (the timetable test keeps the lap inside the day).
-89. **The king kite is a shuttle on its circuit, not a loop: the brief's way could not work.** The
+95. **The king kite is a shuttle on its circuit, not a loop: the brief's way could not work.** The
     brief asked for its stops to move so the summit chain's catch comes before the first stop's
     segment, without touching the chain's timing. That cannot be done under the ink rule: the chain
     catches the kite 35 m after Cresta Sur, a segment only inks if the ride starts within 12 m of its
@@ -390,26 +431,25 @@ without leaning on a wall (see PLAYTEST); a save from before onboarding starts t
     and 0.667. `tests/sim/citySummit.test.ts` changed in one number only: its run is 6600 ticks
     instead of 4000, because the drop onto the needle now comes after the way back; its assertions
     and the route's touches are unchanged.
-90. **The needle's guy wire.** A straight 'guy' rail from 0.4 m off the needle platform's south
+96. **The needle's guy wire.** A straight 'guy' rail from 0.4 m off the needle platform's south
     edge, 0.3 m below its top, to the lawn east of the spine stairs (9, 1180), 44 m lower: rolling
     or hopping off that edge snaps onto it, it reaches `MAX_SPEED` and lands gently on the lawn
     (impact about 6 m/s). It falls further than a skater at `MAX_SPEED` could grind up plus a hop,
     so it is no way up; the needle test now says that instead of "no rail within 8 m". It passes
     6–9 m west of the summit cable car's cables.
-91. **The hill station platform gets run-in steps, not a lower lip or a parapet.** A flight of steps
+97. **The hill station platform gets run-in steps, not a lower lip or a parapet.** A flight of steps
     (STAIRS surface on a ramp, drawn as treads) from the lawn and the spine down flush onto the
     deck's north edge, x 6–27, west of the cable cars' station so the cable paths (which follow the
     ground under them) are untouched. The steps' drag takes a 14 m/s skater to about 7 m/s by the
     deck, where a planted foot stops them; a parapet would bail anyone hitting it above 12 m/s.
-92. **Errand givers.** A giver whose offer was withdrawn without being taken stays quiet for 45 s
+98. **Errand givers.** A giver whose offer was withdrawn without being taken stays quiet for 45 s
     (transient: a save does not keep it). Seven givers that stood on or beside a stop now stand at
     spots of their own nearby (`GIVERS` in `src/sim/city/zones.ts`, kind 'giver', same names),
     which meant editing the giver ids in `src/sim/game/content/errands.ts`. Saffron's hours end at
     0.77 instead of 0.78: from its new spot the last moped could leave before a skater reached the
     stop.
-93. **Saves keep the day (version 2), and the resume spot follows landings.** The safe spot also
+99. **Saves keep the day (version 2), and the resume spot follows landings.** The safe spot also
     refreshes on the first grounded tick after any ride, grind, wallride or air (in
     `src/sim/player.ts`, the safe-spot block only). The full-game check takes saves only once the
     bot stands still on a planted foot with the safe spot under it, so a load starts from exactly
     where it stood (before, it could be up to 2 m and a walking pace away).
-
