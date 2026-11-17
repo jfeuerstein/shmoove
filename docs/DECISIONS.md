@@ -89,3 +89,17 @@ Decisions made without the owner in the room, newest last. Cuts are marked **CUT
 31. **Share-code size.** Run-length coding gives about 0.6 kB for 30 s of steady steering but about
     7 kB for two minutes of constant dragging. Open: a denser packing before ship.
 32. **Camera cuts on teleport** (race start, far respawn) instead of flying across the map.
+
+## M2 — The city (generator)
+
+33. **Ramp streets are two switchback roads at the edges of the hill,** not ramps between the stair
+    streets: a straight ramp cannot climb a 20% hill at a grade a tram can drive. Their hairpins meet
+    every Mercado landing and terrace street, and several ground lines share them.
+34. **The spine is a 12 m staircase with landings** through the Mercado and Terraces, a street on the
+    hill. Mercado alleys are stair-surfaced too: as smooth paving an unsteered skater reached the
+    docks at 20 m/s.
+35. **Funicular tracks** run 4 m apart mid-hill and spread at both ends to keep corners drivable.
+    **The lower cable car** starts just above the Antenna gate (z 978), not on the top terrace.
+36. **The ghost tram shares the switchbacks;** its tunnel is a covered stretch on the top Mercado
+    landing rather than a track of its own.
+37. **The ground curls up at the side edges of the world** so a skater cannot be pinned there.

@@ -38,11 +38,13 @@ Acceptance:
   misregistration; debug panel lists every FEEL key.
 - Perf budgets hold on the slice.
 
-## M2 — City `[ ]` (tag `m2`)
+## M2 — City `[~]` (tag `m2`)
 
-- [ ] City generator: four districts into the World contract (heightfield, surfaces, solids, rails, zones)
-- [ ] Chunk mesher + seamless streaming
-- [ ] Full look: district dressing, sky, sea, day/night ramps, props
+- [x] City generator: four districts into the World contract (1068 solids, 213 rails, 85 zones,
+      16 routes, 10 chain spots; builds in about 120 ms). Independent verification running.
+- [~] Chunk mesher + seamless streaming (implementer running)
+- [~] Full look: district dressing, sky, sea, day/night ramps, props (same task)
+- [ ] The city as the default world, e2e routes and perf on it
 
 Acceptance:
 - Sim tests: generator is deterministic (hash); a no-input skater dropped at the summit reaches the
@@ -51,13 +53,13 @@ Acceptance:
 - e2e: screenshots from each district match DESIGN section 7; no visible chunk pop within 150 m.
 - Perf budgets hold while streaming across the whole city.
 
-## M3 — Rides and time `[ ]` (tag `m3`)
+## M3 — Rides and time `[~]` (tag `m3`)
 
-- [ ] All 16 lines: paths, stops, hours, vehicles, liveries
-- [ ] Vehicle meshes for every kind
-- [ ] Day cycle visuals
-- [ ] Timetable boards at stops, HUD destination board
-- [ ] Line map screen and segment inking
+- [~] All 16 lines on the city's routes: stops, hours, vehicles, timetable meetings (implementer running)
+- [x] Vehicle meshes for every kind, pattern liveries, line-up fixture (`?world=lineup`)
+- [x] Day cycle visuals (sky, ink ramps, night glow)
+- [x] Timetable boards at stops, HUD destination board
+- [x] Line map screen and segment inking
 
 Acceptance:
 - Sim tests: every line's lap period divides the day; vehicles only leave the terminus inside service
@@ -84,13 +86,15 @@ Acceptance:
   chain of 3 brings the full band; bail cuts to wheels; one track at a time; stem starts are beat-quantised.
 - e2e: audio graph starts on first touch without errors; rendered level meters change on hitch.
 
-## M5 — Things to do `[ ]` (tag `m5`)
+## M5 — Things to do `[~]` (tag `m5`)
 
-- [ ] Errands (≥ 8, 2–4 min)
-- [ ] Conductor challenges (13)
-- [ ] Secrets (ghost tram, blimp, Needle via four-link chain)
-- [ ] Chalk lines: record, share code, ghost replay
-- [ ] Saves
+- [ ] Errands (≥ 10, 2–4 min) — brief written, waits for the ride data
+- [ ] Conductor challenges (13) — same task
+- [ ] Secrets (ghost tram, blimp, Needle via four-link chain) — same task; the summit route itself
+      is proved in the ride-data task
+- [x] Chalk lines: record, share code, ghost replay (verified: exact on 66 660 compared ticks).
+      Denser share code in progress: realistic input gave 25 kB for two minutes.
+- [x] Saves (verified against 500 corruptions)
 
 Acceptance:
 - Sim tests: each errand and challenge type completes and fails correctly under scripted state; share
