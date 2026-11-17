@@ -67,3 +67,19 @@ Automated tests only prove the mechanics work; they cannot say whether they feel
   (`STEER_RANGE_PX`)?
 - Halftone dot size on a high-density screen (`3.6 * pixelRatio` in `createRiso().setSize`).
 - Misregistration strength: readable as print, not as blur (plate offsets in the riso shader).
+
+## Sound (nobody has heard it yet)
+
+The audio was written and verified by measurement only: levels, timing, voice counts, chord charts.
+An ear has to judge the rest. Mute with `?mute`.
+
+- Does each district sound like its style: cumbia (Docks), funk (Mercado), highlife (Terraces), city
+  pop (Antenna Hill)? Does a lone stem still groove when it is the only one in?
+- Balance between stems, and of music against wheel noise (`setVolumes` in `src/audio/index.ts`; stem
+  levels in `src/audio/tracks/*.ts`).
+- The stem fade-in on a hitch (starts on the next beat), the one-beat cross-fade between district
+  tracks at different tempos, and the two-bar fade after landing.
+- Is the hard cut on a bail satisfying or just abrupt?
+- City pop bar 2: the lead holds F over C7 (a minor ninth against the E in the chord). Colour or clash?
+- Wheel noise character, the stairs clatter rate, wind, the three motor timbres, the grind scrape.
+- CPU cost of the synth on a real phone.

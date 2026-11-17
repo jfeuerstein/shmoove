@@ -65,11 +65,19 @@ Acceptance:
   route climbs from the docks to the summit using rides only; secret lines are hidden until ridden.
 - e2e: line map screen screenshot with partial ink; every livery distinguishable in a line-up screenshot.
 
-## M4 — Sound `[ ]` (tag `m4`)
+## M4 — Sound `[~]` (tag `m4`)
 
-- [ ] Synth voices and the four district tracks (4 stems each)
-- [ ] Stem mixer driven by hitch/chain/bail events
-- [ ] Wheel, wind, ride and UI sounds
+- [x] Synth voices and the four district tracks (4 stems each)
+- [x] Stem mixer driven by hitch/chain/bail events
+- [x] Wheel, wind, ride and UI sounds
+- [ ] Wired into the app loop; e2e check that the graph starts on first touch
+- [ ] Verifier follow-ups: softer master compressor (ratio ~4), two mixer tests tightened (fresh
+      first link with stems still in; `grindEnd` while still in grind mode), no per-frame array in
+      `engine.ts`, funk and highlife lead figures moved out of the harmony's register
+
+Verified independently: 17 of 19 mixer mutations caught, transport property test clean over 10 000
+random advances, chord charts match, real-browser run with no clipping (peak 0.80), bail silence in
+38 ms, 15 of 24 voices at peak. Nobody has heard it yet: see PLAYTEST.
 
 Acceptance:
 - Unit tests (OfflineAudioContext-free, on the mixer state machine): hitch fades in the right stem;
