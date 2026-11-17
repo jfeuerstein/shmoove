@@ -136,6 +136,29 @@ describe('saves', () => {
     expect(c.chalk.lines[0].bestTicks).toBe(0);
   });
 
+  it('lines saved as version 1 codes are skipped on import; the others are kept', () => {
+    const g = playedGame();
+    const base = roundTrip(exportSave(g, DEFAULT_SETTINGS)) as SaveData;
+    const code = encodeChalk(g.chalk.lines[0]);
+    expect(code.startsWith('SK2-')).toBe(true);
+    // A real version 1 code (run-length frames) as an earlier build saved it.
+    const v1 = 'SK1-AQtNaXJhZG9yIHJ1buY3AAAAAAAA-D99-QxZVft0QBgtRFT7IQnA4Q6lBuQ08j_JTrNA9q0OQuN_lUPgAQwAvwDITABkTAIBTACzLkl8fw';
+    const mixed = migrate({
+      ...base,
+      reducers: { ...base.reducers, chalk: { v: 1, lines: [{ code: v1, best: 400 }, { code, best: 3550 }, { code: v1.replace('SK1-', 'SK1-A'), best: 0 }] } },
+    });
+    if (!mixed) throw new Error('should migrate');
+    const h = newGame();
+    expect(() => importSave(h, mixed)).not.toThrow();
+    expect(h.chalk.lines.length).toBe(1);
+    expect(h.chalk.lines[0]).toEqual(g.chalk.lines[0]);
+    expect(h.progress.lines.map((l) => l.inked)).toEqual(g.progress.lines.map((l) => l.inked));
+    // The saved line is its dense code: a minute on the tram is a short string.
+    const saved = (base.reducers.chalk as { lines: Array<{ code: string }> }).lines[0].code;
+    expect(saved).toBe(code);
+    expect(saved.length).toBeLessThan(200);
+  });
+
   it('importing a save drops a recording or race in progress', () => {
     const g = playedGame();
     const data = migrate(roundTrip(exportSave(g, DEFAULT_SETTINGS)));

@@ -9,6 +9,7 @@ import {
   CHALK_PATH_STRIDE,
   CHALK_TIMEOUT_TICKS,
   FrameReader,
+  STEER_LEVELS,
   base64urlDecode,
   chalkId,
   chalkPath,
@@ -18,6 +19,7 @@ import {
   encodeChalk,
   isChalkError,
   packChalk,
+  packFrame,
   placeAtStart,
   type ChalkLine,
 } from '../../src/sim/game/chalk';
@@ -28,6 +30,8 @@ import { createPlayer, stepPlayer } from '../../src/sim/player';
 import { Rng } from '../../src/sim/rng';
 import { hashPlayer } from '../../src/sim/sim';
 import { Mode, type InputFrame, type SimCtx, type SimEvent } from '../../src/sim/types';
+import { Surface, terrainSurface, type World } from '../../src/sim/world';
+import { Gestures } from '../../src/input/gestures';
 import { seekVehicle, slice, teleport } from './helpers';
 
 const TRAM = 0;
@@ -193,22 +197,37 @@ function race(g: Game, id: string, ticks: number, feed: (i: number) => InputFram
 }
 
 describe('steer quantisation', () => {
-  it('steers that round to the same level give identical sims; the level is within 1/254', () => {
-    // Either side of the level 64/127 = 0.50394. (The brief's 0.5004 / 0.4996 straddle the rounding
-    // boundary 63.5/127 = 0.5 exactly, so under round(steer * 127) they are adjacent levels.)
-    const a = newGame();
-    const b = newGame();
-    for (let i = 0; i < 600; i++) {
-      a.step({ steer: 0.5043, hold: false, hop: i === 100 });
-      b.step({ steer: 0.5036, hold: false, hop: i === 100 });
-    }
-    expect(a.sim.hash()).toBe(b.sim.hash());
-    for (const s of [-1.3, -1, -0.73, -0.004, 0, 0.0039, 0.25, 0.5004, 0.999, 1, 2]) {
-      const q = quantiseSteer(s) / 127;
+  it('steers on one level give identical sims, either side of a boundary they differ; the level is within 1/62', () => {
+    expect(STEER_LEVELS).toBe(31);
+    const drive = (steer: number): number => {
+      const g = newGame();
+      for (let i = 0; i < 600; i++) g.step({ steer, hold: false, hop: i === 100 });
+      return g.sim.hash();
+    };
+    // The level boundary 15.5/31 = 0.5: 0.4990 is level 15, 0.5010 and 0.5150 are level 16.
+    expect(quantiseSteer(0.499)).toBe(15);
+    expect(quantiseSteer(0.501)).toBe(16);
+    expect(quantiseSteer(0.515)).toBe(16);
+    expect(drive(0.501)).toBe(drive(0.515));
+    expect(drive(0.499)).not.toBe(drive(0.501));
+    // Same around -0.5 and around the boundary 0.5/31 next to centre.
+    expect(quantiseSteer(-0.499)).toBe(-15);
+    expect(quantiseSteer(-0.501)).toBe(-16);
+    expect(quantiseSteer(0.5 / 31 - 1e-4)).toBe(0);
+    expect(quantiseSteer(0.5 / 31 + 1e-4)).toBe(1);
+    for (const s of [-1.3, -1, -0.73, -0.4999, -0.004, 0, 0.0039, 0.0162, 0.25, 0.5004, 0.999, 1, 2]) {
+      const q = quantiseSteer(s) / 31;
       const c = Math.max(-1, Math.min(1, s));
-      expect(Math.abs(q - c)).toBeLessThanOrEqual(1 / 254 + 1e-12);
+      expect(Math.abs(q - c)).toBeLessThanOrEqual(1 / 62 + 1e-12);
     }
     expect(quantiseSteer(Number.NaN)).toBe(0);
+    // The sim gets exactly level / 31: a recorded frame replays the same steer.
+    const g = newGame();
+    g.step({ steer: 0.3, hold: false, hop: false });
+    expect(g.applied.steerQ).toBe(9);
+    const rd = new FrameReader();
+    rd.reset(Uint8Array.from([packFrame(9, false, false)]));
+    expect(rd.next()?.steer).toBe(9 / 31);
   });
 });
 
@@ -219,7 +238,7 @@ describe('recording and racing a chalk line', () => {
     expect(r.releaseAt.length).toBeGreaterThanOrEqual(1);
     expect(r.hopAt.length).toBeGreaterThanOrEqual(2);
     expect(r.line.ticks).toBe(900);
-    expect(r.line.inputs.length % 3).toBe(0);
+    expect(r.line.inputs.length).toBe(r.line.ticks);
   });
 
   it('the ghost shadows a player fed the same inputs on every tick, and both end where the recording did', () => {
@@ -321,15 +340,20 @@ describe('recording and racing a chalk line', () => {
   });
 });
 
-/** A random but well-formed line. */
+/**
+ * A random but well-formed line: runs of random length (1 to 255 ticks) of a random steer level and
+ * flags, with some stretches where every tick is random (the coder's worst case).
+ */
 function randomLine(rng: Rng): ChalkLine {
   const ticks = CHALK_MIN_TICKS + rng.int(CHALK_MAX_TICKS - CHALK_MIN_TICKS + 1);
-  const runs: number[] = [];
-  let left = ticks;
-  while (left > 0) {
-    const n = Math.min(left, 1 + rng.int(255));
-    runs.push(rng.int(255), rng.int(4), n);
-    left -= n;
+  const frames = new Uint8Array(ticks);
+  let t = 0;
+  while (t < ticks) {
+    const n = Math.min(ticks - t, 1 + rng.int(255));
+    const noisy = rng.chance(0.1);
+    const f = packFrame(rng.int(63) - 31, rng.chance(0.5), rng.chance(0.5));
+    for (let k = 0; k < n; k++) frames[t + k] = noisy ? packFrame(rng.int(63) - 31, rng.chance(0.5), rng.chance(0.5)) : f;
+    t += n;
   }
   const names = ['Escalera', 'Muelle → Mirador', 'ñandú 🛹 run', '', 'a'.repeat(24), 'Línea 7'];
   const line: ChalkLine = {
@@ -341,7 +365,7 @@ function randomLine(rng: Rng): ChalkLine {
     z: rng.range(-500, 500),
     heading: rng.range(-Math.PI, Math.PI),
     speed: rng.range(0, 20),
-    inputs: Uint8Array.from(runs),
+    inputs: frames,
     ticks,
     endX: Math.fround(rng.range(-500, 500)),
     endY: Math.fround(rng.range(0, 80)),
@@ -378,7 +402,7 @@ describe('share codes', () => {
     for (let k = 0; k < 200; k++) {
       const line = randomLine(rng);
       const code = encodeChalk(line);
-      expect(code.startsWith('SK1-')).toBe(true);
+      expect(code.startsWith('SK2-')).toBe(true);
       const back = decodeChalk(code);
       if (isChalkError(back)) throw new Error(back.error);
       expect(back).toEqual(line);
@@ -411,21 +435,16 @@ describe('share codes', () => {
       expect(reasons.has(e), e).toBe(false);
       reasons.add(e);
     };
-    add('XK1-' + code.slice(4));
+    add('XK2-' + code.slice(4));
     add(code.slice(0, 4) + '***' + code.slice(7));
     add(code.slice(0, code.length - 8));
     add(code.slice(0, -3) + (code.slice(-3, -2) === 'A' ? 'B' : 'A') + code.slice(-2));
-    add(reforge(code, (b) => ((b[0] = 2), b)));
-    // Run total that does not match ticks: lengthen the last run by one.
-    add(
-      reforge(code, (b) => {
-        b[b.length - 1] = b[b.length - 1] === 255 ? 254 : b[b.length - 1] + 1;
-        return b;
-      }),
-    );
-    // Ticks out of range (also breaks the total, but the range is checked first).
+    add(reforge(code, (b) => ((b[0] = 1), b)));
     const nameLen = packChalk(line)[1];
     const ticksAt = 2 + nameLen + 2 + 32 + 12;
+    // An input stream that does not decode to exactly `ticks` frames: claim one tick fewer.
+    add(reforge(code, (b) => ((b[ticksAt] = (line.ticks - 1) & 255), (b[ticksAt + 1] = (line.ticks - 1) >> 8), b)));
+    // Ticks out of range (also breaks the stream, but the range is checked first).
     add(reforge(code, (b) => ((b[ticksAt] = 1), (b[ticksAt + 1] = 0), b)));
     // A non-finite number: x = NaN.
     add(
@@ -633,5 +652,412 @@ describe('finishing rules', () => {
       for (const e of step(h, hold)) if (e.type === 'segmentInked' && racing) inkedWhile.push(e.segment);
     }
     expect(inkedWhile.length).toBeGreaterThan(0);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// Share-code size with realistic thumbs, v2 stream damage, fuzzing
+
+/**
+ * A thumb on the glass, driven through the real `Gestures` recogniser into `Game` on the slice:
+ * drags that swing sinusoidally (0.3-1.5 Hz, 20-110 px), still touches that arm the hitch, lifts and
+ * upward flicks, with +-1.5 px jitter on every move. Returns the frames the game actually applied.
+ */
+function thumbFrames(seed: number, ticks: number): Uint8Array {
+  const g = newGame();
+  const ges = new Gestures();
+  const rng = new Rng(seed);
+  const frames = new Uint8Array(ticks);
+  const fy = 600;
+  let kind = 'lift';
+  let left = 0;
+  let t0 = 0;
+  let cx = 195;
+  let freq = 1;
+  let amp = 40;
+  let ph = 0;
+  let x = 195;
+  let touching = false;
+  for (let t = 0; t < ticks; t++) {
+    if (left <= 0) {
+      const r = rng.next();
+      t0 = t;
+      if (r < 0.6) {
+        kind = 'drag';
+        left = 60 + rng.int(180);
+        freq = rng.range(0.3, 1.5);
+        amp = rng.range(20, 110);
+        ph = rng.range(0, 2 * Math.PI);
+        cx = x;
+      } else if (r < 0.75) {
+        // A fresh still touch: arms the hitch.
+        kind = 'hold';
+        left = 24 + rng.int(96);
+        if (touching) ges.up();
+        touching = false;
+        x = rng.range(100, 290);
+      } else if (r < 0.9) {
+        kind = 'lift';
+        left = 9 + rng.int(40);
+      } else {
+        kind = 'flick';
+        left = 8;
+      }
+    }
+    left--;
+    const k = t - t0;
+    const jx = rng.range(-1.5, 1.5);
+    const jy = rng.range(-1.5, 1.5);
+    if (kind === 'lift') {
+      if (touching) ges.up();
+      touching = false;
+    } else {
+      let y = fy;
+      if (kind === 'drag') x = cx + amp * (Math.sin(2 * Math.PI * freq * (k / 60) + ph) - Math.sin(ph));
+      else if (kind === 'flick') y = fy - Math.min(k, 5) * 18;
+      if (!touching) ges.down(x + jx, y + jy);
+      else ges.move(x + jx, y + jy);
+      touching = true;
+    }
+    g.step(ges.sample());
+    frames[t] = packFrame(g.applied.steerQ, g.applied.hold, g.applied.hop);
+  }
+  return frames;
+}
+
+/** Steady steering: a new steer every 20-40 ticks (about every half second), a hop now and then. */
+function steadyFrames(seed: number, ticks: number): Uint8Array {
+  const g = newGame();
+  const rng = new Rng(seed);
+  const frames = new Uint8Array(ticks);
+  let steer = 0;
+  let next = 0;
+  for (let t = 0; t < ticks; t++) {
+    if (t >= next) {
+      steer = rng.range(-1, 1);
+      next = t + 20 + rng.int(21);
+    }
+    g.step({ steer, hold: false, hop: t % 400 === 399 });
+    frames[t] = packFrame(g.applied.steerQ, g.applied.hold, g.applied.hop);
+  }
+  return frames;
+}
+
+function lineFromFrames(frames: Uint8Array, name = 'Muelle 08:00'): ChalkLine {
+  const line: ChalkLine = {
+    v: 1,
+    id: '',
+    name,
+    startDayTick: 12960,
+    x: 1.2345678901234,
+    z: 98.765432109876,
+    heading: -2.9876543210987,
+    speed: 7.123456789,
+    inputs: frames,
+    ticks: frames.length,
+    endX: Math.fround(-3.21),
+    endY: Math.fround(41.5),
+    endZ: Math.fround(140.25),
+    bestTicks: 0,
+  };
+  line.id = chalkId(line);
+  return line;
+}
+
+/** Where a packing's input-stream length starts, and the stream's offset and length. */
+function streamOf(b: Uint8Array): { countAt: number; at: number; count: number } {
+  const countAt = 2 + b[1] + 2 + 32 + 12 + 2;
+  let at = countAt;
+  let count = 0;
+  let shift = 0;
+  for (;;) {
+    const v = b[at++];
+    count |= (v & 127) << shift;
+    shift += 7;
+    if ((v & 128) === 0) break;
+  }
+  return { countAt, at, count };
+}
+
+/** Re-forge a code with its input stream replaced (length rewritten, or spelled `countBytes`; CRC fixed). */
+function reforgeStream(code: string, edit: (stream: number[]) => number[], countBytes?: number[]): string {
+  return reforge(code, (b) => {
+    const { countAt, at, count } = streamOf(b);
+    const stream = edit(Array.from(b.slice(at, at + count)));
+    const out: number[] = Array.from(b.slice(0, countAt));
+    if (countBytes) out.push(...countBytes);
+    else {
+      let n = stream.length;
+      while (n >= 128) {
+        out.push((n & 127) | 128);
+        n >>>= 7;
+      }
+      out.push(n);
+    }
+    out.push(...stream);
+    return Uint8Array.from(out);
+  });
+}
+
+function streamBytes(code: string): number[] {
+  const b = base64urlDecode(code.slice(4));
+  if (!b) throw new Error('bad code');
+  const { at, count } = streamOf(b);
+  return Array.from(b.slice(at, at + count));
+}
+
+describe('share code version 2', () => {
+  it('stays short with realistic thumb input (three seeds) and with steady steering', () => {
+    const report: string[] = [];
+    for (const [secs, limit] of [
+      [30, 1300],
+      [120, 4500],
+      [240, 9000],
+    ]) {
+      const sizes: number[] = [];
+      for (const seed of [1, 2, 3]) {
+        const line = lineFromFrames(thumbFrames(seed, secs * 60));
+        const code = encodeChalk(line);
+        sizes.push(code.length);
+        expect(code.length, `${secs} s, seed ${seed}`).toBeLessThanOrEqual(limit);
+        const back = decodeChalk(code);
+        if (isChalkError(back)) throw new Error(back.error);
+        expect(back.inputs).toEqual(line.inputs);
+      }
+      report.push(`${secs} s thumb: ${sizes.join(' / ')}`);
+    }
+    const steady: number[] = [];
+    for (const seed of [1, 2, 3]) {
+      const code = encodeChalk(lineFromFrames(steadyFrames(seed, 30 * 60)));
+      steady.push(code.length);
+      expect(code.length).toBeLessThan(500);
+    }
+    report.push(`30 s steady: ${steady.join(' / ')}`);
+    // The realistic input really does exercise every part of the stream.
+    const f = thumbFrames(1, 120 * 60);
+    let holds = 0;
+    let hops = 0;
+    let changes = 0;
+    for (let i = 0; i < f.length; i++) {
+      if (f[i] & 64 && !(i > 0 && f[i - 1] & 64)) holds++;
+      if (f[i] & 128) hops++;
+      if (i > 0 && (f[i] & 63) !== (f[i - 1] & 63)) changes++;
+    }
+    expect(holds).toBeGreaterThan(5);
+    expect(hops).toBeGreaterThan(5);
+    expect(changes).toBeGreaterThan(f.length / 3);
+    console.log(`chalk code sizes (characters): ${report.join('; ')}`);
+  });
+
+  it('a version 1 code is an unknown version', () => {
+    const v1 = 'SK1-AQtNaXJhZG9yIHJ1buY3AAAAAAAA-D99-QxZVft0QBgtRFT7IQnA4Q6lBuQ08j_JTrNA9q0OQuN_lUPgAQwAvwDITABkTAIBTACzLkl8fw';
+    expect(expectError(decodeChalk(v1))).toBe('unknown version');
+    const code = encodeChalk(busy().line);
+    expect(expectError(decodeChalk(reforge(code, (b) => ((b[0] = 1), b))))).toBe('unknown version');
+  });
+
+  it('rejects trailing data, a short stream, a non-minimal length; another stream gives other frames', () => {
+    const r = busy();
+    const code = encodeChalk(r.line);
+    expect(reforgeStream(code, (s) => s)).toBe(code);
+    expect(expectError(decodeChalk(reforgeStream(code, (s) => [...s, 0])))).toBe('bad input stream');
+    expect(expectError(decodeChalk(reforgeStream(code, (s) => [...s, 0x5a, 0x11])))).toBe('bad input stream');
+    expect(expectError(decodeChalk(reforgeStream(code, (s) => s.slice(0, s.length - 1))))).toBe('bad input stream');
+    expect(expectError(decodeChalk(reforgeStream(code, (s) => s.slice(0, s.length >> 1))))).toBe('bad input stream');
+    expect(expectError(decodeChalk(reforgeStream(code, () => [])))).toBe('bad input stream');
+    // The stream length spelled with a needless continuation byte.
+    const len = streamBytes(code).length;
+    expect(len).toBeLessThan(1 << 14);
+    const padded = len < 128 ? [len | 128, 0] : [(len & 127) | 128, (len >> 7) | 128, 0];
+    expect(expectError(decodeChalk(reforgeStream(code, (s) => s, padded)))).toBe('bad input stream');
+    // Another line's stream of the same length in ticks decodes, to that line's frames.
+    const otherFrames = steadyFrames(5, r.line.ticks);
+    const other = streamBytes(encodeChalk(lineFromFrames(otherFrames)));
+    const swapped = decodeChalk(reforgeStream(code, () => other));
+    if (isChalkError(swapped)) throw new Error(swapped.error);
+    expect(swapped.inputs).toEqual(otherFrames);
+    expect(swapped.id).not.toBe(r.line.id);
+  });
+
+  it('fuzz: random strings and one- or two-character mutations never throw and never pass', () => {
+    const rng = new Rng(20261117);
+    const real = [
+      encodeChalk(busy().line),
+      encodeChalk(lineFromFrames(thumbFrames(4, 30 * 60), 'ñandú 🛹')),
+      encodeChalk(lineFromFrames(steadyFrames(4, 60 * 60))),
+      encodeChalk(randomLine(new Rng(9))),
+    ];
+    for (const c of real) expect(isChalkError(decodeChalk(c))).toBe(false);
+    const b64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+    const junk = b64 + '+/=.!~é🛹';
+    const pick = (a: string): string => a[rng.int(a.length)];
+    let lines = 0;
+    let threw = 0;
+    let tried = 0;
+    const tryDecode = (c: string): void => {
+      tried++;
+      try {
+        if (!isChalkError(decodeChalk(c))) lines++;
+      } catch (_e) {
+        threw++;
+      }
+    };
+    // 20 000 random strings: half anything, half a valid prefix and a base64url body.
+    for (let k = 0; k < 20000; k++) {
+      let c = k % 2 === 0 ? '' : 'SK2-';
+      const n = rng.int(k % 2 === 0 ? 80 : 400);
+      for (let i = 0; i < n; i++) c += pick(k % 2 === 0 ? junk : b64);
+      tryDecode(c);
+    }
+    expect(threw).toBe(0);
+    expect(lines).toBe(0);
+    // 20 000 mutations of real codes: one or two characters replaced, or one inserted or deleted.
+    for (let k = 0; k < 20000; k++) {
+      const code = real[k % real.length];
+      let c = code;
+      const kind = k % 5;
+      if (kind === 3) {
+        const at = rng.int(c.length + 1);
+        c = c.slice(0, at) + pick(b64) + c.slice(at);
+      } else if (kind === 4) {
+        const at = rng.int(c.length);
+        c = c.slice(0, at) + c.slice(at + 1);
+      } else {
+        const edits = kind === 0 ? 1 : 2;
+        for (let e = 0; e < edits; e++) {
+          const at = rng.int(c.length);
+          let ch = c[at];
+          while (ch === c[at]) ch = pick(kind === 2 ? junk : b64);
+          c = c.slice(0, at) + ch + c.slice(at + 1);
+        }
+      }
+      if (c === code) continue;
+      tryDecode(c);
+    }
+    expect(tried).toBeGreaterThan(39900);
+    expect(threw).toBe(0);
+    expect(lines).toBe(0);
+    // Forged packings with a correct CRC but damaged input bytes: never a throw.
+    for (let k = 0; k < 2000; k++) {
+      const code = real[k % real.length];
+      tryDecode(
+        reforgeStream(code, (s) => {
+          const out = s.slice();
+          const n = 1 + rng.int(4);
+          for (let i = 0; i < n; i++) out[rng.int(out.length)] = rng.int(256);
+          return rng.chance(0.2) ? out.slice(0, rng.int(out.length + 1)) : out;
+        }),
+      );
+    }
+    expect(threw).toBe(0);
+  }, 30000);
+});
+
+// ---------------------------------------------------------------------------------------------
+// Rules the first verifier found untested
+
+function firstWater(w: World): { x: number; z: number } {
+  for (let z = w.minZ + 2; z < w.maxZ; z += 2) {
+    for (let x = w.minX + 2; x < w.maxX; x += 2) if (terrainSurface(w, x, z) === Surface.WATER) return { x, z };
+  }
+  throw new Error('no water in the slice');
+}
+
+describe('chalk rules', () => {
+  it('a bail in the water aborts a recording: discarded with the reason, no line added', () => {
+    const g = rollingGame();
+    expect(g.chalkStartRecording().ok).toBe(true);
+    for (let i = 0; i < CHALK_MIN_TICKS + 30; i++) g.step(NONE);
+    const wet = firstWater(g.sim.world);
+    teleport(g.sim, wet.x, wet.z + 0.01, 0, 0);
+    let discard: GameEvent | undefined;
+    for (let i = 0; i < 120 && !discard; i++) discard = step(g).find((e) => e.type === 'chalkRecordDiscard');
+    expect(g.sim.player.mode).toBe(Mode.BAIL);
+    expect(discard).toEqual({ type: 'chalkRecordDiscard', reason: 'fell in the water' });
+    expect(g.chalk.mode).toBe('idle');
+    expect(g.chalk.lines.length).toBe(0);
+    expect(g.chalkStopRecording('Wet').ok).toBe(false);
+    expect(g.chalk.lines.length).toBe(0);
+  });
+
+  it('a loop does not finish at the start: the player must leave the finish zone and come back', () => {
+    const g = rollingGame();
+    const p = g.sim.player;
+    expect(g.chalkStartRecording().ok).toBe(true);
+    const sx = p.x;
+    const sy = p.y;
+    const sz = p.z;
+    for (let i = 0; i < CHALK_MIN_TICKS + 30; i++) g.step(NONE);
+    expect(g.chalkStopRecording('Loop').ok).toBe(true);
+    step(g);
+    const rec = g.chalk.lines[0];
+    // The same route, but finishing where it started, from a standstill.
+    const loop = decodeChalk(encodeChalk({ ...rec, speed: 0, endX: Math.fround(sx), endY: Math.fround(sy), endZ: Math.fround(sz) }));
+    if (isChalkError(loop)) throw new Error(loop.error);
+    expect(g.chalkImport(encodeChalk(loop))).toEqual({ ok: true });
+    expect(g.chalkStartRace(loop.id).ok).toBe(true);
+    let fin: Extract<GameEvent, { type: 'chalkFinish' }> | null = null;
+    const watch = (): void => {
+      for (const e of step(g)) if (e.type === 'chalkFinish') fin = e;
+    };
+    for (let i = 0; i < CHALK_COUNTDOWN_TICKS; i++) watch();
+    expect(g.chalk.mode).toBe('racing');
+    // Sitting in the zone (the race starts there) for a second does not finish.
+    for (let i = 0; i < 60; i++) {
+      watch();
+      const dx = p.x - loop.endX;
+      const dz = p.z - loop.endZ;
+      expect(dx * dx + dz * dz).toBeLessThan(CHALK_END_RADIUS * CHALK_END_RADIUS);
+    }
+    expect(fin).toBeNull();
+    expect(g.chalk.mode).toBe('racing');
+    // Out of the zone and back in: now it counts.
+    teleport(g.sim, sx, sz + CHALK_END_RADIUS * 3, 0, 0);
+    watch();
+    watch();
+    expect(fin).toBeNull();
+    teleport(g.sim, sx, sz, 0, 0);
+    watch();
+    expect(fin).toMatchObject({ id: loop.id, won: true, ticks: 63 });
+  });
+
+  it('recording refuses under an awning ("find open ground") and does not start there', () => {
+    const g = newGame();
+    // Roll down the east sidewalk under the awning at z = 165..175.
+    teleport(g.sim, 13, 186, Math.PI, 4);
+    const p = g.sim.player;
+    for (let i = 0; i < 400 && !(p.z < 171 && p.z > 167); i++) g.step(NONE);
+    expect(p.z).toBeLessThan(171);
+    expect(p.z).toBeGreaterThan(167);
+    expect(p.mode).toBe(Mode.GROUND);
+    expect(g.chalkCannotRecord()).toBe('Find open ground');
+    expect(g.chalkStartRecording()).toEqual({ ok: false, reason: 'Find open ground' });
+    expect(g.chalk.mode).toBe('idle');
+    expect(step(g).some((e) => e.type === 'chalkRecordStart')).toBe(false);
+    // Out from under it, on open ground, it can.
+    teleport(g.sim, 13, 150, Math.PI, 0);
+    g.step(NONE);
+    expect(g.chalkCannotRecord()).toBe('');
+  });
+
+  it("finishing in exactly the line's time wins; one tick more loses", () => {
+    const r = busy();
+    const finishAt = (ticks: number): Extract<GameEvent, { type: 'chalkFinish' }> | null => {
+      const g = newGame();
+      g.chalkImport(encodeChalk(r.line));
+      const line = g.chalk.lines[0];
+      expect(g.chalkStartRace(line.id).ok).toBe(true);
+      for (let i = 0; i < CHALK_COUNTDOWN_TICKS; i++) g.step(NONE);
+      let fin: Extract<GameEvent, { type: 'chalkFinish' }> | null = null;
+      for (let i = 1; i <= ticks && !fin; i++) {
+        // Arrive in the zone on racing tick `ticks`: put the skater there just before that step.
+        if (i === ticks) teleport(g.sim, line.endX, line.endZ, 0, 0);
+        for (const e of step(g)) if (e.type === 'chalkFinish') fin = e;
+        if (i < ticks) expect(fin).toBeNull();
+      }
+      return fin;
+    };
+    expect(finishAt(r.line.ticks)).toMatchObject({ won: true, ticks: r.line.ticks, ghostTicks: r.line.ticks });
+    expect(finishAt(r.line.ticks + 1)).toMatchObject({ won: false, ticks: r.line.ticks + 1, ghostTicks: r.line.ticks });
   });
 });
