@@ -104,12 +104,14 @@ export class Engine {
     this.synth = new Synth(ctx);
     const s = this.synth;
 
+    // Light glue on the whole mix, not a limiter: the stems are balanced to peak below full scale
+    // on their own (the full band with SFX measured in a browser stays under 1.0).
     const comp = ctx.createDynamicsCompressor();
-    comp.threshold.value = -12;
-    comp.knee.value = 6;
-    comp.ratio.value = 12;
+    comp.threshold.value = -18;
+    comp.knee.value = 8;
+    comp.ratio.value = 4;
     comp.attack.value = 0.003;
-    comp.release.value = 0.2;
+    comp.release.value = 0.25;
     this.master = ctx.createGain();
     this.sMaster = new Smooth(this.master.gain, 0.9, 1e-4);
     comp.connect(this.master).connect(ctx.destination);
