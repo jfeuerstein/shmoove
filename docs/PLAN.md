@@ -47,7 +47,8 @@ Acceptance:
       east docks, handrail/stair/clearance tests made strict
 - [x] Retune: no traps from 400 random starts, awnings bounce a wanderer, parapets on the hairpins
 - [x] The city is the default world; `city-spine` and `city-errand` e2e routes
-- [~] Independent check of the drawn city (brief `m6d-verify-world`)
+- [x] Independent check of the drawn city (brief `m6d-verify-world`): haze and night fixed; chunk
+      build granularity and the perf gate's coverage in progress (brief `m6f-perf-honesty`)
 
 ## M3 — Rides and time `[x]` (tag `m3`)
 
@@ -76,7 +77,8 @@ Acceptance:
 
 ## M6 — Ship `[~]` (tag `m6`)
 
-- [~] Onboarding that teaches by play (brief `m6b-onboarding`)
+- [x] Onboarding that teaches by play: six hints, a new-game clock that brings the first ride to the
+      first stop, an e2e touch route that completes the lesson (independent check pending)
 - [x] Menus: title, pause, settings, map-complete. Verified
 - [x] Haptics
 - [x] PWA: manifest, icons generated in code, service worker, offline, portrait lock. Verified,

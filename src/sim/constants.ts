@@ -142,6 +142,7 @@ export const FEEL_DEFS = {
   CAM_LOOK_FAR: [32, 5, 80, 'Camera', 'How far ahead the camera reads the ground to decide its tilt, m'],
   CAM_LOOK_SLOPE: [0.6, 0, 1.5, 'Camera', 'How much of the rise or fall ahead goes into the look target'],
   CAM_LOOK_TILT_MAX: [5, 0, 12, 'Camera', 'Most the look target moves up or down for the ground ahead, m'],
+  CAM_FRAME_MAX: [22, 5, 40, 'Camera', 'Most the skater may sit below the centre of the view, degrees: the camera pitches down to keep them in frame'],
   CAM_FOV: [76, 40, 100, 'Camera', 'Vertical field of view at rest, degrees'],
   CAM_FOV_SPEED: [12, 0, 40, 'Camera', 'Extra field of view at top speed, degrees'],
   CAM_SPEED_DIST: [3, 0, 12, 'Camera', 'Extra distance at top speed, m'],

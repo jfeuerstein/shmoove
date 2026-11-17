@@ -30,6 +30,8 @@ function wrap(a: number): number {
   return a - Math.PI * 2 * Math.floor((a + Math.PI) / (Math.PI * 2));
 }
 
+const DEG = Math.PI / 180;
+
 /** Fraction of the way to a target covered in `dt` at an exponential `rate`. */
 function ease(dt: number, rate: number): number {
   return 1 - Math.exp(-rate * dt);
@@ -150,6 +152,13 @@ export class ChaseCamera {
     const wantTilt = Math.max(-F.CAM_LOOK_TILT_MAX, Math.min(F.CAM_LOOK_TILT_MAX, ahead * F.CAM_LOOK_SLOPE));
     this.tilt += (wantTilt - this.tilt) * ease(dt, F.CAM_TILT_RATE);
     _look.set(t.x + fx * F.CAM_LOOK_AHEAD, this.followY + F.CAM_LOOK_UP + this.tilt, t.z + fz * F.CAM_LOOK_AHEAD);
+    // Never lose the skater off the bottom: squeezed against a wall, lifted over a roof or looking
+    // up a steep hill, the camera sits high and close, and a look target far ahead would aim over
+    // their head. Pitch down just enough to keep them within CAM_FRAME_MAX of the centre.
+    const toSkater = Math.atan2(this.followY - cy, Math.hypot(t.x - cx, t.z - cz));
+    const lookRun = Math.hypot(_look.x - cx, _look.z - cz);
+    const lowest = toSkater + F.CAM_FRAME_MAX * DEG;
+    if (Math.atan2(_look.y - cy, lookRun) > lowest) _look.y = cy + Math.tan(lowest) * lookRun;
     this.camera.lookAt(_look);
 
     const wantFov = F.CAM_FOV + F.CAM_FOV_SPEED * speedK;

@@ -65,6 +65,7 @@ Automated tests only prove the mechanics work; they cannot say whether they feel
 | Can you see where you will land, and the hill while climbing? | `CAM_AIR_HEIGHT`, `CAM_UPHILL_HEIGHT`, `CAM_UPHILL_GAIN`, `CAM_CLIMB_RATE`, `CAM_AIR_FOLLOW`, `CAM_MIN_CLEAR` |
 | Do the camera's moves (pulling back for speed or a hitch, tilting for the ground, widening the view) ease rather than lurch? | `CAM_EXTRA_RATE`, `CAM_TILT_RATE`, `CAM_FOV_RATE` |
 | When a wall or roof blocks the view, does the camera duck in quickly and back out calmly? | `CAM_PULL_IN_RATE`, `CAM_PULL_OUT_RATE`, `CAM_PULL_MIN`, `CAM_PULL_DROP` |
+| Squeezed against a wall, coming off stairs or towed up a steep street, is the skater still comfortably above your thumb? | `CAM_FRAME_MAX` |
 | Do stairs rattle and do hits shake for about the right time? | `CAM_STAIR_RATTLE`, `CAM_STAIR_SPEED`, `CAM_SHAKE_DECAY`, `CAM_SHAKE` |
 
 ## Only on a real phone
@@ -111,6 +112,9 @@ An ear has to judge the rest. Mute with `?mute`.
   edge and an approaching ride at speed at night? If not, raise the night tint toward 0.5.
 - Distance haze runs 190–350 m (`FOG_NEAR`, `FOG_FAR` in `src/render/look.ts`). Does the hill feel
   big enough from the summit, and does anything visibly appear out of the haze?
+- Waiting at a stop: landings fall a few percent so nobody gets stuck, which also means you cannot
+  stand still for a ride. Is circling or leaning on a wall fine, or do stops want a flat pad
+  (city generator, `src/sim/city/carve.ts`) or a board that holds on gentle ground?
 - Tram 5 runs at 13 m/s and the night bus at 18 m/s (`src/sim/city/lines.ts`). Is being towed that
   fast up or down the switchbacks fun or uncontrollable? Per-line `cruise`, `rope`.
 - The summit route (lower cable car → summit cable car → kite → king kite → needle): a verifier

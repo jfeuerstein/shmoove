@@ -238,3 +238,33 @@ Decisions made without the owner in the room, newest last. Cuts are marked **CUT
     went from about half strength to a third, so the hill is cobalt and lit windows, signs and cabin
     lights carry the picture. Whether a rail can still be read at speed at night is on the playtest
     list.
+
+## M6b — Onboarding
+
+71. **The lesson is six things done once, in the order the hill presents them** (carve, hop, grind,
+    hitch, sling, ink), then the map pointer and one line: "No pushing. Everything that moves is a
+    lift." Nothing blocks; a step counts whenever it happens, even before its hint has shown. Chains
+    are taught later, the first time a second ride is in reach after a release, and are not part of
+    completion.
+72. **A new game starts at 10:41 on the hill's clock** (`NEW_GAME_DAY_FRAC = 0.4036`), chosen so a
+    handcart reaches Rellano 410, the first stop below the lookout, as a player who follows the hints
+    gets there (about 24 s in), with a moped behind it. The property tested: arrive anywhere from
+    15 s early to 15 s late, dawdle up to 20 s more, and a ride is at the stop or due within 12 s.
+    Earlier in the morning was not possible: lines start service by lap, so no moped passes that
+    stop before about 10:20.
+73. **Errand offers wait until the first hitch.** The lookout where a new game starts is an errand
+    giver's spot, and an offer asks you to hold still before you know what holding does.
+74. **Fixtures skip the lesson.** A boot with `t=`, a test world or a scripted route keeps its own
+    clock and has hints off; the sim's `Game` teaches only when asked (`GameOpts.hints`). The
+    settings toggle turns hints off and on without marking steps learnt.
+75. **The stop board hides while a hint is up**, as it does for an errand offer: raised above it, the
+    hint covered the ride it was pointing at.
+76. **The camera never loses the skater off the bottom of the screen.** Pulled in against a wall or
+    stairs, or lifted while towed up a steep street, it sat high and close and aimed over the
+    skater's head (found in the first-launch screenshots: the skater was under the hint at the
+    moment of the first hitch). It now pitches down just enough to keep the skater within
+    `CAM_FRAME_MAX` degrees of the centre.
+
+Known and left: a hands-off skater from the lookout comes to rest on a plaza block 13 m short of the
+first stop (the hints carry a player past it); landings fall, so you cannot stand and wait at a stop
+without leaning on a wall (see PLAYTEST); a save from before onboarding starts the lesson once.
