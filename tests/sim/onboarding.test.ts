@@ -606,7 +606,7 @@ function stopPoint(L: CompiledLine, name: string): { x: number; z: number } | nu
 interface Launch {
   game: Game;
   log: string[];
-  /** Tick the skater first came within 14 m of the stop (the stop board's range) or caught a ride on its landing, or -1. */
+  /** Tick the skater first came within 14 m of the stop (the stop board's range) or down onto its landing, or -1. */
   arrival: number;
   bails: number;
 }
@@ -616,8 +616,8 @@ const RAIL_X = 3;
 const RUN_IN_Z = 508;
 /** Ticks the bot keeps the sling hint up (so a screenshot can see it) before it lets go. */
 const SLING_WAIT = 40;
-/** Ticks a hint is up before the bot acts on it: half a second to read it. */
-const REACT = 30;
+/** Ticks a hint is up before the bot acts on it: three quarters of a second to read it. */
+const REACT = 45;
 
 interface Want {
   steer: number;
@@ -676,8 +676,9 @@ function policy(game: Game, m: BotMemo, i: number, out: Want): void {
   } else if (!ob.done.carve) {
     if ((ob.shown === 'carve' && seen) || m.carveT > 0) out.steer = m.carveT++ < 30 ? 0.9 : -0.9;
   } else if (p.z > 422) {
-    // Down the stairs on the handrail's line to the third landing, then the spine.
-    const tx = p.z > 470 ? RAIL_X : 0;
+    // Down the stairs on the second flight's handrail line to the third landing, then the spine.
+    // Until the hop is learnt, keep clear of the first flight's handrail (a late hop would land on it).
+    const tx = !ob.done.hop ? 8 : p.z > 470 ? RAIL_X : 0;
     out.steer = clamp(-2 * angleDiff(Math.atan2(tx - p.x, -6), p.heading), -1, 1);
     if (ob.shown === 'hop' && seen && p.mode === Mode.GROUND) out.hop = true;
     if (ob.shown === 'grind' && p.mode === Mode.GROUND && Math.abs(p.z - (RUN_IN_Z + 2)) < 0.5) out.hop = true;
@@ -732,8 +733,8 @@ class Watch {
     const sim = this.game.sim;
     const p = sim.player;
     const w = sim.world;
-    // Arrived: within the stop board's range of the stop, or already on a ride on its landing.
-    if (this.arrival < 0 && (Math.hypot(p.x - this.stop.x, p.z - this.stop.z) < 14 || (p.mode === Mode.HITCH && p.z < 422))) this.arrival = sim.tick;
+    // Arrived: within the stop board's range of the stop, or down on its landing (below the last flight).
+    if (this.arrival < 0 && (Math.hypot(p.x - this.stop.x, p.z - this.stop.z) < 14 || p.z < this.stop.z + 7)) this.arrival = sim.tick;
     for (const e of sim.events) {
       if (e.type === 'bail') this.bails++;
       if (e.type === 'hitch' || e.type === 'release') this.log.push(`${i} ${e.type} ${w.lines[e.line].id}`);
@@ -860,7 +861,7 @@ function touchLaunch(frac: number, maxTicks = 4 * 60 * 60): TouchRun {
   const marked = new Set<string>();
   let upId: string = '';
   let upAt = 0;
-  const SHOT_DELAY = 24;
+  const SHOT_DELAY = 40;
   while (glass.ticks < maxTicks && !game.onboarding.complete) {
     const i = glass.ticks;
     const ob = game.onboarding;
@@ -1028,8 +1029,8 @@ describe('the first launch', () => {
     };
     // Typical arrival (the hint-following player), then up to 20 s of carving around.
     for (let d = 0; d <= 20 * 60; d += 15) expect(rideWithin12s(run.arrival + d), `arriving ${d / 60}s late`).toBe(true);
-    // Tolerance: the whole 20 s range still holds if the typical arrival itself is 12 s earlier or later.
-    for (const shift of [-12 * 60, 12 * 60]) {
+    // Tolerance: the whole 20 s range still holds if the typical arrival itself is 15 s earlier or later.
+    for (const shift of [-15 * 60, 15 * 60]) {
       for (let d = 0; d <= 20 * 60; d += 15) expect(rideWithin12s(run.arrival + shift + d), `shift ${shift / 60}s, +${d / 60}s`).toBe(true);
     }
   });

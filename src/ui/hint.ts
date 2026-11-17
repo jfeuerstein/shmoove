@@ -18,6 +18,8 @@ import { TWOS_STEP, type Twos } from './twos';
 const LONG_TITLE = 18;
 /** How long the punched stub stays up before it slides away, seconds. */
 const PUNCH_HOLD = 0.6;
+/** The least it stays up punched when another hint is waiting, seconds. */
+const PUNCH_MIN = 0.25;
 
 const MAP_POINTER =
   '<svg viewBox="0 0 30 30" aria-hidden="true">' +
@@ -105,7 +107,9 @@ export class HintStub {
     const want: HintId | '' = hidden ? '' : ob.shown;
     if (this.phase === 'punch') {
       this.punchLeft -= dt;
-      if (this.punchLeft <= 0 || hidden) this.leave();
+      // Another hint waiting cuts the hold short, once the punch has been seen.
+      const waiting = want !== '' && want !== this.shownId && PUNCH_HOLD - this.punchLeft >= PUNCH_MIN;
+      if (this.punchLeft <= 0 || hidden || waiting) this.leave();
     } else if (this.phase !== 'out' && want !== this.shownId) {
       if (this.shownId !== '') this.leave();
       else if (want !== '') this.enter(want);
