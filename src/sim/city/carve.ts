@@ -114,7 +114,7 @@ export class Carver {
         if (xLo >= c.x0 && xHi <= c.x1 && zLo >= c.z0 && zHi <= c.z1) this.cliff[ci] = 0;
         if (c.cliffZ && xc >= c.x0 && xc <= c.x1 && xc >= (c.cliffLo ?? -Infinity) && xc <= (c.cliffHi ?? Infinity)) {
           if ((zLo < c.z0 && zHi > c.z0 - c.bz - 1e-6 && zHi <= c.z0 + 1e-6) || (zHi > c.z1 && zLo < c.z1 + c.bz + 1e-6 && zLo >= c.z1 - 1e-6)) {
-            this.cliff[ci] = 1;
+            this.cliff[ci] = 2;
           }
         }
         if (c.cliffX && zc >= c.z0 && zc <= c.z1 && zc >= (c.cliffLo ?? -Infinity) && zc <= (c.cliffHi ?? Infinity)) {
@@ -251,8 +251,17 @@ export class Carver {
         const ci = iz * w.nx + ix;
         if (w.surfaces[ci] === Surface.WATER) continue;
         this.cellRange(ix, iz, r);
-        const dh = r.hi - r.lo;
-        if ((this.cliff[ci] && dh > 0.5) || this.cellGrade(ix, iz) > 0.98) {
+        // The step across a flagged edge (not the slope along it).
+        const hh = w.heights;
+        const k = iz * this.row + ix;
+        const across =
+          this.cliff[ci] === 1
+            ? Math.max(Math.abs(hh[k + 1] - hh[k]), Math.abs(hh[k + this.row + 1] - hh[k + this.row]))
+            : this.cliff[ci] === 2
+              ? Math.max(Math.abs(hh[k + this.row] - hh[k]), Math.abs(hh[k + this.row + 1] - hh[k + 1]))
+              : 0;
+        const step = this.cliff[ci] === 1 ? 0.5 : 1.2;
+        if ((this.cliff[ci] && across > step) || this.cellGrade(ix, iz) > 0.98) {
           isWall[ci] = 1;
           lo[ci] = r.lo;
           hi[ci] = r.hi;

@@ -144,3 +144,9 @@ export const STAIR_HALF = 4;
 
 /** Wedding plaza (flat, at the level of the landing at 462). */
 export const PLAZA_BODA = { x0: 12, x1: 68, z0: 454, z1: 486 } as const;
+
+/** Hill station plaza on Antenna Hill (the lower cable car's top, the summit cable car's base). */
+export const HILL_STATION = { x0: 12, x1: 48, z0: 1030, z1: 1050 } as const;
+
+/** The summit antenna: mast foot and the needle platform's top above the summit ground. */
+export const NEEDLE = { x: 0, z: 1262, height: 26, half: 2 } as const;

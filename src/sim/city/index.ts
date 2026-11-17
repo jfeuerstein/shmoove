@@ -7,6 +7,7 @@
 import { PI } from '../math';
 import { District, createWorld, finalizeWorld, terrainHeight, type World } from '../world';
 import { CITY, GRID } from './layout';
+import { dressCity, needleTop } from './dress';
 import { buildGround, spinePolyline } from './terrain';
 import { addZones } from './zones';
 
@@ -44,12 +45,13 @@ export function buildCity(seed = 1): City {
 
   const ground = buildGround(w);
   ground.carver.buildWalls();
+  dressCity(w, ground, seed);
 
   const spine = spinePolyline(ground);
   for (let i = 0; i < spine.length; i += 3) spine[i + 1] = terrainHeight(w, spine[i], spine[i + 2]);
 
   w.spawn = { x: 0, z: 566, heading: PI };
   finalizeWorld(w);
-  addZones(w);
+  addZones(w, needleTop());
   return { world: w, routes: {}, spine };
 }

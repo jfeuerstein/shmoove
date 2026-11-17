@@ -13,6 +13,7 @@ import {
   FUNI_X1,
   FUNI_Z0,
   FUNI_Z1,
+  HILL_STATION,
   LEVELS,
   MERCADO_STAIRS,
   OUTER_X,
@@ -47,6 +48,14 @@ export interface Ground {
   stairs: StairStreet[];
   /** Index of the first terrace level in LEVELS. */
   firstTerrace: number;
+}
+
+/** Grade of a terrace yard up from its street. */
+export const YARD_RISE = 0.025;
+
+/** Height of a terrace pad (street or yard) at (x, z). */
+export function padHeight(L: Level, x: number, z: number): number {
+  return levelHeight(L, x) + YARD_RISE * Math.max(0, z - L.z1);
 }
 
 /** The last level: the Antenna gate street. */
@@ -107,7 +116,8 @@ export function buildGround(w: World): Ground {
         z1: L.z0 + PAD_DEPTH,
         bx: 6,
         bz: 3,
-        h: (x) => levelHeight(L, x),
+        // The yard rises gently from the street so it drains onto it.
+        h: (x, z) => levelHeight(L, x) + YARD_RISE * Math.max(0, z - L.z1),
         surf: (_x, z) => (z <= L.z1 ? Surface.STREET : Surface.PLAZA),
         cliffZ: true,
         cliffLo: -APEX_X + 4,
@@ -207,6 +217,16 @@ export function buildGround(w: World): Ground {
   });
   // The summit plaza at the top of the spine.
   C.rect({ x0: -10, x1: 10, z0: SPINE_TOP_Z, z1: SPINE_TOP_Z + 8, bx: 4, bz: 4, h: (_x, z) => Math.max(gateTop, baseHeight(z)), surf: () => Surface.PLAZA });
+
+  // --- Antenna Hill: the hill station plaza and paved paths off the spine.
+  const hs = HILL_STATION;
+  C.rect({ x0: hs.x0, x1: hs.x1, z0: hs.z0, z1: hs.z1, bx: 8, bz: 8, h: () => baseHeight((hs.z0 + hs.z1) / 2), surf: () => Surface.PLAZA });
+  for (const [z, x1] of [[1150, -66], [1110, 66], [1200, 40]] as const) {
+    const pts: number[] = [];
+    const n = Math.ceil(Math.abs(x1) / 2);
+    for (let i = 0; i <= n; i++) pts.push((x1 * i) / n, baseHeight(z), z);
+    C.path({ pts, half: 3.5, blend: 4, surf: Surface.STREET });
+  }
 
   // The docks stay at the docks grade under everything (the roads leave them level across).
   C.rect({ x0: CITY.minX, x1: CITY.maxX, z0: 0, z1: B.mercado - 1, bx: 0, bz: 0, h: (_x, z) => docksHeight(z), surf: () => -1 });
