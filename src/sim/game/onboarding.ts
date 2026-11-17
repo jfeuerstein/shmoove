@@ -59,6 +59,8 @@ export const HITCH_NEAR = 30;
 export const HITCH_STOP_NEAR = 20;
 /** A moving ride must pass this close sideways to count as coming at the skater, metres. */
 export const HITCH_LATERAL = 10;
+/** A ride's ground may be this far above or below the skater and still be pointed at, metres. */
+export const LEVEL_DY = 4;
 /** A ride must stay in service this long to be pointed at (2 s). */
 export const CATCH_AHEAD_TICKS = 120;
 /** Hitched this long, the sling hint shows (1.5 s). */
@@ -134,7 +136,8 @@ const RH = makeRailHit();
 /**
  * The best ride to point at for a skater at (x, y, z) with `chain` links alive, at `tick`: a ride
  * tryHitch would accept (in service now and for CATCH_AHEAD_TICKS more, not gated above the next
- * link, its grab point within vertical reach, or a hop's reach for a strap) that is standing within
+ * link, its grab point within vertical reach of the ground under it, or a hop's reach for a strap,
+ * that ground within LEVEL_DY of the skater's height) that is standing within
  * HITCH_STOP_NEAR or moving within HITCH_NEAR toward the skater and passing within HITCH_LATERAL.
  * Writes the line and vehicle into `out` (line -1 when none). Pure.
  */
@@ -149,10 +152,9 @@ export function findCatchable(
 ): void {
   out.line = -1;
   out.veh = -1;
-  const handY = y + FEEL.HAND_HEIGHT;
   const reachY = FEEL.HITCH_REACH_Y;
-  const hopV = FEEL.HOP_V + FEEL.HOP_BONUS_MAX * 0.5;
-  const hopUp = (hopV * hopV) / (2 * FEEL.GRAVITY);
+  // A standing hop's height, with a margin: what a skater on the ground can add to their reach.
+  const hopUp = (0.6 * FEEL.HOP_V * FEEL.HOP_V) / (2 * FEEL.GRAVITY);
   let best = Infinity;
   for (let li = 0; li < w.lines.length; li++) {
     const L = w.lines[li];
@@ -167,7 +169,11 @@ export function findCatchable(
       const dz = z - GP.z;
       const d = Math.sqrt(dx * dx + dz * dz);
       if (d >= HITCH_NEAR || d >= best) continue;
-      const dy = GP.y - handY;
+      // Judged from the ground under the grab point, where the skater would stand to catch it, and
+      // that ground must be about the skater's level (not a street below a wall).
+      const under = topHeight(w, GP.x, GP.z);
+      if (under - y > LEVEL_DY || y - under > LEVEL_DY) continue;
+      const dy = GP.y - (under + FEEL.HAND_HEIGHT);
       if (dy < -reachY || dy > (L.overhead ? reachY + hopUp : reachY)) continue;
       const sp = len2(VS.vx, VS.vz);
       if (sp < 0.05) {
