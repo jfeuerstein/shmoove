@@ -1,6 +1,7 @@
 /**
  * Chain meter: ×N with one pip per link; in flight, a bar drains with the ground grace used.
- * A lost chain shows the count that was lost for a moment, then clears.
+ * A lost chain shows the count that was lost for a moment, then clears. A single ride (one link)
+ * is not a chain, so when it ends nothing is shown as lost.
  */
 import { FEEL } from '../sim/constants';
 import type { Game } from '../sim/game/game';
@@ -10,9 +11,47 @@ import { FlapRow } from './flap';
 import type { Twos } from './twos';
 
 const LOST_SHOW = 1.3;
+/** The fewest links that make a chain worth showing as lost when it ends. */
+const MIN_LOST = 2;
 const MAX_PIPS = 8;
 /** Bar is redrawn in steps of 1/BAR_STEPS so it is not written every frame for nothing. */
 const BAR_STEPS = 40;
+
+/** What the meter shows this frame: a count and whether it is the count of a chain just lost. */
+export interface ChainShown {
+  n: number;
+  lost: boolean;
+}
+
+/**
+ * The meter's decision, apart from the DOM: which number to show and whether it is a lost chain.
+ * `chain` is the live chain on the player; `events` are this frame's sim events.
+ */
+export class ChainDisplay {
+  private lost = 0;
+  private lostTime = 0;
+  private readonly out: ChainShown = { n: 0, lost: false };
+
+  update(events: readonly SimEvent[], chain: number, dt: number): ChainShown {
+    for (const e of events) {
+      if (e.type === 'chainEnd') {
+        this.lost = e.chain;
+        this.lostTime = e.chain >= MIN_LOST ? LOST_SHOW : 0;
+      } else if (e.type === 'hitch') {
+        this.lostTime = 0;
+      }
+    }
+    if (this.lostTime > 0) this.lostTime -= dt;
+    const out = this.out;
+    out.n = chain;
+    out.lost = false;
+    if (chain === 0 && this.lostTime > 0) {
+      out.n = this.lost;
+      out.lost = true;
+    }
+    return out;
+  }
+}
 
 export class ChainMeter {
   readonly el: HTMLElement;
@@ -24,10 +63,9 @@ export class ChainMeter {
   private readonly lostCls: ClassSlot;
   private readonly barOn: ClassSlot;
   private readonly lostFlap: ClassSlot;
+  private readonly display = new ChainDisplay();
   private shown = 0;
   private pipCount = 0;
-  private lost = 0;
-  private lostTime = 0;
   private barStep = -1;
 
   constructor(
@@ -54,22 +92,7 @@ export class ChainMeter {
 
   update(events: readonly SimEvent[], dt: number): void {
     const p = this.game.sim.player;
-    for (const e of events) {
-      if (e.type === 'chainEnd') {
-        this.lost = e.chain;
-        this.lostTime = LOST_SHOW;
-      } else if (e.type === 'hitch') {
-        this.lostTime = 0;
-      }
-    }
-    if (this.lostTime > 0) this.lostTime -= dt;
-
-    let n = p.chain;
-    let lost = false;
-    if (n === 0 && this.lostTime > 0) {
-      n = this.lost;
-      lost = true;
-    }
+    const { n, lost } = this.display.update(events, p.chain, dt);
     this.on.set(n > 0);
     this.lostCls.set(lost);
     this.lostFlap.set(lost);
