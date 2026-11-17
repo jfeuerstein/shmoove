@@ -30,6 +30,8 @@ const ROSTER: {
   hours: [number, number][];
   secret?: boolean;
   minChain?: number;
+  /** Vanishes once its lap is run instead of waiting at the terminus (secrets). */
+  parkHidden?: boolean;
 }[] = [
   { id: 'D1', kind: 'crane', district: D.DOCKS, stem: 0, vehicles: 1, hours: [[0, 1]] },
   { id: 'D2', kind: 'forklift', district: D.DOCKS, stem: 1, vehicles: 3, hours: [[DAY, DUSK]] },
@@ -44,9 +46,9 @@ const ROSTER: {
   { id: 'A1', kind: 'cablecar', district: D.ANTENNA, stem: 0, vehicles: 4, hours: [[0, 1]] },
   { id: 'A2', kind: 'cablecar', district: D.ANTENNA, stem: 1, vehicles: 3, hours: [[DAY, NIGHT]] },
   { id: 'A3', kind: 'kite', district: D.ANTENNA, stem: 2, vehicles: 5, hours: [[0.35, 0.7]] },
-  { id: 'S1', kind: 'ghosttram', district: D.TERRACES, stem: 3, vehicles: 1, hours: [[0, 0.06]], secret: true },
-  { id: 'S2', kind: 'blimp', district: D.ANTENNA, stem: 3, vehicles: 1, hours: [[0.76, 0.77]], secret: true },
-  { id: 'S3', kind: 'kite', district: D.ANTENNA, stem: 3, vehicles: 1, hours: [[0.35, 0.7]], secret: true, minChain: 4 },
+  { id: 'S1', kind: 'ghosttram', district: D.TERRACES, stem: 3, vehicles: 1, hours: [[0, 0.06]], secret: true, parkHidden: true },
+  { id: 'S2', kind: 'blimp', district: D.ANTENNA, stem: 3, vehicles: 1, hours: [[0.76, 0.77]], secret: true, parkHidden: true },
+  { id: 'S3', kind: 'kite', district: D.ANTENNA, stem: 3, vehicles: 1, hours: [[0.35, 0.7]], secret: true, minChain: 4, parkHidden: true },
 ];
 
 const vs = makeVehicleState();
@@ -119,7 +121,7 @@ describe('the roster', () => {
         for (let i = 0; i < l.vehicles; i++) {
           vehicleAt(l, i, t, vs);
           let want = inWindows(r.hours, lapStart(l, vs, t) / DAY_TICKS);
-          if (l.parkHidden === true && vs.lapTick >= l.runTicks) want = false;
+          if (r.parkHidden === true && vs.lapTick >= l.runTicks) want = false;
           expect(vs.active, `${r.id} vehicle ${i} at ${t}`).toBe(want);
           if (vs.active) activeSamples++;
         }
