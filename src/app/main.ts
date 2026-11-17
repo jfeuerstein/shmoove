@@ -287,7 +287,9 @@ function boot(): void {
       if (acc > DT) acc = 0;
     }
     draw(ui.paused ? 1 : acc / DT, dt);
-    lastWork = performance.now() - t0;
+    // A scripted route stands in for the player's thumb: its own cost is reported as a part, not
+    // counted as the game's frame work.
+    lastWork = performance.now() - t0 - cur[PART.route];
     frames++;
     if (statFrames < STATS_CAP) {
       let reducers = 0;

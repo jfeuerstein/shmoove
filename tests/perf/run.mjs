@@ -4,7 +4,8 @@
 //    carves, hops, hitches and slings) in headless Chromium at 4x CPU throttle. Reports work per
 //    frame, per sim step, and for frames that carried exactly one sim step (headless Chromium
 //    rasterises in software and runs at about 10 fps, so most frames carry catch-up steps), plus a
-//    breakdown of every frame by part.
+//    breakdown of every frame by part. Work excludes the route script itself (it stands in for the
+//    player's thumb; its cost is the `route` part).
 // 2. Viewpoint tour: /?route=tour in manual mode visits fixed viewpoints in every district, day and
 //    night, and checks the most draw calls and triangles seen anywhere against the budgets.
 import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
