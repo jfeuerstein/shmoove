@@ -41,6 +41,7 @@ export const FEEL_DEFS = {
   COYOTE_TIME: [0.12, 0, 0.5, 'Air', 'Can still hop this long after rolling off an edge, s'],
   BAIL_IMPACT: [19, 5, 60, 'Air', 'Landing speed into the surface that bails you, m/s'],
   AWNING_BOUNCE: [11, 2, 25, 'Air', 'Minimum bounce speed off an awning, m/s'],
+  AWNING_NUDGE: [2.5, 0, 8, 'Air', 'Least horizontal speed leaving an awning, so nobody bounces on the spot, m/s'],
   AWNING_KEEP: [0.75, 0, 1.2, 'Air', 'Fraction of fall speed returned by an awning'],
   AWNING_ROLL_THROW: [0.6, 0, 1.5, 'Air', 'Rolling onto an awning throws you up at AWNING_BOUNCE x this'],
   AIR_BONK: [1.2, 1, 2, 'Air', 'Bonk off a wall in the air or mid-wallride: speed into it is reversed x (this - 1)'],

@@ -523,3 +523,19 @@ describe('traffic never parks a skater', () => {
     expect(ev.some((e) => e.type === 'bail' && e.reason === 'vehicle')).toBe(true);
   });
 });
+
+describe('flank contact is not an engine', () => {
+  it('a skater pressed against a moving tram for a long time never goes faster than the tram', () => {
+    const sim = newSim();
+    seekVehicle(sim, TRAM, 0, 100, 1, 30);
+    teleport(sim, -1.2, 104, PI / 2 + PI, 0);
+    let top = 0;
+    // Steer into the tram's flank the whole time.
+    run(sim, 600, (s) => {
+      top = Math.max(top, hSpeed(s));
+      return { steer: 1 };
+    });
+    expect(top).toBeLessThan(12);
+    expect(Number.isFinite(sim.player.x + sim.player.z)).toBe(true);
+  });
+});

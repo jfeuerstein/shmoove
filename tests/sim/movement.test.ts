@@ -410,3 +410,22 @@ describe('review fixes', () => {
     expect(ms).toBeLessThan(0.3);
   });
 });
+
+describe('awnings and traffic never trap', () => {
+  it('a skater dropped straight down onto an awning bounces off it, not on the spot for ever', () => {
+    const sim = newSim();
+    // The slice's awning spans x 10..16, z 165..175.
+    teleport(sim, 13, 170, DOWNHILL, 0);
+    sim.player.mode = Mode.AIR;
+    sim.player.y += 6;
+    let bounces = 0;
+    run(sim, 60 * 20, (s) => {
+      for (const e of s.events) if (e.type === 'bounce') bounces++;
+      return {};
+    });
+    expect(bounces).toBeGreaterThanOrEqual(1);
+    expect(bounces).toBeLessThan(6);
+    expect(sim.player.mode).toBe(Mode.GROUND);
+    expect(sim.player.z).toBeLessThan(165);
+  });
+});

@@ -163,3 +163,22 @@ Decisions made without the owner in the room, newest last. Cuts are marked **CUT
 54. **e2e routes assert what the game shows, not which way a race went.** The chalk route's skater
     used to lose its race; a controller change made it win. The route now requires a result ticket
     and a matching toast, whichever it is.
+
+## M3 retune
+
+55. **Tram 5 runs at 13 m/s with three trams,** so its lap fits half a day and one comes every two
+    minutes. (This replaces item 44's "six trams": six would stand on each other at the terminus.)
+    Forklifts run at 7 m/s so their two-lobe lap fits a four-minute period.
+56. **The Antenna rides are all shifted 750 ticks together** so a climber who takes tram 5 from the
+    docks at the start of the day still catches the last summit cable car. The climb takes 400 s
+    with a few seconds to spare; the summit route's two daily windows are unchanged.
+57. **The no-trap rule is exact:** a skater at rest must be on locally level ground (under 1.5% at
+    their own position). Anything else is a pin. 400 drops with no vehicles: no pins, 3.5% of runs
+    with a bail. Parapets at the outer hairpins are left open where the bank behind is higher, and
+    dishes are turned 45 degrees to the slope.
+58. **Awnings hang off the side walls that face stair streets,** where skaters actually fall (245 in
+    all). Landing lips have no drop beside the flights, so nothing can hang under them.
+59. **Awnings and vehicle flanks cannot trap or launch.** An awning sends a skater who comes straight
+    down off along their heading instead of bouncing them on the spot for ever (found when awnings
+    went into alleys: 507 bounces). A vehicle flank brings the skater up to a share of its speed
+    rather than adding that share every tick of contact (a moped had shoved the climb bot to 39 m/s).

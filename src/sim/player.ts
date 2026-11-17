@@ -525,6 +525,11 @@ function land(ctx: SimCtx, g: GroundSample): void {
 
   if (g.surface === Surface.AWNING && impact > 1) {
     p.vy = Math.max(F.AWNING_BOUNCE, -p.vy * F.AWNING_KEEP);
+    // Never bounce on the spot: a skater who comes straight down is sent off along their heading.
+    if (len2(p.vx, p.vz) < F.AWNING_NUDGE) {
+      p.vx = dsin(p.heading) * F.AWNING_NUDGE;
+      p.vz = dcos(p.heading) * F.AWNING_NUDGE;
+    }
     p.coyote = 0;
     ctx.events.push({ type: 'bounce', speed: p.vy });
     return;
@@ -781,8 +786,16 @@ function collideVehicles(ctx: SimCtx): void {
         // dead: a skater with no push must never be parked by passing traffic.
         const out = Math.max(into * F.RIDE_SIDE_BOUNCE, F.RIDE_SIDE_NUDGE);
         const dl = (out - vlat * side) * side;
-        p.vx += -VS.hz * dl + VS.vx * F.RIDE_SIDE_DRAG;
-        p.vz += VS.hx * dl + VS.vz * F.RIDE_SIDE_DRAG;
+        p.vx += -VS.hz * dl;
+        p.vz += VS.hx * dl;
+        // Brushed along: bring the skater's speed along the vehicle's travel up to a share of the
+        // vehicle's. A target, not an impulse: contact can last many ticks and must not add up.
+        const want = len2(VS.vx, VS.vz) * F.RIDE_SIDE_DRAG;
+        const along = p.vx * VS.hx + p.vz * VS.hz;
+        if (along < want) {
+          p.vx += VS.hx * (want - along);
+          p.vz += VS.hz * (want - along);
+        }
         if (into > 1) ctx.events.push({ type: 'wallHit', speed: into });
         if (p.mode === Mode.GROUND) {
           const after = len2(p.vx, p.vz);
