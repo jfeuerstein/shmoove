@@ -22,10 +22,11 @@ function bunting(
   inks: number[],
 ): void {
   const sag = 0.35;
-  const pt = (t: number): [number, number, number] => [ax + (bx - ax) * t, ay + (by - ay) * t - sag * 4 * t * (1 - t), az + (bz - az) * t];
+  const pt = (t: number): [number, number, number] => [ax + (bx - ax) * t, ay + (by - ay) * t - sag * 2 * Math.min(t, 1 - t), az + (bz - az) * t];
+  // The string in two straight runs, sagging at the middle.
   let prev = pt(0);
-  for (let i = 1; i <= flags; i++) {
-    const cur = pt(i / flags);
+  for (const t of [0.5, 1]) {
+    const cur = pt(t);
     b.beam(prev[0], prev[1], prev[2], cur[0], cur[1], cur[2], 0.015, INK.ink);
     prev = cur;
   }
@@ -89,7 +90,7 @@ export function parade(b: MeshBuilder, line: CompiledLine, frame: number): void 
     b.beam(pts[i][0], pts[i][1], az, pts[i + 1][0], pts[i + 1][1], az, 0.08, INK.paper);
     b.box(pts[i][0], pts[i][1], az, 0.14, 0.14, 0.14, 1, 0, FLOWERS[i % 4], {});
   }
-  for (let i = 0; i < 4; i++) for (const s of [1, -1]) b.box(s * aw, deck + 0.5 + i * 0.5, az, 0.13, 0.13, 0.13, 1, 0, FLOWERS[(i + 1) % 4], {});
+  for (let i = 0; i < 2; i++) for (const s of [1, -1]) b.box(s * aw, deck + 0.7 + i * 0.9, az, 0.13, 0.13, 0.13, 1, 0, FLOWERS[(i + 1) % 4], {});
   // Heart: two lobes and a point, both faces.
   const hy = top + 0.55;
   const heart = [0, hy - 0.55, az, 0.5, hy, az, 0.3, hy + 0.3, az, 0, hy + 0.12, az, -0.3, hy + 0.3, az, -0.5, hy, az];

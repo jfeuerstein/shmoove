@@ -443,7 +443,6 @@ export function figure(b: MeshBuilder, x: number, y: number, z: number, o: Figur
     } else {
       const k = o.stride * side * 0.22 * s;
       b.beam(lx, hip, lz, lx + ax * k, y + 0.04, lz + az * k, 0.07 * s, o.legs);
-      b.box(lx + ax * (k + 0.05 * s), y + 0.04, lz + az * (k + 0.05 * s), 0.07 * s, 0.04, 0.07 * s, 1, 0, INK.ink, { bottom: true });
     }
   }
   const tb = hip + 0.28 * s;
@@ -469,6 +468,5 @@ export function figure(b: MeshBuilder, x: number, y: number, z: number, o: Figur
       hz = shz + sz * side * 0.06 * s + az * -o.stride * side * 0.15 * s;
     }
     b.beam(shx, shY, shz, hx, hyy, hz, 0.05 * s, o.shirt);
-    b.box(hx, hyy, hz, 0.055 * s, 0.055 * s, 0.055 * s, 1, 0, SKIN, { bottom: true });
   }
 }
