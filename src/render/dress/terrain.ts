@@ -204,6 +204,15 @@ const RISER = 0xa39b8c;
 
 /** Decoration for cells [ix0, ix1) x [iz0, iz1). It never changes the ground by more than 3 cm (12 cm for treads). */
 export function meshGroundDecor(b: MeshBuilder, w: World, ix0: number, iz0: number, ix1: number, iz1: number): void {
+  meshGroundPaint(b, w, ix0, iz0, ix1, iz1);
+  meshStairTreads(b, w, ix0, iz0, ix1, iz1);
+}
+
+/**
+ * The painted part of the decoration (street dashes, kerbs, track, tufts, quay hazard stripes).
+ * Rows are independent: meshing rows one call at a time gives exactly the geometry of one call.
+ */
+export function meshGroundPaint(b: MeshBuilder, w: World, ix0: number, iz0: number, ix1: number, iz1: number): void {
   const c = w.cell;
   const rx: Run = { a: 0, b: 0 };
   const rz: Run = { a: 0, b: 0 };
@@ -259,7 +268,6 @@ export function meshGroundDecor(b: MeshBuilder, w: World, ix0: number, iz0: numb
       }
     }
   }
-  stairTreads(b, w, ix0, iz0, ix1, iz1);
 }
 
 function tuft(b: MeshBuilder, w: World, x: number, z: number, size: number): void {
@@ -319,9 +327,9 @@ function trackCell(b: MeshBuilder, w: World, ix: number, iz: number, rx: Run, rz
 /**
  * Stair treads drawn as real steps sitting on the ramp: each step's tread is level across its
  * run, set so its nose stands at most TREAD_MAX above the ramp. Runs of coplanar stair cells
- * across the street share one set of steps.
+ * across the street share one set of steps. Rows are independent, as for the paint.
  */
-function stairTreads(b: MeshBuilder, w: World, ix0: number, iz0: number, ix1: number, iz1: number): void {
+export function meshStairTreads(b: MeshBuilder, w: World, ix0: number, iz0: number, ix1: number, iz1: number): void {
   const c = w.cell;
   for (let iz = iz0; iz < iz1; iz++) {
     let ix = ix0;

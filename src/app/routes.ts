@@ -1,12 +1,22 @@
 /**
- * Built-in input scripts, played with `?route=NAME`. The perf harness uses two:
+ * Built-in input scripts, played with `?route=NAME`. The perf harness uses these:
  *
- * - `perf`: a run a player could do. Start at the summit (the world's spawn where there is none),
- *   ride down the spine carving and hopping, hold the touch when a ride comes within reach so it
- *   hitches, let go a few seconds later so it slings, and at the bottom go back to the top once.
+ * - `perfcity`: what `npm run perf` times. The run a player would do, cut into legs: each leg puts
+ *   the skater on the spine at a fixed place in one district and rides down from there for
+ *   LEG_TICKS ticks, carving and hopping, holding the touch when a ride comes within reach so it
+ *   hitches and letting go a few seconds later so it slings. The legs cover all four districts,
+ *   catch rides, and one runs the fast stretch through the terraces that crosses chunk rows at
+ *   speed. `routeWindows` names the ticks of each leg the harness times (all but the first
+ *   LEG_WARM, which hold the teleport and the camera settling).
+ * - `perf`: the same riding from the summit in one long loop (the summit back to the top once a
+ *   descent reaches the bottom). Kept for profiling and the sim-hash test.
  * - `tour`: fixed viewpoints in every district, held still for a while each, for the draw-call and
  *   triangle budgets across the whole city (`tests/perf/run.mjs`).
+ *
+ * The scripts steer with the sim's deterministic math, so a route plays out tick for tick the same
+ * in Node (tests/unit/perfRoute.test.ts) as in the browser.
  */
+import { datan2, dcos, dsin, wrapAngle } from '../sim/math';
 import { grabPoint, makeVehicleState, vehicleAt } from '../sim/lines';
 import { placePlayer } from '../sim/player';
 import type { Sim } from '../sim/sim';
@@ -58,13 +68,6 @@ export function perfBottom(w: World, start: Point): number {
   return startY - PERF_DROP;
 }
 
-function wrap(a: number): number {
-  let r = a;
-  while (r > Math.PI) r -= 2 * Math.PI;
-  while (r < -Math.PI) r += 2 * Math.PI;
-  return r;
-}
-
 const _v = makeVehicleState();
 const _g = { x: 0, y: 0, z: 0 };
 
@@ -105,66 +108,167 @@ function nearestRide(sim: Sim, range: number): boolean {
   return found;
 }
 
-function createPerf(): RouteScript {
-  let world: World | null = null;
-  let start: Point = { x: 0, z: 0, heading: 0 };
-  let bottomY = 0;
-  // The lane: through the world's spawn along its downhill heading (the spine on the city).
-  let laneX = 0;
-  let laneZ = 0;
-  let dirX = 0;
-  let dirZ = 1;
-  let stalled = 0;
-  let riding = 0;
-  let released = 0;
-  return (sim, i, out) => {
+/**
+ * The riding shared by the perf routes: pursue a point ahead on the lane (through the world's spawn
+ * along its downhill heading: the spine on the city), swung side to side so the board carves; seek
+ * rides that come within reach, ride them a while and let go to sling; hop now and then.
+ */
+class Rider {
+  private laneX = 0;
+  private laneZ = 0;
+  private dirX = 0;
+  private dirZ = 1;
+  private riding = 0;
+  private released = 0;
+  /** Ticks in a row stalled on the ground. */
+  stalled = 0;
+
+  constructor(w: World) {
+    this.laneX = w.spawn.x;
+    this.laneZ = w.spawn.z;
+    this.dirX = dsin(w.spawn.heading);
+    this.dirZ = dcos(w.spawn.heading);
+  }
+
+  /** The point on the lane at coordinate z (where the lane crosses z; a lane across the slope: nearest point). */
+  laneAt(z: number): Point {
+    const s = Math.abs(this.dirZ) > 0.2 ? (z - this.laneZ) / this.dirZ : (z - this.laneZ) * this.dirZ;
+    return { x: this.laneX + this.dirX * s, z: this.laneZ + this.dirZ * s, heading: datan2(this.dirX, this.dirZ) };
+  }
+
+  /** Forget any ride in progress (after a teleport). */
+  reset(): void {
+    this.riding = 0;
+    this.released = 0;
+    this.stalled = 0;
+  }
+
+  drive(sim: Sim, i: number, out: InputFrame): void {
     const p = sim.player;
-    const w = sim.world;
-    if (world !== w) {
-      world = w;
-      start = perfStart(w);
-      bottomY = perfBottom(w, start);
-      laneX = w.spawn.x;
-      laneZ = w.spawn.z;
-      dirX = Math.sin(w.spawn.heading);
-      dirZ = Math.cos(w.spawn.heading);
-      placePlayer(w, p, start.x, start.z, start.heading);
-      stalled = 0;
-    }
-    stalled = p.mode === Mode.GROUND && p.speed < 0.3 ? stalled + 1 : 0;
-    if (p.mode !== Mode.HITCH && (p.y < bottomY || stalled > STALL_TICKS)) {
-      placePlayer(w, p, start.x, start.z, start.heading);
-      stalled = 0;
-      riding = 0;
-      released = 0;
-    }
+    this.stalled = p.mode === Mode.GROUND && p.speed < 0.3 ? this.stalled + 1 : 0;
+    const along = (p.x - this.laneX) * this.dirX + (p.z - this.laneZ) * this.dirZ + LOOK_AHEAD;
+    const side = CARVE_AMP * dsin(i / CARVE_PERIOD);
+    let tx = this.laneX + this.dirX * along + this.dirZ * side;
+    let tz = this.laneZ + this.dirZ * along - this.dirX * side;
 
-    // Steer for a point ahead on the lane, swung side to side so the board carves; or for a ride
-    // that comes within reach.
-    const along = (p.x - laneX) * dirX + (p.z - laneZ) * dirZ + LOOK_AHEAD;
-    const side = CARVE_AMP * Math.sin(i / CARVE_PERIOD);
-    let tx = laneX + dirX * along + dirZ * side;
-    let tz = laneZ + dirZ * along - dirX * side;
-
-    // Catch rides that come past, ride a while, then let go to sling.
     if (p.mode === Mode.HITCH) {
-      riding++;
-      out.hold = riding < RIDE_TICKS;
-      if (!out.hold) released = RELEASE_TICKS;
+      this.riding++;
+      out.hold = this.riding < RIDE_TICKS;
+      if (!out.hold) this.released = RELEASE_TICKS;
     } else {
-      riding = 0;
-      if (released > 0) released--;
-      const seek = released === 0 && nearestRide(sim, SEEK);
+      this.riding = 0;
+      if (this.released > 0) this.released--;
+      const seek = this.released === 0 && nearestRide(sim, SEEK);
       if (seek) {
         tx = _near.x;
         tz = _near.z;
       }
       out.hold = seek && _near.d < HOLD_NEAR;
     }
-    const want = Math.atan2(tx - p.x, tz - p.z);
+    const want = datan2(tx - p.x, tz - p.z);
     // The sim turns heading by -steer.
-    out.steer = Math.max(-1, Math.min(1, -wrap(want - p.heading) * STEER_GAIN));
+    out.steer = Math.max(-1, Math.min(1, -wrapAngle(want - p.heading) * STEER_GAIN));
     out.hop = p.mode !== Mode.HITCH && i % 97 === 0;
+  }
+}
+
+function createPerf(): RouteScript {
+  let world: World | null = null;
+  let rider: Rider | null = null;
+  let start: Point = { x: 0, z: 0, heading: 0 };
+  let bottomY = 0;
+  return (sim, i, out) => {
+    const p = sim.player;
+    const w = sim.world;
+    if (world !== w || rider === null) {
+      world = w;
+      rider = new Rider(w);
+      start = perfStart(w);
+      bottomY = perfBottom(w, start);
+      placePlayer(w, p, start.x, start.z, start.heading);
+    }
+    if (p.mode !== Mode.HITCH && (p.y < bottomY || rider.stalled > STALL_TICKS)) {
+      placePlayer(w, p, start.x, start.z, start.heading);
+      rider.reset();
+    }
+    rider.drive(sim, i, out);
+  };
+}
+
+// ---------------------------------------------------------------------------------------------
+// perfcity: the timed legs
+
+/** Ticks per leg of `perfcity`. */
+export const LEG_TICKS = 600;
+/** Ticks at the start of each leg that are not timed: the teleport, the camera cut, chunks filling. */
+export const LEG_WARM = 150;
+
+export interface PerfLeg {
+  /** Short name, for the report. */
+  name: string;
+  /** Where on the lane the leg starts: the lane's z there, m (clamped into the world). */
+  z: number;
+}
+
+/**
+ * The legs of `perfcity`, in order (the order matters: the rides run to a timetable, so what a leg
+ * meets depends on the tick it starts at). Chosen by riding candidate starts in the sim; what they
+ * deliver is asserted tick for tick by tests/unit/perfRoute.test.ts and again in the browser by the
+ * harness: every timed window travels well over 40 m, the windows see all four districts, the
+ * mercado and docks legs hitch and sling, and `streaming` is the fast run down the terraces spine
+ * that crosses chunk rows.
+ */
+export const PERF_LEGS: readonly PerfLeg[] = [
+  { name: 'mercado', z: 375 },
+  { name: 'terraces', z: 875 },
+  { name: 'antenna', z: 1030 },
+  { name: 'streaming', z: 935 },
+  { name: 'docks', z: 260 },
+];
+
+/** Where a leg starts: on the lane where it crosses the leg's z, facing down the lane. */
+export function legStart(w: World, leg: PerfLeg): Point {
+  return new Rider(w).laneAt(Math.max(w.minZ + 1, Math.min(w.maxZ - 1, leg.z)));
+}
+
+export interface RouteWindow {
+  /** The leg's name. */
+  name: string;
+  /** Route ticks [from, to) that are timed. Route tick 0 is the first sim step the route drives. */
+  from: number;
+  to: number;
+}
+
+/** The timed windows of a route (empty for routes that are not cut into legs). */
+export function routeWindows(name: string | null): RouteWindow[] {
+  if (name !== 'perfcity') return [];
+  return PERF_LEGS.map((leg, k) => ({ name: leg.name, from: k * LEG_TICKS + LEG_WARM, to: (k + 1) * LEG_TICKS }));
+}
+
+/** A route that rides `legs` in turn, LEG_TICKS each, then starts over. `perfcity` is PERF_LEGS. */
+export function createLegRoute(legs: readonly PerfLeg[]): RouteScript {
+  let world: World | null = null;
+  let rider: Rider | null = null;
+  let starts: Point[] = [];
+  let leg = -1;
+  return (sim, i, out) => {
+    const p = sim.player;
+    const w = sim.world;
+    if (world !== w || rider === null) {
+      world = w;
+      rider = new Rider(w);
+      starts = legs.map((l) => legStart(w, l));
+      leg = -1;
+    }
+    // After the last leg the run starts over from the first.
+    const k = Math.floor(i / LEG_TICKS) % legs.length;
+    if (k !== leg || rider.stalled > STALL_TICKS) {
+      leg = k;
+      const s = starts[k];
+      placePlayer(w, p, s.x, s.z, s.heading);
+      rider.reset();
+    }
+    rider.drive(sim, i, out);
   };
 }
 
@@ -202,7 +306,7 @@ function createTour(): RouteScript {
   };
 }
 
-const ROUTES: Record<string, () => RouteScript> = { perf: createPerf, tour: createTour };
+const ROUTES: Record<string, () => RouteScript> = { perf: createPerf, perfcity: () => createLegRoute(PERF_LEGS), tour: createTour };
 
 export function getRoute(name: string | null): RouteScript | null {
   return name !== null && name in ROUTES ? ROUTES[name]() : null;
