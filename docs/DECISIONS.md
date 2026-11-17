@@ -191,3 +191,17 @@ Decisions made without the owner in the room, newest last. Cuts are marked **CUT
     repository's default branch may be the only one the `github-pages` environment lets deploy until
     `develop` is added under Settings → Environments → github-pages → Deployment branches). A
     `checks` job runs typecheck, lint and tests beside the deploy without holding it back.
+
+## M3 verification follow-ups
+
+61. **The blimp dips to the hill station.** Its one pass (leaving at 0.76) comes down so the end of
+    its ladder crosses the platform 4.2 m up for about three seconds: out of standing reach (3.6 m),
+    inside a hop's (about 4.9 m). The platform was enlarged to give the sweep its length. Before
+    this nobody could catch it: the ladder never came within 26 m of anything.
+62. **The night bus is an express:** 18 m/s, laps leaving between 0.80 and midnight, home by 0.18, so
+    none is on the road by day. The tram 9 meeting became a tram 5 meeting at night.
+63. **The climb works from any morning start** (the bot crosses the hill station platform instead of
+    waiting for two cars to coincide). Latest docks start that still reaches the summit the same
+    day: about 0.458.
+64. **The summit route stays hard:** three timed releases with roughly 0.3–1.2 s of slack, two
+    windows a day (0.5125 and 0.6375). It is a secret. On the playtest list.

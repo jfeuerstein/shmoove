@@ -103,3 +103,17 @@ An ear has to judge the rest. Mute with `?mute`.
   Screen". Does it launch fullscreen and portrait, and does it start offline?
 - The "NEW TIMETABLE" update ticket after a redeploy.
 - Reduced motion: does it remove everything that bothers you (camera shake, flips, slides)?
+
+## Rides in the city
+
+- Tram 5 runs at 13 m/s and the night bus at 18 m/s (`src/sim/city/lines.ts`). Is being towed that
+  fast up or down the switchbacks fun or uncontrollable? Per-line `cruise`, `rope`.
+- The summit route (lower cable car → summit cable car → kite → king kite → needle): a verifier
+  measured 0.3–1.2 s of slack on each of three releases, with two windows a day. Is it a satisfying
+  secret or impossible by hand? Phases and heights in `src/sim/city/lines.ts` and `routes.ts`;
+  `CHAIN_GROUND_GRACE`, `HITCH_REACH`, `HITCH_REACH_Y`.
+- The blimp: on the hill station platform at dusk (0.76), hop to its ladder. Is the 4.2 m height a
+  fair hop? `HOP_V`, `HITCH_REACH_Y`.
+- Catching overhead rides that need a hop (crane, cable cars, kites): is the swipe-up-and-hold
+  natural?
+- Is a wait of up to two minutes for tram 5, or up to four for a handcart or fish truck, too long?
