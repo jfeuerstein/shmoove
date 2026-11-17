@@ -230,6 +230,8 @@ const STALL_RUNS: readonly [number, number][] = [
   [10.5, 21.5],
 ];
 const STALL_STEP = 3.2;
+/** How far an awning off a building's side wall reaches out, m. */
+const SIDE_AWNING = 1.8;
 /** The landing the funicular's bottom turn-round sweeps (no stalls on its west side). */
 const FUNI_TRACK_LEVEL = 566;
 const STALL_HALF = 1.1;
@@ -311,15 +313,27 @@ function dressMercado(w: World, rng: Rng, firstTerrace: number): number {
               // skater rolling off that street lands on them instead of meeting a wall.
               yTop = Math.max(Math.min(gap.yUp(x0), gap.yUp(x1)) - rng.range(0.1, 0.6), g.hi + 0.05);
             } else {
-              // The downhill row: the tall street wall over the lower street.
-              yTop = gap.yLow(xc) + rng.range(9, 14);
+              // The downhill row: the tall street wall over the lower street, a step lower than the
+              // low roofs behind it, so a skater crossing those carries on onto it and off its front,
+              // onto the awnings over the street below.
+              const behind = Math.min(gap.yUp(x0), gap.yUp(x1)) - 0.6;
+              yTop = Math.min(gap.yLow(xc) + rng.range(9, 11), behind - rng.range(0.3, 0.8));
               yTop = Math.max(yTop, terrainHeight(w, xc, (z0 + z1) / 2) + 5, g.hi + 2.5);
             }
             box(w, x0, x1, z0, z1, g.lo - 1, yTop, 'building', rng.int(8));
             paintUnder(w, x0, x1, z0, z1, Surface.PLAZA);
+            // Below the roof's side edges, where a skater rolls off it into the street or alley
+            // beside: an awning off each side wall, halfway along it.
+            const zm = (z0 + z1) / 2;
+            for (const [a0, a1] of [
+              [x0 - SIDE_AWNING, x0 - 0.1],
+              [x1 + 0.1, x1 + SIDE_AWNING],
+            ] as const) {
+              if (awning(w, rng, a0, a1, zm - 0.9, zm + 0.9)) awnings++;
+            }
             // Awnings over the street below the front of the lowest row (not where stalls stand).
             const lowest = z0 === gap.zA && gap.zA > CITY.bands.mercado + 5;
-            if (gap.awnings && lowest && !stallAt(x0, x1) && rng.chance(0.88) && awning(w, rng, x0 + 0.4, x1 - 0.4, z0 - 3.2, z0 - 0.4)) awnings++;
+            if (gap.awnings && lowest && !stallAt(x0, x1) && awning(w, rng, x0 + 0.4, x1 - 0.4, z0 - 3.2, z0 - 0.4)) awnings++;
           }
         }
       }
@@ -335,18 +349,39 @@ function dressMercado(w: World, rng: Rng, firstTerrace: number): number {
       if (L.z === PLAZA_LEVEL_Z && a > PLAZA_BODA.x0 && a < PLAZA_BODA.x1) continue;
       // The funicular's bottom turn-round and stop are on this crossing.
       if (L.z === FUNI_TRACK_LEVEL && a === FUNI_X) continue;
-      for (const [z0, z1] of [
-        [L.z1 - third, L.z1 - 0.3],
-        [L.z0 + 0.3, L.z0 + third],
+      // Below the flight, right across the stair street (the spine keeps its middle third clear);
+      // above the next one down, over its outer thirds.
+      const full = a !== SPINE_X;
+      for (const [z0, z1, across] of [
+        [L.z1 - third, L.z1 - 0.3, full],
+        [L.z0 + 0.3, L.z0 + third, false],
       ] as const) {
-        for (const [x0, x1] of [
-          [a - h, a - h / 3],
-          [a + h / 3, a + h],
-        ] as const) {
-          if (awning(w, rng, x0, x1, z0, z1)) awnings++;
-        }
+        const spans: (readonly [number, number])[] = across
+          ? [[a - h, a + h]]
+          : [
+              [a - h, a - h / 3],
+              [a + h / 3, a + h],
+            ];
+        for (const [x0, x1] of spans) if (awning(w, rng, x0, x1, z0, z1)) awnings++;
       }
     }
+    // A ledge along the front edge of the landing between the stair streets, over the low roofs.
+    let free: [number, number][] = [[-100, 100]];
+    const cuts: [number, number][] = MERCADO_CROSSINGS.map(([a, h]) => [a - h - 1, a + h + 1]);
+    if (L.z === PLAZA_LEVEL_Z) cuts.push([PLAZA_BODA.x0 - 4, PLAZA_BODA.x1 + 4]);
+    for (const [c0, c1] of cuts) {
+      const next: [number, number][] = [];
+      for (const [e0, e1] of free) {
+        if (c1 <= e0 || c0 >= e1) next.push([e0, e1]);
+        else {
+          if (c0 > e0) next.push([e0, c0]);
+          if (c1 < e1) next.push([c1, e1]);
+        }
+      }
+      free = next;
+    }
+    for (const [e0, e1] of free) if (e1 - e0 >= 6) railAlongX(w, e0, e1, L.z0 + 0.3, (x) => streetHeight(L, x, L.z0) + 0.35, 'ledge');
+
     // Market stalls along the back edge either side of the spine, clear of its width, backed onto
     // the building wall behind (not where the wedding parade or the funicular turns).
     for (const [r0, r1] of STALL_RUNS) {
@@ -526,10 +561,10 @@ function handrail(w: World, x: number, zLo: number, zHi: number): void {
 
 function dressHandrails(w: World, g: Ground): void {
   for (const st of g.stairs) {
-    // The funicular run-out's rail keeps to its west side, on a row of height samples, clear of the
-    // car standing at the base.
-    const x = st.x + (st.x === FUNI_X ? -5 : 2);
-    for (const f of st.stepper.flights) handrail(w, x, f.zLo, f.zHi);
+    // A rail either side of each stair street; the funicular run-out has one on its west side, on a
+    // row of height samples, clear of the car standing at the base.
+    const xs = st.x === FUNI_X ? [st.x - 5] : [st.x - 2, st.x + 2];
+    for (const x of xs) for (const f of st.stepper.flights) handrail(w, x, f.zLo, f.zHi);
   }
   for (const f of g.spine.flights) {
     handrail(w, SPINE_X - 3, f.zLo, f.zHi);

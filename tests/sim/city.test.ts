@@ -800,6 +800,56 @@ describe('roofs are play space', () => {
   });
 });
 
+describe('the Mercado is a toy box', () => {
+  it('a wanderer who carves at random and hops now and then bounces on awnings, lands on roofs and grinds', () => {
+    // The wanderer: a fresh random carve about once a second, a hop every few seconds, never holds
+    // on to a ride. Ten seeds of ten simulated minutes, each from the new-game spawn.
+    const w = city.world;
+    const roofKinds = new Set(['building', 'house', 'stall', 'market', 'warehouse', 'container', 'school', 'church']);
+    let bounces = 0;
+    let roofs = 0;
+    let grinds = 0;
+    const per: string[] = [];
+    for (let seed = 1; seed <= 10; seed++) {
+      const rng = new Rng(9000 + seed);
+      const sim = newSim(w);
+      teleport(sim, w.spawn.x, w.spawn.z, w.spawn.heading);
+      let steer = 0;
+      let nextCarve = 0;
+      let nextHop = 120 + rng.int(180);
+      let b = 0;
+      let r = 0;
+      let g = 0;
+      for (let t = 0; t < 10 * 60 * 60; t++) {
+        if (t >= nextCarve) {
+          steer = rng.range(-1, 1);
+          nextCarve = t + 40 + rng.int(40);
+        }
+        const hop = t >= nextHop;
+        if (hop) nextHop = t + 120 + rng.int(240);
+        sim.step({ steer, hold: false, hop });
+        const p = sim.player;
+        for (const e of sim.events) {
+          if (e.type === 'grindStart') g++;
+          else if (e.type === 'land' && p.onSolid >= 0 && roofKinds.has(w.solids[p.onSolid].kind)) r++;
+          else if (e.type === 'bounce') {
+            const under = w.solids.find((o) => o.kind === 'awning' && Math.abs(o.yTop - p.y) < 0.5 && footprintDistance(o, p.x, p.z) < 0.5);
+            if (under) b++;
+          }
+        }
+      }
+      per.push(`seed ${seed}: ${b} bounces, ${r} roofs, ${g} grinds`);
+      bounces += b;
+      roofs += r;
+      grinds += g;
+    }
+    const report = per.join('\n');
+    expect(bounces, report).toBeGreaterThanOrEqual(12);
+    expect(roofs, report).toBeGreaterThanOrEqual(30);
+    expect(grinds, report).toBeGreaterThanOrEqual(40);
+  }, 120_000);
+});
+
 // ---------------------------------------------------------------------------------------------
 // Routes.
 
