@@ -2,7 +2,7 @@
  * Solids and rails for the four districts. Layout comes from layout.ts and the carved ground; the
  * seeded RNG only picks heights, widths, colours and scatter.
  */
-import { TAU, dcos, dsin } from '../math';
+import { PI, TAU, dcos, dsin } from '../math';
 import { Rng } from '../rng';
 import { Surface, addRail, addSolid, terrainHeight, type World } from '../world';
 import {
@@ -19,7 +19,7 @@ import {
   levelHeight,
   type Level,
 } from './layout';
-import { SPINE_X, STAIR_HALF } from './layout';
+import { ROAD_HALF, SPINE_X, STAIR_HALF } from './layout';
 import type { Ground } from './terrain';
 
 interface Range {
@@ -500,6 +500,51 @@ function paintFlightStrips(w: World, g: Ground): void {
   }
 }
 
+/** Parapet along the outside of every outer hairpin: height above the road, offset beyond its edge, segment length. */
+export const PARAPET = { height: 0.8, out: 0.9, seg: 4, half: 0.3 } as const;
+
+/**
+ * A low parapet round the outside of each outer hairpin of the switchback roads, so a skater who
+ * comes down a road without steering is turned along the bend instead of leaving the road for the
+ * terraced banks beyond it.
+ */
+function dressParapets(w: World, g: Ground): void {
+  for (const road of [g.east, g.west]) {
+    for (const a of road.outer) {
+      const R = a.r + ROAD_HALF + PARAPET.out;
+      const n = Math.max(2, Math.ceil((Math.abs(a.da) * R) / PARAPET.seg));
+      const step = a.da / n;
+      const chord = 2 * R * dsin(Math.abs(step) / 2);
+      for (let k = 0; k < n; k++) {
+        const t0 = a.a0 + step * k;
+        const t1 = t0 + step;
+        const tm = (t0 + t1) / 2;
+        const cx = a.cx + R * dcos(tm);
+        const cz = a.cz + R * dsin(tm);
+        let lo = Infinity;
+        let hi = -Infinity;
+        for (const t of [t0, tm, t1]) {
+          const y = terrainHeight(w, a.cx + (R - PARAPET.half) * dcos(t), a.cz + (R - PARAPET.half) * dsin(t));
+          lo = Math.min(lo, y);
+          hi = Math.max(hi, y);
+        }
+        addSolid(w, {
+          cx,
+          cz,
+          hx: chord / 2 + 0.2,
+          hz: PARAPET.half,
+          rot: tm + PI / 2,
+          yBase: lo - 0.6,
+          yTop: hi + PARAPET.height,
+          surface: Surface.PLAZA,
+          kind: 'wall',
+          style: 1,
+        });
+      }
+    }
+  }
+}
+
 export interface DressStats {
   awnings: number;
 }
@@ -511,6 +556,7 @@ export function dressCity(w: World, g: Ground, seed: number): DressStats {
   dressTerraces(w, rng.fork('terraces'), g.firstTerrace);
   dressAntenna(w, rng.fork('antenna'));
   paintFlightStrips(w, g);
+  dressParapets(w, g);
   dressHandrails(w, g);
   return { awnings };
 }

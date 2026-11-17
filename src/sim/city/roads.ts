@@ -7,9 +7,21 @@
 import { PI, dcos, dsin } from '../math';
 import { APEX_X, BOULEVARD_Z, INNER_R, LEVELS, OUTER_X, PAD_TILT, docksHeight } from './layout';
 
+/** A circular arc a turtle drew: centre, radius, start angle of the radius and its sweep (positive = toward +z from +x). */
+export interface Arc {
+  cx: number;
+  cz: number;
+  r: number;
+  /** Angle of the radius vector (centre to point) at the start, and its signed sweep. */
+  a0: number;
+  da: number;
+}
+
 export class Turtle {
   /** Flat x, z pairs at about `step` spacing. */
   readonly xz: number[] = [];
+  /** Every arc drawn, in order. */
+  readonly arcs: Arc[] = [];
   x: number;
   z: number;
   /** Heading: direction (cos a, sin a) in (x, z). */
@@ -47,6 +59,8 @@ export class Turtle {
     const cx = left ? this.x - r * s0 : this.x + r * s0;
     const cz = left ? this.z + r * c0 : this.z - r * c0;
     const a0 = this.a;
+    // The radius vector points from the centre to the turtle: heading - 90 deg on a left turn, + 90 on a right.
+    this.arcs.push({ cx, cz, r, a0: left ? a0 - PI / 2 : a0 + PI / 2, da });
     for (let i = 1; i <= n; i++) {
       const a = a0 + (da * i) / n;
       const s = dsin(a);
@@ -67,6 +81,8 @@ export interface Road {
   apexS: number[];
   /** Arc length of the whole road. */
   length: number;
+  /** The outer hairpins (turning near the world's edge), as arcs. */
+  outer: Arc[];
 }
 
 /** Where the climb starts: the road keeps the docks grade until it is this far up the hill. */
@@ -82,6 +98,7 @@ export function buildRoad(mirror: boolean): Road {
   const t = new Turtle(OUTER_X, BOULEVARD_Z, 0);
   // Out of the boulevard round the bottom outer hairpin.
   t.arc(rBottom, PI);
+  const outer: Arc[] = [t.arcs[t.arcs.length - 1]];
   t.straight(OUTER_X - xIn);
   const apexIdx: number[] = [];
   for (let i = 0; i < LEVELS.length; i++) {
@@ -93,6 +110,7 @@ export function buildRoad(mirror: boolean): Road {
     t.straight(OUTER_X - xIn);
     const rOut = (LEVELS[i + 1].z - LEVELS[i].z - 2 * INNER_R) / 2;
     t.arc(rOut, PI);
+    outer.push(t.arcs[t.arcs.length - 1]);
     t.straight(OUTER_X - xIn);
   }
   const n = t.xz.length / 2;
@@ -133,5 +151,6 @@ export function buildRoad(mirror: boolean): Road {
     const y = k === 0 ? docksHeight(z) : knotY[k] + (knotY[k + 1] - knotY[k]) * f;
     pts.push(mirror ? -t.xz[i * 2] : t.xz[i * 2], y, z);
   }
-  return { pts, apexS: apexIdx.map((i) => s[i]), length: s[n - 1] };
+  const flip = (a: Arc): Arc => (mirror ? { cx: -a.cx, cz: a.cz, r: a.r, a0: PI - a.a0, da: -a.da } : a);
+  return { pts, apexS: apexIdx.map((i) => s[i]), length: s[n - 1], outer: outer.map(flip) };
 }

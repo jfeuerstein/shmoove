@@ -551,8 +551,12 @@ export function addPylons(w: World): void {
     const n = Math.max(1, Math.floor(len / 40));
     for (let k = 1; k <= n; k++) {
       let f = k / (n + 1);
-      // Slide off a street crossing (the spine) along the line.
-      while (terrainSurface(w, ax + (bx - ax) * f, az + (bz - az) * f) === Surface.STREET && f < 0.95) f += 1 / len;
+      // Slide off a street or path crossing (the spine's steps) along the line.
+      const paved = (q: number): boolean => {
+        const s = terrainSurface(w, ax + (bx - ax) * q, az + (bz - az) * q);
+        return s === Surface.STREET || s === Surface.STAIRS;
+      };
+      while (paved(f) && f < 0.95) f += 1 / len;
       const x = ax + (bx - ax) * f;
       const z = az + (bz - az) * f;
       const g = terrainHeight(w, x, z);

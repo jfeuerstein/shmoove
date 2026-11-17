@@ -281,11 +281,16 @@ export class Carver {
         }
         let end = ix;
         let top = hi[ci];
+        let topLo = hi[ci];
         let base = lo[ci];
+        // A run's top is its highest cell: keep the run's tops within WALL_TOP_TOL of each other so
+        // the wall never stands proud of the ground it holds up (merging step by step would let a
+        // wall along a sloping road creep metres above its low end).
         while (end + 1 < w.nx) {
           const cj = iz * w.nx + end + 1;
-          if (!isWall[cj] || Math.abs(hi[cj] - top) > 0.3) break;
+          if (!isWall[cj] || Math.max(top, hi[cj]) - Math.min(topLo, hi[cj]) > WALL_TOP_TOL) break;
           top = Math.max(top, hi[cj]);
+          topLo = Math.min(topLo, hi[cj]);
           base = Math.min(base, lo[cj]);
           end++;
         }
@@ -307,11 +312,13 @@ export class Carver {
         }
         let end = iz;
         let top = hi[ci];
+        let topLo = hi[ci];
         let base = lo[ci];
         while (end + 1 < w.nz) {
           const cj = (end + 1) * w.nx + ix;
-          if (!isWall[cj] || used[cj] || Math.abs(hi[cj] - top) > 0.3) break;
+          if (!isWall[cj] || used[cj] || Math.max(top, hi[cj]) - Math.min(topLo, hi[cj]) > WALL_TOP_TOL) break;
           top = Math.max(top, hi[cj]);
+          topLo = Math.min(topLo, hi[cj]);
           base = Math.min(base, lo[cj]);
           end++;
         }
@@ -361,6 +368,9 @@ export class Carver {
     }
   }
 }
+
+/** Most a merged wall's top may differ along its length, m. */
+const WALL_TOP_TOL = 0.3;
 
 /** Weight 1 at d = 0 fading smoothly to 0 at d = b. */
 function fade(d: number, b: number): number {

@@ -14,6 +14,7 @@ import {
   FUNI_Z0,
   FUNI_Z1,
   HILL_STATION,
+  INNER_R,
   LEVELS,
   MERCADO_STAIRS,
   OUTER_X,
@@ -119,6 +120,37 @@ function baseSurface(x: number, z: number): Surface {
   if (z < B.antenna) return Surface.GRASS;
   return Math.abs(x) < 3 ? Surface.DIRT : Surface.GRASS;
 }
+
+/**
+ * Pave the grass a little wider round each inner hairpin, where a road meets a level's street:
+ * the vehicles' S-bends from road to street cut across those corners.
+ */
+function paveJunctions(w: World, r: Road): void {
+  const reach = ROAD_HALF + JUNCTION_PAVE;
+  const p = r.pts;
+  for (let iz = 0; iz < w.nz; iz++) {
+    const zc = w.minZ + (iz + 0.5) * w.cell;
+    for (let ix = 0; ix < w.nx; ix++) {
+      const ci = iz * w.nx + ix;
+      if (w.surfaces[ci] !== Surface.GRASS) continue;
+      const xc = w.minX + (ix + 0.5) * w.cell;
+      const ax = Math.abs(xc);
+      if (ax < APEX_X - 15 || ax > APEX_X + INNER_R) continue;
+      if (!LEVELS.some((L) => zc > L.z0 - 10 && zc < L.z1 + 10)) continue;
+      for (let i = 0; i < p.length; i += 3) {
+        const dx = p[i] - xc;
+        const dz = p[i + 2] - zc;
+        if (dx * dx + dz * dz <= reach * reach) {
+          w.surfaces[ci] = Surface.STREET;
+          break;
+        }
+      }
+    }
+  }
+}
+
+/** Extra paving beyond a road's edge at the hairpin junctions, m. */
+const JUNCTION_PAVE = 2.5;
 
 export function buildGround(w: World): Ground {
   fillHeights(w, (_x, z) => baseHeight(z));
@@ -245,13 +277,17 @@ export function buildGround(w: World): Ground {
   const east = buildRoad(false);
   const west = buildRoad(true);
   for (const r of [east, west]) C.path({ pts: r.pts, half: ROAD_HALF, blend: 10, surf: Surface.STREET });
+  for (const r of [east, west]) paveJunctions(w, r);
   berm(w);
 
   // --- The spine: docks -> stairs through every level -> antenna street -> summit.
   const spineSpans: Span[] = [{ z0: SPINE_BOTTOM_Z, z1: B.mercado + 3, h: (_x, z) => docksHeight(z), surf: Surface.STREET }];
   for (const L of LEVELS) spineSpans.push(levelSpan(L, Surface.STREET));
   const gateTop = streetHeight(GATE, SPINE_X, GATE.z1);
-  spineSpans.push({ z0: GATE.z1, z1: SPINE_TOP_Z, h: (_x, z) => Math.max(gateTop, baseHeight(z)), surf: Surface.STREET });
+  // Over Antenna Hill the spine is one long stepped path: on smooth paving at this grade a skater
+  // reached 29 m/s and drifted off it; on steps they keep to a walking-pace roll and the fall line
+  // holds them to it.
+  spineSpans.push({ z0: GATE.z1, z1: SPINE_TOP_Z, h: (_x, z) => Math.max(gateTop, baseHeight(z)), surf: Surface.STAIRS });
   const spine = new Stepper(spineSpans, { axis: SPINE_X, ...STAIR_OPTS });
   C.rect({
     x0: SPINE_X - SPINE_HALF,
