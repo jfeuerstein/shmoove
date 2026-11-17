@@ -6,6 +6,5 @@
   "stepMeanMs": 0.6,
   "stepP95Ms": 1.5,
   "oneStepMeanMs": 6,
-  "oneStepP95Ms": 10,
   "bundleGzipKb": 400
 }

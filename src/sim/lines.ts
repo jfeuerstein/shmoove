@@ -112,6 +112,9 @@ export interface CompiledLine extends LineDef {
   maxZ: number;
   minChainN: number;
   phaseTicks: number;
+  /** Unit horizontal direction of each path segment (xz pairs). A segment with no horizontal
+   *  extent takes its neighbour's, so a heading never depends on which call came before. */
+  segDir: Float64Array;
   /**
    * Memo of vehicleAt for the tick each vehicle was last asked about (created on first use). The
    * sim, the view, the UI and the audio all ask where the same vehicles are on the same tick; the
@@ -188,6 +191,29 @@ export function compileLine(def: LineDef, index: number): CompiledLine {
     }
   }
   const length = cum[n - 1];
+  // Per-segment headings, with vertical segments borrowing the nearest real direction.
+  const segDir = new Float64Array(Math.max(1, n - 1) * 2);
+  const hasDir = new Uint8Array(Math.max(1, n - 1));
+  for (let i = 0; i < n - 1; i++) {
+    const ex = pathPts[i * 3 + 3] - pathPts[i * 3];
+    const ez = pathPts[i * 3 + 5] - pathPts[i * 3 + 2];
+    const hl = Math.sqrt(ex * ex + ez * ez);
+    if (hl > 1e-9) {
+      segDir[i * 2] = ex / hl;
+      segDir[i * 2 + 1] = ez / hl;
+      hasDir[i] = 1;
+    }
+  }
+  for (let i = 0; i < n - 1; i++) {
+    if (hasDir[i] === 1) continue;
+    let j = -1;
+    for (let d = 1; d < n && j < 0; d++) {
+      if (i - d >= 0 && hasDir[i - d] === 1) j = i - d;
+      else if (i + d < n - 1 && hasDir[i + d] === 1) j = i + d;
+    }
+    segDir[i * 2] = j >= 0 ? segDir[j * 2] : 0;
+    segDir[i * 2 + 1] = j >= 0 ? segDir[j * 2 + 1] : 1;
+  }
   if (def.loop) {
     const gap =
       Math.abs(pathPts[0] - pathPts[n * 3 - 3]) +
@@ -289,6 +315,7 @@ export function compileLine(def: LineDef, index: number): CompiledLine {
     minZ,
     maxZ,
     minChainN: def.minChain ?? 1,
+    segDir,
     phaseTicks: (((def.phase ?? 0) % period) + period) % period,
   };
 }
@@ -345,11 +372,8 @@ export function pathAt(
   out.x = p[i] + ex * t;
   out.y = p[i + 1] + ey * t;
   out.z = p[i + 2] + ez * t;
-  const hl = Math.sqrt(ex * ex + ez * ez);
-  if (hl > 1e-9) {
-    out.hx = ex / hl;
-    out.hz = ez / hl;
-  }
+  out.hx = line.segDir[lo * 2];
+  out.hz = line.segDir[lo * 2 + 1];
 }
 
 /**

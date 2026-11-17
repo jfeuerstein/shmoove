@@ -205,3 +205,25 @@ Decisions made without the owner in the room, newest last. Cuts are marked **CUT
     day: about 0.458.
 64. **The summit route stays hard:** three timed releases with roughly 0.3–1.2 s of slack, two
     windows a day (0.5125 and 0.6375). It is a secret. On the playtest list.
+
+## M6c2 — Performance pass
+
+65. **What the frame-time gate measures now.** `npm run perf` reports frame work per part (sim, each
+    reducer, vehicles, world streaming, camera, render submit, UI, audio), per game step, and for
+    frames that carry exactly one sim step, on a route that rides the city the way a player would,
+    and it tours fixed viewpoints in every district by day and night for the draw-call and triangle
+    budgets (worst seen: 71 draw calls, 140k triangles). Budgets gated: the two in DESIGN (mean 10,
+    p95 16.6 ms of frame work), game step mean 0.6 / p95 1.5 ms, one-step frame mean 6 ms. Measured
+    after the pass, at 4x throttle on a shared machine: work mean 4.5–4.9 ms, p95 10.6–13.1 ms.
+66. **One-step frame p95 is reported, not gated.** Headless Chromium rasterises in software at about
+    ten frames a second, so a run has only 9–16 one-step frames and their p95 is the single slowest:
+    always a 12–27 ms wait inside the render submit for the software rasteriser, with the main thread
+    idle. It says nothing about a phone. GPU frame time on a device is on the playtest list.
+67. **What bought the time:** remembering each vehicle's state for the current tick (results
+    bit-identical: the 20 000-tick sim hash is unchanged), building chunk meshes on growable typed
+    arrays (chunk build 0.80 → 0.46 ms), skipping lines whose path is out of drawing range, and the
+    stop board remembering each stop's next arrival.
+68. **A path's heading never depends on call history.** `pathAt` kept the previous call's direction
+    on a segment with no horizontal extent, so the same lookup could return different headings: a
+    latent determinism bug since M1, exposed when the blimp's new descent met the vehicle memo.
+    Segment directions are now precomputed, a vertical segment borrowing its neighbour's.

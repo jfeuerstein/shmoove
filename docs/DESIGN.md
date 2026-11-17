@@ -247,8 +247,13 @@ Target: 60 fps on a mid-range phone (2021-class, e.g. Snapdragon 7-series / A13)
 | JS bundle | ≤ 400 kB gzip |
 | Device pixel ratio | capped at 2; post pass may be dropped by the governor |
 
-`npm run perf` measures these on the scripted route and fails the gate when one is exceeded. Headless
-Chrome rasterises in software, so GPU cost is not representative there; the frame-work figure is the
+`npm run perf` measures these in headless Chrome at 4x CPU throttle and fails the gate when one is
+exceeded. It runs two checks: a route that rides the city the way a player would (carving, hopping,
+hitching, slinging, one descent from the summit to the docks), reporting frame work per part, per
+game step and for frames that carry exactly one sim step; and a tour of fixed viewpoints in every
+district by day and night, for the draw-call and triangle maxima. Further gated budgets: game step
+(sim plus every reducer) mean ≤ 0.6 ms and p95 ≤ 1.5 ms; one-step frame mean ≤ 6 ms. Headless Chrome
+rasterises in software, so GPU cost is not representative there; the frame-work figure is the
 main-thread cost only. Real-device GPU cost is on the PLAYTEST list.
 
 ## 11. Platform
