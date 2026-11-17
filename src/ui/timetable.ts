@@ -164,6 +164,31 @@ export function arrivalTicks(line: CompiledLine, stop: number, tick: number): nu
   return out;
 }
 
+/**
+ * Per line and stop, the tick an arrival was last computed from and the absolute tick it found.
+ * Whether a vehicle stands at a stop at absolute tick T depends on T alone, and arrivalTicks finds
+ * the first such T at or after `tick`; so until that T passes, the answer is that T less the tick.
+ */
+const arrivalMemo = new WeakMap<CompiledLine, Float64Array>();
+
+/** arrivalTicks, answered from the memo while its arrival is still ahead (exactly the same value). */
+export function arrivalTicksMemo(line: CompiledLine, stop: number, tick: number): number {
+  let m = arrivalMemo.get(line);
+  if (m === undefined) {
+    m = new Float64Array(line.allStops.length * 2).fill(Number.NaN);
+    arrivalMemo.set(line, m);
+  }
+  const from = m[stop * 2];
+  const at = m[stop * 2 + 1];
+  if (tick >= from && tick <= at) return at - tick;
+  const ticks = arrivalTicks(line, stop, tick);
+  if (Number.isFinite(ticks)) {
+    m[stop * 2] = tick;
+    m[stop * 2 + 1] = tick + ticks;
+  }
+  return ticks;
+}
+
 export interface BoardRow {
   line: number;
   stop: number;
@@ -180,7 +205,7 @@ export function boardRows(lines: readonly CompiledLine[], near: readonly StopPos
   for (const n of near) {
     const line = lines[n.line];
     const service = inService(line, tick);
-    const ticks = service ? arrivalTicks(line, n.stop, tick) : Infinity;
+    const ticks = service ? arrivalTicksMemo(line, n.stop, tick) : Infinity;
     rows.push({ line: n.line, stop: n.stop, next: followingStop(line, n.stop, tick, ticks), ticks, service: service && Number.isFinite(ticks) });
   }
   rows.sort((a, b) => (a.service === b.service ? a.ticks - b.ticks || a.line - b.line : a.service ? -1 : 1));
