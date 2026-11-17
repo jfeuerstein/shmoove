@@ -90,7 +90,7 @@ export class ErrandHud {
     this.sCount = new TextSlot(count);
     this.sStep = new TextSlot(step);
     this.sProg = new TextSlot(prog);
-    this.stubEl.appendChild(row);
+    this.stubEl.append(sh, row);
     this.stubOn = new ClassSlot(this.stubEl, 'sk-on');
   }
 

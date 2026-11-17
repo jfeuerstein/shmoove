@@ -192,10 +192,12 @@ interface ConductorMarker extends Marker {
 /** A spot at the edge of a zone, on a top surface, clear of walls. */
 function giverSpot(w: World, z: Zone): [number, number] {
   const d = Math.min(z.r * 0.6, 3.5);
+  // Downhill of the centre first: a skater usually arrives from above and looks down the hill.
   const tries: [number, number][] = [
+    [d * 0.45, -d * 0.9],
+    [-d * 0.45, -d * 0.9],
     [d, 0],
     [-d, 0],
-    [0, -d],
     [0, d],
   ];
   for (const [ox, oz] of tries) {
