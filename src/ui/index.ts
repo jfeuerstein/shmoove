@@ -17,6 +17,8 @@ import { ClassSlot, el } from './dom';
 import { LineMap } from './lineMap';
 import { StopBoard } from './stopBoard';
 import { injectStyle } from './style';
+import { clockMinutes, clockText } from './format';
+import { Shell, type ShellHost } from './titleShell';
 import { Toasts } from './toasts';
 import { Twos } from './twos';
 
@@ -38,7 +40,7 @@ export interface UiSound {
 
 export interface Ui {
   update(f: UiFrame): void;
-  /** True while a screen that pauses play is open (line map, chalk screen). main.ts stops stepping the sim. */
+  /** True while a screen that pauses play is open (line map, chalk screen, title, pause, settings, ...). main.ts stops stepping the sim. */
   readonly paused: boolean;
   /** Open the chalk screen's import box with a code already pasted (a shared link). */
   openChalkImport(code: string): void;
@@ -69,7 +71,8 @@ const CHALK_ICON =
   '<path d="M8 8 L22 22 M22 8 L8 22" stroke="#FF2E88" stroke-width="3.4" stroke-linecap="round"/>' +
   '</svg>';
 
-export function createUi(root: HTMLElement, game: Game, sound: UiSound | null): Ui {
+/** `shell` adds the title, pause, settings, map-complete and rotate screens (src/ui/titleShell.ts). */
+export function createUi(root: HTMLElement, game: Game, sound: UiSound | null, shellHost: ShellHost | null = null): Ui {
   const releaseStyle = injectStyle();
   const releaseChalkStyle = injectChalkStyle();
   const lines = game.sim.world.lines;
@@ -227,6 +230,21 @@ export function createUi(root: HTMLElement, game: Game, sound: UiSound | null): 
   window.addEventListener('keydown', onKey);
 
   hud.append(board.el, chain.el, toasts.el, stopBoard.el, hold, chalkHud.el, map.el, mapBtn, chalkBtn, chalkScreen.el);
+  const shell = shellHost
+    ? new Shell(game, twos, shellHost, {
+        openMap: () => setOpen(true),
+        openChalk: () => {
+          setChalkOpen(true);
+          chalkScreen.show('list');
+        },
+        busy: () => mapOpen || chalkOpen,
+        mapPercent: () => Math.floor(mapFraction(game.progress, lines) * 100),
+        clock: () => clockText(clockMinutes(game.sim.dayFrac)),
+        tap: () => sound?.ui('tick'),
+        fanfare: () => sound?.ui('fanfare'),
+      })
+    : null;
+  if (shell) hud.append(...shell.els);
   // Under anything already in the root (the debug panel stays on top and readable).
   root.prepend(hud);
 
@@ -348,10 +366,11 @@ export function createUi(root: HTMLElement, game: Game, sound: UiSound | null): 
         chalkBtn.setAttribute('aria-label', cm === 'recording' ? 'Stop drawing' : cm === 'idle' ? 'Chalk lines' : 'Abandon the race');
       }
       chalkHud.update(f.dt);
+      shell?.frame(f.dt, f.gameEvents);
       twos.update(f.dt);
     },
     get paused(): boolean {
-      return mapOpen || chalkOpen;
+      return mapOpen || chalkOpen || (shell !== null && shell.paused);
     },
     openChalkImport(code: string): void {
       setChalkOpen(true, true);
@@ -365,7 +384,7 @@ export function createUi(root: HTMLElement, game: Game, sound: UiSound | null): 
         inked += inkedCount(prog, i);
         if (prog.lines[i].discovered) discovered++;
       }
-      return {
+      const out: Record<string, string | number | boolean> = {
         hudMode: board.mode === '' ? 'free' : board.mode,
         hudLine: board.lineId,
         hudNextStop: board.nextStopName,
@@ -379,6 +398,8 @@ export function createUi(root: HTMLElement, game: Game, sound: UiSound | null): 
         mapPercent: Math.floor(mapFraction(prog, lines) * 100),
         ...chalkTestState(),
       };
+      shell?.testState(out);
+      return out;
     },
     dispose(): void {
       if (disposed) return;
@@ -392,6 +413,7 @@ export function createUi(root: HTMLElement, game: Game, sound: UiSound | null): 
       chalkBtn.removeEventListener('pointerup', onChalkUp);
       chalkBtn.removeEventListener('pointercancel', onChalkCancel);
       chalkBtn.removeEventListener('click', onChalkClick);
+      shell?.dispose();
       hud.remove();
       releaseChalkStyle();
       releaseStyle();

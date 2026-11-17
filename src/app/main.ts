@@ -7,15 +7,30 @@ import { Gestures, attachGestures } from '../input/gestures';
 import { createChalkView } from '../render/chalkView';
 import { createCityView } from '../render/cityView';
 import { createView } from '../render/view';
-import { DT } from '../sim/constants';
+import { DT, FEEL } from '../sim/constants';
 import { Game, type GameEvent } from '../sim/game/game';
+import { placePlayer } from '../sim/player';
 import { MODE_NAMES, type InputFrame, type SimEvent } from '../sim/types';
 import { createUi } from '../ui/index';
+import type { ShellHost } from '../ui/titleShell';
 import { createAudioView } from './audioView';
 import { createDebugPanel, type DebugPanel } from './debugPanel';
+import { createHaptics } from './haptics';
 import { getParams } from './params';
+import { appVersion, createPwa } from './pwa';
 import { getRoute } from './routes';
 import { createSaveGlue } from './save';
+import {
+  DEFAULT_APP_SETTINGS,
+  VOLUME_STEPS,
+  applySettings,
+  extraOf,
+  fromStored,
+  patchSettings,
+  toSaveSettings,
+  type AppSettings,
+  type SettingSinks,
+} from './settings';
 import { installHook } from './testHook';
 import { buildWorld, isStreamed } from './world';
 
@@ -42,7 +57,96 @@ function boot(): void {
   const audio = createAudio();
   audio.setMuted(params.mute);
   const audioView = createAudioView();
-  const ui = createUi(uiRoot, game, audio);
+
+  // App shell: settings, PWA, haptics, title / pause / settings screens.
+  const query = new URLSearchParams(location.search);
+  const pwa = createPwa({ e2e: params.e2e, sw: query.has('sw'), onChange: () => undefined });
+  /** Camera shake when motion is not reduced: whatever FEEL holds at boot. */
+  const shakeDefault = FEEL.CAM_SHAKE;
+  const sinks: SettingSinks = {
+    setVolumes: (m, s) => audio.setVolumes(m, s),
+    setShake: (v) => {
+      FEEL.CAM_SHAKE = v;
+    },
+    setRiso: (on) => {
+      view.riso.enabled = on;
+    },
+    setReducedUi: (on) => {
+      uiRoot.classList.toggle('sk-reduced', on);
+    },
+  };
+  let settings: AppSettings = fromStored(saves.settings, saves.appData.settings);
+  applySettings(settings, sinks, shakeDefault);
+  const storedFacts = (out: Record<string, string | number | boolean>): void => {
+    const st = saves.stored();
+    let saved: unknown = null;
+    let app: unknown = null;
+    try {
+      saved = st.save === null ? null : JSON.parse(st.save);
+      app = st.app === null ? null : JSON.parse(st.app);
+    } catch (_e) {
+      /* unreadable: reported as missing */
+    }
+    const rec = (v: unknown, k: string): unknown =>
+      typeof v === 'object' && v !== null && !Array.isArray(v) ? (v as Record<string, unknown>)[k] : undefined;
+    const ss = rec(saved, 'settings');
+    const as = rec(app, 'settings');
+    const music = rec(ss, 'music');
+    const haptics = rec(ss, 'haptics');
+    const reduced = rec(as, 'reduced');
+    out.storedMusic = typeof music === 'number' ? Math.round(music * VOLUME_STEPS) : -1;
+    out.storedHaptics = typeof haptics === 'boolean' ? String(haptics) : '';
+    out.storedReduced = typeof reduced === 'boolean' ? String(reduced) : '';
+  };
+  // Called only from frames, after `ui` exists.
+  const haptics = createHaptics({ enabled: () => settings.haptics && !ui.paused });
+  const shellHost: ShellHost = {
+    showTitle: params.route === null && (!params.e2e || query.has('title')),
+    celebrate: params.e2e && query.has('celebrate'),
+    autoPause: !params.e2e && params.route === null,
+    version: appVersion(),
+    values: () => settings,
+    change(patch) {
+      const prev = settings;
+      settings = patchSettings(settings, patch);
+      applySettings(settings, sinks, shakeDefault, prev);
+      saves.setSettings(toSaveSettings(settings), { ...extraOf(settings) });
+    },
+    hasSave: () => saves.hasSave,
+    play() {
+      audio.unlock();
+      if (!params.e2e) pwa.enterFullscreen();
+    },
+    newGame() {
+      saves.resetSave(true);
+      const w = sim.world;
+      placePlayer(w, sim.player, w.spawn.x, w.spawn.z, w.spawn.heading);
+      prev.x = sim.player.x;
+      prev.y = sim.player.y;
+      prev.z = sim.player.z;
+    },
+    resetSave() {
+      const before = settings;
+      saves.resetSave(false);
+      settings = { ...DEFAULT_APP_SETTINGS };
+      applySettings(settings, sinks, shakeDefault, before);
+    },
+    quitToTitle() {
+      saves.saveNow();
+    },
+    playSeconds: () => saves.playTicks * DT,
+    installAvailable: () => pwa.installAvailable,
+    iosHint: () => pwa.iosHint,
+    promptInstall: () => pwa.promptInstall(),
+    updateReady: () => pwa.updateReady,
+    applyUpdate: () => pwa.applyUpdate(),
+    testFacts(out) {
+      storedFacts(out);
+      out.haptic = haptics.last;
+      out.swState = pwa.swState;
+    },
+  };
+  const ui = createUi(uiRoot, game, audio, shellHost);
   // A shared chalk link (?chalk=SK2-...) opens the import box with the code pasted.
   const sharedChalk = new URLSearchParams(location.search).get('chalk');
   if (sharedChalk) ui.openChalkImport(sharedChalk);
@@ -90,6 +194,7 @@ function boot(): void {
     uiFrame.armed = gestures.isArmed;
     uiFrame.dt = dt;
     ui.update(uiFrame);
+    haptics.frame(pending, pendingGame, dt);
     audio.update(audioView(sim, ui.paused), pending, world.lines, dt);
     pending.length = 0;
     pendingGame.length = 0;
