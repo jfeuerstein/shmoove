@@ -111,7 +111,8 @@ const VERGE_MAX_RAISE = 1.2;
  * fading out beyond: where the bank there is already higher it is left alone.
  */
 function raiseVerge(w: World, r: Road, a: Arc): void {
-  const rin = a.r + ROAD_HALF + PARAPET.out - PARAPET.half;
+  // From a little beyond the parapet's outer face, so no ground cell on the road itself is lifted.
+  const rin = a.r + ROAD_HALF + PARAPET.out + PARAPET.half;
   const rFull = rin + 2 * VERGE_HALF;
   const rOut = rFull + VERGE_BLEND;
   const n = 64;
@@ -144,7 +145,7 @@ function raiseVerge(w: World, r: Road, a: Arc): void {
       // Position along the arc, 0..1; outside the arc's sweep, no verge.
       let f = (datan2(z - a.cz, x - a.cx) - a.a0) / a.da;
       f -= Math.floor(f / 2) * 2;
-      if (f > 1) continue;
+      if (f > PARAPET.sweep) continue;
       const target = roadY[Math.round(f * n)] + PARAPET.height + PARAPET.flush;
       let wt = 1;
       if (rho > rFull) {
@@ -412,7 +413,8 @@ export function buildGround(w: World): Ground {
   // stand on their inner edge: a skater coming down the bank beyond rolls over the parapet onto
   // the road instead of being pinned against its back.
   for (const r of [east, west]) {
-    for (const a of r.outer) raiseVerge(w, r, a);
+    // Not round the bottom bend, which lies on the level docks.
+    for (const a of r.outer.slice(1)) raiseVerge(w, r, a);
   }
   berm(w);
 

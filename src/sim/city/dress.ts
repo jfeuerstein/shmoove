@@ -224,10 +224,10 @@ const BLOCK_X: readonly [number, number][] = [
 /** Stair streets of the Mercado as [axis, half width], the spine and the funicular run-out included. */
 const MERCADO_CROSSINGS: readonly (readonly [number, number])[] = [[SPINE_X, SPINE_HALF], [FUNI_X, 6], ...MERCADO_STAIRS.map((x) => [x, STAIR_HALF] as const)];
 
-/** Market stalls along each landing's back edge either side of the spine (x ranges). */
+/** Market stalls along each landing's back edge either side of the spine (x ranges), behind the building faces that line it. */
 const STALL_RUNS: readonly [number, number][] = [
-  [-21.5, -9],
-  [9, 21.5],
+  [-21.5, -10.5],
+  [10.5, 21.5],
 ];
 const STALL_STEP = 3.2;
 /** The landing the funicular's bottom turn-round sweeps (no stalls on its west side). */
@@ -569,8 +569,11 @@ function dressParapets(w: World, g: Ground): void {
   for (const road of [g.east, g.west]) {
     for (const a of road.outer) {
       const R = a.r + ROAD_HALF + PARAPET.out;
-      const n = Math.max(2, Math.ceil((Math.abs(a.da) * R) / PARAPET.seg));
-      const step = a.da / n;
+      // From the bottom of the bend, where the road stands on fill, round to PARAPET.sweep of it:
+      // at the top the road is cut into the hill and the bank stops a skater by itself.
+      const sweep = a.da * PARAPET.sweep;
+      const n = Math.max(2, Math.ceil((Math.abs(sweep) * R) / PARAPET.seg));
+      const step = sweep / n;
       const chord = 2 * R * dsin(Math.abs(step) / 2);
       for (let k = 0; k < n; k++) {
         const t0 = a.a0 + step * k;
@@ -581,17 +584,18 @@ function dressParapets(w: World, g: Ground): void {
         // A wall from the road; from the bank outside (higher, where the road is cut into the
         // hill) its top is nearly flush, so a skater coming down the bank rolls over it onto the
         // road instead of being pinned against it.
+        // The bank is read just outside the parapet's face, at its lowest along the segment.
         let lo = Infinity;
         let road = -Infinity;
-        let bank = -Infinity;
-        for (const t of [t0, tm, t1]) {
+        let bank = Infinity;
+        for (const t of [t0, (t0 + tm) / 2, tm, (tm + t1) / 2, t1]) {
           const c = dcos(t);
           const sn = dsin(t);
           const yi = terrainHeight(w, a.cx + (R - 1) * c, a.cz + (R - 1) * sn);
-          const yo = terrainHeight(w, a.cx + (R + 1) * c, a.cz + (R + 1) * sn);
+          const yo = terrainHeight(w, a.cx + (R + PARAPET.half + 0.35) * c, a.cz + (R + PARAPET.half + 0.35) * sn);
           lo = Math.min(lo, yi, yo);
           road = Math.max(road, yi);
-          bank = Math.max(bank, yo);
+          bank = Math.min(bank, yo);
         }
         addSolid(w, {
           cx,
