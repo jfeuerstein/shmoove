@@ -71,6 +71,15 @@ function box(
   });
 }
 
+/** Paint the cells whose centres lie under a footprint (the ground inside a building). */
+function paintUnder(w: World, x0: number, x1: number, z0: number, z1: number, s: Surface): void {
+  const ix0 = Math.max(0, Math.ceil((x0 - w.minX) / w.cell - 0.5));
+  const ix1 = Math.min(w.nx - 1, Math.floor((x1 - w.minX) / w.cell - 0.5));
+  const iz0 = Math.max(0, Math.ceil((z0 - w.minZ) / w.cell - 0.5));
+  const iz1 = Math.min(w.nz - 1, Math.floor((z1 - w.minZ) / w.cell - 0.5));
+  for (let iz = iz0; iz <= iz1; iz++) for (let ix = ix0; ix <= ix1; ix++) w.surfaces[iz * w.nx + ix] = s;
+}
+
 /** A rail along x at height `yOf(x)` above... (absolute heights), points every `step` m. */
 function railAlongX(w: World, x0: number, x1: number, z: number, yOf: (x: number) => number, kind: string, step = 4): void {
   const n = Math.max(1, Math.ceil(Math.abs(x1 - x0) / step));
@@ -250,16 +259,20 @@ function dressMercado(w: World, rng: Rng, firstTerrace: number): number {
                 [(rx0 + rx1) / 2 + 2, rx1],
               ]
             : [[rx0, rx1]];
-        for (const [x0, x1] of parts) {
+        for (const [bx0p, bx1p] of parts) {
           for (const [z0r, z1r, north] of rows) {
             let z0 = z0r;
             const z1 = z1r;
-            // Leave the wedding plaza open.
-            if (x1 > PLAZA_BODA.x0 - 2 && x0 < PLAZA_BODA.x1 + 2 && z1 > PLAZA_BODA.z0 - 2 && z0 < PLAZA_BODA.z1 + 2) {
-              z0 = Math.max(z0, PLAZA_BODA.z1 + 3);
-              if (x1 > PLAZA_BODA.x0 && x0 < PLAZA_BODA.x1) continue;
+            let x0 = bx0p;
+            let x1 = bx1p;
+            // Leave the wedding plaza open: trim whatever overlaps it.
+            const P = PLAZA_BODA;
+            if (x1 > P.x0 - 2 && x0 < P.x1 + 2 && z1 > P.z0 + 0.5 && z0 < P.z1 + 2) {
+              if (x1 > P.x1 + 8) x0 = P.x1 + 2;
+              else if (x0 < P.x0 - 8) x1 = P.x0 - 2;
+              else z0 = Math.max(z0, P.z1 + 3);
             }
-            if (z1 - z0 < 6) continue;
+            if (z1 - z0 < 6 || x1 - x0 < 5) continue;
             const g = groundRange(w, x0, x1, z0, z1);
             const xc = (x0 + x1) / 2;
             let yTop: number;
@@ -271,11 +284,17 @@ function dressMercado(w: World, rng: Rng, firstTerrace: number): number {
             }
             yTop = Math.max(yTop, g.hi + 2.5);
             box(w, x0, x1, z0, z1, g.lo - 1, yTop, 'building', rng.int(8));
+            paintUnder(w, x0, x1, z0, z1, Surface.PLAZA);
             // Awnings over the street below the front of the lowest row.
             if (gap.awnings && z0 === gap.zA && rng.chance(0.88)) {
-              const yA = gap.yLow(xc) + rng.range(2.35, 2.9);
-              box(w, x0 + 0.4, x1 - 0.4, z0 - 2.8, z0, yA, yA + 0.2, 'awning', rng.int(6), Surface.AWNING, true);
-              awnings++;
+              // Underside 2.35-2.95 m above every point of the street beneath.
+              const ag = groundRange(w, x0 + 0.4, x1 - 0.4, z0 - 3.2, z0 - 0.4);
+              const room = ag.lo + 2.95 - (ag.hi + 2.35);
+              if (room >= 0) {
+                const yA = ag.hi + 2.35 + rng.range(0, room);
+                box(w, x0 + 0.4, x1 - 0.4, z0 - 3.2, z0 - 0.4, yA, yA + 0.2, 'awning', rng.int(6), Surface.AWNING, true);
+                awnings++;
+              }
             }
           }
         }
@@ -288,6 +307,7 @@ function dressMercado(w: World, rng: Rng, firstTerrace: number): number {
   const yP = merc[3].yEnd;
   const cg = groundRange(w, P.x0 + 2, P.x1 - 2, P.z1 + 3, merc[4].z0 - 1);
   box(w, P.x0 + 2, P.x1 - 2, P.z1 + 3, merc[4].z0 - 1, cg.lo - 1, cg.hi + 7, 'church', 0);
+  paintUnder(w, P.x0 - 4, P.x1 + 4, P.z0, merc[4].z0, Surface.PLAZA);
   box(w, 36, 44, P.z1 + 3, P.z1 + 11, cg.lo - 1, yP + 24, 'tower', 0);
   for (let x = P.x0 + 6; x <= P.x1 - 6; x += 6.4) {
     box(w, x - 1.1, x + 1.1, P.z1 - 2.4, P.z1 - 0.8, yP - 0.2, yP + 2.4, 'stall', rng.int(6));

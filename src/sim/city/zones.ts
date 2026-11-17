@@ -36,7 +36,7 @@ export const LANDMARKS: readonly ZoneSpec[] = [
   { id: 'tram_depot', name: 'Cocheras del Tranvía', kind: 'landmark', x: -128, z: 238, r: 8 },
   { id: 'laundry_terrace', name: 'Terraza de la Ropa', kind: 'landmark', x: 60, z: 781, r: 8 },
   { id: 'bus_garage', name: 'Garaje Nocturno', kind: 'landmark', x: 150, z: 232, r: 8 },
-  { id: 'school_roof', name: 'Tejado de la Escuela', kind: 'landmark', x: 56, z: 753, r: 6 },
+  { id: 'school_roof', name: 'Tejado de la Escuela', kind: 'landmark', x: 56, z: 745, r: 6 },
   { id: 'hill_station', name: 'Estación del Cerro', kind: 'landmark', x: 30, z: 1040, r: 6 },
   { id: 'radio_shack', name: 'Caseta de Radio', kind: 'landmark', x: -60, z: 1149, r: 5 },
   { id: 'kite_field', name: 'Campo de Cometas', kind: 'landmark', x: 70, z: 1100, r: 10 },

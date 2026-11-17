@@ -25,6 +25,7 @@ import {
   SPINE_TOP_Z,
   SPINE_X,
   STAIR_HALF,
+  TERRACE_FRONTS,
   baseHeight,
   docksHeight,
   levelHeight,
@@ -50,6 +51,34 @@ export interface Ground {
   firstTerrace: number;
 }
 
+function gridFloor(z: number): number {
+  return CITY.minZ + Math.floor((z - CITY.minZ) / CITY.cell + 1e-9) * CITY.cell;
+}
+
+function gridCeil(z: number): number {
+  return CITY.minZ + Math.ceil((z - CITY.minZ) / CITY.cell - 1e-9) * CITY.cell;
+}
+
+/** Where the ground starts to curl up at the east and west edges of the world. */
+const BERM_X = 172;
+const BERM_K = 0.06;
+
+/**
+ * Curl the ground up near the world's side edges (above the docks), so the fall line never points
+ * out of the world: a skater who reaches the edge rolls back instead of being pinned against it.
+ */
+function berm(w: World): void {
+  const row = w.nx + 1;
+  for (let iz = 0; iz <= w.nz; iz++) {
+    const z = w.minZ + iz * w.cell;
+    if (z < CITY.bands.mercado) continue;
+    for (let ix = 0; ix <= w.nx; ix++) {
+      const d = Math.abs(w.minX + ix * w.cell) - BERM_X;
+      if (d > 0) w.heights[iz * row + ix] += BERM_K * d * d;
+    }
+  }
+}
+
 /** Grade of a terrace yard up from its street. */
 export const YARD_RISE = 0.025;
 
@@ -69,7 +98,8 @@ function baseSurface(x: number, z: number): Surface {
   const B = CITY.bands;
   if (z < 0) return Surface.WATER;
   if (z < B.mercado) return Surface.PLAZA;
-  if (z < B.terraces) return Surface.PLAZA;
+  // Mercado: the ground between landings is stepped alleys (slow); the edge-zone banks are planted.
+  if (z < TERRACE_FRONTS[0]) return Math.abs(x) <= 103 ? Surface.STAIRS : Surface.GRASS;
   if (z < B.antenna) return Surface.GRASS;
   return Math.abs(x) < 3 ? Surface.DIRT : Surface.GRASS;
 }
@@ -101,8 +131,9 @@ export function buildGround(w: World): Ground {
       C.rect({
         x0: -APEX_X,
         x1: APEX_X,
-        z0: L.z0,
-        z1: L.z1,
+        // Snapped out to grid lines so the flat street reaches the building faces exactly.
+        z0: gridFloor(L.z0),
+        z1: gridCeil(L.z1),
         bx: 4,
         bz: 3,
         h: (x) => levelHeight(L, x),
@@ -196,7 +227,8 @@ export function buildGround(w: World): Ground {
   // --- Switchback roads.
   const east = buildRoad(false);
   const west = buildRoad(true);
-  for (const r of [east, west]) C.path({ pts: r.pts, half: ROAD_HALF, blend: 5, surf: Surface.STREET });
+  for (const r of [east, west]) C.path({ pts: r.pts, half: ROAD_HALF, blend: 10, surf: Surface.STREET });
+  berm(w);
 
   // --- The spine: docks -> stairs through every level -> antenna street -> summit.
   const spineSpans: Span[] = [{ z0: SPINE_BOTTOM_Z, z1: B.mercado + 3, h: (_x, z) => docksHeight(z), surf: Surface.STREET }];
