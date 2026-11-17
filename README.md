@@ -74,39 +74,13 @@ After each deploy check that `sw.js` is served (not a 404): a missing `sw.js` le
 ### GitHub Pages
 
 1. In the repository, Settings → Pages → Build and deployment → Source: **GitHub Actions**.
-2. Add `.github/workflows/pages.yml`:
+2. The workflow is in the repo: `.github/workflows/pages.yml` builds the game and deploys `dist/` on
+   every push to `develop` (and on demand from the Actions tab). Its `checks` job runs typecheck, lint
+   and the tests alongside without holding the deploy back. To deploy from another branch, change
+   `branches: [develop]`; if the `github-pages` environment restricts which branches may deploy
+   (Settings → Environments → github-pages → Deployment branches), allow that branch there.
 
-   ```yaml
-   name: Pages
-   on:
-     push:
-       branches: [main]
-     workflow_dispatch:
-   permissions:
-     contents: read
-     pages: write
-     id-token: write
-   jobs:
-     deploy:
-       runs-on: ubuntu-latest
-       environment:
-         name: github-pages
-         url: ${{ steps.deployment.outputs.page_url }}
-       steps:
-         - uses: actions/checkout@v4
-         - uses: actions/setup-node@v4
-           with:
-             node-version: 22
-         - run: npm ci
-         - run: npm run build
-         - uses: actions/upload-pages-artifact@v3
-           with:
-             path: dist
-         - id: deployment
-           uses: actions/deploy-pages@v4
-   ```
-
-3. Push to `main`. The game appears at `https://<user>.github.io/<repo>/`. The relative base is what
+3. Push to `develop`. The game appears at `https://<user>.github.io/<repo>/`. The relative base is what
    lets it live under `/<repo>/`; nothing needs configuring for the sub-path. GitHub Pages caches files
    for 10 minutes, so a new version can take that long to be offered.
 
