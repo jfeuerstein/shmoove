@@ -5,7 +5,7 @@
  * decreases the heading.
  */
 import { DT, FEEL } from './constants';
-import { endChain, stepHitch, tryHitch } from './hitch';
+import { endChain, hitchRideNear, stepHitch, tryHitch } from './hitch';
 import { makeVehicleState, vehicleAt } from './lines';
 import { angleDiff, approachT, clamp, datan2, dcos, dsin, len2, len3, wrapAngle, PI } from './math';
 import { Mode, type BailReason, type InputFrame, type PlayerState, type SimCtx } from './types';
@@ -136,11 +136,17 @@ export function stepPlayer(ctx: SimCtx, input: InputFrame): void {
   p.steer += (clamp(input.steer, -1, 1) - p.steer) * approachT(F.STEER_SMOOTH, DT);
   const steerDelta = Math.abs(p.steer - steerBefore);
 
-  if (input.hold && p.mode !== Mode.HITCH && p.mode !== Mode.BAIL && p.hitchCooldown <= 0) tryHitch(ctx);
+  // Holding reaches for a ride. With none near, it plants a foot: the way to stop and wait.
+  // A ride near enough to coast into keeps a rolling skater rolling; one already standing stays
+  // put and lets it come.
+  let foot = false;
+  if (input.hold && p.mode !== Mode.HITCH && p.mode !== Mode.BAIL && p.hitchCooldown <= 0) {
+    foot = !tryHitch(ctx) && (!hitchRideNear() || p.speed < F.FOOT_STAND);
+  }
 
   switch (p.mode) {
     case Mode.GROUND:
-      stepGround(ctx, steerDelta);
+      stepGround(ctx, steerDelta, foot);
       break;
     case Mode.AIR:
       stepAir(ctx);
@@ -227,7 +233,7 @@ const _pos = { x: 0, z: 0 };
 // ---------------------------------------------------------------------------------------------
 // Ground
 
-function stepGround(ctx: SimCtx, steerDelta: number): void {
+function stepGround(ctx: SimCtx, steerDelta: number, foot: boolean): void {
   const p = ctx.player;
   const w = ctx.world;
   const F = FEEL;
@@ -250,9 +256,14 @@ function stepGround(ctx: SimCtx, steerDelta: number): void {
   const rate = Math.min(F.TURN_RATE_MAX, F.LAT_ACCEL_MAX / Math.max(v, 0.5));
   let heading = p.heading - p.steer * rate * DT;
 
+  // Foot down: a still finger, and only at a pace a foot can take. It brakes, holds on anything
+  // but stairs-steep ground, and keeps the board from swinging downhill or being pumped. Dragging
+  // while holding keeps rolling: that is reaching for a ride on the move.
+  const planted = foot && v < F.FOOT_SPEED && Math.abs(p.steer) < F.FOOT_STEER;
+
   // A slow board swings toward the fall line.
   const grad = len2(G.gx, G.gz);
-  if (grad > 1e-4 && v < F.FALLLINE_SPEED && p.wallHold <= 0) {
+  if (grad > 1e-4 && v < F.FALLLINE_SPEED && p.wallHold <= 0 && !planted) {
     const delta = angleDiff(datan2(-G.gx, -G.gz), heading);
     const low = 1 - v / F.FALLLINE_SPEED;
     const turn = ((F.FALLLINE_GAIN * F.GRAVITY * grad * Math.abs(dsin(delta))) / Math.max(v, 1)) * low * DT;
@@ -269,10 +280,11 @@ function stepGround(ctx: SimCtx, steerDelta: number): void {
 
   v += (gravAlong - F.AIR_DRAG * v * v - surfaceDrag(G.surface) * v - F.CARVE_SCRUB * Math.abs(p.steer) * v) * DT;
   // Rolling resistance brakes but never reverses.
-  v -= F.ROLL_RESIST * DT;
+  const resist = F.ROLL_RESIST + (planted ? F.FOOT_BRAKE : 0);
+  v -= resist * DT;
   if (v <= 0) {
     v = 0;
-    if (-gravAlong > F.ROLL_RESIST) {
+    if (-gravAlong > resist) {
       // Stalled facing uphill: kickturn and let gravity take over.
       heading = wrapAngle(heading + PI);
       fx = -fx;
@@ -281,7 +293,7 @@ function stepGround(ctx: SimCtx, steerDelta: number): void {
     }
   }
   // Tic-tac: carving back and forth trickles in speed at walking pace.
-  if (v < F.PUMP_SPEED_CAP) v = Math.min(F.PUMP_SPEED_CAP, v + F.PUMP_GAIN * steerDelta);
+  if (v < F.PUMP_SPEED_CAP && !planted) v = Math.min(F.PUMP_SPEED_CAP, v + F.PUMP_GAIN * steerDelta);
   if (v > F.MAX_SPEED) v = F.MAX_SPEED;
 
   const vh = v * inv;

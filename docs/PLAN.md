@@ -90,7 +90,7 @@ Acceptance:
       (`tests/sim/fullGame.test.ts`, bot in `tests/sim/bot/`): map complete in 51.5 simulated
       minutes, no bails before it; then the ghost tram, the summit chain and king kite, the blimp;
       three save/load points end in the same state; about 7 s of test time. The blimp's first
-      segment cannot be inked (DECISIONS 77). Independent check pending
+      segment cannot be inked (DECISIONS 79). Independent check pending
 - [ ] Final docs and audit
 
 Acceptance:

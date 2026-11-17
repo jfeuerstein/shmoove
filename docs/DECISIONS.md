@@ -269,15 +269,33 @@ Known and left: a hands-off skater from the lookout comes to rest on a plaza blo
 first stop (the hints carry a player past it); landings fall, so you cannot stand and wait at a stop
 without leaning on a wall (see PLAYTEST); a save from before onboarding starts the lesson once.
 
+## M6 — Onboarding verification
+
+77. **Holding a still finger plants a foot.** The independent check of onboarding found that a
+    clumsy first-timer never caught a ride: by the time they reacted to the hint they had rolled
+    past the stop, and nothing in the game let them stop or go back. Landings fall, so nobody could
+    stand and wait at a stop at all, in a game about catching scheduled rides. Now a held, still
+    finger with no ride near brakes the board to a stop and holds it there, even on a slope, until
+    the finger lifts or a ride's grab point comes past (then it latches as before). It is not a
+    push: it only ever removes speed. It does nothing above `FOOT_SPEED` (a hand out at speed is
+    not a brake), nothing while carving (a dragging finger is reaching on the move), and nothing
+    while rolling with a grabbable ride within `FOOT_NEAR` (coast into it). "Press and hold still"
+    now means what it says.
+78. **A forged chalk tick count is not always damage.** The test that claimed one tick fewer and
+    expected an error depended on the recorded run: when the dropped frame costs under a bit, the
+    shorter line has the same bytes and that code is simply the one code of a shorter line. The
+    test now asserts what the format guarantees: a forged count either fails as a bad stream or
+    decodes to a line whose one code is the forged code; trailing bytes always fail.
+
 ## M6e — Full-game check
 
-77. **The blimp (S2) can never be completed.** Its first segment (Cumbre to Cerro Sur) can only ink
+79. **The blimp (S2) can never be completed.** Its first segment (Cumbre to Cerro Sur) can only ink
     on a hitch caught within 12 m of the start of its pass, where the ladder hangs 28 m above the
     summit with nothing under it to reach from; the only catch is the low sweep over the hill
     station platform, 410 m into the lap. The full-game test asserts the blimp is found and its
     second segment inked, and every other line complete. Left for the lead: move the pass's start
     over something a skater can stand on, or start the lap at the hill station.
-78. **What a save/load is compared on.** A save keeps the time of day, not the day, and puts the
+80. **What a save/load is compared on.** A save keeps the time of day, not the day, and puts the
     skater down at rest at their last safe spot, so a loaded game cannot match an uninterrupted one
     tick for tick. The test compares, from the save on: the same game events in the same order,
     every ink, line and secret event at the same time of day, and at the end the skater bit for bit
@@ -285,10 +303,10 @@ without leaning on a wall (see PLAYTEST); a save from before onboarding starts t
     handrail ground. Saves are taken when the bot is waiting at a stop and the game's safe spot has
     caught up with it (within 0.5 s of stepping off a ride the safe spot is still where the ride was
     boarded, and a save there resumes the skater at the boarding stop).
-79. **The rail magnet counts as a move a skater can make.** Snapping onto a handrail moves the board
+81. **The rail magnet counts as a move a skater can make.** Snapping onto a handrail moves the board
     up to `RAIL_SNAP` sideways in one tick (0.97 m on the spine's handrail); the no-teleport bound is
     the fastest speed for a tick plus `RAIL_SNAP`.
-80. **"Never stuck" is a new segment or a change of district every 3 minutes, up to the map.** The
+82. **"Never stuck" is a new segment or a change of district every 3 minutes, up to the map.** The
     longest stretch is 161 s (night 2, the walk from Rellano 410 to the crane at the west end of the
     quay and its run to Grúa Centro). Tram 5's first run of day 4 leaves Muelle 181 s after the last
     forklift lap ends; the bot rolls to the foot of the Mercado steps behind the stop while it waits,
