@@ -12,13 +12,20 @@ import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { loadavg } from 'node:os';
 import { join } from 'node:path';
 import { gzipSync } from 'node:zlib';
-import { DIST, ROOT, newPhoneContext, waitForReady, withAppAndBrowser } from '../e2e/lib/browser.mjs';
+import { DIST, ROOT, VIEWPORT, newPhoneContext, waitForReady, withAppAndBrowser } from '../e2e/lib/browser.mjs';
 
 const CPU_THROTTLE = 4;
 const WARMUP_MS = 2_000;
 const MEASURE_MS = 10_000;
-/** Frames the tour holds each viewpoint: must match TOUR_HOLD in src/app/routes.ts. */
+/**
+ * The tour holds each viewpoint TOUR_HOLD ticks (src/app/routes.ts): drawn as TOUR_FRAMES frames of
+ * TOUR_TICKS ticks each, enough frames for the 2 ms-a-frame chunk streaming to fill the view. Every
+ * frame is rasterised in software, so drawing all 240 ticks as frames queued minutes of work in the
+ * GPU process and the next page could not load.
+ */
 const TOUR_HOLD = 240;
+const TOUR_TICKS = 4;
+const TOUR_FRAMES = TOUR_HOLD / TOUR_TICKS;
 /** Safety stop for the tour loop. */
 const TOUR_MAX_POINTS = 32;
 const TOUR_TIMES = [
@@ -82,24 +89,26 @@ async function measure({ url, browser }, problems) {
 
 /** One pass of the viewpoint tour at day fraction `t`: per viewpoint, the most draw calls and triangles. */
 async function tour({ url, browser }, t, problems) {
-  const context = await newPhoneContext(browser);
+  // Draw-call and triangle counts do not depend on resolution: device pixel ratio 1 keeps the
+  // software rasteriser's work down.
+  const context = await browser.newContext({ viewport: VIEWPORT, screen: VIEWPORT, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
   const page = await context.newPage();
   watchProblems(page, problems);
   try {
-    await page.goto(url + `/?route=tour&e2e&mute&t=${t}` + extraParams(), { waitUntil: 'commit' });
-    await waitForReady(page, 60_000);
-    return await page.evaluate(
-      ({ hold, maxPoints }) => {
-        const h = window.__skitch;
-        const points = [];
-        let lastKey = '';
-        for (let k = 0; k < maxPoints; k++) {
+    await page.goto(url + `/?route=tour&e2e&mute&t=${t}` + extraParams());
+    await waitForReady(page);
+    const points = [];
+    let lastKey = '';
+    for (let k = 0; k < TOUR_MAX_POINTS; k++) {
+      const p = await page.evaluate(
+        ({ frames, ticks }) => {
+          const h = window.__skitch;
           let drawCalls = 0;
           let triangles = 0;
           let x = 0;
           let z = 0;
-          for (let f = 0; f < hold; f++) {
-            h.advance(1);
+          for (let f = 0; f < frames; f++) {
+            h.advance(ticks);
             const s = h.stats();
             drawCalls = Math.max(drawCalls, s.drawCalls);
             triangles = Math.max(triangles, s.triangles);
@@ -109,16 +118,19 @@ async function tour({ url, browser }, t, problems) {
               z = Math.round(st.z);
             }
           }
-          const key = `${x},${z}`;
-          // After the last viewpoint the tour stays put.
-          if (key === lastKey) break;
-          lastKey = key;
-          points.push({ x, z, drawCalls, triangles });
-        }
-        return points;
-      },
-      { hold: TOUR_HOLD, maxPoints: TOUR_MAX_POINTS },
-    );
+          return { x, z, drawCalls, triangles };
+        },
+        { frames: TOUR_FRAMES, ticks: TOUR_TICKS },
+      );
+      // Let the GPU process catch up before the next viewpoint.
+      await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => r(undefined))));
+      const key = `${p.x},${p.z}`;
+      // After the last viewpoint the tour stays put.
+      if (key === lastKey) break;
+      lastKey = key;
+      points.push(p);
+    }
+    return points;
   } finally {
     await context.close();
   }
