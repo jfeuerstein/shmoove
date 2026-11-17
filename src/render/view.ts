@@ -114,6 +114,8 @@ export function createView(canvas: HTMLCanvasElement, world: World, opts: ViewOp
       }
 
       applyTimeOfDay(sim.dayFrac);
+      // Last frame's camera is close enough for distance culling.
+      vehicles.setCamera(chase.camera.position.x, chase.camera.position.y, chase.camera.position.z);
       vehicles.update(sim.tick, alpha);
       worldView.update(chase.camera.position.x, chase.camera.position.z, sim.dayFrac);
 

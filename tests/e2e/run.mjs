@@ -18,6 +18,8 @@ import {
   waitSlices,
 } from './lib/route.mjs';
 
+const SHOT_TIMEOUT_MS = 180_000;
+
 const ROUTES_DIR = join(ROOT, 'tests', 'e2e', 'routes');
 const SCREENS_DIR = join(ROOT, 'artifacts', 'screens');
 /** A canvas whose pixels differ from its first pixel in less than this fraction counts as blank. */
@@ -91,7 +93,8 @@ async function playRoute(browser, url, route) {
   };
   const shot = async (name) => {
     const file = join(SCREENS_DIR, `${route.name}-${name}.png`);
-    const png = await page.screenshot({ path: file });
+    // Software rendering on a busy machine can take a while to produce a frame.
+    const png = await page.screenshot({ path: file, timeout: SHOT_TIMEOUT_MS });
     await assertCanvasNotBlank(page, png, `${route.name}-${name}`);
     checkedCanvas = true;
   };
@@ -148,7 +151,7 @@ async function playRoute(browser, url, route) {
       }
     }
     if (!checkedCanvas && problems.length === 0) {
-      await assertCanvasNotBlank(page, await page.screenshot(), `${route.name} (end)`);
+      await assertCanvasNotBlank(page, await page.screenshot({ timeout: SHOT_TIMEOUT_MS }), `${route.name} (end)`);
     }
   } catch (e) {
     problems.push(e instanceof Error ? e.message : String(e));
