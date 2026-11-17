@@ -14,6 +14,8 @@ import { glyphSvg } from './hintGlyphs';
 import type { UiSound } from './index';
 import { TWOS_STEP, type Twos } from './twos';
 
+/** Titles longer than this many characters print a size smaller, to stay on one line. */
+const LONG_TITLE = 18;
 /** How long the punched stub stays up before it slides away, seconds. */
 const PUNCH_HOLD = 0.6;
 
@@ -34,6 +36,7 @@ export class HintStub {
   private readonly sub: TextSlot;
   private readonly hole: HTMLElement;
   private readonly on: ClassSlot;
+  private readonly long: ClassSlot;
   private readonly pointerOn: ClassSlot;
   private readonly bob: ClassSlot;
   /** The hint on the stub ('' when none), and what the stub is doing. */
@@ -67,6 +70,7 @@ export class HintStub {
     this.title = new TextSlot(t);
     this.sub = new TextSlot(s);
     this.on = new ClassSlot(this.el, 'sk-on');
+    this.long = new ClassSlot(this.ticket, 'sk-hlong');
     this.mapPointer = el('div', 'sk-hmapptr');
     this.mapPointer.innerHTML = MAP_POINTER;
     this.pointerOn = new ClassSlot(this.mapPointer, 'sk-on');
@@ -140,6 +144,7 @@ export class HintStub {
     this.lastStop = ob.stopName;
     const c = hintCopy(id, ob);
     this.title.set(c.title);
+    this.long.set(c.title.length > LONG_TITLE);
     this.sub.set(c.sub);
     if (c.glyph !== this.glyph) {
       if (this.frame >= 0) this.glyphBox.classList.remove('sk-g' + this.frame);

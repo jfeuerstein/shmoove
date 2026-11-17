@@ -23,6 +23,7 @@ const CSS = `
 .sk-htext{display:flex;flex-direction:column;gap:2px;min-width:0}
 .sk-htitle{font-weight:700;font-size:17px;line-height:1.05;letter-spacing:.08em;color:var(--sk-ink);white-space:nowrap;
   text-shadow:1px 1px 0 rgba(255,46,136,.45)}
+.sk-hlong .sk-htitle{font-size:14px;letter-spacing:.06em}
 .sk-hsub{font-weight:700;font-size:12px;line-height:1.1;letter-spacing:.1em;color:var(--sk-cobalt);white-space:nowrap;
   overflow:hidden;text-overflow:ellipsis;text-shadow:-1px 0 0 rgba(255,46,136,.35)}
 .sk-hsub:empty{display:none}
