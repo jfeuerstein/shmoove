@@ -3,6 +3,9 @@ import { buildCity, type City } from '../../src/sim/city';
 import { MEETINGS } from '../../src/sim/city/lines';
 import { DAY_TICKS, FEEL, resetFeel } from '../../src/sim/constants';
 import { grabPoint, inWindows, makeVehicleState, vehicleAt, type CompiledLine, type VehicleState } from '../../src/sim/lines';
+import { placePlayer } from '../../src/sim/player';
+import { Sim } from '../../src/sim/sim';
+import { NO_INPUT, type SimEvent } from '../../src/sim/types';
 import { District, Surface, collideSolids, findZone, makeWallHit, terrainSurface, topHeight } from '../../src/sim/world';
 
 let city: City;
@@ -228,6 +231,24 @@ describe('the roster', () => {
   });
 });
 
+describe('a whole day of traffic', () => {
+  for (const id of ['spawn', 'spawn_docks', 'spawn_mercado', 'spawn_terraces', 'spawn_antenna']) {
+    it(`never runs down a skater left at ${id}`, () => {
+      const z = findZone(city.world, id);
+      expect(z).not.toBeNull();
+      if (!z) return;
+      const sim = new Sim(city.world, { seed: 1, startDayFrac: 0 });
+      placePlayer(city.world, sim.player, z.x, z.z, city.world.spawn.heading);
+      let bails = 0;
+      for (let t = 0; t < DAY_TICKS; t++) {
+        sim.step(NO_INPUT);
+        for (const e of sim.events) if (e.type === 'bail' && e.reason === 'vehicle') bails++;
+      }
+      expect(bails).toBe(0);
+    });
+  }
+});
+
 describe('meetings', () => {
   /** Ticks (sampled every 10) at which both lines are in service, and at which they meet. */
   function scan(m: (typeof MEETINGS)[number]): { service: Uint8Array; met: Uint8Array } {
@@ -294,6 +315,135 @@ describe('meetings', () => {
       }
       expect(meetings).toBeGreaterThan(0);
       expect(worst).toBeLessThanOrEqual(m.everyTicks);
+    });
+  }
+});
+
+// ---------------------------------------------------------------------------------------------
+// Two-link chains at the meetings: hitch line a, sling, catch line b as it comes past.
+
+interface Overtake {
+  /** Day tick when b's vehicle is level with a's vehicle near the zone. */
+  tick: number;
+  va: number;
+  vb: number;
+}
+
+/** The first moment in the day when a vehicle of b draws level with a vehicle of a at the zone. */
+function findOvertake(aId: string, bId: string, zone: string): Overtake {
+  const a = line(aId);
+  const b = line(bId);
+  const z = findZone(city.world, zone);
+  if (!z) throw new Error(zone);
+  const A = makeVehicleState();
+  const B = makeVehicleState();
+  for (let t = 0; t < DAY_TICKS; t += 2) {
+    for (let i = 0; i < a.vehicles; i++) {
+      vehicleAt(a, i, t, A);
+      if (!A.active || Math.hypot(A.x - z.x, A.z - z.z) > z.r + 12) continue;
+      for (let j = 0; j < b.vehicles; j++) {
+        vehicleAt(b, j, t, B);
+        if (!B.active || Math.hypot(A.x - B.x, A.z - B.z) > 12) continue;
+        // Same way, b level with a and faster.
+        const along = (B.x - A.x) * A.hx + (B.z - A.z) * A.hz;
+        const vrel = (B.vx - A.vx) * A.hx + (B.vz - A.vz) * A.hz;
+        if (A.hx * B.hx + A.hz * B.hz > 0.8 && Math.abs(along) < 1 && vrel > 1) return { tick: t, va: i, vb: j };
+      }
+    }
+  }
+  throw new Error(`${bId} never overtakes ${aId} at ${zone}`);
+}
+
+interface ChainRun {
+  links: number;
+  events: SimEvent[];
+}
+
+/**
+ * Wait beside a's lane ahead of its vehicle, ride it, lean away and crack the whip toward b
+ * (`sign` picks the side), let go `release` ticks after the overtake moment, re-arm, and ride
+ * whatever is caught for a second.
+ */
+function chainRun(aId: string, bId: string, o: Overtake, lead: number, release: number, whip: number, sign: number): ChainRun {
+  const a = line(aId);
+  const b = line(bId);
+  const sim = new Sim(city.world, { seed: 1, startDayFrac: 0 });
+  sim.tick = o.tick - lead;
+  // Stand where a's vehicle origin will be 1.5 s from now, beside it on b's side.
+  const A = makeVehicleState();
+  const B = makeVehicleState();
+  vehicleAt(a, o.va, sim.tick + 90, A);
+  vehicleAt(b, o.vb, o.tick, B);
+  const side = (B.x - A.x) * -A.hz + (B.z - A.z) * A.hx >= 0 ? 1 : -1;
+  const off = a.bodyHalfWid + 0.9;
+  placePlayer(city.world, sim.player, A.x - A.hz * side * off, A.z + A.hx * side * off, Math.atan2(A.hx, A.hz));
+  sim.player.speed = Math.min(3, a.cruise * 0.5);
+  const events: SimEvent[] = [];
+  let hitchedA = false;
+  let released = -1;
+  let caught = -1;
+  let links = 0;
+  const end = lead + release;
+  for (let i = 0; i < lead + release + 400; i++) {
+    let steer = 0;
+    let hold = true;
+    if (released < 0) {
+      if (i >= end - whip) steer = sign;
+      else if (i >= end - whip - 45) steer = -sign;
+      hold = !hitchedA || i < end;
+    } else if (caught < 0) hold = i > released + 4;
+    else hold = i < caught + 60;
+    sim.step({ steer, hold, hop: false });
+    for (const e of sim.events) {
+      events.push(e);
+      if (e.type === 'hitch') {
+        if (!hitchedA) {
+          if (e.line !== a.index) return { links: 0, events };
+          hitchedA = true;
+        } else if (released >= 0 && caught < 0) {
+          caught = i;
+          links = e.line === b.index ? e.chain : 0;
+        }
+      }
+      if (e.type === 'release' && released < 0) released = i;
+    }
+    if (!hitchedA && i > lead + 60) return { links: 0, events };
+    if (caught >= 0 && i > caught + 60) break;
+    if (released >= 0 && caught < 0 && i > released + 240) break;
+  }
+  return { links, events };
+}
+
+/** Search release time and whip length for a script that chains a into b. */
+function findCityChain(aId: string, bId: string, zone: string): { params: number[]; run: ChainRun } {
+  resetFeel();
+  const o = findOvertake(aId, bId, zone);
+  for (const lead of [240, 420]) {
+    for (let release = -150; release <= 150; release += 6) {
+      for (const whip of [0, 16, 28]) {
+        for (const sign of [1, -1]) {
+          const run = chainRun(aId, bId, o, lead, release, whip, sign);
+          if (run.links === 2) return { params: [lead, release, whip, sign], run };
+        }
+      }
+    }
+  }
+  throw new Error(`no ${aId} -> ${bId} chain found`);
+}
+
+describe('two-link chains at the meetings', () => {
+  for (const [a, b, zone] of [
+    ['D2', 'D3', 'chain_D2_D3'],
+    ['D2', 'T2', 'chain_D2_T2'],
+    ['M2', 'M1', 'chain_M1_M2'],
+  ]) {
+    it(`a skater hitches ${a}, slings, and catches ${b} as it comes past`, () => {
+      const { run } = findCityChain(a, b, zone);
+      const catchB = run.events.find((e) => e.type === 'hitch' && e.line === line(b).index);
+      expect(catchB).toMatchObject({ chain: 2, newLink: true });
+      expect(run.events.find((e) => e.type === 'hitch')).toMatchObject({ line: line(a).index, chain: 1 });
+      expect(run.events.some((e) => e.type === 'chainEnd')).toBe(false);
+      expect(run.events.some((e) => e.type === 'bail')).toBe(false);
     });
   }
 });
