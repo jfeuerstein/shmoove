@@ -30,12 +30,13 @@ Add them to the address, for example `http://localhost:5173/?slice&debug`.
 | `t=0.5` | Starts at that time of day, as a fraction of the day (0 midnight, 0.5 noon) |
 | `seed=N` | World and random seed (integer, default 1) |
 | `mute` | Starts with audio muted |
-| `route=NAME` | Plays a built-in input script instead of your thumb (`perf`: an endless busy ride). No title screen |
+| `route=NAME` | Plays a built-in input script instead of your thumb: `perfcity` (the five legs `npm run perf` times), `perf` (an endless loop on the summit, for profiling), `tour` (fixed viewpoints in every district). No title screen |
 | `chalk=SK2-...` | Opens the chalk import box with that share code pasted |
 
 Controls: touch and drag to carve; touch and hold to arm a grab, which hitches the nearest ride in
-reach; lift to let go (the slingshot); flick up to hop. On a keyboard: arrows or A/D steer, Space holds,
-W or Up hops, M opens the map, P pauses.
+reach, or with no ride near plants a foot and stops you; lift to let go (the slingshot); flick up to
+hop. On a keyboard: arrows or A/D steer, Space holds, W or Up hops, M opens the map, L the ledger, P
+pauses, Escape closes a screen.
 
 ## Build and preview
 
@@ -54,10 +55,10 @@ The service worker only registers in the built app, so offline play and updates 
 | `npm run typecheck` | The TypeScript compiles under strict settings |
 | `npm run lint` | ESLint passes, including the rules that keep `src/sim/` pure and deterministic |
 | `npm test` | Unit tests and deterministic sim tests pass headless (movement, hitching, rides, saves, UI logic, icons, service worker, haptics, settings) |
-| `npm run e2e` | Every scripted route in `tests/e2e/routes/` plays in headless Chromium at 390x844 with real touch input, its expectations hold, and its screenshots land in `artifacts/screens/` |
+| `npm run e2e` | Every scripted route in `tests/e2e/routes/` plays in headless Chromium at 390x844 with real touch input, its expectations hold, the page logs no error or warning, and its screenshots land in `artifacts/screens/` |
 | `npm run e2e:pwa` | The built app is installable and offline: manifest and icons served correctly, the service worker activates, a reload with the network gone still boots, and a new build reaches the player through the "new version" ticket |
-| `npm run perf` | The scripted route stays inside the budgets (frame time at 4x CPU throttle, draw calls, triangles, JS gzip size) |
-| `npm run gate` | All of the above in order; a milestone is done only when this is green |
+| `npm run perf` | The `perfcity` route through all four districts and a viewpoint tour stay inside the budgets in `tests/perf/budgets.json` (frame work and game step at 4x CPU throttle, draw calls, triangles, JS gzip size); writes `artifacts/perf.json` |
+| `npm run gate` | typecheck, lint, test, build, e2e, e2e:pwa, perf in order, stopping at the first failure; a milestone is done only when this is green |
 
 The e2e and perf runners build `dist/` if it is missing; run `npm run build` first after changing code.
 
@@ -75,9 +76,10 @@ After each deploy check that `sw.js` is served (not a 404): a missing `sw.js` le
 
 1. In the repository, Settings → Pages → Build and deployment → Source: **GitHub Actions**.
 2. The workflow is in the repo: `.github/workflows/pages.yml` builds the game and deploys `dist/` on
-   every push to `develop` (and on demand from the Actions tab). Its `checks` job runs typecheck, lint
+   every push to `develop` and to the working branch `claude/build-skitch-game-ntnaek` (and on demand
+   from the Actions tab). Its `checks` job runs typecheck, lint
    and the tests alongside without holding the deploy back. To deploy from another branch, change
-   `branches: [develop]`; if the `github-pages` environment restricts which branches may deploy
+   its `branches:` list; if the `github-pages` environment restricts which branches may deploy
    (Settings → Environments → github-pages → Deployment branches), allow that branch there.
 
 3. Push to `develop`. The game appears at `https://<user>.github.io/<repo>/`. The relative base is what
@@ -113,7 +115,7 @@ ticket; RELOAD switches to it.
 
 ## Wrap it as a native app later (not done here)
 
-Capacitor can wrap `dist/` as is, because nothing assumes a browser chrome and every URL is relative:
+A native shell was left out on purpose (see Cut in `docs/DECISIONS.md`). Capacitor can wrap `dist/` as is, because nothing assumes a browser chrome and every URL is relative:
 
 ```sh
 npm install @capacitor/core @capacitor/cli @capacitor/android
@@ -136,7 +138,8 @@ for iOS.
 | `src/app/` | Boot, main loop, saves, settings, haptics, PWA glue, debug panel |
 | `scripts/` | The gate, the icon generator and the service worker generator |
 | `public/` | The manifest and host headers (icons are generated here at build time) |
-| `tests/` | `unit`, `sim`, `e2e` (routes and the PWA check), `perf` |
+| `tests/` | `unit`, `sim` (with the closed-loop bots in `sim/bot/`), `e2e` (routes and the PWA check), `perf` (the runner, budgets and `profile.mjs`, a profiling diagnostic) |
+| `docs/` | Design, plan, decisions, the playtest list, and `briefs/`: every task brief as sent |
 
 ## Tuning the feel
 
@@ -149,4 +152,6 @@ which constant controls each.
 - `docs/DESIGN.md`: the spec.
 - `docs/PLAN.md`: milestones and progress.
 - `docs/DECISIONS.md`: decisions and cuts made along the way, with reasons.
+- `docs/PLAYTEST.md`: what only a human can judge, and what controls it.
+- `docs/briefs/`: the brief behind each delegated task, with its outcome in `briefs/README.md`.
 - `CLAUDE.md`: conventions and commands for working in the repo.
