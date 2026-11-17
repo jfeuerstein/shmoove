@@ -30,15 +30,10 @@ const WH = makeWallHit();
 const RH = makeRailHit();
 const VS = makeVehicleState();
 
-/** Head-on enough to bounce back rather than slide (cos of angle to the wall normal). */
-const HEAD_ON = 0.8;
+/** Housekeeping intervals and insets; not feel. */
 const SAFE_INTERVAL = 0.5;
-/** Below this speed a square wall hit turns you along the wall instead of bouncing you back. */
-const SLIDE_SPEED = 3;
 const WALL_HOLD = 0.35;
-const WALL_EXIT_PUSH = 1.2;
 const WALL_ROOF_INSET = 0.3;
-const GRIND_STALL_SPEED = 0.6;
 
 export function createPlayer(): PlayerState {
   return {
@@ -313,7 +308,7 @@ function stepGround(ctx: SimCtx, steerDelta: number): void {
     p.wallHold = WALL_HOLD;
     let dx: number;
     let dz: number;
-    if (into > HEAD_ON && v > SLIDE_SPEED) {
+    if (into > F.WALL_HEAD_ON && v > F.WALL_SLIDE_SPEED) {
       // Fast and square on: bounce back.
       dx = fx + 2 * into * WH.nx;
       dz = fz + 2 * into * WH.nz;
@@ -593,7 +588,7 @@ function stepGrind(ctx: SimCtx): void {
     leaveRail(ctx);
     return;
   }
-  if (Math.abs(v) < GRIND_STALL_SPEED && Math.abs(RH.ty) < 0.03) {
+  if (Math.abs(v) < F.GRIND_STALL_SPEED && Math.abs(RH.ty) < 0.03) {
     // Stalled on a flat rail: step off.
     p.vx = RH.tx * v;
     p.vy = 0;
@@ -701,8 +696,8 @@ function stepWall(ctx: SimCtx): void {
 
   const beside = wallBeside(o, nx, nz, p.wallNx, p.wallNz, F.PLAYER_RADIUS + 0.35);
   if (!beside || p.modeTime > F.WALL_TIME || ny + F.PLAYER_HEIGHT * 0.5 < o.yBase) {
-    p.vx += p.wallNx * WALL_EXIT_PUSH;
-    p.vz += p.wallNz * WALL_EXIT_PUSH;
+    p.vx += p.wallNx * F.WALL_EXIT_PUSH;
+    p.vz += p.wallNz * F.WALL_EXIT_PUSH;
     leaveWall(ctx, false, false);
   }
 }

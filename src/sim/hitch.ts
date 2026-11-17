@@ -30,13 +30,7 @@ const GP = { x: 0, y: 0, z: 0 };
 const G = makeGroundSample();
 const WH = makeWallHit();
 
-/** How fast "straight behind" follows a ride that changes direction, rad/s. */
-const REST_RATE = 5;
-/** Stiffness of the soft stop at SWING_MAX, 1/s^2. */
-const SWING_STOP = 60;
-const OMEGA_LATCH_MAX = 2.5;
-/** Most of the towed/reeled vertical speed that carries into a release, m/s. */
-const SLING_VY_CARRY = 6;
+/** Pauses that stop event spam; not feel. */
 const DENIED_COOLDOWN = 0.6;
 const POST_SLING_COOLDOWN = 0.12;
 
@@ -121,7 +115,7 @@ function latch(ctx: SimCtx, li: number, vi: number): void {
   // Swing rate from the skater's velocity relative to the ride, across the rope.
   const rvx = p.vx - VS.vx;
   const rvz = p.vz - VS.vz;
-  p.omega = clamp((rvx * dcos(p.psi) - rvz * dsin(p.psi)) / Math.max(p.rope, 1), -OMEGA_LATCH_MAX, OMEGA_LATCH_MAX);
+  p.omega = clamp((rvx * dcos(p.psi) - rvz * dsin(p.psi)) / Math.max(p.rope, 1), -FEEL.SWING_LATCH_MAX, FEEL.SWING_LATCH_MAX);
 
   p.yankX = p.x;
   p.yankY = p.y;
@@ -168,7 +162,7 @@ export function stepHitch(ctx: SimCtx, hold: boolean): void {
   const rideSpeed = len2(VS.vx, VS.vz);
   if (rideSpeed > 0.3) {
     const target = datan2(-VS.vx, -VS.vz);
-    p.psiRest = wrapAngle(p.psiRest + clamp(angleDiff(target, p.psiRest), -REST_RATE * DT, REST_RATE * DT));
+    p.psiRest = wrapAngle(p.psiRest + clamp(angleDiff(target, p.psiRest), -F.SWING_REST_RATE * DT, F.SWING_REST_RATE * DT));
   }
   const th = angleDiff(p.psi, p.psiRest);
   const w2 = F.SWING_FREQ * F.SWING_FREQ * clamp(rideSpeed / F.SWING_REF_SPEED, 0.15, 1.6);
@@ -181,8 +175,8 @@ export function stepHitch(ctx: SimCtx, hold: boolean): void {
     const want = w2 * (1 - dcos(F.SWING_MIN_AMP));
     if (energy < want) acc += F.SWING_PUMP * (1 - energy / want) * (p.omega >= 0 ? 1 : -1);
   }
-  if (th > F.SWING_MAX) acc -= SWING_STOP * (th - F.SWING_MAX);
-  else if (th < -F.SWING_MAX) acc -= SWING_STOP * (th + F.SWING_MAX);
+  if (th > F.SWING_MAX) acc -= F.SWING_STOP * (th - F.SWING_MAX);
+  else if (th < -F.SWING_MAX) acc -= F.SWING_STOP * (th + F.SWING_MAX);
   p.omega = clamp(p.omega + acc * DT, -F.SWING_OMEGA_MAX, F.SWING_OMEGA_MAX);
   p.psi = wrapAngle(p.psi + p.omega * DT);
   p.rope = moveToward(p.rope, L.rope, F.REEL_RATE * DT);
@@ -262,7 +256,7 @@ function sling(ctx: SimCtx, hop: boolean): void {
   if (exit > cap) exit = cap;
   p.vx = dx * exit;
   p.vz = dz * exit;
-  p.vy = clamp(p.vy, 0, SLING_VY_CARRY) + F.SLING_POP + (hop ? F.SLING_HOP_POP : 0);
+  p.vy = clamp(p.vy, 0, F.SLING_VY_CARRY) + F.SLING_POP + (hop ? F.SLING_HOP_POP : 0);
   p.speed = len3(p.vx, p.vy, p.vz);
   p.heading = datan2(dx, dz);
   if (hop) {

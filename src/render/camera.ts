@@ -24,7 +24,6 @@ export interface CamTarget {
   rideYaw: number | null;
 }
 
-const TOP_SPEED = 28;
 const _look = new THREE.Vector3();
 
 function wrap(a: number): number {
@@ -96,7 +95,7 @@ export class ChaseCamera {
     this.lastY = t.y;
     this.slope += (Math.max(-0.5, Math.min(0.5, climb)) - this.slope) * ease(2.5);
 
-    const speedK = Math.min(1, t.speed / TOP_SPEED);
+    const speedK = Math.min(1, t.speed / F.CAM_TOP_SPEED);
     const hitched = t.mode === Mode.HITCH;
     const wantDist = speedK * F.CAM_SPEED_DIST + (hitched ? F.CAM_HITCH_DIST : 0);
     const wantHeight =

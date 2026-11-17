@@ -27,6 +27,8 @@ export const FEEL_DEFS = {
   PLAYER_HEIGHT: [1.7, 0.5, 2.5, 'Ground', 'Collision height, m'],
   WALL_SCRUB: [0.5, 0, 1, 'Ground', 'Speed lost sliding along a wall (fraction at head-on)'],
   WALL_BOUNCE: [0.35, 0, 1, 'Ground', 'Speed kept bouncing off a wall head-on'],
+  WALL_HEAD_ON: [0.8, 0.3, 1, 'Ground', 'How square a wall hit must be (cos) to bounce back rather than slide'],
+  WALL_SLIDE_SPEED: [3, 0, 12, 'Ground', 'Below this speed a square hit turns you along the wall instead of bouncing, m/s'],
   WALL_BAIL_SPEED: [12, 3, 40, 'Ground', 'Speed into a wall that bails you, m/s'],
 
   // --- Air
@@ -52,6 +54,7 @@ export const FEEL_DEFS = {
   GRIND_FRICTION: [0.5, 0, 5, 'Grind', 'Rail deceleration, m/s^2'],
   GRIND_EXIT_POP: [2.6, 0, 8, 'Grind', 'Upward speed leaving the end of a rail, m/s'],
   GRIND_HOP_SIDE: [2.8, 0, 8, 'Grind', 'Sideways speed from steer when hopping off a rail, m/s'],
+  GRIND_STALL_SPEED: [0.6, 0, 3, 'Grind', 'Below this speed on a flat rail you step off, m/s'],
   GRIND_COOLDOWN: [0.3, 0, 1, 'Grind', 'Time before the same rail can be re-snapped, s'],
 
   // --- Wall
@@ -63,6 +66,7 @@ export const FEEL_DEFS = {
   WALL_ENTRY_UP: [3, 0, 10, 'Wall', 'Minimum upward speed on wallride entry, m/s'],
   WALL_JUMP_OUT: [5.5, 0, 12, 'Wall', 'Wall-jump speed away from the wall, m/s'],
   WALL_JUMP_UP: [7, 0, 14, 'Wall', 'Wall-jump upward speed, m/s'],
+  WALL_EXIT_PUSH: [1.2, 0, 6, 'Wall', 'Push away from the wall when a wallride runs out, m/s'],
   WALL_COOLDOWN: [0.35, 0, 1.5, 'Wall', 'Time before another wallride, s'],
 
   // --- Hitch
@@ -83,6 +87,9 @@ export const FEEL_DEFS = {
   SWING_PUMP: [4, 0, 12, 'Hitch', 'Strength of the self-sustaining swing, rad/s^2'],
   SWING_STEER: [9, 0, 25, 'Hitch', 'Lean torque from steer while hitched, rad/s^2'],
   SWING_OMEGA_MAX: [3.2, 1, 8, 'Hitch', 'Fastest swing rate; caps the whip, rad/s'],
+  SWING_LATCH_MAX: [2.5, 0.5, 8, 'Hitch', 'Most swing rate a catch can start with, rad/s'],
+  SWING_REST_RATE: [5, 0.5, 20, 'Hitch', 'How fast "straight behind" follows a ride that turns, rad/s'],
+  SWING_STOP: [60, 5, 200, 'Hitch', 'Stiffness of the soft stop at SWING_MAX, 1/s^2'],
   SWING_MAX: [1.3, 0.3, 1.55, 'Hitch', 'Widest swing angle, rad'],
   HITCH_Y_RATE: [11, 1, 40, 'Hitch', 'How fast height follows the strap, 1/s'],
 
@@ -92,6 +99,7 @@ export const FEEL_DEFS = {
   LINK_BONUS: [2.2, 0, 8, 'Sling', 'Exit speed added per chain link, m/s'],
   SLING_CAP: [29, 10, 60, 'Sling', 'Cap on exit speed, m/s'],
   SLING_POP: [4.6, 0, 12, 'Sling', 'Upward pop on release, m/s'],
+  SLING_VY_CARRY: [6, 0, 15, 'Sling', 'Most upward speed from the tow that carries into a release, m/s'],
   SLING_HOP_POP: [5.5, 0, 12, 'Sling', 'Extra upward pop when releasing with a swipe up, m/s'],
   CHAIN_GROUND_GRACE: [0.6, 0, 3, 'Sling', 'Ground time a chain survives after release, s (0 = strict)'],
 
@@ -123,6 +131,7 @@ export const FEEL_DEFS = {
   CAM_AIR_HEIGHT: [1.2, 0, 8, 'Camera', 'Extra height while airborne, m'],
   CAM_UPHILL_HEIGHT: [2.5, 0, 10, 'Camera', 'Extra height when heading uphill, m'],
   CAM_MIN_CLEAR: [1.2, 0.2, 5, 'Camera', 'Minimum camera height above ground and roofs, m'],
+  CAM_TOP_SPEED: [28, 10, 50, 'Camera', 'Speed at which the speed effects are at full, m/s'],
   CAM_SHAKE: [0.12, 0, 1, 'Camera', 'Shake scale on stairs, landings and bails'],
 } as const satisfies Record<string, Def>;
 
