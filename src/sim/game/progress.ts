@@ -150,6 +150,7 @@ const VS = makeVehicleState();
 
 /** Tracks the current hitch and inks segments as the towing vehicle completes them. */
 export class ProgressReducer implements GameReducer {
+  readonly key = 'progress';
   private readonly segs: Segment[][];
   private readonly slack: number[][];
   // Current hitch (transient; a fresh session starts unhitched).
@@ -164,9 +165,25 @@ export class ProgressReducer implements GameReducer {
   private runStart = 0;
   private runDir = 1;
 
-  constructor(private readonly progress: Progress, lines: readonly CompiledLine[]) {
+  constructor(
+    private readonly progress: Progress,
+    private readonly lines: readonly CompiledLine[],
+  ) {
     this.segs = lines.map(lineSegments);
     this.slack = this.segs.map((ss) => ss.map(segmentSlack));
+  }
+
+  exportState(): ProgressData {
+    return exportProgress(this.progress);
+  }
+
+  /** Replaces progress in place (the UI holds the same object); any hitch in flight is forgotten. */
+  importState(data: unknown): void {
+    const fresh = importProgress(this.lines, data);
+    this.progress.lines.length = 0;
+    for (const l of fresh.lines) this.progress.lines.push(l);
+    this.progress.mapComplete = fresh.mapComplete;
+    this.active = false;
   }
 
   step(game: Game): void {
