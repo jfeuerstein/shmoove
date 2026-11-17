@@ -112,7 +112,24 @@ export interface CompiledLine extends LineDef {
   maxZ: number;
   minChainN: number;
   phaseTicks: number;
+  /**
+   * Memo of vehicleAt for the tick each vehicle was last asked about (created on first use). The
+   * sim, the view, the UI and the audio all ask where the same vehicles are on the same tick; the
+   * memo answers repeats with the same numbers instead of searching the path again.
+   */
+  vmemo?: VehicleMemo;
 }
+
+/** Per line: for each vehicle, the tick memoised (NaN for none) and its VehicleState fields. */
+export interface VehicleMemo {
+  /** The line this memo belongs to: a copy of a line (`{ ...line }`) must not answer from it. */
+  owner: CompiledLine;
+  tick: Float64Array;
+  state: Float64Array;
+}
+
+/** Numbers stored per vehicle in a VehicleMemo. */
+const MEMO_FIELDS = 12;
 
 export interface VehicleState {
   active: boolean;
@@ -335,8 +352,53 @@ export function pathAt(
   }
 }
 
-/** Where vehicle `i` of `line` is at absolute tick `tick`. Pure. */
+/**
+ * Where vehicle `i` of `line` is at absolute tick `tick`. Pure: a repeat for the same vehicle and
+ * tick is answered from the line's memo with exactly the numbers the first call computed.
+ */
 export function vehicleAt(line: CompiledLine, i: number, tick: number, out: VehicleState): void {
+  let memo = line.vmemo;
+  if (memo === undefined || memo.owner !== line) {
+    memo = { owner: line, tick: new Float64Array(line.vehicles).fill(Number.NaN), state: new Float64Array(line.vehicles * MEMO_FIELDS) };
+    line.vmemo = memo;
+  }
+  const m = memo.state;
+  const k = i * MEMO_FIELDS;
+  if (memo.tick[i] === tick) {
+    out.active = m[k] === 1;
+    out.x = m[k + 1];
+    out.y = m[k + 2];
+    out.z = m[k + 3];
+    out.vx = m[k + 4];
+    out.vy = m[k + 5];
+    out.vz = m[k + 6];
+    out.hx = m[k + 7];
+    out.hz = m[k + 8];
+    out.s = m[k + 9];
+    out.dir = m[k + 10];
+    out.lapTick = m[k + 11];
+    return;
+  }
+  computeVehicle(line, i, tick, out);
+  if (i >= 0 && i < line.vehicles && Number.isInteger(i)) {
+    memo.tick[i] = tick;
+    m[k] = out.active ? 1 : 0;
+    m[k + 1] = out.x;
+    m[k + 2] = out.y;
+    m[k + 3] = out.z;
+    m[k + 4] = out.vx;
+    m[k + 5] = out.vy;
+    m[k + 6] = out.vz;
+    m[k + 7] = out.hx;
+    m[k + 8] = out.hz;
+    m[k + 9] = out.s;
+    m[k + 10] = out.dir;
+    m[k + 11] = out.lapTick;
+  }
+}
+
+/** vehicleAt without the memo (the memo stores what this computes). */
+export function computeVehicle(line: CompiledLine, i: number, tick: number, out: VehicleState): void {
   const day = ((tick % DAY_TICKS) + DAY_TICKS) % DAY_TICKS;
   const offset = Math.floor((i * line.period) / line.vehicles) + line.phaseTicks;
   const lt = (day + offset) % line.period;
