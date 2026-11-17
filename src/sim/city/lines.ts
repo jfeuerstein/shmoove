@@ -66,7 +66,7 @@ export const CITY_LINES: readonly CityLineSpec[] = [
   { id: 'M2', name: 'Carretillas', kind: 'handcart', district: D.MERCADO, stem: 1, vehicles: 3, cruise: 3.5, accel: 1.5, dwell: 2, windows: HOURS.dawnAfternoon, phase: 4360, lane: 1.6 },
   { id: 'M3', name: 'La Boda', kind: 'parade', district: D.MERCADO, stem: 2, vehicles: 1, cruise: 2.2, accel: 1.5, dwell: 2, windows: HOURS.boda, phase: 0, lane: 0 },
   { id: 'T1', name: 'Funicular', kind: 'funicular', district: D.TERRACES, stem: 0, vehicles: 2, cruise: 11, accel: 3, dwell: 5, windows: HOURS.allDay, phase: 440, lane: 0 },
-  { id: 'T2', name: 'Tranvía 5', kind: 'tram', district: D.TERRACES, stem: 1, vehicles: 3, cruise: 10, accel: 3, dwell: 3, windows: HOURS.allDay, phase: 4644, lane: 1.6 },
+  { id: 'T2', name: 'Tranvía 5', kind: 'tram', district: D.TERRACES, stem: 1, vehicles: 3, cruise: 9, accel: 2.5, dwell: 6, windows: HOURS.allDay, phase: 2484, lane: 1.6 },
   { id: 'T3', name: 'Tranvía 9', kind: 'tram', district: D.TERRACES, stem: 2, vehicles: 2, cruise: 10, accel: 3, dwell: 3, windows: HOURS.dayDusk, phase: 80, lane: 1.6 },
   { id: 'T4', name: 'Nocturno', kind: 'bus', district: D.TERRACES, stem: 3, vehicles: 2, cruise: 11, accel: 3, dwell: 4, windows: HOURS.night, phase: 2268, lane: 3.5 },
   { id: 'A1', name: 'Teleférico Bajo', kind: 'cablecar', district: D.ANTENNA, stem: 0, vehicles: 4, cruise: 7, accel: 1.5, dwell: 4, windows: HOURS.allDay, phase: 0, lane: 0 },

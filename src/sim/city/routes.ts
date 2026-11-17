@@ -353,7 +353,7 @@ const CABLE_SEP = 8;
 
 /** Kite circuit control points: x, z, height above the ground. Index 0 is Campo Sur. */
 export const KITES: readonly (readonly [number, number, number])[] = [
-  [50, 1050, 13],
+  [50, 1050, 12],
   [44, 1090, 13],
   [39, 1130, 13],
   [34, 1166, 16.5],
@@ -364,7 +364,7 @@ export const KITES: readonly (readonly [number, number, number])[] = [
   [116, 1206, 17],
   [142, 1134, 17],
   [132, 1058, 16],
-  [92, 1032, 14],
+  [92, 1032, 12.5],
 ];
 const KITE_EAST = 8;
 /** King kite control points: x, z, absolute height. Index 0 is over the needle. */
