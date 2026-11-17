@@ -34,7 +34,7 @@ function surfaceAt(w: World, ix: number, iz: number): number {
 }
 
 /** Ink of one cell: the surface colour with a little per-patch variation (near only). */
-function cellColor(w: World, ix: number, iz: number, surface: number, varied: boolean): number {
+function cellColor(ix: number, iz: number, surface: number, varied: boolean): number {
   const base = surfaceColor(surface);
   if (surface === Surface.STAIRS) return shade(base, (iz & 1) === 0 ? 1.03 : 0.9);
   if (surface === Surface.WATER || !varied) return base;
@@ -87,7 +87,7 @@ export function meshGround(b: MeshBuilder, w: World, ix0: number, iz0: number, i
     let ix = ix0;
     while (ix < ix1) {
       const s = w.surfaces[iz * w.nx + ix];
-      const color = cellColor(w, ix, iz, s, !far);
+      const color = cellColor(ix, iz, s, !far);
       if (!far || !planar(w, ix, iz)) {
         emitCell(b, w, ix, iz, color);
         ix++;
@@ -98,7 +98,7 @@ export function meshGround(b: MeshBuilder, w: World, ix0: number, iz0: number, i
       const gz = vertexHeight(w, ix, iz + 1) - h00;
       let end = ix + 1;
       while (end < ix1) {
-        if (cellColor(w, end, iz, w.surfaces[iz * w.nx + end], false) !== color) break;
+        if (cellColor(end, iz, w.surfaces[iz * w.nx + end], false) !== color) break;
         const k = end + 1 - ix;
         if (Math.abs(vertexHeight(w, end + 1, iz) - (h00 + gx * k)) > 1e-5) break;
         if (Math.abs(vertexHeight(w, end + 1, iz + 1) - (h00 + gx * k + gz)) > 1e-5) break;

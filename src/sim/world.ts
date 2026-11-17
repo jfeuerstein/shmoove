@@ -232,10 +232,6 @@ export function districtAt(w: World, z: number): District {
 // ---------------------------------------------------------------------------------------------
 // Heightfield
 
-export function setHeight(w: World, ix: number, iz: number, h: number): void {
-  w.heights[iz * (w.nx + 1) + ix] = h;
-}
-
 export function vertexHeight(w: World, ix: number, iz: number): number {
   return w.heights[iz * (w.nx + 1) + ix];
 }

@@ -11,7 +11,6 @@
 import { BARS, LOOP_STEPS, STEPS_PER_BAR } from './tracks/types';
 
 export const STEPS_PER_BEAT = 4;
-export const BEATS_PER_BAR = 4;
 /** A step this late (s) is not played late; the timeline slides instead. */
 export const MAX_LATE = 0.03;
 /** Lead time given to the first step after a re-anchor, s. */
