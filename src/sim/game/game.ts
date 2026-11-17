@@ -1,6 +1,6 @@
 /**
  * The game layer above the sim: deterministic reducers over sim state and events (line-map
- * progress, chalk lines, errands, conductor challenges and secrets).
+ * progress, chalk lines, errands, conductor challenges, secrets and onboarding).
  *
  * `Game.step` is the only way time advances: it steps the sim, then every reducer in a fixed order.
  * A reducer owns its own state, reads `game.sim` and `game.sim.events`, and pushes GameEvents.
@@ -18,6 +18,7 @@ import { ConductorsReducer, type ConductorDef, type ConductorState } from './con
 import { CONDUCTORS } from './content/conductors';
 import { ERRANDS } from './content/errands';
 import { ErrandsReducer, type ErrandDef, type ErrandFailReason, type ErrandState } from './errands';
+import { OnboardingReducer, type HintId, type OnboardingState, type OnboardingStep } from './onboarding';
 import { ProgressReducer, createProgress, type Progress } from './progress';
 import { SecretsReducer, type SecretId, type SecretState } from './secrets';
 
@@ -48,12 +49,23 @@ export type GameEvent =
   | { type: 'conductorStart'; line: number }
   | { type: 'conductorPunch'; line: number }
   | { type: 'conductorFail'; line: number }
-  | { type: 'secretFound'; id: SecretId };
+  | { type: 'secretFound'; id: SecretId }
+  /** An onboarding hint came up (a step, or a closing ticket). */
+  | { type: 'hintShow'; step: HintId }
+  /** An onboarding step was learnt. */
+  | { type: 'hintDone'; step: OnboardingStep }
+  /** The six lesson steps and the closing tickets are done. */
+  | { type: 'onboardingComplete' };
 
 /** Game construction options: the sim's, plus the errand and conductor content (the city's by default). */
 export interface GameOpts extends SimOpts {
   errands?: readonly ErrandDef[];
   conductors?: readonly ConductorDef[];
+  /**
+   * The hints setting, which the onboarding lesson follows. Off by default: a Game teaches only when
+   * told to (the app turns it on from the player's setting for a real game).
+   */
+  hints?: boolean;
 }
 
 export interface GameReducer {
@@ -94,6 +106,7 @@ export class Game {
   readonly errands: ErrandState;
   readonly conductors: ConductorState;
   readonly secrets: SecretState;
+  readonly onboarding: OnboardingState;
   /** Events from the most recent step (cleared at the start of each step). */
   readonly events: GameEvent[] = [];
   /** The quantised input the last step applied. */
@@ -104,6 +117,7 @@ export class Game {
   /** Public for observers that need lookups (where an errand's target is); state changes only through commands. */
   readonly errandsReducer: ErrandsReducer;
   readonly conductorsReducer: ConductorsReducer;
+  private readonly onboardingReducer: OnboardingReducer;
   private readonly simInput: InputFrame = { steer: 0, hold: false, hop: false };
   /** Events raised by commands between steps; they come out with the next step's events. */
   private readonly queued: GameEvent[] = [];
@@ -119,6 +133,9 @@ export class Game {
     this.conductors = this.conductorsReducer.state;
     const secrets = new SecretsReducer(world);
     this.secrets = secrets.state;
+    this.onboardingReducer = new OnboardingReducer(world);
+    this.onboarding = this.onboardingReducer.state;
+    this.onboardingReducer.setHints(opts.hints ?? false);
     // Fixed order: later reducers may read what earlier ones did this step.
     this.reducers = [
       new ProgressReducer(this.progress, world.lines),
@@ -126,6 +143,8 @@ export class Game {
       this.errandsReducer,
       this.conductorsReducer,
       secrets,
+      // Last: it reads what every other reducer did this step (inked segments, errands, races).
+      this.onboardingReducer,
     ];
   }
 
@@ -145,6 +164,11 @@ export class Game {
     if (this.chalkReducer.holdsSkater()) this.sim.tickOnly();
     else this.sim.step(this.simInput);
     for (const r of this.reducers) r.step(this);
+  }
+
+  /** May errands offer themselves? Not while the lesson runs and the hitch is still to learn. */
+  get errandsOpen(): boolean {
+    return this.onboardingReducer.errandsOpen();
   }
 
   /** Queue an event raised by a command; it is delivered with the next step's events. */
@@ -182,6 +206,18 @@ export class Game {
   /** Give up the errand in progress (it fails with reason 'abandon'). */
   errandAbandon(): CommandResult {
     return this.errandsReducer.abandon(this);
+  }
+  /** The hints setting: off, no hint shows and errands are open from the start. */
+  onboardingSetHints(on: boolean): void {
+    this.onboardingReducer.setHints(on);
+  }
+  /** Mark the whole lesson learnt: no hint shows again. */
+  onboardingSkip(): void {
+    this.onboardingReducer.skip(this);
+  }
+  /** Start the lesson over. */
+  onboardingReset(): void {
+    this.onboardingReducer.reset();
   }
   /** Why recording cannot start right now, or '' if it can. */
   chalkCannotRecord(): string {
