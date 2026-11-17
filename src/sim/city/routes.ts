@@ -131,12 +131,12 @@ function sBendRun(dz: number): number {
 }
 
 /** Resample a flat x, z polyline at about SPACING m and attach heights. */
-function resample(xz: number[], y: (x: number, z: number) => number, closed: boolean): number[] {
+function resample(xz: number[], y: (x: number, z: number) => number, closed: boolean, spacing = SPACING): number[] {
   const n = xz.length / 2;
   const cum = new Float64Array(n);
   for (let i = 1; i < n; i++) cum[i] = cum[i - 1] + len2(xz[i * 2] - xz[i * 2 - 2], xz[i * 2 + 1] - xz[i * 2 - 1]);
   const total = cum[n - 1];
-  const m = Math.max(2, Math.round(total / SPACING));
+  const m = Math.max(2, Math.round(total / spacing));
   const out: number[] = [];
   let k = 0;
   for (let j = 0; j <= m; j++) {
@@ -344,11 +344,11 @@ function smoothHeights(path: number[], passes: number, closed: boolean): void {
  */
 /** Cable car end points: [ax, az, bx, bz] (base, then top). */
 export const CABLES = {
-  A1: [-10, 956, 32, 1040],
+  A1: [-17, 951, 35.8, 1033],
   A2: [37, 1044, 13, 1254],
 } as const satisfies Record<string, readonly [number, number, number, number]>;
 /** Height of the cable cars above whatever is below them. */
-const CABLE_ABOVE = 10.2;
+const CABLE_ABOVE = 9.6;
 const CABLE_SEP = 8;
 
 /** Kite circuit control points: x, z, height above the ground. Index 0 is Campo Sur. */
@@ -384,9 +384,20 @@ export const KING: readonly (readonly [number, number, number])[] = [
 const KING_FAR = 5;
 
 function cablePath(w: World, c: readonly [number, number, number, number], above: number): number[] {
-  const path = resample(cableLoop(c[0], c[1], c[2], c[3], CABLE_SEP), (x, z) => topHeight(w, x, z) + above, true);
+  const path = resample(cableLoop(c[0], c[1], c[2], c[3], CABLE_SEP), () => 0, true, 2.5);
+  // Ride over the highest ground within a few metres, so the car lifts before a retaining wall
+  // rather than dragging its strap into it.
+  const n = path.length / 3;
+  const g = new Float64Array(n);
+  for (let i = 0; i < n; i++) g[i] = topHeight(w, path[i * 3], path[i * 3 + 2]);
+  for (let i = 0; i < n; i++) {
+    let m = g[i];
+    for (let k = -3; k <= 3; k++) m = Math.max(m, g[(((i + k) % (n - 1)) + (n - 1)) % (n - 1)]);
+    path[i * 3 + 1] = m + above;
+  }
+  path[(n - 1) * 3 + 1] = path[1];
   smoothHeights(path, 3, true);
-  clampAbove(w, path, above - 0.8, above + 2.5);
+  clampAbove(w, path, above - 0.4, 12.9);
   return path;
 }
 
@@ -505,7 +516,7 @@ export function buildRoutes(w: World, g: Ground): Record<string, RouteDef> {
   // Terraces.
   specs.push({ id: 'T1', loop: true, overhead: false, path: ground(funicularLoop()), stops: [['Base', FUNI_TRACK.cx, FUNI_TRACK.zBottom - FUNI_TRACK.r], ['Cima', FUNI_TRACK.cx, FUNI_TRACK.zTop + FUNI_TRACK.r]] });
   const top = LEVELS[LEVELS.length - 1].z;
-  specs.push({ id: 'T2', loop: true, overhead: false, path: ground(boulevardLoop(g, top, true, 12)), stops: [['Muelle', 12, BOULEVARD_Z], ['Mercado', -152, 436], ['Terrazas', -152, 754], ['Puerta de la Antena', 20, top], ['Escuela', 152, 754], ['Mercado Este', 152, 436]] });
+  specs.push({ id: 'T2', loop: true, overhead: false, path: ground(boulevardLoop(g, top, true, 12)), stops: [['Muelle', 12, BOULEVARD_Z], ['Mercado', -152, 436], ['Terrazas', -152, 754], ['Puerta de la Antena', -12, top], ['Escuela', 152, 754], ['Mercado Este', 152, 436]] });
   specs.push({ id: 'T3', loop: true, overhead: false, path: ground(levelLoop(g, 619, 835, 20)), stops: [['Terraza Baja', 20, 619], ['Zigzag Oeste', -152, 727], ['Terraza Alta', 20, 835], ['Zigzag Este', 152, 727]] });
   specs.push({ id: 'T4', loop: true, overhead: false, path: ground(boulevardLoop(g, 727, false, 12)), stops: [['Garaje', -12, BOULEVARD_Z], ['Rampa Este', 152, 488], ['Terraza 727', 20, 727], ['Rampa Oeste', -152, 488]] });
 

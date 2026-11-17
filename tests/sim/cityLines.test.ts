@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { buildCity, type City } from '../../src/sim/city';
-import { MEETINGS } from '../../src/sim/city/lines';
+import { MEETINGS, buildCityLines } from '../../src/sim/city/lines';
 import { DAY_TICKS, FEEL, resetFeel } from '../../src/sim/constants';
 import { grabPoint, inWindows, makeVehicleState, vehicleAt, type CompiledLine, type VehicleState } from '../../src/sim/lines';
 import { placePlayer } from '../../src/sim/player';
@@ -95,6 +95,13 @@ describe('the roster', () => {
       // Two or more stops, so at least two segments to ink.
       expect(l.allStops.length, r.id).toBeGreaterThanOrEqual(2);
     }
+  });
+
+  it('compiles every line quickly, the same way each time', () => {
+    const t0 = performance.now();
+    const again = buildCityLines(city.world, city.routes);
+    expect(performance.now() - t0).toBeLessThan(150);
+    expect(again.map((l) => [l.period, l.length, l.phaseTicks])).toEqual(city.world.lines.map((l) => [l.period, l.length, l.phaseTicks]));
   });
 
   it('every lap period divides the day, so the timetable repeats exactly', () => {

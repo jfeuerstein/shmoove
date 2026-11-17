@@ -2,9 +2,12 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { buildCity, type City } from '../../src/sim/city';
 import { DAY_TICKS, FEEL, resetFeel } from '../../src/sim/constants';
 import { Game, type GameEvent } from '../../src/sim/game/game';
-import { grabPoint, makeVehicleState, vehicleAt, type CompiledLine } from '../../src/sim/lines';
+import { grabPoint, makeVehicleState, vehicleAt, type CompiledLine, type VehicleState } from '../../src/sim/lines';
+import { angleDiff, clamp } from '../../src/sim/math';
 import { placePlayer } from '../../src/sim/player';
+import { Sim } from '../../src/sim/sim';
 import { Mode } from '../../src/sim/types';
+import { findZone } from '../../src/sim/world';
 
 let city: City;
 beforeAll(() => {
@@ -29,6 +32,195 @@ function lapStartTick(l: CompiledLine): number {
   }
   throw new Error(`${l.id} never starts a lap`);
 }
+
+// ---------------------------------------------------------------------------------------------
+// The climb: from the docks to the summit on rides alone.
+
+interface Leg {
+  line: string;
+  /** Where to wait for the ride (x, z); for a bumper ride, beside its lane. */
+  wait: (sim: Sim) => [number, number];
+  /** True when it is time to let go of the ride. */
+  alight: (v: VehicleState, sim: Sim) => boolean;
+}
+
+interface ClimbLog {
+  reached: number;
+  ladder: string[];
+  maxStep: number;
+  maxStepAt: string;
+  /** Most height gained, off a ride, above where the skater last left one (or started). */
+  worstFreeClimb: number;
+  bails: number;
+  trace: string[];
+}
+
+/** Where vehicle `vi` of `l` stands at stop `k`, and its heading there. */
+function stopPose(l: CompiledLine, k: number): { x: number; y: number; z: number; hx: number; hz: number } {
+  const st = l.allStops[k];
+  for (let t = 0; t < l.period; t++) {
+    if (Math.abs(l.lapS[t] - st.s) < 0.05 && l.lapS[t] === l.lapS[t + 1]) {
+      vehicleAt(l, 0, t - l.phaseTicks, vs);
+      return { x: vs.x, y: vs.y, z: vs.z, hx: vs.hx, hz: vs.hz };
+    }
+  }
+  throw new Error(`${l.id} never stands at stop ${k}`);
+}
+
+/** Has vehicle state v come to rest at stop k of l? */
+function atStop(l: CompiledLine, v: VehicleState, k: number): boolean {
+  return Math.abs(v.s - l.allStops[k].s) < 0.05 && Math.hypot(v.vx, v.vz) < 0.05;
+}
+
+/** Is any vehicle of l standing at stop k at this tick? */
+function anyAtStop(l: CompiledLine, k: number, tick: number): boolean {
+  const V = makeVehicleState();
+  for (let i = 0; i < l.vehicles; i++) {
+    vehicleAt(l, i, tick, V);
+    if (V.active && atStop(l, V, k)) return true;
+  }
+  return false;
+}
+
+/**
+ * A small closed-loop climber. On the ground it steers for the next ride's waiting point,
+ * tic-tacs when slow, keeps the touch armed only when a vehicle of the wanted line is close, and
+ * hops for a strap that is out of standing reach. Riding, it holds on until the leg says to let
+ * go. After the last leg it rolls for the summit.
+ */
+function climb(legs: Leg[], startZone: string, endZone: string, maxTicks: number): ClimbLog {
+  const w = city.world;
+  const start = findZone(w, startZone);
+  const end = findZone(w, endZone);
+  if (!start || !end) throw new Error('zones');
+  const sim = new Sim(w, { seed: 1, startDayFrac: 0.3 });
+  placePlayer(w, sim.player, start.x, start.z, w.spawn.heading);
+  const p = sim.player;
+  const log: ClimbLog = { reached: -1, ladder: [], maxStep: 0, maxStepAt: '', worstFreeClimb: 0, bails: 0, trace: [] };
+  let leg = 0;
+  let freeBase = p.y;
+  let px = p.x;
+  let py = p.y;
+  let pz = p.z;
+  let wasHitched = false;
+  const V = makeVehicleState();
+  const G = { x: 0, y: 0, z: 0 };
+  for (let i = 0; i < maxTicks; i++) {
+    let steer = 0;
+    let hold = false;
+    let hop = false;
+    const L = leg < legs.length ? line(legs[leg].line) : null;
+    if (p.mode === Mode.HITCH) {
+      const H = w.lines[p.hLine];
+      vehicleAt(H, p.hVeh, sim.tick, V);
+      if (!L || H.index !== L.index) hold = false;
+      else if (legs[leg].alight(V, sim)) {
+        hold = false;
+        leg++;
+      } else hold = true;
+      // Ride quietly: lean against the swing so it does not slam into the walls of the road.
+      if (Math.hypot(V.vx, V.vz) > 4) steer = clamp(-(1.5 * angleDiff(p.psi, p.psiRest) + 0.5 * p.omega), -1, 1);
+    } else {
+      // Steer for the waiting point, or the end zone after the last leg.
+      const [tx, tz] = L ? legs[leg].wait(sim) : [end.x, end.z];
+      const want = Math.atan2(tx - p.x, tz - p.z);
+      const dist = Math.hypot(tx - p.x, tz - p.z);
+      steer = clamp(-2 * angleDiff(want, p.heading), -1, 1);
+      if (p.mode === Mode.GROUND && p.speed < 2.4 && dist > 2) steer = clamp(steer + (Math.floor(i / 12) % 2 === 0 ? 0.9 : -0.9), -1, 1);
+      if (L) {
+        // Arm the touch when a vehicle of the wanted line is near and nothing else is nearer to
+        // hand; hop for a high strap.
+        let nearest = Infinity;
+        let nearestWanted = false;
+        for (const M of w.lines) {
+          for (let k = 0; k < M.vehicles; k++) {
+            vehicleAt(M, k, sim.tick, V);
+            if (!V.active) continue;
+            grabPoint(M, V, G);
+            const d = Math.hypot(G.x - p.x, G.z - p.z);
+            if (d < nearest) {
+              nearest = d;
+              nearestWanted = M.index === L.index;
+            }
+            if (M.index !== L.index) continue;
+            const high = G.y - (p.y + FEEL.HAND_HEIGHT) > FEEL.HITCH_REACH_Y * 0.75;
+            if (L.overhead && high && d < 2.5 && p.mode === Mode.GROUND) hop = true;
+          }
+        }
+        hold = nearestWanted && nearest < 9;
+      }
+    }
+    sim.step({ steer, hold, hop });
+    for (const e of sim.events) {
+      if (e.type === 'bail') log.bails++;
+      if (e.type === 'hitch') {
+        log.ladder.push(w.lines[e.line].id);
+        log.trace.push(`${(i / 60).toFixed(1)}s hitch ${w.lines[e.line].id} at ${p.x.toFixed(0)},${p.y.toFixed(0)},${p.z.toFixed(0)}`);
+      }
+      if (e.type === 'release') log.trace.push(`${(i / 60).toFixed(1)}s release ${w.lines[e.line].id} at ${p.x.toFixed(0)},${p.y.toFixed(0)},${p.z.toFixed(0)}`);
+    }
+    const hitched = p.mode === Mode.HITCH;
+    if (wasHitched && !hitched) freeBase = p.y;
+    if (!hitched) log.worstFreeClimb = Math.max(log.worstFreeClimb, p.y - freeBase);
+    if (!hitched && p.y < freeBase) freeBase = p.y;
+    wasHitched = hitched;
+    const step = Math.max(Math.hypot(p.x - px, p.z - pz) * 60, Math.abs(p.y - py) * 60);
+    if (step > log.maxStep) {
+      log.maxStep = step;
+      log.maxStepAt = `${(i / 60).toFixed(2)}s mode ${p.mode} d ${(Math.hypot(p.x - px, p.z - pz) * 60).toFixed(1)} dy ${((p.y - py) * 60).toFixed(1)} at ${p.x.toFixed(1)},${p.y.toFixed(1)},${p.z.toFixed(1)}`;
+    }
+    px = p.x;
+    py = p.y;
+    pz = p.z;
+    if (i % 600 === 0) log.trace.push(`${(i / 60).toFixed(0)}s leg ${leg} ${p.x.toFixed(0)},${p.y.toFixed(0)},${p.z.toFixed(0)} mode ${p.mode} v ${p.speed.toFixed(1)}`);
+    if (leg >= legs.length && Math.hypot(p.x - end.x, p.z - end.z) < end.r && !hitched) {
+      log.reached = i;
+      break;
+    }
+  }
+  return log;
+}
+
+describe('the climb', () => {
+  it('a skater gets from the docks to the summit on rides alone, in under 12 minutes', () => {
+    const T2 = line('T2');
+    const A1 = line('A1');
+    const A2 = line('A2');
+    const muelle = stopPose(T2, 0);
+    const puerta = T2.allStops.findIndex((s) => s.name === 'Puerta de la Antena');
+    const a1Base = stopPose(A1, 0);
+    const a2Base = stopPose(A2, 0);
+    const legs: Leg[] = [
+      {
+        // Tram 5 from its docks terminus: wait beside the lane at the rear bumper.
+        line: 'T2',
+        wait: () => [muelle.x - muelle.hx * T2.anchorBack - muelle.hz * 2.6, muelle.z - muelle.hz * T2.anchorBack + muelle.hx * 2.6],
+        // Let go at the Antenna gate stop, under the lower cable car's base.
+        alight: (v) => atStop(T2, v, puerta),
+      },
+      {
+        line: 'A1',
+        wait: () => [a1Base.x, a1Base.z],
+        // At the hill station, let go as a summit cable car waits beside it.
+        alight: (v, sim) => Math.abs(v.s - A1.allStops[1].s) < 3 && anyAtStop(A2, 0, sim.tick),
+      },
+      {
+        line: 'A2',
+        wait: () => [a2Base.x, a2Base.z],
+        alight: (v) => atStop(A2, v, 1),
+      },
+    ];
+    const log = climb(legs, 'spawn_docks', 'summit', 12 * 60 * 60);
+    expect(log.reached, log.trace.slice(-12).join('\n')).toBeGreaterThan(0);
+    expect(log.ladder).toEqual(['T2', 'A1', 'A2']);
+    expect(log.bails).toBe(0);
+    // No teleports: never faster than the fastest ride plus a full whip, or the sling cap.
+    const fastest = Math.max(...city.world.lines.map((l) => l.cruise));
+    expect(log.maxStep, log.maxStepAt).toBeLessThan(Math.max(FEEL.SLING_CAP, fastest + FEEL.SWING_OMEGA_MAX * 4) + 1);
+    // Height is won on rides: off a ride, never more than a hop or a sling's pop above where it let go.
+    expect(log.worstFreeClimb).toBeLessThan(3);
+  });
+});
 
 const REGULAR = ['D1', 'D2', 'D3', 'M1', 'M2', 'M3', 'T1', 'T2', 'T3', 'T4', 'A1', 'A2', 'A3'];
 
