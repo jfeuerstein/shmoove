@@ -2,7 +2,7 @@
  * The onboarding hint stub: one hint at a time as a small ticket low on the screen, a thumb glyph
  * animated on twos, a few words, and a punched hole that is punched through (with the punch sound)
  * when the step is learnt. It slides in and out on twos. Plus the one-time map pointer: a mango
- * chevron bobbing beside the map button while the 'map' ticket is up.
+ * ring pulsing round the map button while the 'map' ticket is up.
  *
  * An observer: it reads `game.onboarding` and game events and never writes game state.
  */
@@ -20,12 +20,6 @@ const LONG_TITLE = 18;
 const PUNCH_HOLD = 0.6;
 /** The least it stays up punched when another hint is waiting, seconds. */
 const PUNCH_MIN = 0.25;
-
-const MAP_POINTER =
-  '<svg viewBox="0 0 30 30" aria-hidden="true">' +
-  '<path d="M20 5 L9 15 L20 25" stroke="#1B1A2E" stroke-width="7" fill="none" stroke-linecap="round" stroke-linejoin="round"/>' +
-  '<path d="M20 5 L9 15 L20 25" stroke="#FFAE1A" stroke-width="4.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>' +
-  '</svg>';
 
 type Phase = 'idle' | 'in' | 'punch' | 'out';
 
@@ -74,7 +68,6 @@ export class HintStub {
     this.on = new ClassSlot(this.el, 'sk-on');
     this.long = new ClassSlot(this.ticket, 'sk-hlong');
     this.mapPointer = el('div', 'sk-hmapptr');
-    this.mapPointer.innerHTML = MAP_POINTER;
     this.pointerOn = new ClassSlot(this.mapPointer, 'sk-on');
     this.bob = new ClassSlot(this.mapPointer, 'sk-b1');
   }
@@ -160,7 +153,7 @@ export class HintStub {
     }
   }
 
-  /** Glyph frames and the map pointer's bob, stepped on twos from the frame clock. */
+  /** Glyph frames and the map pointer's pulse, stepped on twos from the frame clock. */
   private animate(dt: number): void {
     if (this.shownId === '' || this.glyph === '') return;
     this.stepClock += dt;

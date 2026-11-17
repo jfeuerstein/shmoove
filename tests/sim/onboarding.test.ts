@@ -774,9 +774,10 @@ function firstLaunch(frac: number, maxTicks = 4 * 60 * 60): Launch {
  * A touch script, as the e2e route stores it: ['w', ticks] wait; ['d', x, y] finger down; ['m', x, y]
  * move; ['u'] lift; ['f', hold] swipe up (from the finger that is down, or a fresh one at the
  * runner's default point), keeping the finger down if `hold`; ['s', step, hintsDone] the hint
- * `step` is up with that many steps learnt (a screenshot and a check).
+ * `step` is up with that many steps learnt (a screenshot and a check), with an optional fourth
+ * element naming a second look at the same hint.
  */
-type Touch = ['w', number] | ['d', number, number] | ['m', number, number] | ['u'] | ['f', boolean] | ['s', string, number];
+type Touch = ['w', number] | ['d', number, number] | ['m', number, number] | ['u'] | ['f', boolean] | ['s', string, number] | ['s', string, number, string];
 
 /** Where fingers go down: low on the glass, centre, clear of every button. */
 const FINGER_X = 195;
@@ -879,6 +880,17 @@ function touchLaunch(frac: number, maxTicks = 4 * 60 * 60): TouchRun {
     }
     policy(game, memo, i, want);
     const f = glass.finger;
+    // A second look where the world pointer matters: at the hop onto the rail, and at the press.
+    const second = (id: string, look: string): void => {
+      if (ob.shown !== id || marked.has(`${id}-${look}`)) return;
+      marked.add(`${id}-${look}`);
+      flush();
+      let n = 0;
+      for (const d of Object.values(ob.done)) if (d) n++;
+      script.push(['s', id, n, look]);
+    };
+    if (want.hop) second('grind', 'hop');
+    if (want.hold && !f) second('hitch', 'press');
     if (want.hop && (!f || f.y - SWIPE_MOVES * SWIPE_STEP > 200)) {
       flush();
       script.push(['f', f !== null]);
@@ -1065,7 +1077,7 @@ describe('one thumb on glass', () => {
     for (const t of touches) expect(isTouch(t), JSON.stringify(t)).toBe(true);
     const back = replay(NEW_GAME_DAY_FRAC, touches as Touch[]);
     for (const mk of back.marks) expect({ shown: mk.shown, done: mk.done }, mk.want).toEqual({ shown: mk.want, done: mk.wantDone });
-    expect(back.marks.map((mk) => mk.want)).toEqual(['carve', 'hop', 'grind', 'hitch', 'sling', 'ink', 'map', 'lift']);
+    expect([...new Set(back.marks.map((mk) => mk.want))]).toEqual(['carve', 'hop', 'grind', 'hitch', 'sling', 'ink', 'map', 'lift']);
     expect(back.game.onboarding.complete, back.log.join('\n')).toBe(true);
   });
 });
@@ -1088,7 +1100,7 @@ function isTouch(t: unknown): boolean {
     case 'f':
       return t.length === 2 && typeof t[1] === 'boolean';
     case 's':
-      return t.length === 3 && typeof t[1] === 'string' && Number.isInteger(t[2]);
+      return (t.length === 3 || (t.length === 4 && typeof t[3] === 'string')) && typeof t[1] === 'string' && Number.isInteger(t[2]);
     default:
       return false;
   }

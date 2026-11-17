@@ -24,8 +24,8 @@ const CSS = `
 .sk-htitle{font-weight:700;font-size:17px;line-height:1.05;letter-spacing:.08em;color:var(--sk-ink);white-space:nowrap;
   text-shadow:1px 1px 0 rgba(255,46,136,.45)}
 .sk-hlong .sk-htitle{font-size:14px;letter-spacing:.06em}
-.sk-hsub{font-weight:700;font-size:12px;line-height:1.1;letter-spacing:.1em;color:var(--sk-cobalt);white-space:nowrap;
-  overflow:hidden;text-overflow:ellipsis;text-shadow:-1px 0 0 rgba(255,46,136,.35)}
+.sk-hsub{font-weight:700;font-size:12px;line-height:1.15;letter-spacing:.1em;color:var(--sk-cobalt);max-width:232px;
+  text-shadow:-1px 0 0 rgba(255,46,136,.35)}
 .sk-hsub:empty{display:none}
 /* The punched hole: an empty ring until the step is learnt, then punched through. */
 .sk-hhole{position:absolute;right:12px;top:50%;width:18px;height:18px;margin-top:-9px;border-radius:50%;
@@ -33,12 +33,13 @@ const CSS = `
 .sk-hdone .sk-hhole{background:var(--sk-ink);box-shadow:0 0 0 2px var(--sk-pink)}
 .sk-hhole.sk-p1{transform:scale(1.45)}
 .sk-hhole.sk-p2{transform:scale(.8)}
-/* The map pointer: a mango chevron beside the map button, bobbing on twos. */
-.sk-hmapptr{position:absolute;z-index:4;display:none;width:30px;height:30px;pointer-events:none;
-  top:calc(var(--sk-st) + var(--sk-gap) + 8px);left:calc(var(--sk-sl) + var(--sk-gap) + 50px)}
+/* The map pointer: a mango ring round the map button, pulsing on twos. It covers nothing else. */
+.sk-hmapptr{position:absolute;z-index:4;display:none;width:56px;height:56px;pointer-events:none;border-radius:6px;
+  top:calc(var(--sk-st) + var(--sk-gap) - 5px);left:calc(var(--sk-sl) + var(--sk-gap) - 5px);
+  box-shadow:inset 0 0 0 3px var(--sk-mango),inset 0 0 0 5px var(--sk-ink),0 0 0 2px var(--sk-ink)}
+.sk-debug .sk-hmapptr{left:calc(var(--sk-sl) - 5px);width:54px;height:54px}
 .sk-hmapptr.sk-on{display:block}
-.sk-hmapptr svg{display:block;width:100%;height:100%}
-.sk-hmapptr.sk-b1{transform:translateX(5px)}
+.sk-hmapptr.sk-b1{transform:scale(1.12)}
 .sk-reduced .sk-hglyph .sk-fr{display:none}
 .sk-reduced .sk-hglyph .sk-frs{display:inline}
 .sk-reduced .sk-hint.sk-in1,.sk-reduced .sk-hint.sk-in2,.sk-reduced .sk-hint.sk-out1,.sk-reduced .sk-hint.sk-out2{transform:translateX(-50%)}
