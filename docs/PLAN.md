@@ -38,53 +38,54 @@ Acceptance:
   misregistration; debug panel lists every FEEL key.
 - Perf budgets hold on the slice.
 
-## M2 — City `[~]` (tag `m2`)
+## M2 — City `[x]` (tag `m2`)
 
 - [x] City generator: four districts into the World contract
 - [x] Chunk mesher + seamless streaming, district dressing, sea, day/night, props
 - [x] City fixes from verification: the spawn rolls, landings fall, the summit is crowned, the
       Mercado is tight with awnings, stalls and handrails on every stair street, forklifts reach the
       east docks, handrail/stair/clearance tests made strict
-- [~] Open (task `m3-retune`): the strict no-trap test fails by three runs (two pins outside the
-      west hairpin parapets), a random wanderer bounces on 3 awnings where 12 are required
+- [x] Retune: no traps from 400 random starts, awnings bounce a wanderer, parapets on the hairpins
 - [x] The city is the default world; `city-spine` and `city-errand` e2e routes
+- [~] Independent check of the drawn city (brief `m6d-verify-world`)
 
-## M3 — Rides and time `[~]` (tag `m3`)
+## M3 — Rides and time `[x]` (tag `m3`)
 
 - [x] All 16 lines on the city's routes with lanes, stops, hours; six scheduled meetings; a scripted
       climb from the docks to the summit on rides only; the four-link summit route
-- [~] Open (task `m3-retune`): three ride-data tests fail since the forklift loop grew; tram 5 comes
-      every four minutes and should come every two; one conductor number to re-measure
+- [x] Retune and verification follow-ups: tram 5 every two minutes, a blimp that can be caught at
+      the hill station, a night-only express night bus, stops off the spine, body-corner clearance
 - [x] Vehicle meshes for every kind, pattern liveries, line-up fixture (`?world=lineup`)
 - [x] Day cycle visuals, timetable boards at stops, HUD destination board
 - [x] Line map screen and segment inking
-- [ ] Independent verification of the ride data (after the retune)
+- [x] Independent verification of the ride data (failed once on the blimp; fixed)
 
-## M4 — Sound `[~]` (tag `m4`)
+## M4 — Sound `[x]` (tag `m4`)
 
 - [x] Four district tracks in four stems, the stem mixer, wheel/wind/ride/UI sounds, wired into the
       loop; verified by measurement (nobody has heard it: see PLAYTEST)
-- [~] Verifier follow-ups (task `m6c1-followups`): lighter compressor, two mixer tests, lead register
+- [x] Verifier follow-ups: lighter compressor, two mixer tests, lead register
 
-## M5 — Things to do `[~]` (tag `m5`)
+## M5 — Things to do `[x]` (tag `m5`)
 
 - [x] Errands (13), conductor challenges (13), secrets (4), ledger, world markers. Verified: every
       errand and challenge completed by independent bots
-- [~] Verifier follow-ups (task `m6c1-followups`): `ferry_luggage` limit, three missing conductor tests
+- [x] Verifier follow-ups: `ferry_luggage` limit, three conductor tests
 - [x] Chalk lines: record, `SK2-` share code (about 2.4 kB for two minutes), ghost race. Verified exact
 - [x] Saves. Verified against 500 corruptions
 
 ## M6 — Ship `[~]` (tag `m6`)
 
-- [ ] Onboarding that teaches by play (brief written: `docs/briefs/m6b-onboarding.md`)
+- [~] Onboarding that teaches by play (brief `m6b-onboarding`)
 - [x] Menus: title, pause, settings, map-complete. Verified
 - [x] Haptics
 - [x] PWA: manifest, icons generated in code, service worker, offline, portrait lock. Verified,
       including the update flow and a stale-cache bug the verifier found and fixed
-- [x] README with deploy steps
-- [ ] Performance pass: the city with all rides is at the frame-work budget (p95 14–17 ms at 4x
-      throttle against 16.6), with no margin
+- [x] README with deploy steps; GitHub Pages workflow deploying `develop` and the working branch
+- [x] Performance pass: frame work on the city with all rides 4.5–4.9 ms mean, 10.6–13.1 ms p95 at
+      4x throttle (budget 10 / 16.6); worst view 71 draw calls, 140k triangles (budget 120 / 180k)
 - [ ] Full-game check: first launch → completed line map by a scripted skater with no teleports
+      (brief `m6e-full-game`)
 - [ ] Final docs and audit
 
 Acceptance:
