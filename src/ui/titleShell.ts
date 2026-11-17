@@ -83,6 +83,7 @@ export class Shell {
   private releaseStyle: () => void;
   private readonly listeners: Array<[EventTarget, string, EventListener]> = [];
   private celebrateDue: boolean;
+  private firstFrame = true;
 
   constructor(
     game: Game,
@@ -208,7 +209,12 @@ export class Shell {
       this.setComplete(true);
     }
     const instant = this.host.values().reduced;
-    if (this.screen === 'title') this.title.step(dt, instant);
+    if (this.screen === 'title') {
+      // Mounted after the constructor opened the title: hide the HUD on the first frame.
+      if (this.firstFrame) this.syncTitling();
+      this.title.step(dt, instant);
+    }
+    this.firstFrame = false;
     if (this.completeOpen) this.complete.step(dt, instant);
     if (this.rotating) this.rotate.update(dt, instant);
     this.updateOn.set(this.host.updateReady());
@@ -267,6 +273,12 @@ export class Shell {
     if (this.screen === 'none' && !this.completeOpen && !this.hooks.busy()) this.setScreen('pause');
   }
 
+  /** The HUD hides behind the title so the wordmark reads alone over the city. */
+  private syncTitling(): void {
+    const parent = this.title.el.parentElement;
+    if (parent) parent.classList.toggle('sk-titling', this.screen === 'title');
+  }
+
   private refreshTitle(): void {
     this.title.refresh({
       hasSave: this.host.hasSave(),
@@ -279,8 +291,7 @@ export class Shell {
   private setScreen(s: Screen): void {
     this.screen = s;
     this.titleOn.set(s === 'title');
-    // The HUD hides behind the title so the wordmark reads alone over the city.
-    this.title.el.parentElement?.classList.toggle('sk-titling', s === 'title');
+    this.syncTitling();
     this.pauseOn.set(s === 'pause');
     if (s === 'title') {
       this.title.open(
