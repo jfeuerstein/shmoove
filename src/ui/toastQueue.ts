@@ -12,7 +12,12 @@ export type ToastKind =
   | 'chalk-saved'
   | 'chalk-discarded'
   | 'chalk-won'
-  | 'chalk-lost';
+  | 'chalk-lost'
+  | 'errand-done'
+  | 'errand-fail'
+  | 'conductor'
+  | 'conductor-punch'
+  | 'secret';
 
 export interface Toast<T> {
   id: number;

@@ -48,7 +48,9 @@ export interface ShellHost {
 export interface ShellHooks {
   openMap(): void;
   openChalk(): void;
-  /** The line map or chalk screen is open. */
+  /** Open the ledger (errands, conductors, secrets), if the UI has one. */
+  openLedger?(): void;
+  /** The line map, chalk screen or ledger is open. */
   busy(): boolean;
   mapPercent(): number;
   /** The game clock, HH:MM. */
@@ -119,7 +121,12 @@ export class Shell {
         this.setScreen('none');
         hooks.openChalk();
       },
-      openLedger: null,
+      openLedger: hooks.openLedger
+        ? () => {
+            this.setScreen('none');
+            hooks.openLedger?.();
+          }
+        : null,
       settings: () => this.setSettings(true),
       quit: () => {
         host.quitToTitle();

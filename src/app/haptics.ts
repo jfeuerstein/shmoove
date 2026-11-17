@@ -45,6 +45,13 @@ const MAP_COMPLETE = P('mapComplete', 10, 20, 40, 20, 40, 20, 40, 80, 60, 120);
 const CHALK_GO = P('chalkGo', 6, 30);
 const CHALK_WON = P('chalkWon', 8, 14, 30, 14, 30, 40);
 const CHALK_LOST = P('chalkLost', 5, 20, 60, 20);
+const ERRAND_START = P('errandStart', 5, 10, 30, 18);
+const ERRAND_STEP = P('errandStep', 4, 12);
+const ERRAND_DONE = P('errandDone', 8, 14, 30, 14, 30, 40);
+const ERRAND_FAIL = P('errandFail', 5, 30, 60, 12);
+const CONDUCTOR_START = P('conductorStart', 4, 8, 30, 8);
+const CONDUCTOR_PUNCH = P('conductorPunch', 8, 24, 30, 10);
+const SECRET_FOUND = P('secretFound', 9, 10, 40, 10, 40, 10, 40, 60);
 
 /** The hitch thud, plus one short pulse per chain link beyond the first (capped). */
 export function hitchPattern(chain: number): HapticPattern {
@@ -93,6 +100,20 @@ export function patternFor(e: SimEvent | GameEvent): HapticPattern | null {
       return CHALK_GO;
     case 'chalkFinish':
       return e.won ? CHALK_WON : CHALK_LOST;
+    case 'errandStart':
+      return ERRAND_START;
+    case 'errandStep':
+      return ERRAND_STEP;
+    case 'errandDone':
+      return ERRAND_DONE;
+    case 'errandFail':
+      return ERRAND_FAIL;
+    case 'conductorStart':
+      return CONDUCTOR_START;
+    case 'conductorPunch':
+      return CONDUCTOR_PUNCH;
+    case 'secretFound':
+      return SECRET_FOUND;
     default:
       return null;
   }

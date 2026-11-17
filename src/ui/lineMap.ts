@@ -2,10 +2,12 @@
  * The line map screen: a schematic of the network as inline SVG (paths projected to plan with
  * uphill at the top, simplified and fitted), district bands, each discovered line in its livery
  * colour (un-inked segments thin and dashed, inked ones thick and printed off-register), stops, a
- * "you are here" marker, a header with overall progress and a tappable legend.
+ * "you are here" marker, a header with overall progress and a tappable legend. The legend carries a
+ * conductor's punch per line and the title strip the number of secrets found.
  */
 import type { Game } from '../sim/game/game';
 import { inkedCount, lineSegments, mapFraction, type Segment } from '../sim/game/progress';
+import { SECRET_IDS } from '../sim/game/secrets';
 import { pathAt, type CompiledLine } from '../sim/lines';
 import { DISTRICT_NAMES } from '../sim/world';
 import { el, makeBadge } from './dom';
@@ -20,6 +22,11 @@ const MARGIN = 26;
 /** How far the schematic may stretch a long thin network across the screen. */
 const MAX_STRETCH = 3;
 const SVG_NS = 'http://www.w3.org/2000/svg';
+/** A conductor's cap and ticket punch, for the legend. */
+const CONDUCTOR_MARK =
+  '<svg viewBox="0 0 14 14" aria-hidden="true">' +
+  '<path d="M2 7 Q7 1.5 12 7 Z" fill="#F3EBDD"/><rect x="1.5" y="7" width="11" height="2" rx="1" fill="#F3EBDD"/>' +
+  '<circle cx="7" cy="11.6" r="1.6" fill="#F3EBDD"/></svg>';
 
 interface LineGeom {
   line: CompiledLine;
@@ -45,6 +52,8 @@ export class LineMap {
   /** Lines drawn and the progress percentage on the last render. */
   drawn = 0;
   percent = 0;
+  /** Secrets found, as shown on the last render. */
+  secrets = 0;
 
   constructor(
     private readonly game: Game,
@@ -183,7 +192,11 @@ export class LineMap {
       `<text x="16" y="4" font-size="11" font-weight="700" letter-spacing="1.5" fill="#FF2E88" stroke="#F3EBDD" stroke-width="3" paint-order="stroke">YOU</text>` +
       `</g>`;
     svg += '</svg>';
-    this.body.innerHTML = svg + `<div class="sk-maptitle">SANTA RAMPA · LINES</div>`;
+    let secrets = 0;
+    for (const id of SECRET_IDS) if (this.game.secrets.found[id] !== undefined) secrets++;
+    this.secrets = secrets;
+    this.body.innerHTML =
+      svg + `<div class="sk-maptitle">SANTA RAMPA · LINES<span class="sk-mapsecrets">SECRETS ${secrets}/${SECRET_IDS.length}</span></div>`;
   }
 
   private drawLegend(shown: LineGeom[]): void {
@@ -196,10 +209,16 @@ export class LineMap {
       row.dataset.line = g.line.id;
       const lp = prog.lines[li];
       const punch = el('span', 'sk-punch' + (lp.complete ? ' sk-done' : ''));
+      const hasConductor = this.game.conductors.list.some((c) => c.line === g.line.id);
+      const cond = el('span', 'sk-legcond' + (this.game.conductors.punched[g.line.id] ? ' sk-done' : ''));
+      cond.innerHTML = CONDUCTOR_MARK;
+      cond.setAttribute('aria-label', this.game.conductors.punched[g.line.id] ? 'Conductor punched' : 'Conductor not punched');
+      if (!hasConductor) cond.style.visibility = 'hidden';
       row.append(
         makeBadge(g.line),
         el('span', 'sk-legname', boardText(g.line.name)),
         el('span', 'sk-legcount', `${inkedCount(prog, li)}/${lp.inked.length}`),
+        cond,
         punch,
         el('span', 'sk-legstops', g.line.allStops.map((s) => boardText(s.name)).join(' · ')),
       );

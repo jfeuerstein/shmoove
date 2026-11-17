@@ -1,6 +1,6 @@
 /**
- * The DOM overlay: destination board, chain meter, hold cue, ticket toasts, stop timetable board
- * and the line map screen. An observer of the game: it reads state and events and never writes
+ * The DOM overlay: destination board, chain meter, hold cue, ticket toasts, stop timetable board,
+ * errand offer and stub, conductor chip, and the line map, chalk and ledger screens. An observer of the game: it reads state and events and never writes
  * them; the only thing it feeds back is `paused`, which main.ts honours by not stepping.
  */
 import type { Game, GameEvent } from '../sim/game/game';
@@ -13,7 +13,13 @@ import { ChalkScreen } from './chalkScreen';
 import { injectChalkStyle } from './chalkStyle';
 import { DestinationBoard } from './board';
 import { ChainMeter } from './chain';
+import { ConductorHud } from './conductorHud';
 import { ClassSlot, el } from './dom';
+import { SECRET_INFO, failText, taskText, ticksClock } from './errandFormat';
+import { ErrandHud } from './errandHud';
+import { injectErrandStyle } from './errandStyle';
+import { LedgerScreen } from './ledgerScreen';
+import { injectLedgerStyle } from './ledgerStyle';
 import { LineMap } from './lineMap';
 import { StopBoard } from './stopBoard';
 import { injectStyle } from './style';
@@ -40,7 +46,7 @@ export interface UiSound {
 
 export interface Ui {
   update(f: UiFrame): void;
-  /** True while a screen that pauses play is open (line map, chalk screen, title, pause, settings, ...). main.ts stops stepping the sim. */
+  /** True while a screen that pauses play is open (line map, chalk screen, ledger, title, pause, settings, ...). main.ts stops stepping the sim. */
   readonly paused: boolean;
   /** Open the chalk screen's import box with a code already pasted (a shared link). */
   openChalkImport(code: string): void;
@@ -71,10 +77,21 @@ const CHALK_ICON =
   '<path d="M8 8 L22 22 M22 8 L8 22" stroke="#FF2E88" stroke-width="3.4" stroke-linecap="round"/>' +
   '</svg>';
 
+const LEDGER_ICON =
+  '<svg viewBox="0 0 30 30" aria-hidden="true">' +
+  '<rect x="6" y="5" width="19" height="22" rx="1.5" fill="#1F3FBF"/>' +
+  '<rect x="5" y="4" width="19" height="22" rx="1.5" fill="#F3EBDD"/>' +
+  '<rect x="5" y="4" width="19" height="5" rx="1.5" fill="#FFAE1A"/>' +
+  '<path d="M8.5 13.5 H20.5 M8.5 17.5 H20.5 M8.5 21.5 H15" stroke="#1B1A2E" stroke-width="1.8" stroke-linecap="round"/>' +
+  '<circle cx="20" cy="21.5" r="2.4" fill="#FF2E88"/>' +
+  '</svg><i class="sk-ldot"></i>';
+
 /** `shell` adds the title, pause, settings, map-complete and rotate screens (src/ui/titleShell.ts). */
 export function createUi(root: HTMLElement, game: Game, sound: UiSound | null, shellHost: ShellHost | null = null): Ui {
   const releaseStyle = injectStyle();
   const releaseChalkStyle = injectChalkStyle();
+  const releaseErrandStyle = injectErrandStyle();
+  const releaseLedgerStyle = injectLedgerStyle();
   const lines = game.sim.world.lines;
   const segs: Segment[][] = lines.map(lineSegments);
 
@@ -93,9 +110,13 @@ export function createUi(root: HTMLElement, game: Game, sound: UiSound | null, s
 
   let mapOpen = false;
   let chalkOpen = false;
+  let ledgerOpen = false;
   const setOpen = (open: boolean): void => {
     if (open === mapOpen) return;
-    if (open) setChalkOpen(false, true);
+    if (open) {
+      setChalkOpen(false, true);
+      setLedgerOpen(false, true);
+    }
     mapOpen = open;
     hud.classList.toggle('sk-open', open);
     mapBtn.setAttribute('aria-expanded', String(open));
@@ -126,7 +147,10 @@ export function createUi(root: HTMLElement, game: Game, sound: UiSound | null, s
   });
   function setChalkOpen(open: boolean, quiet = false): void {
     if (open === chalkOpen) return;
-    if (open) setOpen(false);
+    if (open) {
+      setOpen(false);
+      setLedgerOpen(false, true);
+    }
     chalkOpen = open;
     hud.classList.toggle('sk-chalkopen', open);
     chalkBtn.setAttribute('aria-expanded', String(open));
@@ -189,6 +213,63 @@ export function createUi(root: HTMLElement, game: Game, sound: UiSound | null, s
   const recording = new ClassSlot(hud, 'sk-recording');
   const racing = new ClassSlot(hud, 'sk-racing');
 
+  // Errands, conductors, secrets: the in-play pieces, the ledger screen and its button.
+  const errandHud = new ErrandHud(game, twos);
+  const conductorHud = new ConductorHud(game, twos);
+  const errandOn = new ClassSlot(hud, 'sk-errand');
+  const offering = new ClassSlot(hud, 'sk-offering');
+  const ledger = new LedgerScreen(game, twos, {
+    close: () => setLedgerOpen(false),
+    tap: () => sound?.ui('tick'),
+  });
+  const ledgerBtn = el('button', 'sk-ledgerbtn');
+  ledgerBtn.type = 'button';
+  ledgerBtn.innerHTML = LEDGER_ICON;
+  ledgerBtn.dataset.sk = 'ledgerBtn';
+  ledgerBtn.setAttribute('aria-label', 'Ledger: errands, conductors, secrets');
+  ledgerBtn.setAttribute('aria-expanded', 'false');
+  /** Something new went into the ledger since it was last opened. */
+  const news = new ClassSlot(ledgerBtn, 'sk-news');
+  function setLedgerOpen(open: boolean, quiet = false): void {
+    if (open === ledgerOpen) return;
+    if (open) {
+      setOpen(false);
+      setChalkOpen(false, true);
+    }
+    ledgerOpen = open;
+    hud.classList.toggle('sk-ledgeropen', open);
+    ledgerBtn.setAttribute('aria-expanded', String(open));
+    if (open) {
+      news.set(false);
+      ledger.render();
+      twos.play(ledger.el, 'sk-r1', 'sk-r2');
+    } else twos.cancel(ledger.el);
+    if (!quiet) sound?.ui('tick');
+  }
+  let ledgerPointer = -1;
+  const onLedgerDown = (e: PointerEvent): void => {
+    ledgerPointer = e.pointerId;
+    e.preventDefault();
+    e.stopPropagation();
+  };
+  const onLedgerUp = (e: PointerEvent): void => {
+    if (e.pointerId !== ledgerPointer) return;
+    ledgerPointer = -1;
+    e.preventDefault();
+    e.stopPropagation();
+    setLedgerOpen(!ledgerOpen);
+  };
+  const onLedgerCancel = (): void => {
+    ledgerPointer = -1;
+  };
+  const onLedgerClick = (e: MouseEvent): void => {
+    if (e.detail === 0) setLedgerOpen(!ledgerOpen);
+  };
+  ledgerBtn.addEventListener('pointerdown', onLedgerDown);
+  ledgerBtn.addEventListener('pointerup', onLedgerUp);
+  ledgerBtn.addEventListener('pointercancel', onLedgerCancel);
+  ledgerBtn.addEventListener('click', onLedgerClick);
+
   const mapBtn = el('button', 'sk-mapbtn');
   mapBtn.type = 'button';
   mapBtn.innerHTML = MAP_ICON;
@@ -220,8 +301,10 @@ export function createUi(root: HTMLElement, game: Game, sound: UiSound | null, s
     const t = e.target;
     if (t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement) return;
     if (e.code === 'KeyM') toggle();
+    else if (e.code === 'KeyL') setLedgerOpen(!ledgerOpen);
     else if (e.code === 'Escape' && mapOpen) setOpen(false);
     else if (e.code === 'Escape' && chalkOpen) setChalkOpen(false);
+    else if (e.code === 'Escape' && ledgerOpen) setLedgerOpen(false);
   };
   mapBtn.addEventListener('pointerdown', onBtnDown);
   mapBtn.addEventListener('pointerup', onBtnUp);
@@ -229,7 +312,23 @@ export function createUi(root: HTMLElement, game: Game, sound: UiSound | null, s
   mapBtn.addEventListener('click', onBtnClick);
   window.addEventListener('keydown', onKey);
 
-  hud.append(board.el, chain.el, toasts.el, stopBoard.el, hold, chalkHud.el, map.el, mapBtn, chalkBtn, chalkScreen.el);
+  hud.append(
+    board.el,
+    chain.el,
+    errandHud.stubEl,
+    conductorHud.el,
+    toasts.el,
+    stopBoard.el,
+    errandHud.offerEl,
+    hold,
+    chalkHud.el,
+    map.el,
+    mapBtn,
+    chalkBtn,
+    ledgerBtn,
+    chalkScreen.el,
+    ledger.el,
+  );
   const shell = shellHost
     ? new Shell(game, twos, shellHost, {
         openMap: () => setOpen(true),
@@ -237,7 +336,11 @@ export function createUi(root: HTMLElement, game: Game, sound: UiSound | null, s
           setChalkOpen(true);
           chalkScreen.show('list');
         },
-        busy: () => mapOpen || chalkOpen,
+        openLedger: () => {
+          setLedgerOpen(true);
+          ledger.show('errands');
+        },
+        busy: () => mapOpen || chalkOpen || ledgerOpen,
         mapPercent: () => Math.floor(mapFraction(game.progress, lines) * 100),
         clock: () => clockText(clockMinutes(game.sim.dayFrac)),
         tap: () => sound?.ui('tick'),
@@ -301,10 +404,43 @@ export function createUi(root: HTMLElement, game: Game, sound: UiSound | null, s
           serial: game.sim.tick,
         });
         break;
+      case 'errandDone': {
+        const def = game.errands.list.find((d) => d.id === e.id);
+        toasts.show('errand-done', {
+          line: null,
+          title: def ? def.title : 'Errand',
+          body: ticksClock(e.ticks),
+          serial: game.sim.tick,
+          stamp: 'DELIVERED',
+          best: e.best,
+        });
+        news.set(true);
+        break;
+      }
+      case 'errandFail': {
+        const def = game.errands.list.find((d) => d.id === e.id);
+        toasts.show('errand-fail', { line: null, title: def ? def.title : 'Errand', body: failText(e.reason), serial: game.sim.tick });
+        break;
+      }
+      case 'conductorStart': {
+        const L = lines[e.line];
+        const def = game.conductors.list.find((c) => c.line === L.id);
+        toasts.show('conductor', { line: L, title: 'Conductor', body: def ? taskText(game.sim.world, def) : L.name, serial: game.sim.tick });
+        break;
+      }
+      case 'conductorPunch':
+        toasts.show('conductor-punch', { line: lines[e.line], title: 'Punched', body: lines[e.line].name, serial: game.sim.tick });
+        news.set(true);
+        break;
+      case 'secretFound':
+        toasts.show('secret', { line: null, title: 'Secret found', body: SECRET_INFO[e.id].name, serial: game.sim.tick });
+        news.set(true);
+        break;
       default:
         break;
     }
     chalkHud.onEvent(e);
+    conductorHud.onEvent(e);
   };
 
   const onSimEvent = (e: SimEvent): void => {
@@ -345,6 +481,31 @@ export function createUi(root: HTMLElement, game: Game, sound: UiSound | null, s
     return out;
   };
 
+  const ledgerTestState = (): Record<string, string | number | boolean> => {
+    const er = game.errands;
+    const a = er.active;
+    const n = ledger.counts();
+    const out: Record<string, string | number | boolean> = {
+      errandOffered: er.offered ?? '',
+      errandOfferFill: Math.round(er.offerFill * 100),
+      errandActive: a ? a.id : '',
+      errandStep: a ? a.step : -1,
+      errandLeft: a ? Math.ceil(a.ticksLeft / 60) : 0,
+      errandsDone: n.errands[0],
+      conductorActive: game.conductors.active ? lines[game.conductors.active.line].id : '',
+      conductorsPunched: n.conductors[0],
+      secretsFound: n.secrets[0],
+      ledgerOpen,
+      ledgerTab: ledgerOpen ? ledger.tab : '',
+    };
+    const r = ledgerBtn.getBoundingClientRect();
+    const shown = r.width > 0 && !mapOpen && !chalkOpen && !ledgerOpen;
+    out.ledgerBtnX = shown ? Math.round(r.left + r.width / 2) : -1;
+    out.ledgerBtnY = shown ? Math.round(r.top + r.height / 2) : -1;
+    if (ledgerOpen) ledger.centres(out);
+    return out;
+  };
+
   return {
     update(f: UiFrame): void {
       if (disposed) return;
@@ -366,11 +527,15 @@ export function createUi(root: HTMLElement, game: Game, sound: UiSound | null, s
         chalkBtn.setAttribute('aria-label', cm === 'recording' ? 'Stop drawing' : cm === 'idle' ? 'Chalk lines' : 'Abandon the race');
       }
       chalkHud.update(f.dt);
+      errandHud.update(shellHost ? shellHost.values().hints : true);
+      errandOn.set(errandHud.active);
+      offering.set(errandHud.offering);
+      conductorHud.update(f.dt);
       shell?.frame(f.dt, f.gameEvents);
       twos.update(f.dt);
     },
     get paused(): boolean {
-      return mapOpen || chalkOpen || (shell !== null && shell.paused);
+      return mapOpen || chalkOpen || ledgerOpen || (shell !== null && shell.paused);
     },
     openChalkImport(code: string): void {
       setChalkOpen(true, true);
@@ -397,6 +562,7 @@ export function createUi(root: HTMLElement, game: Game, sound: UiSound | null, s
         inkedSegments: inked,
         mapPercent: Math.floor(mapFraction(prog, lines) * 100),
         ...chalkTestState(),
+        ...ledgerTestState(),
       };
       shell?.testState(out);
       return out;
@@ -413,8 +579,14 @@ export function createUi(root: HTMLElement, game: Game, sound: UiSound | null, s
       chalkBtn.removeEventListener('pointerup', onChalkUp);
       chalkBtn.removeEventListener('pointercancel', onChalkCancel);
       chalkBtn.removeEventListener('click', onChalkClick);
+      ledgerBtn.removeEventListener('pointerdown', onLedgerDown);
+      ledgerBtn.removeEventListener('pointerup', onLedgerUp);
+      ledgerBtn.removeEventListener('pointercancel', onLedgerCancel);
+      ledgerBtn.removeEventListener('click', onLedgerClick);
       shell?.dispose();
       hud.remove();
+      releaseLedgerStyle();
+      releaseErrandStyle();
       releaseChalkStyle();
       releaseStyle();
     },
