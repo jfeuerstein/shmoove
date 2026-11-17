@@ -179,6 +179,7 @@ export function ride(label: string, spec: RideSpec): Task {
   const maxWait = spec.maxWait ?? 60 * 60 * 4;
   return {
     label,
+    idle: () => phase === 'wait',
     begin(b) {
       if (!L) {
         L = lineById(b.w, spec.line);

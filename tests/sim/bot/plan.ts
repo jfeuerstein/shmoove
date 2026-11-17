@@ -102,11 +102,13 @@ export function secretPlan(): Task[] {
       b.steerTo(out, 0, 1240, 0);
       out.hop = i === 5;
     }),
+    // Down the summit stairs (they hold the speed down, where the grass would let it run away) to
+    // the hill station, and up onto its platform from the west end.
     go('down to the hill station', [
-      [10, 1200],
-      [20, 1080],
-      [20, 1052],
-      [19, 1040],
+      [1, 1235],
+      [1, 1100],
+      [2, 1041],
+      [16, 1040],
     ]),
     ride('S2 pass', { line: 'S2', at: 'Cumbre', to: 'Cumbre', segs: [1], anywhere: true, wait: [19, 1038.4] }),
   ];

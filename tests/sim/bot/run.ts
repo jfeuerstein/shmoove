@@ -19,6 +19,8 @@ export interface Book {
   /** Every game event with the tick it came out on. */
   events: { tick: number; e: GameEvent }[];
   bails: number;
+  /** Where and why each bail happened. */
+  bailLog: string[];
   recoveries: number;
   /** Largest plan move in one tick outside a bail recovery, metres. */
   maxStep: number;
@@ -39,6 +41,7 @@ export function newBook(game: Game): Book {
   return {
     events: [],
     bails: 0,
+    bailLog: [],
     recoveries: 0,
     maxStep: 0,
     maxStepAt: '',
@@ -103,6 +106,7 @@ export function makeRunner(game: Game, bot: Skater, book: Book = newBook(game)):
         for (const e of g.sim.events) {
           if (e.type === 'bail') {
             book.bails++;
+            book.bailLog.push(`${e.reason} at tick ${g.sim.tick} (${p.x.toFixed(0)}, ${p.y.toFixed(0)}, ${p.z.toFixed(0)}) during ${r.bot.task?.label ?? 'nothing'}`);
             bailing = true;
           }
           if (e.type === 'recover') {

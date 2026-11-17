@@ -25,6 +25,8 @@ export interface Task {
   begin?(b: Skater): void;
   /** Write this tick's input; say whether the task goes on, is done, or has failed. */
   step(b: Skater, out: InputFrame): Status;
+  /** True while the task is only waiting for a ride (a calm moment to save the game). */
+  idle?(): boolean;
 }
 
 const V = makeVehicleState();
@@ -59,16 +61,19 @@ export class Skater {
   get done(): boolean {
     return this.ti >= this.tasks.length || this.failure !== '';
   }
+  /** Waiting at a stop for a ride, on the board. */
+  get waiting(): boolean {
+    const t = this.task;
+    return t !== null && t.idle !== undefined && t.idle() && this.p.mode === Mode.GROUND;
+  }
   get task(): Task | null {
     return this.ti < this.tasks.length ? this.tasks[this.ti] : null;
   }
 
-  /** Continue with another Game (a save loaded into a fresh one): the current task starts over. */
+  /** Continue with another Game (a save loaded into a fresh one): the current task begins again. */
   rebind(game: Game): void {
     this.game = game;
     this.taskTicks = 0;
-    const t = this.task;
-    if (t?.begin) t.begin(this);
   }
 
   note(s: string): void {
@@ -118,7 +123,8 @@ export class Skater {
     if (p.mode === Mode.GROUND && p.speed < crawl && dist > 2) out.steer = clamp(out.steer + (Math.floor(this.clock / 12) % 2 === 0 ? 0.9 : -0.9), -1, 1);
     // A kerb or a platform edge in the way, too tall to roll up: hop it.
     if (p.mode === Mode.GROUND && p.speed > 0.8 && dist > 0.5) {
-      const ahead = Math.min(1.4, dist);
+      // Far enough ahead that the hop has risen over the edge by the time the board gets there.
+      const ahead = Math.min(clamp(p.speed * 0.2, 1.4, 4), dist);
       const fx = dx / dist;
       const fz = dz / dist;
       const facing = fx * dsin(p.heading) + fz * dcos(p.heading);
