@@ -327,7 +327,8 @@ export class ErrandsReducer implements GameReducer {
     const sim = game.sim;
     const p = sim.player;
     let here: Resolved | null = null;
-    if (p.mode !== Mode.HITCH && p.mode !== Mode.BAIL) {
+    // Onboarding holds offers back until the player has learnt what holding still does.
+    if (p.mode !== Mode.HITCH && p.mode !== Mode.BAIL && game.errandsOpen) {
       const f = sim.dayFrac;
       for (const r of this.resolved) {
         if (!errandOpen(r.def, f)) continue;
