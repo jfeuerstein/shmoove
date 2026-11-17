@@ -45,6 +45,8 @@ export class HintStub {
   private stepClock = 0;
   private lastRetry = false;
   private lastStop = '';
+  private lastCatch = false;
+  private lastHop = false;
 
   constructor(
     private readonly game: Game,
@@ -106,7 +108,7 @@ export class HintStub {
     } else if (this.phase !== 'out' && want !== this.shownId) {
       if (this.shownId !== '') this.leave();
       else if (want !== '') this.enter(want);
-    } else if (this.phase === 'in' && (ob.slingRetry !== this.lastRetry || ob.stopName !== this.lastStop)) {
+    } else if (this.phase === 'in' && (ob.slingRetry !== this.lastRetry || ob.stopName !== this.lastStop || ob.inkCatch !== this.lastCatch || ob.target.hop !== this.lastHop)) {
       this.fill(this.shownId);
     }
     this.animate(dt);
@@ -139,6 +141,8 @@ export class HintStub {
     const ob = this.game.onboarding;
     this.lastRetry = ob.slingRetry;
     this.lastStop = ob.stopName;
+    this.lastCatch = ob.inkCatch;
+    this.lastHop = ob.target.hop;
     const c = hintCopy(id, ob);
     this.title.set(c.title);
     this.long.set(c.title.length > LONG_TITLE);
