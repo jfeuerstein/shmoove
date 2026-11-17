@@ -52,7 +52,12 @@ found that the regular map can be finished, and that the secret lines cannot be 
 6. **Resume spot:** refreshed on the first grounded tick after a ride ends (and after a grind or
    a landing), not only on the half-second clock. **Day count** saved and restored (save version
    bump with migration; old saves load with day 0).
-7. Update the full-game test: S2 completes; every line is complete at the end; no bail in the
+7. **Errand givers stand clear of stops.** Since holding a still finger now stops you to wait for
+   a ride (DECISIONS 77), a player waiting at a stop inside a giver's spot takes the errand instead
+   (the moped stop on the boulevard, `stop_M1_0`, is one). Move givers so no giver's offer zone
+   overlaps the waiting area of any stop (the stop zone plus 4 m), with a test over every giver
+   and stop, and let the full-game bot stand still at every stop (it circles at those today).
+8. Update the full-game test: S2 completes; every line is complete at the end; no bail in the
    whole run except ones the bot chooses (there should be none: it takes the wire down). Keep
    every other assertion as strict as it is.
 
