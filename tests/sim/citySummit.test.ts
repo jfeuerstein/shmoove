@@ -30,7 +30,8 @@ interface Script {
  * ride it to the hill station, let go with a hop as a summit cable car waits beside it, ride
  * that up until a kite comes past, crack the whip and hop onto the kite's strap, ride the kite up
  * until the king kite swoops past, whip and hop onto it, and hold on: the king kite perches on
- * the needle and drops the rider onto the platform.
+ * the needle, flies its circuit back the other way with the rider (inking the line) and drops them
+ * onto the platform when it perches there again.
  */
 const SUMMIT: Script = {
   start: 27540,
@@ -49,8 +50,8 @@ const SUMMIT: Script = {
     [3216, 0, 1, 0],
   ],
 };
-/** Ticks the run lasts: past the drop onto the needle. */
-const SUMMIT_TICKS = 4000;
+/** Ticks the run lasts: past the drop onto the needle at the end of the king kite's way back. */
+const SUMMIT_TICKS = 6600;
 /** All four lines of the route repeat every this many ticks, and with them the window. */
 const WINDOW_PERIOD = 5400;
 
