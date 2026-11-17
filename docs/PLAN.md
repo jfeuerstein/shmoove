@@ -40,82 +40,52 @@ Acceptance:
 
 ## M2 — City `[~]` (tag `m2`)
 
-- [x] City generator: four districts into the World contract (1068 solids, 213 rails, 85 zones,
-      16 routes, 10 chain spots)
-- [x] Chunk mesher + seamless streaming (`src/render/cityView.ts`; resumable chunk builds)
-- [x] Full look: district dressing for every kind, sea, day/night ramps, props; fixture `?world=proptown`
-- [~] City fixes from independent verification (brief: `docs/briefs/m2-cityfix.md`, waits for the
-      ride data which edits the same files): the spawn does not roll, pockets at terrace ends,
-      a flat summit, the Mercado is too sparse near the spine, east docks far from any ride, and
-      four tests that stayed green when their property was broken
-- [ ] The city as the default world, e2e routes and perf on it (first look: `city-spine` route;
-      perf at the spawn 16 draw calls, 42k triangles, 4.4 ms mean / 14.6 ms p95)
-
-Acceptance:
-- Sim tests: generator is deterministic (hash); a no-input skater dropped at the summit reaches the
-  docks without leaving the world or getting stuck; every district has rails, awnings/roofs as
-  specified; no solid blocks a street centreline.
-- e2e: screenshots from each district match DESIGN section 7; no visible chunk pop within 150 m.
-- Perf budgets hold while streaming across the whole city.
+- [x] City generator: four districts into the World contract
+- [x] Chunk mesher + seamless streaming, district dressing, sea, day/night, props
+- [x] City fixes from verification: the spawn rolls, landings fall, the summit is crowned, the
+      Mercado is tight with awnings, stalls and handrails on every stair street, forklifts reach the
+      east docks, handrail/stair/clearance tests made strict
+- [~] Open (task `m3-retune`): the strict no-trap test fails by three runs (two pins outside the
+      west hairpin parapets), a random wanderer bounces on 3 awnings where 12 are required
+- [x] The city is the default world; `city-spine` and `city-errand` e2e routes
 
 ## M3 — Rides and time `[~]` (tag `m3`)
 
-- [~] All 16 lines on the city's routes: stops, hours, vehicles, timetable meetings (implementer running)
+- [x] All 16 lines on the city's routes with lanes, stops, hours; six scheduled meetings; a scripted
+      climb from the docks to the summit on rides only; the four-link summit route
+- [~] Open (task `m3-retune`): three ride-data tests fail since the forklift loop grew; tram 5 comes
+      every four minutes and should come every two; one conductor number to re-measure
 - [x] Vehicle meshes for every kind, pattern liveries, line-up fixture (`?world=lineup`)
-- [x] Day cycle visuals (sky, ink ramps, night glow)
-- [x] Timetable boards at stops, HUD destination board
+- [x] Day cycle visuals, timetable boards at stops, HUD destination board
 - [x] Line map screen and segment inking
-
-Acceptance:
-- Sim tests: every line's lap period divides the day; vehicles only leave the terminus inside service
-  hours; each regular line can be ridden end to end by a scripted skater and inks completely; a scripted
-  route climbs from the docks to the summit using rides only; secret lines are hidden until ridden.
-- e2e: line map screen screenshot with partial ink; every livery distinguishable in a line-up screenshot.
+- [ ] Independent verification of the ride data (after the retune)
 
 ## M4 — Sound `[~]` (tag `m4`)
 
-- [x] Synth voices and the four district tracks (4 stems each)
-- [x] Stem mixer driven by hitch/chain/bail events
-- [x] Wheel, wind, ride and UI sounds
-- [ ] Wired into the app loop; e2e check that the graph starts on first touch
-- [ ] Verifier follow-ups: softer master compressor (ratio ~4), two mixer tests tightened (fresh
-      first link with stems still in; `grindEnd` while still in grind mode), no per-frame array in
-      `engine.ts`, funk and highlife lead figures moved out of the harmony's register
-
-Verified independently: 17 of 19 mixer mutations caught, transport property test clean over 10 000
-random advances, chord charts match, real-browser run with no clipping (peak 0.80), bail silence in
-38 ms, 15 of 24 voices at peak. Nobody has heard it yet: see PLAYTEST.
-
-Acceptance:
-- Unit tests (OfflineAudioContext-free, on the mixer state machine): hitch fades in the right stem;
-  chain of 3 brings the full band; bail cuts to wheels; one track at a time; stem starts are beat-quantised.
-- e2e: audio graph starts on first touch without errors; rendered level meters change on hitch.
+- [x] Four district tracks in four stems, the stem mixer, wheel/wind/ride/UI sounds, wired into the
+      loop; verified by measurement (nobody has heard it: see PLAYTEST)
+- [~] Verifier follow-ups (task `m6c1-followups`): lighter compressor, two mixer tests, lead register
 
 ## M5 — Things to do `[~]` (tag `m5`)
 
-- [ ] Errands (≥ 10, 2–4 min) — brief written, waits for the ride data
-- [ ] Conductor challenges (13) — same task
-- [ ] Secrets (ghost tram, blimp, Needle via four-link chain) — same task; the summit route itself
-      is proved in the ride-data task
-- [x] Chalk lines: record, share code, ghost replay (verified: exact on 66 660 compared ticks).
-      Denser share code in progress: realistic input gave 25 kB for two minutes.
-- [x] Saves (verified against 500 corruptions)
+- [x] Errands (13), conductor challenges (13), secrets (4), ledger, world markers. Verified: every
+      errand and challenge completed by independent bots
+- [~] Verifier follow-ups (task `m6c1-followups`): `ferry_luggage` limit, three missing conductor tests
+- [x] Chalk lines: record, `SK2-` share code (about 2.4 kB for two minutes), ghost race. Verified exact
+- [x] Saves. Verified against 500 corruptions
 
-Acceptance:
-- Sim tests: each errand and challenge type completes and fails correctly under scripted state; share
-  code round-trips; a ghost replay reproduces the recorded final state hash exactly; saves round-trip
-  and migrate; the Needle is unreachable below a four-link chain and reachable with one.
-- e2e: errand ticket, challenge board, chalk export/import flow screenshots.
+## M6 — Ship `[~]` (tag `m6`)
 
-## M6 — Ship `[ ]` (tag `m6`)
-
-- [ ] Onboarding that teaches by play
-- [ ] Menus, settings, pause
-- [ ] Haptics
-- [ ] Performance pass against budgets
-- [ ] PWA: manifest, icons generated in code, service worker, offline, portrait lock
-- [ ] README with deploy steps; PLAYTEST.md final
-- [ ] Full-game check: first launch → completed line map (scripted, accelerated)
+- [ ] Onboarding that teaches by play (brief written: `docs/briefs/m6b-onboarding.md`)
+- [x] Menus: title, pause, settings, map-complete. Verified
+- [x] Haptics
+- [x] PWA: manifest, icons generated in code, service worker, offline, portrait lock. Verified,
+      including the update flow and a stale-cache bug the verifier found and fixed
+- [x] README with deploy steps
+- [ ] Performance pass: the city with all rides is at the frame-work budget (p95 14–17 ms at 4x
+      throttle against 16.6), with no margin
+- [ ] Full-game check: first launch → completed line map by a scripted skater with no teleports
+- [ ] Final docs and audit
 
 Acceptance:
 - Fresh clone: `npm install`, `npm run build`, `npm test` pass.

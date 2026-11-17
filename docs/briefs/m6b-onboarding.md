@@ -3,7 +3,7 @@ You are the implementer for task M6B-ONBOARDING on SKITCH: a first launch that t
 Commit early and often: anything not committed can vanish without warning. Commit after each part and at least every 20 minutes; work-in-progress commits are fine if `npm run typecheck` passes.
 
 ## Files you own
-- `src/sim/game/onboarding.ts` (new; pure sim) and its registration, events and commands in `src/sim/game/game.ts`
+- `src/sim/game/onboarding.ts` (new; pure sim) and its registration, events and commands in `src/sim/game/game.ts`; the one gate described below in `src/sim/game/errands.ts`
 - `src/ui/hint*.ts` (new) with minimal mounting edits in `src/ui/index.ts`/`style.ts`
 - `src/render/hintView.ts` (new: world-space pointers), wiring edits in `src/app/main.ts`, the new-game start time in `src/app/**` (where a new game is created)
 - `tests/sim/onboarding.test.ts`, `tests/unit/ui/hint*.test.ts`, `tests/e2e/routes/city-first-launch.mjs`
@@ -30,6 +30,8 @@ After `ink`, one last ticket: "NO PUSHING. EVERYTHING THAT MOVES IS A LIFT." and
 
 **UI** (`src/ui/hint*.ts`): one hint at a time as a small ticket stub low on the screen, above the hold cue and clear of the skater: a thumb glyph drawn in inline SVG and animated on twos through `twos.ts` (slide, flick, press-and-fill, drag-then-lift: four tiny two- or three-frame animations), two or three words of text, and a punched hole that fills when the step is done (with `sound.ui('punch')`). It slides in and out on twos. Respect reduced motion (static glyph). `Ui.testState()` additions: `hint` (step or ''), `hintsDone` (count), `onboardingComplete`.
 **World pointers** (`src/render/hintView.ts`): `createHintView(scene, world): { update(game, alpha, dt): void; dispose(): void }`: a bobbing mango chevron (on twos) over the thing the current hint is about: the handrail's run-in for `grind`, the vehicle's grab bar or strap end for `hitch` (use `grabPoint`), nothing otherwise. One draw call. `MeshBuilder` + `inkMaterial()` with `glow`.
+
+**Errands wait their turn.** The new-game spawn is inside an errand giver's zone (the giver of `funicular_valve` stands on the lookout), so a new player's first sight would be an errand offer asking them to hold still, before they know what holding does. Until the `hitch` step is done, errand offers must not fill or show: add a small gate the errands reducer consults (for example a `canOffer` flag on the game that onboarding owns), with the minimum edit to `src/sim/game/errands.ts`; givers still stand there and wave. Test it both ways (no offer before `hitch` is done; offers work after; and with hints off / onboarding skipped they work from the start).
 
 ## Acceptance tests
 1. `tests/sim/onboarding.test.ts` on synthetic worlds and the city: each hint shows only in its situation and only after its prerequisites; each completes on its condition (including the sling's whip rule and its fallback); ignoring a hint never blocks later ones that do not depend on it; nothing shows with hints off, during a chalk race, or after completion; state round-trips through the save; determinism (two games, same inputs, same state); the scan for catchable vehicles agrees with what `tryHitch` would accept within the next few seconds (a hint must not point at a ride that cannot be caught, e.g. a gated line or one out of service).
