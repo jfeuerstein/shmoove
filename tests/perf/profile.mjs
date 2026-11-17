@@ -1,5 +1,6 @@
-// CPU profile of the perf route (not part of the gate): the same page and throttle as `npm run perf`,
-// with the V8 sampling profiler on for the measured window. Prints the functions with the most self
+// CPU profile of the perf route (not part of the gate): the same page, route and throttle as
+// `npm run perf`, with the V8 sampling profiler on for SKITCH_PROFILE_MS (default 60 s: the first
+// four legs of the perfcity route). Prints the functions with the most self
 // time and the most inclusive time, and saves artifacts/perf.cpuprofile (opens in Chrome DevTools).
 // Names come from the served bundle: run `npx vite build --minify false` first for readable ones
 // (and `npm run build` again afterwards). Usage: node tests/perf/profile.mjs
@@ -17,13 +18,13 @@ async function run({ url, browser }) {
     const cdp = await context.newCDPSession(page);
     await cdp.send('Emulation.setCPUThrottlingRate', { rate: CPU_THROTTLE });
     const extra = process.env.SKITCH_PERF_PARAMS ? '&' + process.env.SKITCH_PERF_PARAMS : '';
-    await page.goto(url + '/?route=perf&mute' + extra);
+    await page.goto(url + `/?route=${process.env.SKITCH_PROFILE_ROUTE ?? 'perfcity'}&mute` + extra);
     await waitForReady(page);
     await sleep(2000);
     await cdp.send('Profiler.enable');
     await cdp.send('Profiler.setSamplingInterval', { interval: 200 });
     await cdp.send('Profiler.start');
-    await sleep(Number(process.env.SKITCH_PROFILE_MS ?? 10000));
+    await sleep(Number(process.env.SKITCH_PROFILE_MS ?? 60000));
     const { profile } = await cdp.send('Profiler.stop');
     return profile;
   } finally {
