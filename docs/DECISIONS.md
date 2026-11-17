@@ -60,3 +60,14 @@ Decisions made without the owner in the room, newest last. Cuts are marked **CUT
     entries.
 20. **Milestone tags are local.** The remote for this session only accepts pushes to the working
     branch, so `m1`…`m6` exist as local tags and as "tag mN" markers in commit subjects.
+
+## M3b / M4 — Game layer, UI, audio wiring
+
+21. **UI animation is clocked by the frame, not CSS.** Split-flap flips and ticket slides step on
+    twos from the UI frame `dt`. CSS animations run on wall time, which made deterministic e2e
+    screenshots catch every flap mid-flip.
+22. **Ink slack.** A segment inks if the hitch began within `min(12 m, segment / 4)` of its start,
+    because a bumper is grabbed as the vehicle pulls away from the stop, not while it stands there.
+23. **The line map may stretch a long thin network** up to 3x across so it fills a portrait screen.
+24. **Audio starts on the first touch or key** (browser autoplay rules) and follows the sim through
+    one `AudioView` per frame; the nearest-ride search for motor sounds runs every sixth frame.

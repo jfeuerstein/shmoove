@@ -16,6 +16,8 @@ export interface SkitchTestState {
   armed?: boolean;
   /** Rows in the feel panel (0 when it is not open). */
   feelRows?: number;
+  /** Audio mixer facts: context running, track (district, -1 none), stems in, full band, wheel level. */
+  audio?: { running: boolean; track: number; stems: number; fullBand: boolean; wheel: number };
   /** Anything else a screen wants a route to be able to assert on. */
   ui?: Record<string, string | number | boolean>;
 }

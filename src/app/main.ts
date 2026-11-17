@@ -2,17 +2,19 @@
  * Boot and main loop. Fixed 60 Hz sim steps from an accumulator; rendering interpolates. With
  * `?e2e` nothing runs on its own: the test harness advances time through the hook.
  */
+import { createAudio } from '../audio/index';
 import { Gestures, attachGestures } from '../input/gestures';
 import { createView } from '../render/view';
 import { DT } from '../sim/constants';
 import { Game, type GameEvent } from '../sim/game/game';
-import { buildSlice } from '../sim/slice';
 import { MODE_NAMES, type InputFrame, type SimEvent } from '../sim/types';
 import { createUi } from '../ui/index';
+import { createAudioView } from './audioView';
 import { createDebugPanel, type DebugPanel } from './debugPanel';
 import { getParams } from './params';
 import { getRoute } from './routes';
 import { installHook } from './testHook';
+import { buildWorld } from './world';
 
 const MAX_CATCH_UP = 4;
 const STATS_CAP = 20000;
@@ -22,7 +24,7 @@ function boot(): void {
   const canvas = document.getElementById('game') as HTMLCanvasElement;
   const uiRoot = document.getElementById('ui') as HTMLElement;
 
-  const world = buildSlice(params.seed);
+  const world = buildWorld(params);
   const game = new Game(world, { seed: params.seed, startDayFrac: params.t ?? undefined });
   const sim = game.sim;
   const gestures = new Gestures();
@@ -31,7 +33,14 @@ function boot(): void {
   const route = getRoute(params.route);
   const panel: DebugPanel | null = params.debug ? createDebugPanel(uiRoot) : null;
   // After the panel, so the UI can keep its controls clear of it.
-  const ui = createUi(uiRoot, game, null);
+  const audio = createAudio();
+  audio.setMuted(params.mute);
+  const audioView = createAudioView();
+  const ui = createUi(uiRoot, game, audio);
+  // Browsers only start audio from a user gesture: the first touch or key unlocks it.
+  const unlock = (): void => audio.unlock();
+  window.addEventListener('pointerdown', unlock);
+  window.addEventListener('keydown', unlock);
 
   const prev = { x: sim.player.x, y: sim.player.y, z: sim.player.z };
   const pending: SimEvent[] = [];
@@ -70,6 +79,7 @@ function boot(): void {
     uiFrame.armed = gestures.isArmed;
     uiFrame.dt = dt;
     ui.update(uiFrame);
+    audio.update(audioView(sim, ui.paused), pending, world.lines, dt);
     pending.length = 0;
     pendingGame.length = 0;
     panel?.update(sim, { ...view.info(), workMs: lastWork });
@@ -104,6 +114,17 @@ function boot(): void {
     if (workMs.length < STATS_CAP) workMs.push(lastWork);
   };
 
+  const audioState = (): { running: boolean; track: number; stems: number; fullBand: boolean; wheel: number } => {
+    const d = audio.debug();
+    return {
+      running: d.running,
+      track: d.track ?? -1,
+      stems: d.stemTargets.filter((g) => g > 0.5).length,
+      fullBand: d.fullBand,
+      wheel: d.wheelLevel,
+    };
+  };
+
   installHook({
     ready: true,
     manual: params.e2e,
@@ -131,6 +152,7 @@ function boot(): void {
         armed: gestures.isArmed,
         feelRows: panel ? document.querySelectorAll('[data-feel]').length : 0,
         ui: ui.testState(),
+        audio: audioState(),
       };
     },
     stats() {
