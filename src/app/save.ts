@@ -15,6 +15,7 @@
  * save and read at boot, and is plain JSON the app interprets (`src/app/settings.ts`).
  */
 import type { Game, GameEvent } from '../sim/game/game';
+import { placePlayer } from '../sim/player';
 import { DEFAULT_SETTINGS, exportSave, importSave, migrate, type SaveData, type SaveSettings } from '../sim/game/save';
 
 export const SAVE_KEY = 'skitch.save.v1';
@@ -23,6 +24,30 @@ export const BACKUP_KEY = 'skitch.save.bak';
 export const APP_KEY = 'skitch.app.v1';
 /** Autosave interval in sim ticks of play (15 s). */
 export const AUTOSAVE_TICKS = 15 * 60;
+/** Play time after which a save is worth continuing even with nothing inked or found (30 s). */
+export const CONTINUE_PLAY_TICKS = 30 * 60;
+
+const nonEmptyArray = (v: unknown): boolean => Array.isArray(v) && v.length > 0;
+const nonEmptyRecord = (v: unknown): boolean => typeof v === 'object' && v !== null && !Array.isArray(v) && Object.keys(v).length > 0;
+const field = (section: unknown, key: string): unknown =>
+  typeof section === 'object' && section !== null ? (section as Record<string, unknown>)[key] : undefined;
+
+/**
+ * Whether a game is worth continuing: something inked, a chalk line, an errand done, a conductor
+ * punched or a secret found (read from the reducers' exported sections), or at least
+ * CONTINUE_PLAY_TICKS of play. Changing a setting alone is not a game to continue.
+ */
+export function worthContinuing(sections: Readonly<Record<string, unknown>>, playTicks: number): boolean {
+  if (playTicks >= CONTINUE_PLAY_TICKS) return true;
+  const lines = field(sections.progress, 'lines');
+  if (Array.isArray(lines) && lines.some((l) => Array.isArray(field(l, 'inked')) && (field(l, 'inked') as unknown[]).some((b) => b === true))) return true;
+  return (
+    nonEmptyArray(field(sections.chalk, 'lines')) ||
+    nonEmptyRecord(field(sections.errands, 'done')) ||
+    nonEmptyArray(field(sections.conductors, 'punched')) ||
+    nonEmptyRecord(field(sections.secrets, 'found'))
+  );
+}
 
 const SAVE_ON: ReadonlySet<GameEvent['type']> = new Set<GameEvent['type']>([
   'segmentInked',
@@ -42,7 +67,10 @@ export interface SaveGlue {
   readonly appData: Readonly<Record<string, unknown>>;
   /** Sim ticks played across sessions (stepped ticks only; paused time does not count). */
   readonly playTicks: number;
-  /** A save exists in storage (loaded at boot or written since). */
+  /**
+   * There is a game to continue: a save exists in storage (loaded at boot or written since) and
+   * the game holds progress or enough play time (`worthContinuing`). Settings alone do not count.
+   */
   readonly hasSave: boolean;
   /** Replace the settings and the app-only settings record, and write a save now. */
   setSettings(settings: SaveSettings, appSettings: Record<string, unknown>): void;
@@ -53,8 +81,9 @@ export interface SaveGlue {
   /** Write a save now. Returns whether it reached storage. */
   saveNow(): boolean;
   /**
-   * Wipe the stored save, its backup and play time, and start the game's systems fresh. Settings
-   * go back to defaults unless `keepSettings` (a new game keeps the player's settings).
+   * Wipe the stored save, its backup and play time, start the game's systems fresh and put the
+   * skater at the world's spawn. Settings go back to defaults unless `keepSettings` (a new game
+   * keeps the player's settings).
    */
   resetSave(keepSettings?: boolean): void;
   dispose(): void;
@@ -168,7 +197,11 @@ export function createSaveGlue(game: Game, opts: { e2e: boolean }): SaveGlue {
       return playTicks;
     },
     get hasSave() {
-      return lastGood !== null;
+      if (lastGood === null) return false;
+      if (playTicks >= CONTINUE_PLAY_TICKS) return true;
+      const sections: Record<string, unknown> = {};
+      for (const r of game.reducers) if (r.exportState) sections[r.key] = r.exportState();
+      return worthContinuing(sections, playTicks);
     },
     setSettings(next, app) {
       settings = { ...next };
@@ -220,6 +253,8 @@ export function createSaveGlue(game: Game, opts: { e2e: boolean }): SaveGlue {
         settings = { ...DEFAULT_SETTINGS };
         appSettings = {};
       }
+      const w = game.sim.world;
+      placePlayer(w, game.sim.player, w.spawn.x, w.spawn.z, w.spawn.heading);
       playTicks = 0;
       sinceSave = 0;
       lastGood = null;

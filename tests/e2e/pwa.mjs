@@ -5,18 +5,24 @@
 //   2. The service worker registers, reaches `activated` and controls the page.
 //   3. Offline (preview server stopped and the browser context offline), a reload still boots the
 //      game to `__skitch.ready` and renders a non-blank canvas.
-//   4. Update, end to end: a second dist with one changed file (and its regenerated sw.js) is served
-//      on the same origin. The page sees the new version waiting, shows the "new version" ticket,
-//      RELOAD activates it, the page reloads under the new worker, only the new cache is left and
-//      it serves the changed file.
+//   4. Update, end to end: a second dist with a changed index.html and a renamed entry script (and
+//      its regenerated sw.js) is served on the same origin. The page sees the new version waiting,
+//      shows the "new version" ticket, RELOAD activates it, the page reloads under the new worker,
+//      only the new cache is left and it serves the changed file.
+//   5. Stale index regression: like GitHub Pages, the server sends `Cache-Control: max-age=600` on
+//      index.html (and every other file but sw.js), so the browser's HTTP cache holds a fresh copy
+//      of the first build's index.html while the new worker precaches. After RELOAD the HTTP cache
+//      is cleared (CDP) and the page reloaded once more: it must still boot to ready on the new
+//      build. Without `cache: 'reload'` on the precache requests (scripts/make-sw.mjs) the new cache
+//      would hold the old index.html, which names an entry script the new build no longer has.
 //   npm run e2e:pwa
-import { spawn } from 'node:child_process';
-import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdtempSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { createServer as createHttpServer } from 'node:http';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { extname, join, normalize, sep } from 'node:path';
 import { writeServiceWorker } from '../../scripts/make-sw.mjs';
-import { DIST, ROOT, ensureBuild, launchBrowser, newPhoneContext, waitForReady } from './lib/browser.mjs';
+import { DIST, ensureBuild, launchBrowser, newPhoneContext, waitForReady } from './lib/browser.mjs';
 import { decodePng, nonFlatFraction } from './lib/png.mjs';
 
 const SHOT_TIMEOUT_MS = 180_000;
@@ -36,39 +42,54 @@ function freePort() {
   });
 }
 
-/** `vite preview` of `outDir` on a fixed port (same origin across builds). */
+const MIME = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.json': 'application/json',
+  '.webmanifest': 'application/manifest+json',
+  '.png': 'image/png',
+  '.svg': 'image/svg+xml',
+};
+
+/**
+ * A static server for `outDir` on a fixed port (same origin across builds), cached like GitHub
+ * Pages: `max-age=600` on everything except sw.js (which browsers fetch past the HTTP cache anyway).
+ * Host config files (`_headers`) are not served, as on a real host.
+ */
 async function preview(outDir, port) {
-  const viteBin = join(ROOT, 'node_modules', 'vite', 'bin', 'vite.js');
-  const child = spawn(
-    process.execPath,
-    [viteBin, 'preview', '--host', '127.0.0.1', '--port', String(port), '--strictPort', '--outDir', outDir],
-    { cwd: ROOT, stdio: ['ignore', 'pipe', 'pipe'] },
-  );
-  let log = '';
-  child.stdout.on('data', (d) => (log += d));
-  child.stderr.on('data', (d) => (log += d));
-  const url = `http://127.0.0.1:${port}`;
-  const end = Date.now() + 20_000;
-  for (;;) {
-    if (child.exitCode !== null) throw new Error(`vite preview exited (${child.exitCode})\n${log}`);
-    try {
-      if ((await fetch(url + '/')).ok) break;
-    } catch {
-      // not up yet
+  const root = normalize(outDir + sep);
+  const server = createHttpServer((req, res) => {
+    const path = decodeURIComponent(new URL(req.url ?? '/', 'http://x').pathname);
+    const rel = path.endsWith('/') ? path + 'index.html' : path;
+    const file = normalize(join(root, rel));
+    if (!file.startsWith(root) || rel === '/_headers' || !existsSync(file) || !statSync(file).isFile()) {
+      res.writeHead(404, { 'Content-Type': 'text/plain' });
+      res.end('not found');
+      return;
     }
-    if (Date.now() > end) {
-      child.kill();
-      throw new Error(`vite preview did not start\n${log}`);
-    }
-    await new Promise((r) => setTimeout(r, 100));
-  }
+    res.writeHead(200, {
+      'Content-Type': MIME[extname(file)] ?? 'application/octet-stream',
+      'Cache-Control': rel === '/sw.js' ? 'no-cache' : 'max-age=600',
+    });
+    res.end(readFileSync(file));
+  });
+  const sockets = new Set();
+  server.on('connection', (socket) => {
+    sockets.add(socket);
+    socket.on('close', () => sockets.delete(socket));
+  });
+  await new Promise((res, rej) => {
+    server.once('error', rej);
+    server.listen(port, '127.0.0.1', () => res(undefined));
+  });
   return {
-    url,
+    url: `http://127.0.0.1:${port}`,
     close: () =>
       new Promise((res) => {
-        if (child.exitCode !== null) return res(undefined);
-        child.once('exit', () => res(undefined));
-        child.kill();
+        if (!server.listening) return res(undefined);
+        for (const socket of sockets) socket.destroy();
+        server.close(() => res(undefined));
       }),
   };
 }
@@ -95,10 +116,16 @@ async function main() {
   const cacheA = /const CACHE = "([^"]+)"/.exec(swA)?.[1] ?? '';
   check('dist/sw.js names its cache', cacheA.startsWith('skitch-'), cacheA);
 
-  // Second build: the real dist with one changed file and its regenerated worker.
+  // Second build: the real dist with a changed index.html, its entry script renamed (as any code
+  // change renames it) and its regenerated worker.
   const distB = mkdtempSync(join(tmpdir(), 'skitch-dist-b-'));
   cpSync(DIST, distB, { recursive: true });
-  const indexB = readFileSync(join(distB, 'index.html'), 'utf8').replace('</html>', `${MARKER}\n</html>`);
+  const indexA = readFileSync(join(distB, 'index.html'), 'utf8');
+  const entryA = /src="\.\/(assets\/[^"]+\.js)"/.exec(indexA)?.[1] ?? '';
+  check('the build has an entry script', entryA.length > 0 && existsSync(join(distB, entryA)), entryA);
+  const entryB = entryA.replace(/\.js$/, '-b.js');
+  renameSync(join(distB, entryA), join(distB, entryB));
+  const indexB = indexA.replace(entryA, entryB).replace('</html>', `${MARKER}\n</html>`);
   writeFileSync(join(distB, 'index.html'), indexB);
   const cacheB = writeServiceWorker(distB).name;
   check('a changed file gives a new cache name', cacheB !== cacheA && cacheB.startsWith('skitch-'), `${cacheA} -> ${cacheB}`);
@@ -193,6 +220,25 @@ async function main() {
     check('the new cache serves the changed file', served.includes(MARKER));
     const offered = await page.evaluate(() => window.__skitch.state().ui?.updateOffered);
     check('no ticket after the update', offered === false, String(offered));
+
+    // 5. Nothing left in the HTTP cache to paper over a stale precache: reload once more.
+    const cdp = await context.newCDPSession(page);
+    await cdp.send('Network.clearBrowserCache');
+    await page.reload();
+    try {
+      await waitForReady(page, 60_000);
+    } catch (e) {
+      throw new Error(`with the HTTP cache cleared the reload did not boot: ${e instanceof Error ? e.message : e}\n${failed.slice(-5).join('\n')}`);
+    }
+    const booted = await page.evaluate((marker) => ({
+      entry: document.querySelector('script[type="module"]')?.getAttribute('src') ?? '',
+      marked: document.documentElement.outerHTML.includes(marker),
+    }), MARKER);
+    check(
+      'with the HTTP cache cleared, a reload boots the new build to ready',
+      booted.marked && booted.entry.endsWith(entryB),
+      `${booted.entry}, marker ${booted.marked ? 'present' : 'missing'}`,
+    );
     if (problems.length) check('no page errors', false, problems.join('; '));
     await context.close();
   } finally {

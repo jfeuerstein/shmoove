@@ -376,7 +376,7 @@ function stepGround(ctx: SimCtx, steerDelta: number): void {
     bail(ctx, 'water');
   } else if (G2.surface === Surface.AWNING) {
     // Rolled onto an awning: it throws you.
-    p.vy = F.AWNING_BOUNCE * 0.6;
+    p.vy = F.AWNING_BOUNCE * F.AWNING_ROLL_THROW;
     ctx.events.push({ type: 'bounce', speed: p.vy });
     p.surface = -1;
     p.onSolid = -1;
@@ -464,8 +464,8 @@ function stepAir(ctx: SimCtx): void {
         p.x = nx;
         p.y = ny;
         p.z = nz;
-        p.vx -= 1.3 * vn * WH.nx;
-        p.vz -= 1.3 * vn * WH.nz;
+        p.vx -= F.AIR_BONK_BAIL * vn * WH.nx;
+        p.vz -= F.AIR_BONK_BAIL * vn * WH.nz;
         bail(ctx, 'wall');
         return;
       }
@@ -485,8 +485,8 @@ function stepAir(ctx: SimCtx): void {
         ctx.events.push({ type: 'wallStart' });
         return;
       }
-      p.vx -= 1.2 * vn * WH.nx;
-      p.vz -= 1.2 * vn * WH.nz;
+      p.vx -= F.AIR_BONK * vn * WH.nx;
+      p.vz -= F.AIR_BONK * vn * WH.nz;
       if (-vn > 1) ctx.events.push({ type: 'wallHit', speed: -vn });
     }
   }
@@ -599,7 +599,7 @@ function stepGrind(ctx: SimCtx): void {
     leaveRail(ctx);
     return;
   }
-  if (Math.abs(v) < F.GRIND_STALL_SPEED && Math.abs(RH.ty) < 0.03) {
+  if (Math.abs(v) < F.GRIND_STALL_SPEED && Math.abs(RH.ty) < F.GRIND_FLAT_SLOPE) {
     // Stalled on a flat rail: step off.
     p.vx = RH.tx * v;
     p.vy = 0;
@@ -679,8 +679,8 @@ function stepWall(ctx: SimCtx): void {
       // Ran into something else: bonk off it.
       const vn = p.vx * WH.nx + p.vz * WH.nz;
       if (vn < 0) {
-        p.vx -= 1.2 * vn * WH.nx;
-        p.vz -= 1.2 * vn * WH.nz;
+        p.vx -= F.AIR_BONK * vn * WH.nx;
+        p.vz -= F.AIR_BONK * vn * WH.nz;
       }
       p.x = nx;
       p.y = ny;
@@ -760,9 +760,9 @@ function collideVehicles(ctx: SimCtx): void {
       const closing = (VS.vx - p.vx) * VS.hx + (VS.vz - p.vz) * VS.hz;
       const ram = lon > 0 ? closing : -closing;
       if (ram > F.RIDE_BAIL_SPEED) {
-        p.vx = VS.vx * 0.6 - VS.hz * side * 4;
-        p.vz = VS.vz * 0.6 + VS.hx * side * 4;
-        p.vy = 3;
+        p.vx = VS.vx * F.BAIL_KNOCK_CARRY - VS.hz * side * F.BAIL_KNOCK_SIDE;
+        p.vz = VS.vz * F.BAIL_KNOCK_CARRY + VS.hx * side * F.BAIL_KNOCK_SIDE;
+        p.vy = F.BAIL_KNOCK_UP;
         bail(ctx, 'vehicle');
         return;
       }
@@ -771,9 +771,9 @@ function collideVehicles(ctx: SimCtx): void {
       const into = -vlat * side;
       if (into > 0) {
         if (into > F.WALL_BAIL_SPEED) {
-          p.vx = VS.vx * 0.6 - VS.hz * side * 4;
-          p.vz = VS.vz * 0.6 + VS.hx * side * 4;
-          p.vy = 3;
+          p.vx = VS.vx * F.BAIL_KNOCK_CARRY - VS.hz * side * F.BAIL_KNOCK_SIDE;
+          p.vz = VS.vz * F.BAIL_KNOCK_CARRY + VS.hx * side * F.BAIL_KNOCK_SIDE;
+          p.vy = F.BAIL_KNOCK_UP;
           bail(ctx, 'vehicle');
           return;
         }

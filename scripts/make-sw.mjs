@@ -2,7 +2,7 @@
 // files and a cache name derived from a hash of their paths and contents, so any change to any
 // file makes a new cache (and a byte-different sw.js, which is what makes the browser update).
 //
-// Behaviour: precache everything on install; cache-first for same-origin GETs with a network
+// Behaviour: precache everything on install (a failed install deletes its cache); cache-first for same-origin GETs with a network
 // fallback; navigations get the cached index.html; old skitch caches are deleted on activate;
 // the waiting worker only takes over when the page posts 'skipWaiting' (the RELOAD control on the
 // "new version" ticket). All URLs are relative to the worker, so dist/ works from any path.
@@ -55,7 +55,13 @@ const INDEX = new URL('index.html', self.registration.scope).href;
 self.addEventListener('install', (event) => {
   // cache: 'reload' skips the HTTP cache: a host that caches index.html (GitHub Pages: 10 min) would
   // otherwise hand the new precache the old page, which names a script the new cache does not hold.
-  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(FILES.map((f) => new Request(f, { cache: 'reload' })))));
+  // A failed precache must not leave a half-filled cache behind: delete it, then fail the install.
+  event.waitUntil(
+    caches
+      .open(CACHE)
+      .then((cache) => cache.addAll(FILES.map((f) => new Request(f, { cache: 'reload' }))))
+      .catch((err) => caches.delete(CACHE).then(() => Promise.reject(err))),
+  );
 });
 
 self.addEventListener('activate', (event) => {

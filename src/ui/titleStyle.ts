@@ -29,6 +29,8 @@ const CSS = `
 .sk-pausebtn svg{width:30px;height:30px;display:block}
 .sk-debug .sk-pausebtn{left:var(--sk-sl);width:44px;height:44px;top:calc(var(--sk-st) + var(--sk-gap) + 104px)}
 .sk-open .sk-pausebtn,.sk-chalkopen .sk-pausebtn{display:none}
+/* Hidden while the pause card it opened is up */
+.sk-pausebtn:has(~ .sk-pause.sk-on){display:none}
 
 /* Title */
 .sk-title,.sk-pause,.sk-settings,.sk-complete,.sk-rotate,.sk-tconfirm{display:none}
@@ -87,12 +89,13 @@ const CSS = `
 .sk-slabel{color:var(--sk-cobalt);font-size:13px;font-weight:700;letter-spacing:.16em}
 .sk-sval{--sk-cw:15px;--sk-ch:22px}
 .sk-strack{display:flex;align-items:stretch;gap:4px}
-.sk-sbtn.sk-sstep{flex:none;width:40px;min-height:44px;padding:0;font-size:22px;letter-spacing:0}
-.sk-scells{flex:1;display:flex;gap:2px;min-width:0}
-.sk-sbtn.sk-scell{flex:1;min-width:0;min-height:44px;padding:0;border-radius:2px;box-shadow:none;
-  background:linear-gradient(#34335A 0 50%,#28274A 50% 100%);position:relative}
-.sk-sbtn.sk-scell::after{content:'';position:absolute;left:0;right:0;top:50%;height:1px;background:rgba(10,9,24,.85)}
-.sk-sbtn.sk-scell.sk-lit{background:linear-gradient(#FFBE45 0 50%,var(--sk-mango) 50% 100%);box-shadow:1px 1px 0 rgba(31,63,191,.8)}
+.sk-sbtn.sk-sstep{flex:none;width:44px;min-width:44px;min-height:44px;padding:0;font-size:22px;letter-spacing:0}
+.sk-scells{flex:1;display:flex;align-items:stretch;gap:2px;min-width:0;min-height:44px;pointer-events:auto;cursor:pointer;
+  touch-action:pan-y;outline:none;border-radius:3px}
+.sk-scells:focus-visible{box-shadow:0 0 0 2px var(--sk-cobalt)}
+.sk-scell{flex:1;min-width:0;border-radius:2px;background:linear-gradient(#34335A 0 50%,#28274A 50% 100%);position:relative}
+.sk-scell::after{content:'';position:absolute;left:0;right:0;top:50%;height:1px;background:rgba(10,9,24,.85)}
+.sk-scell.sk-lit{background:linear-gradient(#FFBE45 0 50%,var(--sk-mango) 50% 100%);box-shadow:1px 1px 0 rgba(31,63,191,.8)}
 .sk-sswitch{flex-direction:row;align-items:center;justify-content:space-between;gap:10px}
 .sk-swords{display:flex;flex-direction:column;gap:3px;min-width:0}
 .sk-snote{font-size:11px;font-weight:700;letter-spacing:.06em;color:rgba(27,26,46,.62);text-transform:none}
@@ -102,7 +105,8 @@ const CSS = `
 .sk-sinstall .sk-sbtn{align-self:flex-start}
 .sk-sresetrow{gap:6px}
 .sk-sbtn.sk-sreset{align-self:flex-start;background:transparent;color:var(--sk-pink);box-shadow:inset 0 0 0 2px var(--sk-pink)}
-.sk-sbtn.sk-sreset.sk-sdanger{background:var(--sk-pink);color:var(--sk-paper)}
+.sk-sconfirm{z-index:3}
+.sk-sconfirm .sk-cacts .sk-sbtn{flex:1}
 .sk-scredits{flex:none;text-align:center;padding:4px 10px 10px;color:rgba(27,26,46,.7)}
 .sk-scredhead{font-weight:700;font-size:14px;letter-spacing:.22em;color:var(--sk-pink);text-shadow:1px 1px 0 rgba(31,63,191,.6)}
 .sk-scredbody{margin-top:4px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:none;line-height:1.4}

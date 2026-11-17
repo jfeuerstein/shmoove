@@ -3,7 +3,8 @@
  * by swapping between two pre-merged geometries, and a beacon over the active errand's target.
  *
  * - Errand givers stand at the edge of their zone holding up a mango ticket and wave; grey-blue and
- *   still when their errand is done or not on offer at this hour.
+ *   still when their errand is done or not on offer at this hour; in colour but still, the ticket
+ *   lowered, while their own errand is running.
  * - Conductors stand beside their stop in a cap and coat of the line's livery base colour with a
  *   stripe, holding a ticket punch; once punched they tip the cap on the second frame.
  * - The beacon is a tall thin post with a flag (seen over roofs) and a pink ring at its foot round
@@ -115,12 +116,13 @@ const GIVER_WAVE: Arm = { x: 0.38, y: 0.5, z: 0.08 };
 const DOWN_L: Arm = { x: 0.12, y: -0.5, z: 0.06 };
 const DOWN_R: Arm = { x: 0.12, y: -0.5, z: 0.04 };
 
+const GIVER_COATS = [INK.teal, INK.pink, INK.cobalt];
+
 function giverFigure(frame: number, live: boolean, style: number): MeshBuilder {
   if (!live) {
     return figure({ coat: GREY, legs: GREY_DARK, skin: GREY_SKIN, cap: -1, stripe: GREY_DARK, armL: DOWN_L, armR: DOWN_R, prop: 'ticket', propColor: GREY_DARK });
   }
-  const coats = [INK.teal, INK.pink, INK.cobalt];
-  const coat = coats[style % coats.length];
+  const coat = GIVER_COATS[style % GIVER_COATS.length];
   return figure({
     coat,
     legs: INK.ink,
@@ -132,6 +134,12 @@ function giverFigure(frame: number, live: boolean, style: number): MeshBuilder {
     prop: 'ticket',
     propColor: INK.mango,
   });
+}
+
+/** A giver whose errand is running: in colour, standing still with the ticket lowered. */
+function giverBusyFigure(style: number): MeshBuilder {
+  const coat = GIVER_COATS[style % GIVER_COATS.length];
+  return figure({ coat, legs: INK.ink, skin: SKIN, cap: -1, stripe: INK.white, armL: DOWN_L, armR: DOWN_R, prop: 'ticket', propColor: INK.mango });
 }
 
 function conductorFigure(frame: number, punched: boolean, line: CompiledLine): MeshBuilder {
@@ -164,7 +172,18 @@ function conductorFigure(frame: number, punched: boolean, line: CompiledLine): M
   });
 }
 
+/** Where the beacon goes: written by `beaconTarget`. */
+interface BeaconTarget {
+  x: number;
+  z: number;
+  r: number;
+  /** Changes whenever the target does; 0 means no target. */
+  key: number;
+}
+
 const _m = new THREE.Matrix4();
+const _bt: BeaconTarget = { x: 0, z: 0, r: 0, key: 0 };
+const _pa = { x: 0, y: 0, z: 0, hx: 0, hz: 1 };
 const _r = new THREE.Matrix4();
 const _wh = makeWallHit();
 
@@ -182,6 +201,8 @@ interface GiverMarker extends Marker {
   errands: ErrandDef[];
   style: number;
   live: boolean;
+  /** One of its errands is the active one: stand still until it ends. */
+  busy: boolean;
 }
 
 interface ConductorMarker extends Marker {
@@ -279,7 +300,7 @@ export function createMarkersView(scene: THREE.Scene, world: World, game: Game):
     const [x, zz] = giverSpot(world, z);
     // Face across the zone toward its centre (or downhill, toward the camera, if at the centre).
     const yaw = x === z.x && zz === z.z ? Math.PI : Math.atan2(z.x - x, z.z - zz);
-    givers.push({ x, y: topHeight(world, x, zz), z: zz, yaw, inRange: false, errands: [d], style: givers.length, live: false });
+    givers.push({ x, y: topHeight(world, x, zz), z: zz, yaw, inRange: false, errands: [d], style: givers.length, live: false, busy: false });
   }
   const conductors: ConductorMarker[] = [];
   for (const c of game.conductors.list) {
@@ -293,6 +314,7 @@ export function createMarkersView(scene: THREE.Scene, world: World, game: Game):
   // Each figure's two frames, built once, at the origin.
   const giverFrames = givers.map((g) => [giverFigure(0, true, g.style), giverFigure(1, true, g.style)]);
   const giverIdle = giverFigure(0, false, 0);
+  const giverBusy = givers.map((g) => giverBusyFigure(g.style));
   const condFrames = conductors.map((c) => [0, 1].map((f) => [conductorFigure(f, false, world.lines[c.line]), conductorFigure(f, true, world.lines[c.line])]));
 
   const empty = new THREE.BufferGeometry();
@@ -313,7 +335,7 @@ export function createMarkersView(scene: THREE.Scene, world: World, game: Game):
   let frame = -1;
   let rangeCountdown = 0;
   let dirty = true;
-  let beaconKey = '';
+  let beaconKey = 0;
 
   const disposeAll = (gs: THREE.BufferGeometry[]): void => {
     for (const g of gs) g.dispose();
@@ -325,7 +347,7 @@ export function createMarkersView(scene: THREE.Scene, world: World, game: Game):
     giverGeo = [0, 1].map((f) => {
       const b = new MeshBuilder();
       givers.forEach((g, i) => {
-        if (g.inRange) placeFigure(b, g.live ? giverFrames[i][f] : giverIdle, g);
+        if (g.inRange) placeFigure(b, g.busy ? giverBusy[i] : g.live ? giverFrames[i][f] : giverIdle, g);
       });
       return b.build();
     });
@@ -341,34 +363,59 @@ export function createMarkersView(scene: THREE.Scene, world: World, game: Game):
     frame = -1;
   };
 
-  /** Where the beacon goes for the active errand's current step, or null. */
-  const beaconTarget = (): { x: number; z: number; r: number; key: string } | null => {
+  /**
+   * Where the beacon goes for the active errand's current step, written to `out`; false when there
+   * is none. Allocation-free: it runs every RANGE_EVERY frames. The key packs the errand, the step
+   * and, for a ride step, the line and stop, into one number that changes when the target does.
+   */
+  const beaconTarget = (out: BeaconTarget): boolean => {
     const a = game.errands.active;
-    if (!a) return null;
-    const def = errs.find((d) => d.id === a.id);
-    if (!def) return null;
-    const step: StepDef = def.steps[a.step];
+    if (!a) return false;
+    let ei = -1;
+    for (let i = 0; i < errs.length; i++) {
+      if (errs[i].id === a.id) {
+        ei = i;
+        break;
+      }
+    }
+    if (ei < 0) return false;
+    const step: StepDef = errs[ei].steps[a.step];
+    const base = (ei * 64 + a.step + 1) * 65536;
     const p = game.sim.player;
     if (step.kind === 'hitch' || (step.kind === 'rideTo' && !(p.mode === Mode.HITCH && world.lines[p.hLine].id === step.line))) {
-      const L = world.lines.find((l) => l.id === step.line);
-      if (!L) return null;
-      const P = { x: 0, y: 0, z: 0, hx: 0, hz: 1 };
+      let li = -1;
+      for (let i = 0; i < world.lines.length; i++) {
+        if (world.lines[i].id === step.line) {
+          li = i;
+          break;
+        }
+      }
+      if (li < 0) return false;
+      const L = world.lines[li];
       let best = Infinity;
       let bk = 0;
       for (let k = 0; k < L.allStops.length; k++) {
-        pathAt(L, L.allStops[k].s, P);
-        const d = (P.x - p.x) * (P.x - p.x) + (P.z - p.z) * (P.z - p.z);
+        pathAt(L, L.allStops[k].s, _pa);
+        const d = (_pa.x - p.x) * (_pa.x - p.x) + (_pa.z - p.z) * (_pa.z - p.z);
         if (d < best) {
           best = d;
           bk = k;
         }
       }
-      pathAt(L, L.allStops[bk].s, P);
-      return { x: P.x, z: P.z, r: 5, key: `${a.id}:${a.step}:stop${L.id}${bk}` };
+      pathAt(L, L.allStops[bk].s, _pa);
+      out.x = _pa.x;
+      out.z = _pa.z;
+      out.r = 5;
+      out.key = base + 1 + li * 256 + bk;
+      return true;
     }
     const z = game.errandsReducer.stepZone(a.id, a.step);
-    if (!z) return null;
-    return { x: z.x, z: z.z, r: z.r, key: `${a.id}:${a.step}:${z.id}` };
+    if (!z) return false;
+    out.x = z.x;
+    out.z = z.z;
+    out.r = z.r;
+    out.key = base;
+    return true;
   };
 
   return {
@@ -376,11 +423,17 @@ export function createMarkersView(scene: THREE.Scene, world: World, game: Game):
       const p = g.sim.player;
       // State of givers and conductors.
       const f = g.sim.dayFrac;
+      const activeId = g.errands.active ? g.errands.active.id : null;
       for (const gv of givers) {
         let live = false;
-        for (const d of gv.errands) if (errandOpen(d, f) && !g.errands.done[d.id]) live = true;
-        if (live !== gv.live) {
+        let busy = false;
+        for (const d of gv.errands) {
+          if (errandOpen(d, f) && !g.errands.done[d.id]) live = true;
+          if (d.id === activeId) busy = true;
+        }
+        if (live !== gv.live || busy !== gv.busy) {
           gv.live = live;
+          gv.busy = busy;
           dirty = true;
         }
       }
@@ -408,13 +461,13 @@ export function createMarkersView(scene: THREE.Scene, world: World, game: Game):
             dirty = true;
           }
         }
-        const bt = beaconTarget();
-        const key = bt ? bt.key : '';
+        const has = beaconTarget(_bt);
+        const key = has ? _bt.key : 0;
         if (key !== beaconKey) {
           beaconKey = key;
           disposeAll(beaconGeo);
-          beaconGeo = bt ? [buildBeacon(world, bt.x, bt.z, bt.r, 0), buildBeacon(world, bt.x, bt.z, bt.r, 1)] : [];
-          beaconMesh.visible = bt !== null;
+          beaconGeo = has ? [buildBeacon(world, _bt.x, _bt.z, _bt.r, 0), buildBeacon(world, _bt.x, _bt.z, _bt.r, 1)] : [];
+          beaconMesh.visible = has;
           frame = -1;
         }
       }

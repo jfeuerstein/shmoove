@@ -164,7 +164,7 @@ export function stepHitch(ctx: SimCtx, hold: boolean): void {
     p.psiRest = wrapAngle(p.psiRest + clamp(angleDiff(target, p.psiRest), -F.SWING_REST_RATE * DT, F.SWING_REST_RATE * DT));
   }
   const th = angleDiff(p.psi, p.psiRest);
-  const w2 = F.SWING_FREQ * F.SWING_FREQ * clamp(rideSpeed / F.SWING_REF_SPEED, 0.15, 1.6);
+  const w2 = F.SWING_FREQ * F.SWING_FREQ * clamp(rideSpeed / F.SWING_REF_SPEED, F.SWING_REF_MIN, F.SWING_REF_MAX);
   // The strap soaks up the catch: heavy damping right after latching, easing to the normal value.
   const settle = p.hitchTime < F.SWING_SETTLE_TIME ? F.SWING_SETTLE_DAMP * (1 - p.hitchTime / F.SWING_SETTLE_TIME) : 0;
   let acc = -w2 * dsin(th) - (F.SWING_DAMP + settle) * p.omega + p.steer * F.SWING_STEER;
@@ -203,8 +203,8 @@ export function stepHitch(ctx: SimCtx, hold: boolean): void {
       const oz = Z - GP.z;
       p.rope = Math.max(len2(ox, oz), 0.2);
       p.psi = datan2(ox, oz);
-      p.omega *= -0.3;
-      if (p.rope > L.rope + F.HITCH_REACH) {
+      p.omega *= -F.HITCH_WALL_BOUNCE;
+      if (p.rope > L.rope + F.STRAP_SLIP) {
         // Dragged round a corner behind a wall: the strap slips.
         letGo(ctx);
         return;
@@ -215,7 +215,7 @@ export function stepHitch(ctx: SimCtx, hold: boolean): void {
   sampleGround(w, X, p.y, Z, F.STEP_UP, G);
   const targetY = L.overhead ? Math.max(G.y, GP.y - F.HAND_HEIGHT) : G.y;
   let Y: number;
-  if (!L.overhead && p.y - G.y < 0.5) Y = G.y;
+  if (!L.overhead && p.y - G.y < F.TOW_SNAP_HEIGHT) Y = G.y;
   else Y = p.y + (targetY - p.y) * approachT(F.HITCH_Y_RATE, DT);
   if (k < 1) Y = lerp(Math.max(p.yankY, G.y), Y, k);
   if (Y < G.y) Y = G.y;

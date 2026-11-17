@@ -86,7 +86,7 @@ export class Engine {
   private motorIdle = 0;
   private motorKind: MotorKind | null = null;
 
-  private players: Player[] = [];
+  private readonly players: Player[] = [];
   private appliedGen = 0;
   private appliedRev = 0;
   private duckTarget = 1;
@@ -104,12 +104,14 @@ export class Engine {
     this.synth = new Synth(ctx);
     const s = this.synth;
 
+    // Light glue on the whole mix, not a limiter: the stems are balanced to peak below full scale
+    // on their own (the full band with SFX measured in a browser stays under 1.0).
     const comp = ctx.createDynamicsCompressor();
-    comp.threshold.value = -12;
-    comp.knee.value = 6;
-    comp.ratio.value = 12;
+    comp.threshold.value = -18;
+    comp.knee.value = 8;
+    comp.ratio.value = 4;
     comp.attack.value = 0.003;
-    comp.release.value = 0.2;
+    comp.release.value = 0.25;
     this.master = ctx.createGain();
     this.sMaster = new Smooth(this.master.gain, 0.9, 1e-4);
     comp.connect(this.master).connect(ctx.destination);
@@ -287,11 +289,15 @@ export class Engine {
     }
 
     if (!m.hold) for (const p of this.players) this.schedulePlayer(p, now);
-    this.players = this.players.filter((p) => {
-      if (p.dieAt > now) return true;
-      p.out.disconnect();
-      return false;
-    });
+    // Drop finished players, compacting in place (no new array per frame).
+    const ps = this.players;
+    let kept = 0;
+    for (let i = 0; i < ps.length; i++) {
+      const p = ps[i];
+      if (p.dieAt > now) ps[kept++] = p;
+      else p.out.disconnect();
+    }
+    ps.length = kept;
 
     for (const c of m.cues) this.cue(c, now + NOW_LEAD);
     this.noiseLayer(m, now, dt);
@@ -552,7 +558,7 @@ export class Engine {
   dispose(): void {
     this.stopMotor();
     for (const p of this.players) p.out.disconnect();
-    this.players = [];
+    this.players.length = 0;
     for (const n of this.persistent) {
       try {
         n.stop();

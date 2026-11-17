@@ -74,6 +74,8 @@ const MAX_STOP_DIST = 40;
 interface Bound {
   /** Mean over start times in the errand's hours, seconds. */
   seconds: number;
+  /** The worst (longest) over start times in the errand's hours, seconds. */
+  worst: number;
   problems: string[];
 }
 
@@ -93,6 +95,7 @@ function errandBound(def: ErrandDef): Bound {
   const problems: string[] = [];
   const starts = startTicks(def);
   let total = 0;
+  let worst = 0;
   for (const s0 of starts) {
     const g = zone(def.giver);
     let x = g.x;
@@ -156,8 +159,9 @@ function errandBound(def: ErrandDef): Bound {
       }
     }
     total += t;
+    worst = Math.max(worst, t);
   }
-  return { seconds: starts.length > 0 ? total / starts.length : Infinity, problems };
+  return { seconds: starts.length > 0 ? total / starts.length : Infinity, worst: starts.length > 0 ? worst : Infinity, problems };
 }
 
 describe('errand content on the city', () => {
@@ -215,14 +219,17 @@ describe('errand content on the city', () => {
     }
   });
 
-  it('feasible: the time a skater needs at least (geometry + timetable waits at the offered hours) is under 70% of the limit; rides stop near where they are needed and run then', () => {
+  it('feasible: the time a skater needs at least (geometry + timetable waits) at the worst offered start time is under 80% of the limit; rides stop near where they are needed and run then', () => {
     const report: string[] = [];
     for (const e of ERRANDS) {
       const b = errandBound(e);
       expect(b.problems, e.id).toEqual([]);
       const limit = e.limitTicks / 60;
-      report.push(`${e.id}: bound ${b.seconds.toFixed(0)} s of ${limit} s`);
-      expect(b.seconds, report.join('\n')).toBeLessThan(0.7 * limit);
+      report.push(`${e.id}: mean ${b.seconds.toFixed(0)} s, worst ${b.worst.toFixed(0)} s of ${limit} s`);
+      // The worst start, not the mean: an errand offered at a time it cannot be done in is a broken
+      // promise however good the average is. The bound is a lower bound at a generous speed, so it
+      // must leave a fifth of the limit for real skating.
+      expect(b.worst, report.join('\n')).toBeLessThan(0.8 * limit);
     }
   });
 });

@@ -69,6 +69,7 @@ under `e2e`), `sw` (register the service worker under `e2e`), `celebrate` (open 
 
 `dist/` is a static site with relative URLs (Vite `base: './'`), so it works at a domain root or under
 any sub-path without rebuilding. Serve it over HTTPS (service workers need it; `localhost` is exempt).
+After each deploy check that `sw.js` is served (not a 404): a missing `sw.js` leaves everyone who has played before on the old build.
 
 ### GitHub Pages
 
