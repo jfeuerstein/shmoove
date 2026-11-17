@@ -27,6 +27,18 @@ export interface TitleFacts {
   mapPercent: number;
   installAvailable: boolean;
   iosHint: boolean;
+  /** Play time so far, seconds: the tear-off ticket's serial is made from it. */
+  playSeconds?: number;
+}
+
+/**
+ * A six-digit ticket serial ('Nº 482913') from the play time: the same save always prints the same
+ * number, and it never reads as a blank 000000.
+ */
+export function ticketSerial(playSeconds: number): string {
+  const s = Number.isFinite(playSeconds) && playSeconds > 0 ? Math.floor(playSeconds) : 0;
+  const n = 100000 + ((Math.imul(s + 1, 2654435761) >>> 0) % 900000);
+  return 'Nº ' + String(n);
 }
 
 export class TitleScreen {
@@ -38,6 +50,7 @@ export class TitleScreen {
   private readonly install: HTMLButtonElement;
   private readonly hint: HTMLElement;
   private readonly confirm: HTMLElement;
+  private readonly serial: HTMLElement;
   private t = 0;
   private confirming = false;
   private facts: TitleFacts = { hasSave: false, mapPercent: 0, installAvailable: false, iosHint: false };
@@ -83,7 +96,8 @@ export class TitleScreen {
     this.confirm = el('div', 'sk-tconfirm');
     const ticket = el('div', 'sk-ticket sk-big sk-ttear');
     const head = el('div', 'sk-thead');
-    head.append(el('span', 'sk-op', 'Start over?'), el('span', 'sk-serial', 'Nº 000000'));
+    this.serial = el('span', 'sk-serial', ticketSerial(0));
+    head.append(el('span', 'sk-op', 'Start over?'), this.serial);
     const body = el('div', 'sk-ttearbody', 'Inked lines, chalk lines and play time are torn up. Settings stay.');
     const acts = el('div', 'sk-cacts');
     acts.append(
@@ -131,6 +145,7 @@ export class TitleScreen {
     this.newGame.style.display = facts.hasSave ? '' : 'none';
     this.install.style.display = facts.installAvailable ? '' : 'none';
     this.hint.style.display = facts.iosHint ? '' : 'none';
+    this.serial.textContent = ticketSerial(facts.playSeconds ?? 0);
   }
 
   get playLabel(): string {
