@@ -5,6 +5,7 @@
 import { createAudio } from '../audio/index';
 import { Gestures, attachGestures } from '../input/gestures';
 import { createChalkView } from '../render/chalkView';
+import { createCityView } from '../render/cityView';
 import { createView } from '../render/view';
 import { DT } from '../sim/constants';
 import { Game, type GameEvent } from '../sim/game/game';
@@ -16,7 +17,7 @@ import { getParams } from './params';
 import { getRoute } from './routes';
 import { createSaveGlue } from './save';
 import { installHook } from './testHook';
-import { buildWorld } from './world';
+import { buildWorld, isStreamed } from './world';
 
 const MAX_CATCH_UP = 4;
 const STATS_CAP = 20000;
@@ -33,7 +34,7 @@ function boot(): void {
   const saves = createSaveGlue(game, { e2e: params.e2e });
   const gestures = new Gestures();
   attachGestures(canvas, gestures);
-  const view = createView(canvas, world);
+  const view = createView(canvas, world, isStreamed(params) ? { worldView: createCityView } : {});
   const chalkView = createChalkView(view.scene, world);
   const route = getRoute(params.route);
   const panel: DebugPanel | null = params.debug ? createDebugPanel(uiRoot) : null;
