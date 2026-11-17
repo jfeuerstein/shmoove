@@ -163,9 +163,13 @@ export class LineMap {
     if (sel >= 0) {
       const g = shown.find((q) => q.line.index === sel);
       if (g) {
+        // Labels go on the outside of the line: right of its centre to the right, else left.
+        let cx = 0;
+        for (const st of g.stops) cx += project(pr, st[0], st[1])[0];
+        cx /= Math.max(1, g.stops.length);
         for (let i = 0; i < g.stops.length; i++) {
           const [x, y] = project(pr, g.stops[i][0], g.stops[i][1]);
-          const right = x < w * 0.6;
+          const right = x >= cx - 1 ? x < w - 90 : x < 90;
           svg += `<text x="${(x + (right ? 9 : -9)).toFixed(1)}" y="${(y + 4).toFixed(1)}" text-anchor="${right ? 'start' : 'end'}" font-size="12" font-weight="700" letter-spacing="1" fill="#1B1A2E" stroke="#F3EBDD" stroke-width="3" paint-order="stroke">${escapeXml(boardText(g.line.allStops[i].name))}</text>`;
         }
       }
