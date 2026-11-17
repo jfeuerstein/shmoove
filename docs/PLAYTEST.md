@@ -106,6 +106,11 @@ An ear has to judge the rest. Mute with `?mute`.
 
 ## Rides in the city
 
+- Night prints in cobalt with lit windows and signs carrying the picture (`KEYS` in
+  `src/render/look.ts`, the night `tint`). On a phone outdoors, can you still read a rail, a stair
+  edge and an approaching ride at speed at night? If not, raise the night tint toward 0.5.
+- Distance haze runs 190–350 m (`FOG_NEAR`, `FOG_FAR` in `src/render/look.ts`). Does the hill feel
+  big enough from the summit, and does anything visibly appear out of the haze?
 - Tram 5 runs at 13 m/s and the night bus at 18 m/s (`src/sim/city/lines.ts`). Is being towed that
   fast up or down the switchbacks fun or uncontrollable? Per-line `cruise`, `rope`.
 - The summit route (lower cable car → summit cable car → kite → king kite → needle): a verifier
