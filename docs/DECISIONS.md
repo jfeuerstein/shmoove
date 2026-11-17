@@ -182,3 +182,12 @@ Decisions made without the owner in the room, newest last. Cuts are marked **CUT
     down off along their heading instead of bouncing them on the spot for ever (found when awnings
     went into alleys: 507 bounces). A vehicle flank brings the skater up to a share of its speed
     rather than adding that share every tick of contact (a moped had shoved the climb bot to 39 m/s).
+
+## Deploy
+
+60. **`develop` is the testing branch.** The owner tests from a GitHub Pages deploy, so the working
+    branch is pushed to `develop` after each merge that builds. `.github/workflows/pages.yml`
+    builds and deploys on every push to `develop` (and to the working branch, which as the
+    repository's default branch may be the only one the `github-pages` environment lets deploy until
+    `develop` is added under Settings → Environments → github-pages → Deployment branches). A
+    `checks` job runs typecheck, lint and tests beside the deploy without holding it back.
