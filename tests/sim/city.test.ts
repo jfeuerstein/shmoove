@@ -3,7 +3,7 @@
  * controller; they assert what a player would find, not how the generator builds it.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
-import { resetFeel } from '../../src/sim/constants';
+import { FEEL, resetFeel } from '../../src/sim/constants';
 import { angleDiff, clamp, datan2 } from '../../src/sim/math';
 import { Rng } from '../../src/sim/rng';
 import { Sim } from '../../src/sim/sim';
@@ -461,11 +461,20 @@ describe('what stands on the hill', () => {
     expect(n.kind).toBe('secret');
     expect(n.y - terrainHeight(w, n.x, n.z)).toBeGreaterThanOrEqual(20);
     expect(topHeight(w, n.x, n.z)).toBeCloseTo(n.y, 2);
-    for (const r of w.rails) {
-      for (let i = 0; i < r.pts.length; i += 3) {
-        expect(Math.hypot(r.pts[i] - n.x, r.pts[i + 1] - n.y, r.pts[i + 2] - n.z)).toBeGreaterThan(8);
-      }
-    }
+    // No rail comes near it but its own guy wire, which is a way down, not up: it falls further
+    // from the needle to its foot than the fastest skater (MAX_SPEED) could grind up and then hop.
+    const near = w.rails.filter((r) => {
+      for (let i = 0; i < r.pts.length; i += 3) if (Math.hypot(r.pts[i] - n.x, r.pts[i + 1] - n.y, r.pts[i + 2] - n.z) <= 8) return true;
+      return false;
+    });
+    expect(near.map((r) => r.kind)).toEqual(['guy']);
+    const wire = near[0].pts;
+    const top = Math.max(wire[1], wire[wire.length - 2]);
+    const foot = Math.min(wire[1], wire[wire.length - 2]);
+    expect(top).toBeLessThan(n.y);
+    const climb = (FEEL.MAX_SPEED * FEEL.MAX_SPEED) / (2 * FEEL.GRAVITY);
+    const hop = ((FEEL.HOP_V + FEEL.HOP_BONUS_MAX) ** 2) / (2 * FEEL.GRAVITY);
+    expect(n.y - foot).toBeGreaterThan(climb + hop + 2);
     for (const o of w.solids) {
       const d = Math.hypot(o.cx - n.x, o.cz - n.z);
       if (d < 1) continue; // the antenna itself

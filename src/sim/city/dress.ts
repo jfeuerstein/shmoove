@@ -14,6 +14,7 @@ import {
   LEVELS,
   MERCADO_STAIRS,
   NEEDLE,
+  NEEDLE_WIRE,
   PAD_DEPTH,
   PLAZA_BODA,
   PLAZA_LEVEL_Z,
@@ -25,7 +26,7 @@ import {
   type Level,
 } from './layout';
 import { PARAPET, ROAD_HALF, SPINE_X, STAIR_HALF } from './layout';
-import { HILL_STATION_PLATFORM, type Ground } from './terrain';
+import { HILL_STATION_DECK, HILL_STATION_PLATFORM, type Ground } from './terrain';
 
 interface Range {
   lo: number;
@@ -573,12 +574,23 @@ function dressAntenna(w: World, rng: Rng): void {
   const hs = HILL_STATION;
   const yh = baseHeight((hs.z0 + hs.z1) / 2);
   const pf = HILL_STATION_PLATFORM;
-  box(w, pf.x0, pf.x1, pf.z0, pf.z1, yh - 0.5, yh + 1.0, 'platform', 1, Surface.PLAZA);
+  box(w, pf.x0, pf.x1, pf.z0, pf.z1, yh - 0.5, yh + HILL_STATION_DECK, 'platform', 1, Surface.PLAZA);
   // The summit antenna and the needle.
   const gN = terrainHeight(w, NEEDLE.x, NEEDLE.z);
   const top = needleTop();
   box(w, NEEDLE.x - 0.6, NEEDLE.x + 0.6, NEEDLE.z - 0.6, NEEDLE.z + 0.6, gN - 1, top - 0.6, 'mast', 1);
   box(w, NEEDLE.x - NEEDLE.half, NEEDLE.x + NEEDLE.half, NEEDLE.z - NEEDLE.half, NEEDLE.z + NEEDLE.half, top - 0.6, top, 'needle', 0, Surface.ROOF);
+  // Its guy wire: a straight grindable line down to the lawn, the reward for reaching the needle.
+  const gw = NEEDLE_WIRE;
+  const y0 = top - gw.below;
+  const y1 = terrainHeight(w, gw.x1, gw.z1) + gw.foot;
+  const n = 12;
+  const pts: number[] = [];
+  for (let k = 0; k <= n; k++) {
+    const f = k / n;
+    pts.push(gw.x0 + (gw.x1 - gw.x0) * f, y0 + (y1 - y0) * f, gw.z0 + (gw.z1 - gw.z0) * f);
+  }
+  addRail(w, pts, 'guy');
 }
 
 // ---------------------------------------------------------------------------------------------
