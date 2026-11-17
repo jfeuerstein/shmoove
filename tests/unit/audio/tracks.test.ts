@@ -43,6 +43,34 @@ describe('district tracks', () => {
     });
   });
 
+  it('where the horns answer low (funk bars 2 and 6, highlife bars 3, 7 and 8) the harmony stays under them', () => {
+    const cases: Array<[style: string, bars: number[]]> = [
+      ['funk', [2, 6]],
+      ['highlife', [3, 7, 8]],
+    ];
+    for (const [style, bars] of cases) {
+      const t = TRACKS.find((x) => x.style === style);
+      expect(t, style).toBeDefined();
+      if (!t) continue;
+      for (const bar of bars) {
+        const inBar = (e: { step: number }): boolean => e.step >= (bar - 1) * 16 && e.step < bar * 16;
+        const leadLow = Math.min(...t.stems[3].filter(inBar).flatMap((e) => e.notes));
+        const harmTop = Math.max(...t.stems[2].filter(inBar).flatMap((e) => e.notes));
+        expect(harmTop, `${style} bar ${bar}`).toBeLessThanOrEqual(leadLow);
+      }
+    }
+  });
+
+  it('city pop bar 2 holds a tone of its C7, not the F a minor ninth above its E', () => {
+    const t = TRACKS.find((x) => x.style === 'city pop');
+    expect(t).toBeDefined();
+    if (!t) return;
+    const held = t.stems[3].filter((e) => e.step >= 16 && e.step < 32 && e.len >= 3);
+    expect(held.length).toBeGreaterThan(0);
+    const ch = chordAt(t.chords, 16);
+    for (const e of held) for (const n of e.notes) expect(ch.tones, `note ${n}`).toContain(n % 12);
+  });
+
   it('the validator catches broken tracks', () => {
     const base = TRACKS[0];
     const broken = (f: (t: TrackDef) => void): string[] => {

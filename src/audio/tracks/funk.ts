@@ -3,18 +3,21 @@
  * Progression: Em7 | A9 | Em7 | A9 | Gmaj7 | F#m7 | Em7 | Bm7 (the i7-IV9 dorian vamp, then a
  * climb out and a minor-v turnaround).
  * Hook: a horn-section call that jabs E twice and bends up to G, answered by a held C#/A drop;
- * the second half restates it a third lower over Gmaj7 and ends climbing to B.
+ * the second half restates it a step lower over Gmaj7 and ends climbing to B. Where the horns
+ * answer low (bars 2 and 6) the clav drops under them so the two parts do not share a register.
  */
 import { bars8, chord, drums, kit, melody } from './notation';
 import { Drum, type TrackDef } from './types';
 
 const chords = [
   chord(0, 'Em7', 'E', ['E', 'G', 'B', 'D'], ['G4', 'B4', 'D5']),
-  chord(16, 'A9', 'A', ['A', 'C#', 'E', 'G', 'B'], ['G4', 'B4', 'C#5']),
+  // Under the horns' C#5-B4 answer: voiced below B4.
+  chord(16, 'A9', 'A', ['A', 'C#', 'E', 'G', 'B'], ['C#4', 'G4', 'A4']),
   chord(32, 'Em7', 'E', ['E', 'G', 'B', 'D'], ['G4', 'B4', 'D5']),
   chord(48, 'A9', 'A', ['A', 'C#', 'E', 'G', 'B'], ['G4', 'B4', 'C#5']),
   chord(64, 'Gmaj7', 'G', ['G', 'B', 'D', 'F#'], ['F#4', 'B4', 'D5']),
-  chord(80, 'F#m7', 'F#', ['F#', 'A', 'C#', 'E'], ['E4', 'A4', 'C#5']),
+  // Under the horns' held C#5 and A4 pickup: voiced below A4.
+  chord(80, 'F#m7', 'F#', ['F#', 'A', 'C#', 'E'], ['A3', 'C#4', 'E4']),
   chord(96, 'Em7', 'E', ['E', 'G', 'B', 'D'], ['G4', 'B4', 'D5']),
   chord(112, 'Bm7', 'B', ['B', 'D', 'F#', 'A'], ['F#4', 'A4', 'D5']),
 ];

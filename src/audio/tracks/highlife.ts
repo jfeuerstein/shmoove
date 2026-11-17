@@ -3,6 +3,7 @@
  * Progression: G | C | D | G | Em | C | Am | D (I-IV-V-I, then vi-IV-ii-V back home).
  * Hook: horns in thirds that bounce B/G - D/B and leap to G/E over C; the second half lifts the
  * same shape a third higher over Em and C, then cadences on F#/A down into the top of the loop.
+ * Where the horns sit low (bars 3, 7 and 8) the guitar is voiced an octave down, under them.
  */
 import { bars8, chord, drums, kit, melody } from './notation';
 import { Drum, type TrackDef } from './types';
@@ -10,12 +11,12 @@ import { Drum, type TrackDef } from './types';
 const chords = [
   chord(0, 'G', 'G', ['G', 'B', 'D'], ['G3', 'B3', 'D4', 'G4']),
   chord(16, 'C', 'C', ['C', 'E', 'G'], ['G3', 'C4', 'E4', 'G4']),
-  chord(32, 'D', 'D', ['D', 'F#', 'A'], ['A3', 'D4', 'F#4', 'A4']),
+  chord(32, 'D', 'D', ['D', 'F#', 'A'], ['D3', 'F#3', 'A3', 'D4']),
   chord(48, 'G', 'G', ['G', 'B', 'D'], ['G3', 'B3', 'D4', 'G4']),
   chord(64, 'Em', 'E', ['E', 'G', 'B'], ['G3', 'B3', 'E4', 'G4']),
   chord(80, 'C', 'C', ['C', 'E', 'G'], ['G3', 'C4', 'E4', 'G4']),
-  chord(96, 'Am', 'A', ['A', 'C', 'E'], ['A3', 'C4', 'E4', 'A4']),
-  chord(112, 'D', 'D', ['D', 'F#', 'A'], ['A3', 'D4', 'F#4', 'A4']),
+  chord(96, 'Am', 'A', ['A', 'C', 'E'], ['E3', 'A3', 'C4', 'E4']),
+  chord(112, 'D', 'D', ['D', 'F#', 'A'], ['D3', 'F#3', 'A3', 'D4']),
 ];
 
 // Son-clave timeline on the clave, off-beat bell, 16th shaker leaning on the off-beats, a soft

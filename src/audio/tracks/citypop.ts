@@ -50,7 +50,8 @@ const harmony = melody(
 
 const lead = melody([
   'A4! . . C5 . . F5 . E5 - - . C5 . . .',
-  'D5 . . E5 . . G5 . F5 - - . E5 . D5 .',
+  // The sigh lands on E, the third of C7 (an F held over it rubbed a minor ninth against the E).
+  'D5 . . E5 . . G5 . E5 - - . E5 . D5 .',
   'C5! . . E5 . . A5 . G5 - - . E5 . . .',
   'F5 - - . E5 . D5 . C5 - - . A4 . . .',
   'A4! . . C5 . . F5 . E5 - - . D5 . . .',
