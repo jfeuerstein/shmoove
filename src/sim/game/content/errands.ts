@@ -2,7 +2,7 @@
  * The errands of Santa Rampa. Zone and line ids are the city's contract (`src/sim/city`); positions
  * and timetables are never written here, so the content survives the city moving a few metres.
  * `tests/sim/content.test.ts` checks every id, the district spread and that each errand can be
- * done inside its limit (a lower bound from geometry and timetables under 70% of the limit).
+ * done inside its limit (a lower bound from geometry and timetables, at the worst offered start time, under 80% of the limit).
  */
 import { District } from '../../world';
 import type { ErrandDef } from '../errands';
@@ -30,7 +30,8 @@ export const ERRANDS: readonly ErrandDef[] = [
     giver: 'ferry_pier',
     district: District.DOCKS,
     brief: 'A suitcase rides the crane hook to the east quay.',
-    limitTicks: 3 * MIN,
+    // One crane car on a 180 s lap: a 3 minute limit could not be met at about half the start times.
+    limitTicks: 4 * MIN,
     steps: [
       { kind: 'hitch', line: 'D1' },
       { kind: 'rideTo', line: 'D1', zone: 'stop_D1_2', noBail: true },
