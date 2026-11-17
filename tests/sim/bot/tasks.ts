@@ -26,24 +26,26 @@ export interface GoOpts {
 /** Roll along waypoints. A waypoint counts as reached within `r`, or once it is behind the skater on the way to the next. */
 export function go(label: string, pts: readonly XZ[], opts: GoOpts = {}): Task {
   const r = opts.r ?? 3;
-  const max = opts.max ?? 60 * 60;
+  const max = opts.max ?? 60 * 60 * 4;
   let k = 0;
   let hopped = -1;
+  let started = false;
   return {
     label,
     begin(b) {
-      // Resume at the nearest waypoint not yet behind us (after a load the skater may be anywhere on the way).
+      if (!started) {
+        started = true;
+        return;
+      }
+      // Resumed after a load put the skater down somewhere on the way: carry on from the nearest waypoint.
       let best = Infinity;
-      let bi = 0;
       for (let i = 0; i < pts.length; i++) {
         const d = Math.hypot(pts[i][0] - b.p.x, pts[i][1] - b.p.z);
         if (d < best) {
           best = d;
-          bi = i;
+          k = i;
         }
       }
-      k = b.taskTicks === 0 && b.ti >= 0 ? Math.min(k, bi) : bi;
-      if (k < bi) k = bi;
     },
     step(b, out) {
       const p = b.p;
@@ -135,6 +137,8 @@ export interface RideSpec {
   linger?: number;
   /** Steer while riding (default: quiet the swing). */
   steer?: (b: Skater, out: InputFrame) => void;
+  /** Catch a vehicle wherever it comes past the wait point, not only one standing at `at`. */
+  anywhere?: boolean;
 }
 
 /** Segments from stop index a to stop index b along a line's travel (a full lap when a === b). */
@@ -172,7 +176,7 @@ export function ride(label: string, spec: RideSpec): Task {
   let tries = 0;
   let caughtVeh = -1;
   let slackAt = 0;
-  const maxWait = spec.maxWait ?? 60 * 90;
+  const maxWait = spec.maxWait ?? 60 * 60 * 4;
   return {
     label,
     begin(b) {
@@ -223,7 +227,7 @@ export function ride(label: string, spec: RideSpec): Task {
           b.steerTo(out, wx, wz);
           // Arm when the fresh vehicle of this line at the stop is the nearest grab point around.
           b.nearestGrab(9, NG);
-          if (NG.line === line.index && fresh(line, NG.veh, b.tick, kAt, slackAt)) {
+          if (NG.line === line.index && (spec.anywhere === true || fresh(line, NG.veh, b.tick, kAt, slackAt))) {
             out.hold = NG.d < FEEL.HITCH_REACH + 2;
             if (line.overhead && NG.d < 2.5 && NG.dy > FEEL.HITCH_REACH_Y * 0.75 && p.mode === Mode.GROUND) out.hop = true;
             // Close in on the grab point itself.

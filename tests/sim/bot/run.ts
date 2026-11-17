@@ -20,7 +20,7 @@ export interface Book {
   events: { tick: number; e: GameEvent }[];
   bails: number;
   recoveries: number;
-  /** Largest plan move in one tick outside a bail recovery, m/s. */
+  /** Largest plan move in one tick outside a bail recovery, metres. */
   maxStep: number;
   maxStepAt: string;
   /** Moves bigger than a skater can make, outside a bail recovery. */
@@ -51,10 +51,14 @@ export function newBook(game: Game): Book {
   };
 }
 
-/** The fastest a skater can move in a tick, m/s: a sling at the cap, or a ride plus a full whip. */
-export function maxSkaterSpeed(w: World): number {
+/**
+ * The most a skater can move in one tick, metres: the fastest they can go (a sling at the cap, the
+ * board's top speed, or a ride plus a full whip) for a tick, plus the rail magnet, which pulls the
+ * board onto a handrail up to RAIL_SNAP sideways in the tick a grind starts.
+ */
+export function maxSkaterStep(w: World): number {
   const fastest = Math.max(...w.lines.map((l) => l.cruise));
-  return Math.max(FEEL.SLING_CAP, FEEL.MAX_SPEED, fastest + FEEL.SWING_OMEGA_MAX * 4) + 1;
+  return (Math.max(FEEL.SLING_CAP, FEEL.MAX_SPEED, fastest + FEEL.SWING_OMEGA_MAX * 4) + 1) / 60 + FEEL.RAIL_SNAP;
 }
 
 export interface Runner {
@@ -67,7 +71,7 @@ export interface Runner {
 
 export function makeRunner(game: Game, bot: Skater, book: Book = newBook(game)): Runner {
   const input: InputFrame = { steer: 0, hold: false, hop: false };
-  const vmax = maxSkaterSpeed(game.sim.world);
+  const stepMax = maxSkaterStep(game.sim.world);
   let px = game.sim.player.x;
   let pz = game.sim.player.z;
   let stall = 0;
@@ -119,7 +123,7 @@ export function makeRunner(game: Game, bot: Skater, book: Book = newBook(game)):
           book.longestStall = stall;
           book.stallEndAt = g.sim.tick;
         }
-        const step = Math.hypot(p.x - px, p.z - pz) * 60;
+        const step = Math.hypot(p.x - px, p.z - pz);
         if (bailing || recovered) {
           // A bail recovery (out of the water) puts the skater back at their last safe spot.
           bailing = p.mode === Mode.BAIL;
@@ -128,7 +132,7 @@ export function makeRunner(game: Game, bot: Skater, book: Book = newBook(game)):
             book.maxStep = step;
             book.maxStepAt = `tick ${g.sim.tick} mode ${p.mode} at ${p.x.toFixed(1)},${p.y.toFixed(1)},${p.z.toFixed(1)}`;
           }
-          if (step > vmax) book.jumps.push(`${step.toFixed(1)} m/s at tick ${g.sim.tick}`);
+          if (step > stepMax) book.jumps.push(`${step.toFixed(2)} m at tick ${g.sim.tick} mode ${p.mode}`);
         }
         px = p.x;
         pz = p.z;
