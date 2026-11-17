@@ -7,6 +7,7 @@ import type { UiSound } from './index';
 import { el, makeBadge } from './dom';
 import { boardText } from './format';
 import { ToastQueue, type Toast, type ToastKind } from './toastQueue';
+import type { Twos } from './twos';
 
 export interface ToastData {
   line: CompiledLine | null;
@@ -23,16 +24,15 @@ const SOUND: Record<ToastKind, 'ink' | 'punch' | 'fanfare' | 'deny'> = {
   map: 'fanfare',
 };
 
-/** How long a leaving ticket stays in the DOM while it slides out, s. */
-const OUT_TIME = 0.17;
-
 export class Toasts {
   readonly el: HTMLElement;
   readonly queue = new ToastQueue<ToastData>();
   private readonly nodes = new Map<number, HTMLElement>();
-  private readonly leaving: Array<{ node: HTMLElement; t: number }> = [];
 
-  constructor(private readonly sound: UiSound | null) {
+  constructor(
+    private readonly sound: UiSound | null,
+    private readonly twos: Twos,
+  ) {
     this.el = el('div', 'sk-toasts');
   }
 
@@ -46,27 +46,20 @@ export class Toasts {
     const node = this.build(added);
     this.nodes.set(added.id, node);
     this.el.prepend(node);
+    this.twos.play(node, 'sk-in1', 'sk-in2');
     this.sound?.ui(SOUND[kind]);
   }
 
   update(dt: number): void {
     for (const t of this.queue.update(dt)) this.remove(t);
-    for (let i = this.leaving.length - 1; i >= 0; i--) {
-      const l = this.leaving[i];
-      l.t -= dt;
-      if (l.t <= 0) {
-        l.node.remove();
-        this.leaving.splice(i, 1);
-      }
-    }
   }
 
   private remove(t: Toast<ToastData>): void {
     const node = this.nodes.get(t.id);
     if (!node) return;
     this.nodes.delete(t.id);
-    node.classList.add('sk-out');
-    this.leaving.push({ node, t: OUT_TIME });
+    // Slides away on twos, then leaves the stack.
+    this.twos.play(node, 'sk-out1', 'sk-out2', () => node.remove());
   }
 
   private build(t: Toast<ToastData>): HTMLElement {

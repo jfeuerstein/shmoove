@@ -4,7 +4,7 @@ import { TICK_HZ } from '../sim/constants';
 /** Minutes of game time shown by the clock: the day is a 24-hour clock ticking in 5-minute steps. */
 export function clockMinutes(dayFrac: number): number {
   const f = dayFrac - Math.floor(dayFrac);
-  // A hair of tolerance so 0.3 (07:12 exactly) is not floored to 07:10 by rounding error.
+  // A hair of tolerance so an exact step boundary (0.5 = 12:00) is not floored a step early.
   return (Math.floor((f * 1440) / 5 + 1e-6) * 5) % 1440;
 }
 

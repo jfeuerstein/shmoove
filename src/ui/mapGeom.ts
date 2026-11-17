@@ -102,6 +102,8 @@ export function polyBounds(polys: readonly Poly[]): Bounds {
  * city facing uphill (+x is on the left, as the chase camera shows it).
  */
 export interface Projection {
+  /** Screen px per metre across (x) and up (z). Equal unless the fit was allowed to stretch. */
+  sx: number;
   scale: number;
   /** Screen position of plan (0, 0). */
   ox: number;
@@ -109,17 +111,26 @@ export interface Projection {
 }
 
 export function project(pr: Projection, x: number, z: number): [number, number] {
-  return [pr.ox - x * pr.scale, pr.oy - z * pr.scale];
+  return [pr.ox - x * pr.sx, pr.oy - z * pr.scale];
 }
 
-/** Uniform fit of `b` into a w x h box with `margin` on every side, centred. */
-export function fitProjection(b: Bounds, w: number, h: number, margin: number): Projection {
+/**
+ * Fit `b` into a w x h box with `margin` on every side, centred. Uniform by default; with
+ * `maxStretch` > 1 the narrower axis may be stretched up to that factor to fill the box, as
+ * schematic transit maps do with a long thin network.
+ */
+export function fitProjection(b: Bounds, w: number, h: number, margin: number, maxStretch = 1): Projection {
   const bw = Math.max(b.maxX - b.minX, 1e-3);
   const bh = Math.max(b.maxZ - b.minZ, 1e-3);
-  const scale = Math.max(1e-6, Math.min((w - 2 * margin) / bw, (h - 2 * margin) / bh));
+  const fx = Math.max(1e-6, (w - 2 * margin) / bw);
+  const fz = Math.max(1e-6, (h - 2 * margin) / bh);
+  const u = Math.min(fx, fz);
+  const k = Math.max(1, maxStretch);
+  const sx = Math.min(fx, u * k);
+  const scale = Math.min(fz, u * k);
   const cx = (b.minX + b.maxX) / 2;
   const cz = (b.minZ + b.maxZ) / 2;
-  return { scale, ox: w / 2 + cx * scale, oy: h / 2 + cz * scale };
+  return { sx, scale, ox: w / 2 + cx * sx, oy: h / 2 + cz * scale };
 }
 
 /** SVG path data for a projected polyline. */

@@ -1,17 +1,18 @@
 /**
  * A split-flap row: a fixed number of character cells, each with a hairline split. When a
- * character changes, only that cell is touched and it flips in two steps (animated on twos).
+ * character changes, only that cell is touched and it flips in two steps (on twos, see twos.ts).
  */
 import { el } from './dom';
+import type { Twos } from './twos';
 
 export class FlapRow {
   readonly el: HTMLElement;
   private readonly cells: HTMLElement[] = [];
   private readonly chars: string[] = [];
-  private readonly flipB: boolean[] = [];
   private text = '';
 
   constructor(
+    private readonly twos: Twos,
     readonly size: number,
     readonly align: 'left' | 'right' = 'left',
     cls = '',
@@ -22,7 +23,6 @@ export class FlapRow {
       this.el.appendChild(c);
       this.cells.push(c);
       this.chars.push(' ');
-      this.flipB.push(false);
     }
   }
 
@@ -44,11 +44,7 @@ export class FlapRow {
       this.chars[i] = ch;
       const c = this.cells[i];
       c.textContent = ch === ' ' ? '' : ch;
-      // Alternate between two identical animations so a change restarts it without a reflow.
-      const b = !this.flipB[i];
-      this.flipB[i] = b;
-      c.classList.toggle('sk-fa', !b);
-      c.classList.toggle('sk-fb', b);
+      this.twos.play(c, 'sk-f1', 'sk-f2');
     }
   }
 }

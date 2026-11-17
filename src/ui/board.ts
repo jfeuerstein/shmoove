@@ -9,13 +9,14 @@ import { el, styleBadge, TextSlot } from './dom';
 import { FlapRow } from './flap';
 import { boardText, clockMinutes, clockText, countdownSeconds, countdownText, kmh } from './format';
 import { nextStopOf, type NextStop } from './timetable';
+import type { Twos } from './twos';
 
 export class DestinationBoard {
   readonly el: HTMLElement;
-  private readonly name = new FlapRow(9);
-  private readonly clock = new FlapRow(5, 'right');
-  private readonly info = new FlapRow(9);
-  private readonly right = new FlapRow(5, 'right');
+  private readonly name: FlapRow;
+  private readonly clock: FlapRow;
+  private readonly info: FlapRow;
+  private readonly right: FlapRow;
   private readonly slot1: TextSlot;
   private readonly slot2: TextSlot;
   private readonly badge: HTMLElement;
@@ -36,7 +37,14 @@ export class DestinationBoard {
   nextStopName = '';
   lineId = '';
 
-  constructor(private readonly game: Game) {
+  constructor(
+    private readonly game: Game,
+    twos: Twos,
+  ) {
+    this.name = new FlapRow(twos, 9);
+    this.clock = new FlapRow(twos, 5, 'right');
+    this.info = new FlapRow(twos, 9);
+    this.right = new FlapRow(twos, 5, 'right');
     this.el = el('div', 'sk-board sk-panel');
     const r1 = el('div', 'sk-row');
     const r2 = el('div', 'sk-row');

@@ -7,6 +7,7 @@ import type { Game } from '../sim/game/game';
 import type { SimEvent } from '../sim/types';
 import { ClassSlot, el } from './dom';
 import { FlapRow } from './flap';
+import type { Twos } from './twos';
 
 const LOST_SHOW = 1.3;
 const MAX_PIPS = 8;
@@ -15,7 +16,7 @@ const BAR_STEPS = 40;
 
 export class ChainMeter {
   readonly el: HTMLElement;
-  private readonly flap = new FlapRow(4, 'right');
+  private readonly flap: FlapRow;
   private readonly pips: HTMLElement;
   private readonly bar: HTMLElement;
   private readonly fill: HTMLElement;
@@ -29,7 +30,11 @@ export class ChainMeter {
   private lostTime = 0;
   private barStep = -1;
 
-  constructor(private readonly game: Game) {
+  constructor(
+    private readonly game: Game,
+    private readonly twos: Twos,
+  ) {
+    this.flap = new FlapRow(twos, 3, 'right');
     this.el = el('div', 'sk-chain sk-panel');
     this.pips = el('div', 'sk-pips');
     this.bar = el('div', 'sk-bar');
@@ -98,6 +103,6 @@ export class ChainMeter {
       this.pipCount++;
     }
     const last = this.pips.lastElementChild;
-    if (last && last !== prevLast) last.classList.add('sk-new');
+    if (last instanceof HTMLElement && last !== prevLast) this.twos.play(last, 'sk-f1', 'sk-f2');
   }
 }

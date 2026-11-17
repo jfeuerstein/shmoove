@@ -11,11 +11,14 @@ import { DISTRICT_NAMES } from '../sim/world';
 import { el, makeBadge } from './dom';
 import { FlapRow } from './flap';
 import { boardText, hexColor } from './format';
+import type { Twos } from './twos';
 import { fitProjection, pathData, polyBounds, project, simplify, subPath, type Poly } from './mapGeom';
 
 /** Simplification tolerance, metres. */
 export const MAP_TOLERANCE = 3;
 const MARGIN = 26;
+/** How far the schematic may stretch a long thin network across the screen. */
+const MAX_STRETCH = 3;
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
 interface LineGeom {
@@ -35,8 +38,8 @@ export class LineMap {
   readonly el: HTMLElement;
   private readonly body: HTMLElement;
   private readonly legend: HTMLElement;
-  private readonly pct = new FlapRow(4, 'right');
-  private readonly count = new FlapRow(9);
+  private readonly pct: FlapRow;
+  private readonly count: FlapRow;
   private readonly geoms: LineGeom[];
   private selected = -1;
   /** Lines drawn and the progress percentage on the last render. */
@@ -45,9 +48,12 @@ export class LineMap {
 
   constructor(
     private readonly game: Game,
+    twos: Twos,
     onClose: () => void,
     private readonly onTap: () => void,
   ) {
+    this.pct = new FlapRow(twos, 4, 'right');
+    this.count = new FlapRow(twos, 9);
     this.el = el('div', 'sk-map');
     const head = el('div', 'sk-maphead');
     const close = el('button', 'sk-close', 'Close');
@@ -97,8 +103,9 @@ export class LineMap {
     this.count.set(`${done}/${regular} LINES`);
     this.percent = pct;
 
-    this.drawSvg(shown);
+    // Legend first: it takes its height out of the map area, which the SVG then measures.
     this.drawLegend(shown);
+    this.drawSvg(shown);
   }
 
   private drawSvg(shown: LineGeom[]): void {
@@ -111,12 +118,12 @@ export class LineMap {
     for (const g of shown) for (const p of g.polys) all.push(p);
     if (all.length === 0) all.push([sim.player.x, sim.player.z]);
     const b = polyBounds(all);
-    const pr = fitProjection(b, w, h, MARGIN);
+    const pr = fitProjection(b, w, h, MARGIN, MAX_STRETCH);
 
     let svg = `<svg xmlns="${SVG_NS}" viewBox="0 0 ${w} ${h}" preserveAspectRatio="xMidYMid meet">`;
     // District bands, faint stripes across the drawn area, uphill at the top.
-    const zTop = b.maxZ + MARGIN / pr.scale;
-    const zBot = b.minZ - MARGIN / pr.scale;
+    const zTop = pr.oy / pr.scale;
+    const zBot = (pr.oy - h) / pr.scale;
     let k = 0;
     for (const band of sim.world.bands) {
       const z1 = Math.min(band.zMax, zTop);

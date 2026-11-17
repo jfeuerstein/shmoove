@@ -27,10 +27,9 @@ const CSS = `
   font-weight:700;font-size:calc(var(--sk-cw) * 1.12);line-height:var(--sk-ch);text-align:center;
   font-variant-numeric:tabular-nums;transform-origin:50% 50%}
 .sk-cell::after{content:'';position:absolute;left:0;right:0;top:50%;height:1px;margin-top:-.5px;background:rgba(10,9,24,.85)}
-.sk-fa{animation:sk-flapA .17s steps(2,end)}
-.sk-fb{animation:sk-flapB .17s steps(2,end)}
-@keyframes sk-flapA{from{transform:scaleY(.12);color:#FFE2A6}to{transform:scaleY(1)}}
-@keyframes sk-flapB{from{transform:scaleY(.12);color:#FFE2A6}to{transform:scaleY(1)}}
+/* Flip on twos (classes stepped by twos.ts): the top flap falls, then lands. */
+.sk-f1{transform:scaleY(.14);color:#FFE2A6}
+.sk-f2{transform:scaleY(.62);color:#FFCB66}
 .sk-pinkflap .sk-cell{color:var(--sk-pink)}
 
 .sk-panel{background:var(--sk-ink);border-radius:3px;box-shadow:2px 2px 0 rgba(31,63,191,.55),-1px 0 0 rgba(255,46,136,.45)}
@@ -64,11 +63,10 @@ const CSS = `
 
 /* Chain meter */
 .sk-chain{position:absolute;top:var(--sk-top2);right:calc(var(--sk-sr) + var(--sk-gap));padding:5px 6px 6px;display:none;
-  flex-direction:column;align-items:flex-end;gap:4px;min-width:calc(var(--sk-cw) * 4 + 15px)}
+  flex-direction:column;align-items:flex-end;gap:4px;min-width:calc(var(--sk-cw) * 3 + 14px)}
 .sk-chain.sk-on{display:flex}
 .sk-pips{display:flex;gap:3px;justify-content:flex-end}
 .sk-pip{width:9px;height:9px;border-radius:50%;background:var(--sk-mango);box-shadow:1px 1px 0 var(--sk-cobalt)}
-.sk-pip.sk-new{animation:sk-flapA .17s steps(2,end)}
 .sk-lost .sk-pip{background:var(--sk-pink)}
 .sk-bar{width:100%;height:4px;background:#3A3960;border-radius:2px;overflow:hidden;visibility:hidden}
 .sk-bar.sk-on{visibility:visible}
@@ -85,15 +83,14 @@ const CSS = `
 .sk-toasts{position:absolute;top:var(--sk-top2);left:calc(var(--sk-sl) + var(--sk-gap));width:min(62vw,270px);
   display:flex;flex-direction:column;gap:6px}
 .sk-ticket{position:relative;background:var(--sk-paper);color:var(--sk-ink);padding:7px 10px 8px 30px;
-  animation:sk-in .17s steps(2,end);filter:drop-shadow(2px 2px 0 rgba(27,26,46,.35));
-  -webkit-mask:radial-gradient(circle at 0 6px,#0000 3px,#000 3.6px) 0 0/100% 12px repeat-y,radial-gradient(circle at 15px 50%,#0000 4.5px,#000 5.2px);
+  filter:drop-shadow(2px 2px 0 rgba(27,26,46,.35));
+  -webkit-mask:radial-gradient(circle at 0 5px,#0000 3.4px,#000 4px) 0 0/100% 10px repeat-y,radial-gradient(circle at 15px 50%,#0000 5px,#000 5.7px);
   -webkit-mask-composite:source-in;
-  mask:radial-gradient(circle at 0 6px,#0000 3px,#000 3.6px) 0 0/100% 12px repeat-y,radial-gradient(circle at 15px 50%,#0000 4.5px,#000 5.2px);
+  mask:radial-gradient(circle at 0 5px,#0000 3.4px,#000 4px) 0 0/100% 10px repeat-y,radial-gradient(circle at 15px 50%,#0000 5px,#000 5.7px);
   mask-composite:intersect}
 .sk-ticket::before{content:'';position:absolute;left:24px;top:4px;bottom:4px;border-left:2px dotted rgba(27,26,46,.35)}
-.sk-ticket.sk-out{animation:sk-out .17s steps(2,end) forwards}
-@keyframes sk-in{from{transform:translateX(-112%)}to{transform:none}}
-@keyframes sk-out{from{transform:none}to{transform:translateX(-112%)}}
+.sk-ticket.sk-in1,.sk-ticket.sk-out2{transform:translateX(-80%)}
+.sk-ticket.sk-in2,.sk-ticket.sk-out1{transform:translateX(-34%)}
 .sk-thead{display:flex;align-items:center;gap:6px}
 .sk-op{color:var(--sk-pink);font-weight:700;font-size:15px;letter-spacing:.1em;text-shadow:1px 1px 0 rgba(31,63,191,.8)}
 .sk-serial{margin-left:auto;font:10px/1 ui-monospace,Menlo,Consolas,monospace;color:var(--sk-cobalt);letter-spacing:0;
@@ -105,15 +102,17 @@ const CSS = `
 .sk-ticket.sk-big .sk-tbody{font-size:16px}
 .sk-stamp{position:absolute;right:10px;bottom:6px;width:26px;height:26px;border-radius:50%;border:2px solid var(--sk-cobalt);
   color:var(--sk-cobalt);font:700 9px/22px 'Arial Narrow',Arial,sans-serif;text-align:center;transform:rotate(-14deg);opacity:.8}
-.sk-ticket.sk-big{-webkit-mask:radial-gradient(circle at 0 6px,#0000 3px,#000 3.6px) 0 0/100% 12px repeat-y,radial-gradient(circle at 15px 30%,#0000 4.5px,#000 5.2px),radial-gradient(circle at 15px 70%,#0000 4.5px,#000 5.2px);
+.sk-ticket.sk-big{-webkit-mask:radial-gradient(circle at 0 5px,#0000 3.4px,#000 4px) 0 0/100% 10px repeat-y,radial-gradient(circle at 15px 30%,#0000 5px,#000 5.7px),radial-gradient(circle at 15px 70%,#0000 5px,#000 5.7px);
   -webkit-mask-composite:source-in;
-  mask:radial-gradient(circle at 0 6px,#0000 3px,#000 3.6px) 0 0/100% 12px repeat-y,radial-gradient(circle at 15px 30%,#0000 4.5px,#000 5.2px),radial-gradient(circle at 15px 70%,#0000 4.5px,#000 5.2px);
+  mask:radial-gradient(circle at 0 5px,#0000 3.4px,#000 4px) 0 0/100% 10px repeat-y,radial-gradient(circle at 15px 30%,#0000 5px,#000 5.7px),radial-gradient(circle at 15px 70%,#0000 5px,#000 5.7px);
   mask-composite:intersect}
 
 /* Stop timetable board */
 .sk-stop{position:absolute;left:calc(var(--sk-sl) + var(--sk-gap));right:calc(var(--sk-sr) + var(--sk-gap));bottom:calc(var(--sk-sb) + var(--sk-gap));
   padding:6px;display:flex;flex-direction:column;gap:3px;align-items:stretch;
-  transform:translateY(calc(100% + 24px));transition:transform .17s steps(2,end)}
+  transform:translateY(calc(100% + 24px))}
+.sk-stop.sk-up1{transform:translateY(62%)}
+.sk-stop.sk-up2{transform:translateY(22%)}
 .sk-stop.sk-on{transform:none}
 .sk-stop .sk-row{justify-content:flex-start}
 .sk-stop .sk-row>.sk-flap:last-child{margin-left:auto}
@@ -122,8 +121,9 @@ const CSS = `
 /* Line map */
 .sk-map{position:absolute;inset:0;z-index:2;pointer-events:auto;display:none;flex-direction:column;background:var(--sk-paper);
   text-transform:uppercase;letter-spacing:.05em;touch-action:none}
-.sk-open .sk-map{display:flex;animation:sk-rise .17s steps(2,end)}
-@keyframes sk-rise{from{transform:translateY(40%)}to{transform:none}}
+.sk-open .sk-map{display:flex}
+.sk-map.sk-r1{transform:translateY(34%)}
+.sk-map.sk-r2{transform:translateY(10%)}
 .sk-maphead{background:var(--sk-ink);display:flex;align-items:center;gap:8px;flex:none;
   padding:calc(var(--sk-st) + 8px) calc(var(--sk-sr) + 8px) 8px calc(var(--sk-sl) + 62px);min-height:62px}
 .sk-maphead .sk-flap{margin:0}

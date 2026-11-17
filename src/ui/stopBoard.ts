@@ -9,6 +9,7 @@ import { ClassSlot, el, styleBadge, TextSlot } from './dom';
 import { FlapRow } from './flap';
 import { boardText, countdownSeconds, countdownText } from './format';
 import { boardRows, nearbyStops, stopPositions, type StopPos } from './timetable';
+import type { Twos } from './twos';
 
 export const STOP_RADIUS = 14;
 const ROWS = 4;
@@ -24,19 +25,22 @@ interface RowEls {
 
 export class StopBoard {
   readonly el: HTMLElement;
-  private readonly title = new FlapRow(16);
+  private readonly title: FlapRow;
   private readonly titleSlot: TextSlot;
   private readonly rows: RowEls[] = [];
   private readonly stops: StopPos[];
   private readonly on: ClassSlot;
   private t = PERIOD;
+  private shown = false;
   /** Name of the stop shown, or '' when hidden. */
   stopName = '';
 
   constructor(
     private readonly game: Game,
     private readonly rootFlag: ClassSlot,
+    private readonly twos: Twos,
   ) {
+    this.title = new FlapRow(twos, 16);
     this.el = el('div', 'sk-stop sk-panel');
     this.stops = stopPositions(game.sim.world.lines);
     const head = el('div', 'sk-row sk-title');
@@ -49,8 +53,8 @@ export class StopBoard {
       const r = el('div', 'sk-row');
       const badge = el('span', 'sk-badge');
       badge.style.visibility = 'hidden';
-      const next = new FlapRow(11);
-      const time = new FlapRow(5, 'right');
+      const next = new FlapRow(twos, 11);
+      const time = new FlapRow(twos, 5, 'right');
       r.append(badge, next.el, time.el);
       this.el.appendChild(r);
       this.rows.push({ el: r, badge, badgeLine: -1, next, time });
@@ -75,8 +79,16 @@ export class StopBoard {
         ? []
         : nearbyStops(this.stops, p.x, p.z, STOP_RADIUS, (li) => prog.lines[li].discovered);
     const show = near.length > 0;
-    this.on.set(show);
-    this.rootFlag.set(show);
+    if (show !== this.shown) {
+      this.shown = show;
+      this.rootFlag.set(show);
+      // Slides on twos: up through two steps then on; down by dropping on and stepping back.
+      if (show) this.twos.play(this.el, 'sk-up1', 'sk-up2', () => this.on.set(true));
+      else {
+        this.on.set(false);
+        this.twos.play(this.el, 'sk-up2', 'sk-up1');
+      }
+    }
     if (!show) {
       this.stopName = '';
       return;

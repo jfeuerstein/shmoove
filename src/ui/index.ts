@@ -13,6 +13,7 @@ import { LineMap } from './lineMap';
 import { StopBoard } from './stopBoard';
 import { injectStyle } from './style';
 import { Toasts } from './toasts';
+import { Twos } from './twos';
 
 export interface UiFrame {
   game: Game;
@@ -59,10 +60,11 @@ export function createUi(root: HTMLElement, game: Game, sound: UiSound | null): 
   if (root.querySelector('.feel')) hud.classList.add('sk-debug');
   const stopUp = new ClassSlot(hud, 'sk-stopup');
 
-  const board = new DestinationBoard(game);
-  const chain = new ChainMeter(game);
-  const toasts = new Toasts(sound);
-  const stopBoard = new StopBoard(game, stopUp);
+  const twos = new Twos();
+  const board = new DestinationBoard(game, twos);
+  const chain = new ChainMeter(game, twos);
+  const toasts = new Toasts(sound, twos);
+  const stopBoard = new StopBoard(game, stopUp, twos);
   const hold = el('div', 'sk-hold');
   const holdOn = new ClassSlot(hold, 'sk-on');
   const holdFull = new ClassSlot(hold, 'sk-full');
@@ -74,12 +76,15 @@ export function createUi(root: HTMLElement, game: Game, sound: UiSound | null): 
     hud.classList.toggle('sk-open', open);
     mapBtn.setAttribute('aria-expanded', String(open));
     mapBtn.setAttribute('aria-label', open ? 'Close the line map' : 'Open the line map');
-    if (open) map.render();
+    if (open) {
+      map.render();
+      twos.play(map.el, 'sk-r1', 'sk-r2');
+    } else twos.cancel(map.el);
     sound?.ui('tick');
   };
   const toggle = (): void => setOpen(!mapOpen);
 
-  const map = new LineMap(game, () => setOpen(false), () => sound?.ui('tick'));
+  const map = new LineMap(game, twos, () => setOpen(false), () => sound?.ui('tick'));
 
   const mapBtn = el('button', 'sk-mapbtn');
   mapBtn.type = 'button';
@@ -174,6 +179,7 @@ export function createUi(root: HTMLElement, game: Game, sound: UiSound | null): 
       const hitched = game.sim.player.mode === Mode.HITCH;
       holdOn.set(f.armed);
       holdFull.set(f.armed && hitched);
+      twos.update(f.dt);
     },
     get paused(): boolean {
       return mapOpen;
