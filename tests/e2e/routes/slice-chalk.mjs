@@ -68,7 +68,7 @@ export default {
     at('chalkShare0', SHARE0),
     ...tap(SHARE0),
     { do: 'wait', ticks: 6 },
-    { do: 'expect', label: 'SHARE shows the line as a code', test: (s) => s.ui.chalkView === 'share' && typeof s.ui.chalkCode === 'string' && s.ui.chalkCode.startsWith('SK1-') && s.ui.chalkCode.length > 40 },
+    { do: 'expect', label: 'SHARE shows the line as a code', test: (s) => s.ui.chalkView === 'share' && typeof s.ui.chalkCode === 'string' && s.ui.chalkCode.startsWith('SK2-') && s.ui.chalkCode.length > 40 },
     { do: 'shot', name: 'chalk-share' },
     at('chalkClose', CLOSE),
     ...tap(CLOSE),

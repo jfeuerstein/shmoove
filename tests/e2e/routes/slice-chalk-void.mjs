@@ -1,7 +1,7 @@
 // M5a chalk lines, import: a shared link carries a code with one character changed in transit.
 // The import box opens with it pasted; ADD stamps it VOID with the reason and adds nothing.
 const GOOD =
-  'SK1-AQtNaXJhZG9yIHJ1buY3AAAAAAAA-D99-QxZVft0QBgtRFT7IQnA4Q6lBuQ08j_JTrNA9q0OQuN_lUPgAQwAvwDITABkTAIBTACzLkl8fw';
+  'SK2-AgtNaXJhZG9yIHJ1buY3AAAAAAAA-D99-QxZVft0QBgtRFT7IQnA4Q6lBuQ08j_Z0Z5Ag9MGQsPyjUPgAQ_AD7f_An9iFaQJUlKsPjjPfGOv';
 // The 'B' at index 60 became a 'Q'.
 const BAD = GOOD.slice(0, 60) + 'Q' + GOOD.slice(61);
 const near = (s, key, pt) => Math.abs(s.ui[key + 'X'] - pt.x) <= 6 && Math.abs(s.ui[key + 'Y'] - pt.y) <= 6;
