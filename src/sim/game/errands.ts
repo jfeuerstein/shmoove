@@ -6,7 +6,9 @@
  * There are no buttons in play, so an errand is taken by the one extra verb the game has: hold
  * still. Inside the giver's zone, on the board, slower than OFFER_MAX_SPEED, not hitched and with
  * the touch armed while no ride is in reach, the offer fills over OFFER_FILL_TICKS and starts.
- * Releasing the touch empties it; rolling out of the zone withdraws it. One errand at a time.
+ * Releasing the touch empties it; rolling out of the zone withdraws it. One errand at a time. A
+ * giver whose offer was ignored (withdrawn without being taken) does not offer again for
+ * OFFER_SNOOZE_TICKS, so circling near them is not a stream of offers.
  *
  * Steps are checked in order, one completion per tick at most. The errand is done when the last
  * step completes inside the limit; it fails when the limit runs out or a step's modifier fires
@@ -78,6 +80,8 @@ const MAX_GRIND_STEP = 1;
 export const OFFER_MAX_SPEED = 4;
 /** Hold time that takes an offer: 0.6 s. */
 export const OFFER_FILL_TICKS = 36;
+/** A giver whose offer was ignored stays quiet this long: 45 s. */
+export const OFFER_SNOOZE_TICKS = 45 * 60;
 
 export function inZone(z: Zone, x: number, y: number, zz: number, dy = ZONE_DY): boolean {
   const dx = x - z.x;
@@ -233,6 +237,8 @@ export class ErrandsReducer implements GameReducer {
   private cur: Resolved | null = null;
   /** The touch must lift before another offer can fill (after a start or an end). */
   private needLift = false;
+  /** Giver zone id -> tick its last offer was ignored (withdrawn without being taken). */
+  private readonly snoozed = new Map<string, number>();
   // Per-step counters.
   private ground = 0;
   private grindM = 0;
@@ -297,6 +303,7 @@ export class ErrandsReducer implements GameReducer {
     st.offerFill = 0;
     st.failedLast = null;
     this.cur = null;
+    this.snoozed.clear();
     if (typeof data !== 'object' || data === null) return;
     const done = (data as { done?: unknown }).done;
     if (typeof done !== 'object' || done === null || Array.isArray(done)) return;
@@ -332,6 +339,8 @@ export class ErrandsReducer implements GameReducer {
       const f = sim.dayFrac;
       for (const r of this.resolved) {
         if (!errandOpen(r.def, f)) continue;
+        const ignored = this.snoozed.get(r.giver.id);
+        if (ignored !== undefined && sim.tick - ignored < OFFER_SNOOZE_TICKS) continue;
         if (inZone(r.giver, p.x, p.y, p.z)) {
           here = r;
           break;
@@ -340,6 +349,9 @@ export class ErrandsReducer implements GameReducer {
     }
     const id = here ? here.def.id : null;
     if (id !== st.offered) {
+      // An offer withdrawn without being taken (a start clears `offered` itself) was ignored.
+      const was = st.offered === null ? undefined : this.byId.get(st.offered);
+      if (was) this.snoozed.set(was.giver.id, sim.tick);
       st.offered = id;
       st.offerFill = 0;
       if (id !== null) game.events.push({ type: 'errandOffer', id });

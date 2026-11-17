@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { DAY_TICKS, resetFeel } from '../../src/sim/constants';
 import { ERRANDS } from '../../src/sim/game/content/errands';
 import type { ErrandDef, StepDef } from '../../src/sim/game/errands';
-import { OFFER_FILL_TICKS } from '../../src/sim/game/errands';
+import { OFFER_FILL_TICKS, OFFER_SNOOZE_TICKS } from '../../src/sim/game/errands';
 import { Game, type GameEvent } from '../../src/sim/game/game';
 import { grabPoint, makeVehicleState, vehicleAt } from '../../src/sim/lines';
 import { placePlayer } from '../../src/sim/player';
@@ -130,6 +130,44 @@ describe('hold to accept', () => {
     step(game, log, { hold: true }, 60);
     expect(game.errands.active).toBeNull();
     expect(types(log)).toEqual(['errandOffer']);
+  });
+
+  it('an offer that is ignored does not come back from that giver for 45 s; then it does', () => {
+    const game = newGame(world(), [errand([{ kind: 'reach', zone: 'east' }]), errand([{ kind: 'reach', zone: 'east' }], { id: 'e2', giver: 'giver2' })]);
+    const log: Log = { events: [] };
+    teleport(game, 0, 0);
+    step(game, log);
+    expect(game.errands.offered).toBe('e1');
+    // Roll out without taking it: ignored.
+    teleport(game, 12, 0);
+    step(game, log, {}, 60);
+    // Back a few seconds later, circling and then holding still in the zone: nothing.
+    const back = game.sim.tick;
+    for (let k = 0; k < 6; k++) {
+      teleport(game, k % 2 === 0 ? 0 : 12, 0);
+      step(game, log, {}, 60);
+    }
+    teleport(game, 0, 0);
+    step(game, log, { hold: true }, OFFER_FILL_TICKS * 3);
+    expect(game.errands.offered).toBeNull();
+    expect(game.errands.active).toBeNull();
+    // Another giver is not snoozed.
+    teleport(game, -20, -20);
+    step(game, log);
+    expect(game.errands.offered).toBe('e2');
+    teleport(game, 12, 0);
+    step(game, log);
+    expect(types(log)).toEqual(['errandOffer', 'errandOffer']);
+    // 45 s after it was ignored the first giver offers again, and the offer can be taken.
+    step(game, log, {}, OFFER_SNOOZE_TICKS - (game.sim.tick - back) - 120);
+    teleport(game, 0, 0);
+    step(game, log, {}, 2);
+    expect(game.errands.offered).toBeNull();
+    step(game, log, {}, 240);
+    expect(game.errands.offered).toBe('e1');
+    step(game, log, { hold: true }, OFFER_FILL_TICKS + 1);
+    expect(game.errands.active?.id).toBe('e1');
+    expect(types(log)).toEqual(['errandOffer', 'errandOffer', 'errandOffer', 'errandStart']);
   });
 
   it('does not fill while rolling fast, while hitched, or with a ride in reach', () => {
