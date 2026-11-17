@@ -354,6 +354,44 @@ describe('steps', () => {
     expect(doneAtZ).toBeLessThan(-19 + 23);
   });
 
+  it('grind ignores a teleport: a move of more than 1 m in one tick on the rail adds no metres', () => {
+    const game = newGame(world(), [errand([{ kind: 'grind', metres: 20 }])]);
+    const log: Log = { events: [] };
+    accept(game, log);
+    teleport(game, -60, -19);
+    const p = game.sim.player;
+    p.mode = Mode.AIR;
+    p.y = 4.9;
+    p.vy = 0;
+    p.vz = 6;
+    p.vx = 0;
+    p.heading = 0;
+    for (let i = 0; i < 120 && (p.mode as Mode) !== Mode.GRIND; i++) step(game, log);
+    expect(p.mode).toBe(Mode.GRIND);
+    step(game, log, {}, 10);
+    expect(p.mode).toBe(Mode.GRIND);
+    const before = game.errands.active?.progress ?? Number.NaN;
+    expect(before).toBeGreaterThan(0.5);
+    expect(before).toBeLessThan(3);
+    // Jump 15 m down the rail in a single tick.
+    const z0 = p.z;
+    p.railS += 15;
+    step(game, log);
+    expect(p.mode).toBe(Mode.GRIND);
+    expect(p.z - z0).toBeGreaterThan(14);
+    const after = game.errands.active?.progress ?? Number.NaN;
+    expect(after - before).toBeLessThan(1);
+    // The errand still needs 20 m actually ground: it finishes past where the jump landed.
+    const landedZ = p.z;
+    let doneAtZ = Number.NaN;
+    for (let i = 0; i < 600 && game.errands.active; i++) {
+      step(game, log);
+      if (!game.errands.active) doneAtZ = p.z;
+    }
+    expect(types(log).slice(-1)).toEqual(['errandDone']);
+    expect(doneAtZ - landedZ + before).toBeGreaterThan(18);
+  });
+
   it('air needs one flight of that length, not several short ones', () => {
     const game = newGame(world(), [errand([{ kind: 'air', seconds: 1 }])]);
     const log: Log = { events: [] };
