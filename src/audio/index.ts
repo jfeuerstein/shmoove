@@ -42,9 +42,13 @@ export interface AudioDebug {
   /** Transport position. */
   bar: number;
   beat: number;
-  /** Live oscillator/buffer source nodes, and the most seen at once (0 without Web Audio). */
+  /**
+   * Live oscillator/buffer source nodes, the most planned to sound at once, and voices skipped
+   * because the 24-source budget was full (all 0 without Web Audio).
+   */
   voices: number;
   peakVoices: number;
+  droppedVoices: number;
 }
 
 export type UiSound = 'tick' | 'punch' | 'ink' | 'fanfare' | 'deny';
@@ -139,6 +143,7 @@ class AudioSystemImpl implements AudioSystem {
       beat: pos?.beat ?? 0,
       voices: this.engine?.voices ?? 0,
       peakVoices: this.engine?.synth.peak ?? 0,
+      droppedVoices: this.engine?.synth.dropped ?? 0,
     };
   }
 

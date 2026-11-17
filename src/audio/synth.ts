@@ -8,6 +8,17 @@ import { Drum, type BassVoice, type HarmonyVoice, type KitVoice, type LeadVoice 
 
 /** Most oscillator + buffer source nodes alive at once (persistent ones included). */
 export const MAX_VOICES = 24;
+/**
+ * A source in its last 30 ms (a choked chord fading out, a tail ending) does not hold the budget
+ * against a note starting now: the budget is about steady-state polyphony, not 30 ms overlaps.
+ */
+const TAIL_GRACE = 0.03;
+
+interface Held {
+  gain: GainNode;
+  srcs: AudioScheduledSourceNode[];
+  end: number;
+}
 
 export function mtof(m: number): number {
   return 440 * Math.pow(2, (m - 69) / 12);
@@ -30,8 +41,13 @@ export class Synth {
   readonly noise: AudioBuffer;
   /** Live source nodes, and the most seen at once. */
   live = 0;
+  /** Most sources planned to sound at once (persistent ones included). */
   peak = 0;
+  /** Voices not started because the budget was full. */
   dropped = 0;
+  private persistentCount = 0;
+  private readonly ends = new Map<AudioScheduledSourceNode, number>();
+  private readonly held = new Map<string, Held>();
 
   private readonly pulse: PeriodicWave;
   private readonly vibrato: Float32Array<ArrayBuffer>;
@@ -85,21 +101,37 @@ export class Synth {
 
   // ---- plumbing ----
 
-  /** Room for n more sources? Counts drops for diagnostics. */
-  private room(n: number): boolean {
-    if (this.live + n <= MAX_VOICES) return true;
+  /**
+   * Room for n more sources sounding at time t? Counts sources still planned to sound at t, so
+   * notes that will have stopped (or been choked) by then do not hold the budget.
+   */
+  private room(n: number, t: number): boolean {
+    if (this.liveAt(t + TAIL_GRACE) + n <= MAX_VOICES) return true;
     this.dropped++;
     return false;
   }
 
-  /** Start a one-shot source and stop it at `end`; `tail` is disconnected when it ends. */
-  private run(src: AudioScheduledSourceNode, t: number, end: number, tail: AudioNode): void {
+  private liveAt(t: number): number {
+    let c = this.persistentCount;
+    for (const end of this.ends.values()) if (end > t) c++;
+    return c;
+  }
+
+  private track(src: AudioScheduledSourceNode, t: number, end: number, tail: AudioNode): void {
     this.live++;
-    if (this.live > this.peak) this.peak = this.live;
+    const at = this.liveAt(t + TAIL_GRACE) + 1;
+    if (at > this.peak) this.peak = at;
+    this.ends.set(src, end);
     src.onended = () => {
       this.live--;
+      this.ends.delete(src);
       tail.disconnect();
     };
+  }
+
+  /** Start a one-shot source and stop it at `end`; `tail` is disconnected when it ends. */
+  private run(src: AudioScheduledSourceNode, t: number, end: number, tail: AudioNode): void {
+    this.track(src, t, end, tail);
     src.start(t);
     src.stop(end);
   }
@@ -107,8 +139,45 @@ export class Synth {
   /** Register a source that runs until disposal. */
   hold(src: AudioScheduledSourceNode, t: number): void {
     this.live++;
-    if (this.live > this.peak) this.peak = this.live;
+    this.persistentCount++;
+    if (this.persistentCount > this.peak) this.peak = this.persistentCount;
     src.start(t);
+  }
+
+  /** Stop a source registered with hold(). */
+  unhold(src: AudioScheduledSourceNode): void {
+    try {
+      src.stop();
+    } catch (_e) {
+      // never started or already stopped
+    }
+    this.live--;
+    this.persistentCount--;
+  }
+
+  /**
+   * Monophonic voices and comped chords: a new note on `key` at t lifts the previous one (a
+   * bassist muting the string, a pianist lifting for the next chord).
+   */
+  private choke(key: string, t: number): void {
+    const h = this.held.get(key);
+    if (!h || h.end <= t) return;
+    const g = h.gain.gain;
+    g.cancelScheduledValues(t);
+    g.setTargetAtTime(0, t, 0.005);
+    const stopAt = t + TAIL_GRACE;
+    for (const src of h.srcs) {
+      const end = this.ends.get(src);
+      if (end !== undefined && end > stopAt) {
+        src.stop(stopAt);
+        this.ends.set(src, stopAt);
+      }
+    }
+    h.end = stopAt;
+  }
+
+  private remember(key: string, gain: GainNode, srcs: AudioScheduledSourceNode[], end: number): void {
+    this.held.set(key, { gain, srcs, end });
   }
 
   private osc(type: OscillatorType, freq: number, t: number): OscillatorNode {
@@ -144,12 +213,7 @@ export class Synth {
   }
 
   private startNoise(src: AudioBufferSourceNode, t: number, end: number, tail: AudioNode): void {
-    this.live++;
-    if (this.live > this.peak) this.peak = this.live;
-    src.onended = () => {
-      this.live--;
-      tail.disconnect();
-    };
+    this.track(src, t, end, tail);
     src.start(t, hash01(this.noiseSeq) * (this.noise.duration - 0.6));
     src.stop(end);
   }
@@ -182,7 +246,7 @@ export class Synth {
       case Drum.OHAT:
         return this.noiseHit(t, vel * 0.3, dest, 'highpass', 7200, 0.7, 0.09, 0.4);
       case Drum.SHAKER:
-        return this.noiseHit(t, vel * 0.3, dest, 'bandpass', 6000, 1.4, 0.022, 0.12, 0.012);
+        return this.noiseHit(t, vel * 0.4, dest, 'bandpass', 6000, 1.4, 0.022, 0.12, 0.012);
       case Drum.SCRAPE:
         return this.scrape(t, vel, dest, false);
       case Drum.SCRAPE_LONG:
@@ -209,7 +273,7 @@ export class Synth {
   }
 
   private kick(kitv: KitVoice, t: number, vel: number, dest: AudioNode): void {
-    if (!this.room(1)) return;
+    if (!this.room(1, t)) return;
     const soft = kitv === 'highlife';
     const top = soft ? 115 : kitv === 'citypop' ? 175 : 150;
     const o = this.osc('sine', top, t);
@@ -217,11 +281,11 @@ export class Synth {
     const g = this.gain();
     this.ad(g.gain, t, 0.003, vel * (soft ? 0.65 : 0.95), soft ? 0.06 : 0.085);
     o.connect(g).connect(dest);
-    this.run(o, t, t + 0.45, g);
+    this.run(o, t, t + 0.38, g);
   }
 
   private snare(kitv: KitVoice, t: number, vel: number, dest: AudioNode): void {
-    if (!this.room(2)) return;
+    if (!this.room(2, t)) return;
     const gated = kitv === 'citypop';
     const n = this.noiseSource();
     const f = gated ? this.filter('bandpass', 2000, 0.6) : this.filter('highpass', 1500, 0.8);
@@ -245,13 +309,13 @@ export class Synth {
     const og = this.gain();
     this.ad(og.gain, t, 0.002, vel * 0.32, 0.03);
     o.connect(og).connect(dest);
-    this.run(o, t, t + 0.2, og);
+    this.run(o, t, t + 0.14, og);
   }
 
   private noiseHit(
     t: number, peak: number, dest: AudioNode, type: BiquadFilterType, freq: number, q: number, tc: number, len: number, attack = 0.001,
   ): void {
-    if (!this.room(1)) return;
+    if (!this.room(1, t)) return;
     const n = this.noiseSource();
     const f = this.filter(type, freq, q);
     const g = this.gain();
@@ -261,7 +325,7 @@ export class Synth {
   }
 
   private scrape(t: number, vel: number, dest: AudioNode, long: boolean): void {
-    if (!this.room(1)) return;
+    if (!this.room(1, t)) return;
     const dur = long ? 0.15 : 0.055;
     const n = this.noiseSource();
     const f = this.filter('bandpass', long ? 3000 : 3600, 2.2);
@@ -273,7 +337,7 @@ export class Synth {
   }
 
   private tone(t: number, peak: number, dest: AudioNode, type: OscillatorType, f0: number, f1: number, tc: number): void {
-    if (!this.room(1)) return;
+    if (!this.room(1, t)) return;
     const o = this.osc(type, f0, t);
     o.frequency.exponentialRampToValueAtTime(f1, t + tc * 1.5);
     const g = this.gain();
@@ -283,9 +347,9 @@ export class Synth {
   }
 
   private bellHit(t: number, vel: number, dest: AudioNode, f: number): void {
-    if (!this.room(2)) return;
+    if (!this.room(2, t)) return;
     const g = this.gain();
-    this.ad(g.gain, t, 0.001, vel * 0.16, 0.06);
+    this.ad(g.gain, t, 0.001, vel * 0.22, 0.06);
     const a = this.osc('triangle', f, t);
     const b = this.osc('sine', f * 2.76, t);
     const bg = this.gain(0.5);
@@ -297,7 +361,7 @@ export class Synth {
   }
 
   private clap(t: number, vel: number, dest: AudioNode): void {
-    if (!this.room(1)) return;
+    if (!this.room(1, t)) return;
     const n = this.noiseSource();
     const f = this.filter('bandpass', 1150, 1.1);
     const shape = this.gain();
@@ -310,19 +374,20 @@ export class Synth {
   // ---- bass ----
 
   bass(v: BassVoice, note: number, t: number, dur: number, vel: number, dest: AudioNode): void {
-    if (!this.room(1)) return;
+    this.choke(v, t);
+    if (!this.room(1, t)) return;
     const hz = mtof(note);
     const off = t + dur;
     const g = this.gain();
     let o: OscillatorNode;
-    let end: number;
+    let rel: number;
     switch (v) {
       case 'tumbao': {
         o = this.osc('triangle', hz, t);
         const f = this.filter('lowpass', 750, 0.9);
-        this.asr(g.gain, t, 0.006, vel * 0.75, vel * 0.5, 0.2, off - 0.03, 0.04);
+        rel = 0.04;
+        this.asr(g.gain, t, 0.006, vel * 0.47, vel * 0.32, 0.2, off - 0.03, rel);
         o.connect(f).connect(g);
-        end = off + 0.25;
         break;
       }
       case 'slap': {
@@ -330,17 +395,17 @@ export class Synth {
         const f = this.filter('lowpass', 300, 6);
         f.frequency.setValueAtTime(400 + 3600 * vel, t);
         f.frequency.setTargetAtTime(320, t + 0.005, 0.045);
-        this.asr(g.gain, t, 0.003, vel * 0.6, vel * 0.32, 0.09, off - 0.02, 0.03);
+        rel = 0.03;
+        this.asr(g.gain, t, 0.003, vel * 0.45, vel * 0.24, 0.09, off - 0.02, rel);
         o.connect(f).connect(g);
-        end = off + 0.2;
         break;
       }
       case 'walk': {
         o = this.osc('triangle', hz, t);
         const f = this.filter('lowpass', 1300, 1);
-        this.asr(g.gain, t, 0.004, vel * 0.75, vel * 0.35, 0.22, off - 0.02, 0.05);
+        rel = 0.05;
+        this.asr(g.gain, t, 0.004, vel * 0.5, vel * 0.24, 0.22, off - 0.02, rel);
         o.connect(f).connect(g);
-        end = off + 0.3;
         break;
       }
       case 'octave': {
@@ -348,14 +413,16 @@ export class Synth {
         const f = this.filter('lowpass', 500, 4);
         f.frequency.setValueAtTime(600 + 2000 * vel, t);
         f.frequency.setTargetAtTime(420, t + 0.004, 0.06);
-        this.asr(g.gain, t, 0.004, vel * 0.42, vel * 0.25, 0.12, off - 0.02, 0.03);
+        rel = 0.03;
+        this.asr(g.gain, t, 0.004, vel * 0.28, vel * 0.17, 0.12, off - 0.02, rel);
         o.connect(f).connect(g);
-        end = off + 0.2;
         break;
       }
     }
     g.connect(dest);
+    const end = off + rel * 6;
     this.run(o, t, end, g);
+    this.remember(v, g, [o], end);
   }
 
   // ---- harmony ----
@@ -374,26 +441,44 @@ export class Synth {
     }
   }
 
+  /** One oscillator per note into a shared filter + envelope; returns the sources. */
+  private chordOscs(
+    notes: readonly number[], t: number, end: number, into: AudioNode, tail: AudioNode, make: (n: number, i: number) => OscillatorNode,
+  ): OscillatorNode[] {
+    const srcs: OscillatorNode[] = [];
+    notes.forEach((n, i) => {
+      const o = make(n, i);
+      o.connect(into);
+      this.run(o, t, end, i === 0 ? tail : o);
+      srcs.push(o);
+    });
+    return srcs;
+  }
+
   private accordion(notes: readonly number[], t: number, dur: number, vel: number, dest: AudioNode): void {
-    if (!this.room(notes.length)) return;
+    this.choke('accordion', t);
+    if (!this.room(notes.length, t)) return;
     const f = this.filter('bandpass', 1500, 0.8);
     const g = this.gain();
     const off = t + Math.max(0.06, dur * 0.85);
-    this.asr(g.gain, t, 0.012, vel * 0.16, vel * 0.13, 0.08, off, 0.035);
+    this.asr(g.gain, t, 0.012, vel * 0.45, vel * 0.36, 0.08, off, 0.03);
     f.connect(g).connect(dest);
-    const end = off + 0.2;
-    notes.forEach((n, i) => {
-      // Two reeds a few cents apart, alternated across the chord: saw and square.
+    const end = off + 0.18;
+    // Two reeds a few cents apart, alternated across the chord: saw and square.
+    const srcs = this.chordOscs(notes, t, end, f, g, (n, i) => {
       const o = this.osc(i % 2 === 0 ? 'sawtooth' : 'square', mtof(n), t);
       o.detune.value = i % 2 === 0 ? 7 : -7;
-      o.connect(f);
-      this.run(o, t, end, i === 0 ? g : o);
+      return o;
     });
+    this.remember('accordion', g, srcs, end);
   }
 
   private clav(notes: readonly number[], t: number, dur: number, vel: number, dest: AudioNode): void {
-    if (!this.room(notes.length)) return;
     const muted = vel < 0.5;
+    // A dead-string scratch is percussive: one string is enough.
+    const play = muted ? notes.slice(0, 1) : notes;
+    this.choke('clav', t);
+    if (!this.room(play.length, t)) return;
     const f = this.filter('bandpass', 700, muted ? 3 : 6);
     // Envelope-swept wah: open fast, close slower.
     f.frequency.setValueAtTime(600, t);
@@ -401,37 +486,41 @@ export class Synth {
     f.frequency.setTargetAtTime(800, t + 0.03, 0.07);
     const g = this.gain();
     const off = t + (muted ? 0.035 : Math.min(dur, 0.2));
-    this.asr(g.gain, t, 0.002, muted ? 0.16 : vel * 0.24, muted ? 0.05 : vel * 0.14, muted ? 0.012 : 0.07, off, 0.02);
+    this.asr(g.gain, t, 0.002, muted ? 0.8 : vel * 1.2, muted ? 0.25 : vel * 0.7, muted ? 0.012 : 0.07, off, 0.015);
     f.connect(g).connect(dest);
-    const end = off + 0.12;
-    notes.forEach((n, i) => {
+    const end = off + 0.09;
+    const srcs = this.chordOscs(play, t, end, f, g, (n) => {
       const o = this.ctx.createOscillator();
       o.setPeriodicWave(this.pulse);
       o.frequency.setValueAtTime(mtof(n), t);
-      o.connect(f);
-      this.run(o, t, end, i === 0 ? g : o);
+      return o;
     });
+    this.remember('clav', g, srcs, end);
   }
 
   private pluck(note: number, t: number, vel: number, dest: AudioNode): void {
-    if (!this.room(1)) return;
+    if (!this.room(1, t)) return;
     const o = this.osc('sawtooth', mtof(note), t);
     const f = this.filter('lowpass', 800, 2);
     f.frequency.setValueAtTime(1500 + 3000 * vel, t);
     f.frequency.setTargetAtTime(650, t + 0.002, 0.07);
     const g = this.gain();
-    this.ad(g.gain, t, 0.002, vel * 0.17, 0.16);
+    this.ad(g.gain, t, 0.002, vel * 0.27, 0.11);
     o.connect(f).connect(g).connect(dest);
-    this.run(o, t, t + 0.6, g);
+    this.run(o, t, t + 0.45, g);
   }
 
-  private epiano(notes: readonly number[], t: number, dur: number, vel: number, dest: AudioNode): void {
-    if (!this.room(notes.length * 2)) return;
+  private epiano(chord: readonly number[], t: number, dur: number, vel: number, dest: AudioNode): void {
+    // Short pushes are comped lighter: just the top two notes of the voicing.
+    const notes = dur < 0.35 && chord.length > 2 ? chord.slice(chord.length - 2) : chord;
+    this.choke('epiano', t);
+    if (!this.room(notes.length * 2, t)) return;
     const g = this.gain();
     const off = t + dur;
-    this.asr(g.gain, t, 0.004, vel * 0.13, vel * 0.07, 0.35, off, 0.09);
+    this.asr(g.gain, t, 0.004, vel * 0.09, vel * 0.05, 0.35, off, 0.08);
     g.connect(dest);
-    const end = off + 0.4;
+    const end = off + 0.45;
+    const srcs: OscillatorNode[] = [];
     notes.forEach((n, i) => {
       const hz = mtof(n);
       const det = i % 2 === 0 ? 5 : -5;
@@ -447,7 +536,9 @@ export class Synth {
       car.connect(g);
       this.run(car, t, end, i === 0 ? g : car);
       this.run(mod, t, end, idx);
+      srcs.push(car, mod);
     });
+    this.remember('epiano', g, srcs, end);
   }
 
   // ---- lead ----
@@ -455,13 +546,14 @@ export class Synth {
   lead(v: LeadVoice, notes: readonly number[], t: number, dur: number, vel: number, dest: AudioNode): void {
     switch (v) {
       case 'clarinet':
-        for (const n of notes) this.clarinet(n, t, dur, vel, dest);
-        return;
-      case 'horns':
-        for (const n of notes) this.brass([n, n - 7, n - 12], t, dur, vel, dest, 0.1);
-        return;
+        return this.clarinet(notes[0], t, dur, vel, dest);
+      case 'horns': {
+        // Section stab: the line plus the octave below; accents add the fifth below.
+        const n = notes[0];
+        return this.brass('horns', vel >= 1 ? [n, n - 7, n - 12] : [n, n - 12], t, dur, vel, dest, 0.2);
+      }
       case 'hornThirds':
-        return this.brass(notes, t, dur, vel, dest, 0.13);
+        return this.brass('hornThirds', notes, t, dur, vel, dest, 0.2);
       case 'bell':
         for (const n of notes) this.glass(n, t, vel, dest);
         return;
@@ -469,19 +561,23 @@ export class Synth {
   }
 
   private clarinet(note: number, t: number, dur: number, vel: number, dest: AudioNode): void {
-    if (!this.room(1)) return;
+    this.choke('clarinet', t);
+    if (!this.room(1, t)) return;
     const o = this.osc('square', mtof(note), t);
     if (dur > 0.3) o.detune.setValueCurveAtTime(this.vibrato, t + 0.12, dur - 0.12);
     const f = this.filter('lowpass', 1700 + 900 * vel, 0.6);
     const g = this.gain();
     const off = t + dur;
-    this.asr(g.gain, t, 0.035, vel * 0.16, vel * 0.13, 0.1, off - 0.02, 0.05);
+    this.asr(g.gain, t, 0.035, vel * 0.18, vel * 0.145, 0.1, off - 0.02, 0.05);
     o.connect(f).connect(g).connect(dest);
-    this.run(o, t, off + 0.3, g);
+    const end = off + 0.3;
+    this.run(o, t, end, g);
+    this.remember('clarinet', g, [o], end);
   }
 
-  private brass(notes: readonly number[], t: number, dur: number, vel: number, dest: AudioNode, level: number): void {
-    if (!this.room(notes.length)) return;
+  private brass(key: string, notes: readonly number[], t: number, dur: number, vel: number, dest: AudioNode, level: number): void {
+    this.choke(key, t);
+    if (!this.room(notes.length, t)) return;
     const f = this.filter('lowpass', 400, 1.2);
     // Brassy blat: the filter opens fast, overshoots, settles.
     f.frequency.setValueAtTime(350, t);
@@ -492,16 +588,16 @@ export class Synth {
     this.asr(g.gain, t, 0.025, vel * level, vel * level * 0.75, 0.15, off - 0.02, 0.05);
     f.connect(g).connect(dest);
     const end = off + 0.3;
-    notes.forEach((n, i) => {
+    const srcs = this.chordOscs(notes, t, end, f, g, (n, i) => {
       const o = this.osc('sawtooth', mtof(n), t);
       o.detune.value = i % 2 === 0 ? 4 : -4;
-      o.connect(f);
-      this.run(o, t, end, i === 0 ? g : o);
+      return o;
     });
+    this.remember(key, g, srcs, end);
   }
 
   private glass(note: number, t: number, vel: number, dest: AudioNode): void {
-    if (!this.room(2)) return;
+    if (!this.room(2, t)) return;
     const hz = mtof(note);
     const car = this.osc('sine', hz, t);
     const mod = this.osc('sine', hz * 3.5, t);
@@ -510,10 +606,10 @@ export class Synth {
     idx.gain.setTargetAtTime(hz * 0.05, t + 0.002, 0.12);
     mod.connect(idx).connect(car.frequency);
     const g = this.gain();
-    this.ad(g.gain, t, 0.002, vel * 0.2, 0.32);
+    this.ad(g.gain, t, 0.002, vel * 0.36, 0.15);
     car.connect(g).connect(dest);
-    this.run(car, t, t + 1.3, g);
-    this.run(mod, t, t + 1.3, idx);
+    this.run(car, t, t + 0.7, g);
+    this.run(mod, t, t + 0.7, idx);
   }
 
   // ---- effects ----
@@ -529,7 +625,7 @@ export class Synth {
   }
 
   boing(t: number, speed: number, dest: AudioNode): void {
-    if (!this.room(1)) return;
+    if (!this.room(1, t)) return;
     const k = Math.min(1, Math.max(0.3, speed / 8));
     const o = this.osc('triangle', 170, t);
     o.frequency.setValueCurveAtTime(this.boingCurve, t, 0.45);
@@ -548,7 +644,7 @@ export class Synth {
   }
 
   whoosh(t: number, speed: number, dest: AudioNode): void {
-    if (!this.room(1)) return;
+    if (!this.room(1, t)) return;
     const n = this.noiseSource();
     const top = 350 + 95 * Math.min(speed, 30);
     const f = this.filter('bandpass', 300, 1.3);
@@ -564,7 +660,7 @@ export class Synth {
   }
 
   chime(t: number, note: number, dest: AudioNode, level = 0.22): void {
-    if (!this.room(1)) return;
+    if (!this.room(1, t)) return;
     const o = this.osc('triangle', mtof(note), t);
     const g = this.gain();
     this.ad(g.gain, t, 0.003, level, 0.22);
@@ -573,7 +669,7 @@ export class Synth {
   }
 
   buzz(t: number, hz: number, len: number, dest: AudioNode, level = 0.22): void {
-    if (!this.room(1)) return;
+    if (!this.room(1, t)) return;
     const o = this.osc('square', hz, t);
     o.detune.value = -30;
     const f = this.filter('lowpass', 900, 0.8);
@@ -585,7 +681,7 @@ export class Synth {
   }
 
   crash(t: number, dest: AudioNode): void {
-    if (this.room(1)) {
+    if (this.room(1, t)) {
       const n = this.noiseSource();
       const f = this.filter('lowpass', 6000, 0.7);
       f.frequency.setValueAtTime(6500, t);
@@ -595,7 +691,7 @@ export class Synth {
       n.connect(f).connect(g).connect(dest);
       this.startNoise(n, t, t + 1, g);
     }
-    if (this.room(1)) {
+    if (this.room(1, t)) {
       // Scatter: bits of board and grit skittering off.
       const n = this.noiseSource();
       const f = this.filter('bandpass', 2600, 2);
@@ -620,7 +716,7 @@ export class Synth {
   }
 
   ink(t: number, dest: AudioNode): void {
-    if (!this.room(1)) return;
+    if (!this.room(1, t)) return;
     const o = this.osc('sine', 520, t);
     o.frequency.exponentialRampToValueAtTime(860, t + 0.09);
     const g = this.gain();
