@@ -4,6 +4,7 @@
  */
 import { createAudio } from '../audio/index';
 import { Gestures, attachGestures } from '../input/gestures';
+import { createChalkView } from '../render/chalkView';
 import { createView } from '../render/view';
 import { DT } from '../sim/constants';
 import { Game, type GameEvent } from '../sim/game/game';
@@ -13,6 +14,7 @@ import { createAudioView } from './audioView';
 import { createDebugPanel, type DebugPanel } from './debugPanel';
 import { getParams } from './params';
 import { getRoute } from './routes';
+import { createSaveGlue } from './save';
 import { installHook } from './testHook';
 import { buildWorld } from './world';
 
@@ -27,9 +29,12 @@ function boot(): void {
   const world = buildWorld(params);
   const game = new Game(world, { seed: params.seed, startDayFrac: params.t ?? undefined });
   const sim = game.sim;
+  // Before anything reads game state: a stored save puts progress, chalk lines and the skater back.
+  const saves = createSaveGlue(game, { e2e: params.e2e });
   const gestures = new Gestures();
   attachGestures(canvas, gestures);
   const view = createView(canvas, world);
+  const chalkView = createChalkView(view.scene, world);
   const route = getRoute(params.route);
   const panel: DebugPanel | null = params.debug ? createDebugPanel(uiRoot) : null;
   // After the panel, so the UI can keep its controls clear of it.
@@ -37,6 +42,9 @@ function boot(): void {
   audio.setMuted(params.mute);
   const audioView = createAudioView();
   const ui = createUi(uiRoot, game, audio);
+  // A shared chalk link (?chalk=SK1-...) opens the import box with the code pasted.
+  const sharedChalk = new URLSearchParams(location.search).get('chalk');
+  if (sharedChalk) ui.openChalkImport(sharedChalk);
   // Browsers only start audio from a user gesture: the first touch or key unlocks it.
   const unlock = (): void => audio.unlock();
   window.addEventListener('pointerdown', unlock);
@@ -63,6 +71,7 @@ function boot(): void {
       prev.z = sim.player.z;
     }
     game.step(input);
+    saves.afterStep(game.events);
     for (const e of sim.events) {
       pending.push(e);
       if (eventLog.length < 4096) eventLog.push(e.type);
@@ -75,6 +84,7 @@ function boot(): void {
   let lastWork = 0;
   const uiFrame = { game, armed: false, simEvents: pending, gameEvents: pendingGame, dt: 0 };
   const draw = (alpha: number, dt: number): void => {
+    chalkView.update(game, alpha, dt);
     view.render(sim, prev, alpha, dt, pending);
     uiFrame.armed = gestures.isArmed;
     uiFrame.dt = dt;
