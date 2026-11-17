@@ -100,7 +100,7 @@ function play(save?: SavePoint): Played {
       bot.rebind(fresh);
     }
   }
-  if (bot.done && !bot.failure) r.run(SETTLE, () => false);
+  if (bot.done && !bot.failure) r.run(SETTLE, undefined, true);
   const after: [number, GameEvent][] = book.events.slice(fromEvent).map((x) => [dayTick(x.tick), x.e]);
   return { game, bot, book, mapTick, atMap, savedAt, after, ms: performance.now() - t0 };
 }

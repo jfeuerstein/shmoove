@@ -68,8 +68,11 @@ export interface Runner {
   game: Game;
   bot: Skater;
   book: Book;
-  /** Step until `until` holds, the bot is done, or `max` ticks pass. Returns ticks stepped. */
-  run(max: number, until?: () => boolean): number;
+  /**
+   * Step until `until` holds, the bot is done, or `max` ticks pass. Returns ticks stepped. With
+   * `hands off`, keep stepping after the bot is done with the touch released (a last fall settling).
+   */
+  run(max: number, until?: () => boolean, handsOff?: boolean): number;
 }
 
 export function makeRunner(game: Game, bot: Skater, book: Book = newBook(game)): Runner {
@@ -84,7 +87,7 @@ export function makeRunner(game: Game, bot: Skater, book: Book = newBook(game)):
     game,
     bot,
     book,
-    run(max, until) {
+    run(max, until, handsOff = false) {
       const g = r.game;
       const w = g.sim.world;
       let n = 0;
@@ -95,8 +98,12 @@ export function makeRunner(game: Game, bot: Skater, book: Book = newBook(game)):
         pz = g.sim.player.z;
         district = districtAt(w, pz);
       }
-      while (n < max && !r.bot.done && !(until && until())) {
-        r.bot.input(input);
+      while (n < max && (handsOff || !r.bot.done) && !(until && until())) {
+        if (r.bot.done) {
+          input.steer = 0;
+          input.hold = false;
+          input.hop = false;
+        } else r.bot.input(input);
         g.step(input);
         n++;
         book.ticks++;
