@@ -97,7 +97,84 @@ export function bucketWorld(w: World, g: ChunkGrid): ChunkBuckets {
   return out;
 }
 
-/** Everything in one chunk at one level of detail, into one builder. */
+/** Terrain rows meshed per piece of an incremental chunk build. */
+const ROWS_PER_PIECE = 4;
+
+/**
+ * One chunk being built at one level of detail, in small pieces (a few terrain rows, one solid,
+ * one rail, one zone), so the work can stop at a deadline and resume on a later frame.
+ */
+export class ChunkJob {
+  readonly b = new MeshBuilder();
+  /** Time spent on this chunk so far, ms (kept by the caller). */
+  ms = 0;
+  private readonly w: World;
+  private readonly bk: ChunkBuckets;
+  private readonly ci: number;
+  private readonly lod: Lod;
+  private readonly ix0: number;
+  private readonly ix1: number;
+  private readonly iz0: number;
+  private readonly iz1: number;
+  private phase = 0;
+  private i = 0;
+
+  constructor(w: World, g: ChunkGrid, bk: ChunkBuckets, ci: number, lod: Lod) {
+    this.w = w;
+    this.bk = bk;
+    this.ci = ci;
+    this.lod = lod;
+    this.ix0 = (ci % g.ncx) * g.cells;
+    this.iz0 = Math.floor(ci / g.ncx) * g.cells;
+    this.ix1 = Math.min(w.nx, this.ix0 + g.cells);
+    this.iz1 = Math.min(w.nz, this.iz0 + g.cells);
+  }
+
+  /** Do one piece of work; true when the chunk is complete. */
+  step(): boolean {
+    const w = this.w;
+    const ci = this.ci;
+    switch (this.phase) {
+      case 0: {
+        const z0 = this.iz0 + this.i;
+        const z1 = Math.min(this.iz1, z0 + ROWS_PER_PIECE);
+        meshTerrain(this.b, w, this.ix0, z0, this.ix1, z1, this.lod);
+        this.i += ROWS_PER_PIECE;
+        if (z1 >= this.iz1) this.next();
+        return false;
+      }
+      case 1:
+        if (this.i < this.bk.solids[ci].length) meshSolid(this.b, w, w.solids[this.bk.solids[ci][this.i++]], this.lod);
+        else this.next();
+        return false;
+      case 2:
+        if (this.i < this.bk.rails[ci].length) meshRail(this.b, w, w.rails[this.bk.rails[ci][this.i++]], this.lod);
+        else this.next();
+        return false;
+      case 3:
+        if (this.i < this.bk.zones[ci].length) meshZoneProps(this.b, w, w.zones[this.bk.zones[ci][this.i++]], this.lod);
+        else this.next();
+        return false;
+      default:
+        return true;
+    }
+  }
+
+  /** Work until done (true) or until `clock()` reaches `deadline` (false). Always does one piece. */
+  run(clock: () => number, deadline: number): boolean {
+    for (;;) {
+      if (this.step()) return true;
+      if (clock() >= deadline) return false;
+    }
+  }
+
+  private next(): void {
+    this.phase++;
+    this.i = 0;
+  }
+}
+
+/** Everything in one chunk at one level of detail, into one builder, in one go. */
 export function meshChunk(b: MeshBuilder, w: World, g: ChunkGrid, bk: ChunkBuckets, ci: number, lod: Lod): void {
   const cx = ci % g.ncx;
   const cz = Math.floor(ci / g.ncx);
@@ -117,7 +194,12 @@ export function wantLod(d: number, current: Lod): Lod {
 }
 
 export interface StreamHooks<T> {
-  build(chunk: number, lod: Lod): T;
+  /**
+   * Build (or keep building) a chunk. Work may be split across calls: return null when `clock()`
+   * passes `deadline` before the chunk is done, and the streamer calls again on a later frame.
+   * The first piece of work of a call always runs.
+   */
+  build(chunk: number, lod: Lod, clock: () => number, deadline: number): T | null;
   /** Make a built item visible / invisible. */
   show(item: T): void;
   hide(item: T): void;
@@ -142,11 +224,11 @@ export class ChunkStreamer<T> {
   private frame = 0;
   private lastChunk = -1;
   private nCand = 0;
-  /** Chunks built in the most recent update, and in total. */
+  /** Chunks finished in the most recent update, and in total. */
   builtLast = 0;
   builtTotal = 0;
-  /** Longest single build measured, ms. */
-  worstBuildMs = 0;
+  /** Longest time spent building in one update, ms. */
+  worstFrameBuildMs = 0;
 
   private readonly g: ChunkGrid;
   private readonly hooks: StreamHooks<T>;
@@ -226,6 +308,8 @@ export class ChunkStreamer<T> {
     this.lastChunk = here;
 
     const t0 = clock();
+    const deadline = t0 + STREAM.BUILD_MS;
+    let spent = false; // the frame's build budget is used up
     for (let k = 0; k < nc; k++) {
       const ci = this.cand[k];
       const d = this.candD[k];
@@ -242,14 +326,16 @@ export class ChunkStreamer<T> {
         const cxk = ci % g.ncx;
         const czk = Math.floor(ci / g.ncx);
         const urgent = teleport && Math.abs(cxk - hx) <= 1 && Math.abs(czk - hz) <= 1;
-        const room = this.builtLast === 0 || (this.builtLast < STREAM.MAX_BUILDS && clock() - t0 < STREAM.BUILD_MS);
-        if (!urgent && !room) continue; // keep showing what it has until there is time
-        const b0 = clock();
-        this.items[slot] = this.hooks.build(ci, want);
-        const ms = clock() - b0;
-        if (ms > this.worstBuildMs) this.worstBuildMs = ms;
+        if (!urgent && (spent || this.builtLast >= STREAM.MAX_BUILDS)) continue; // keep showing what it has
+        const item = this.hooks.build(ci, want, clock, urgent ? Infinity : deadline);
+        if (item === null) {
+          spent = true;
+          continue;
+        }
+        this.items[slot] = item;
         this.builtLast++;
         this.builtTotal++;
+        if (clock() >= deadline) spent = true;
       }
       this.hideChunk(ci, nowMs);
       const item = this.items[slot];
@@ -259,6 +345,8 @@ export class ChunkStreamer<T> {
         this.shown[ci] = want;
       }
     }
+    const ms = clock() - t0;
+    if (ms > this.worstFrameBuildMs) this.worstFrameBuildMs = ms;
     // Shown chunks that fell out of reach.
     for (let ci = 0; ci < this.n; ci++) {
       if (this.shown[ci] !== Lod.NONE && this.stamp[ci] !== frame) this.hideChunk(ci, nowMs);
@@ -320,9 +408,12 @@ export class ChunkStreamer<T> {
 }
 
 export interface CityView extends WorldView {
-  /** Streaming statistics, for the perf report and tests in a browser. */
-  stats(): { shown: number; resident: number; builtTotal: number; worstBuildMs: number; triangles: number };
+  /** Streaming statistics, for the perf report. */
+  stats(): { shown: number; resident: number; builtTotal: number; worstChunkMs: number; worstFrameBuildMs: number; triangles: number };
 }
+
+/** Partly built chunks kept while nearer ones jump the queue. */
+const MAX_PARTIAL = 6;
 
 const now = (): number => performance.now();
 
@@ -333,11 +424,31 @@ export function createCityView(world: World): CityView {
   const mat = inkMaterial();
   const g = chunkGrid(world);
   const bk = bucketWorld(world, g);
+  const jobs: (ChunkJob | null)[] = new Array<ChunkJob | null>(g.ncx * g.ncz * 2).fill(null);
+  const partial: number[] = [];
   let triangles = 0;
+  let worstChunkMs = 0;
   const streamer = new ChunkStreamer<THREE.Mesh>(g, {
-    build(ci, lod) {
-      const b = new MeshBuilder();
-      meshChunk(b, world, g, bk, ci, lod);
+    build(ci, lod, clock, deadline) {
+      const slot = ci * 2 + lod - 1;
+      let job = jobs[slot];
+      if (job === null) {
+        if (partial.length >= MAX_PARTIAL) {
+          const drop = partial.shift();
+          if (drop !== undefined) jobs[drop] = null;
+        }
+        job = new ChunkJob(world, g, bk, ci, lod);
+        jobs[slot] = job;
+        partial.push(slot);
+      }
+      const t0 = clock();
+      const done = job.run(clock, deadline);
+      job.ms += clock() - t0;
+      if (!done) return null;
+      jobs[slot] = null;
+      partial.splice(partial.indexOf(slot), 1);
+      if (job.ms > worstChunkMs) worstChunkMs = job.ms;
+      const b = job.b;
       const mesh = new THREE.Mesh(b.build(), mat);
       mesh.name = `chunk_${ci}_${lod === Lod.NEAR ? 'near' : 'far'}`;
       mesh.matrixAutoUpdate = false;
@@ -355,7 +466,7 @@ export function createCityView(world: World): CityView {
     },
     dispose(m) {
       group.remove(m);
-      triangles -= (m.userData.tris as number) ?? 0;
+      triangles -= m.userData.tris as number;
       m.geometry.dispose();
     },
   });
@@ -373,7 +484,8 @@ export function createCityView(world: World): CityView {
         shown: streamer.shownCount(),
         resident: streamer.residentCount(),
         builtTotal: streamer.builtTotal,
-        worstBuildMs: streamer.worstBuildMs,
+        worstChunkMs,
+        worstFrameBuildMs: streamer.worstFrameBuildMs,
         triangles,
       };
     },

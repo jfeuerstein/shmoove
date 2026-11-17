@@ -1,6 +1,7 @@
 import type * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import {
+  ChunkJob,
   ChunkStreamer,
   STREAM,
   bucketWorld,
@@ -398,6 +399,30 @@ describe('chunks', () => {
   });
 });
 
+describe('incremental chunk builds', () => {
+  it('a chunk built piece by piece across many deadlines equals one built in one go', () => {
+    const g = chunkGrid(town);
+    const bk = bucketWorld(town, g);
+    for (const ci of [0, 7, 12, 21, 30]) {
+      for (const lod of [Lod.NEAR, Lod.FAR]) {
+        const job = new ChunkJob(town, g, bk, ci, lod);
+        let calls = 0;
+        // A deadline already passed: exactly one piece per call.
+        while (!job.run(() => 1, 0)) calls++;
+        expect(calls).toBeGreaterThan(5);
+        // Same vertices (the pieces interleave ground and paint rows, so compare as sorted sets).
+        const verts = (p: Float32Array): string[] => {
+          const out: string[] = [];
+          for (let i = 0; i < p.length; i += 3) out.push(`${p[i]},${p[i + 1]},${p[i + 2]}`);
+          return out.sort();
+        };
+        const whole = positions(geometry((b) => meshChunk(b, town, g, bk, ci, lod)));
+        expect(verts(positions(job.b.build()))).toEqual(verts(whole));
+      }
+    }
+  });
+});
+
 describe('streaming policy', () => {
   const grid: ChunkGrid = { minX: 0, minZ: 0, size: 60, cells: 20, ncx: 8, ncz: 25 };
   const centre = (ci: number): [number, number] => [((ci % grid.ncx) + 0.5) * grid.size, (Math.floor(ci / grid.ncx) + 0.5) * grid.size];
@@ -413,6 +438,7 @@ describe('streaming policy', () => {
     const built: Item[] = [];
     const s = new ChunkStreamer<Item>(grid, {
       build(ci, lod) {
+        // Each chunk is one indivisible piece of work here.
         t += buildMs;
         const it: Item = { ci, lod, visible: false, disposed: false };
         built.push(it);
@@ -523,6 +549,49 @@ describe('streaming policy', () => {
     const visible = built.filter((it) => it.visible);
     expect(visible.length).toBe(s.shownCount());
     for (const it of visible) expect(s.shown[it.ci]).toBe(it.lod);
+  });
+
+  it('finishes chunks whose builds span several frames, nearest first, keeping what is shown meanwhile', () => {
+    let t = 0;
+    const calls = new Map<number, number>();
+    const finished: number[] = [];
+    const s = new ChunkStreamer<{ ci: number }>(grid, {
+      build(ci, lod, clock, deadline) {
+        // Three pieces of 3 ms each; stop at the deadline.
+        const key = ci * 2 + lod;
+        for (;;) {
+          const n = (calls.get(key) ?? 0) + 1;
+          calls.set(key, n);
+          t += 3;
+          if (n >= 3) {
+            finished.push(ci);
+            return { ci };
+          }
+          if (clock() >= deadline) return null;
+        }
+      },
+      show() {},
+      hide() {},
+      dispose() {},
+    });
+    let now = 0;
+    const clock = (): number => t;
+    for (let f = 0; f < 600; f++) {
+      now += 16;
+      t = now;
+      s.update(250, 700, now, clock);
+      // Never more than one piece past the budget in a frame once the first view is up.
+      if (f > 0) expect(t - now).toBeLessThanOrEqual(STREAM.BUILD_MS + 3);
+    }
+    for (let ci = 0; ci < s.n; ci++) {
+      const [x, z] = centre(ci);
+      if (Math.hypot(x - 250, z - 700) < STREAM.NEAR_R) expect(s.shown[ci]).toBe(Lod.NEAR);
+    }
+    const d = finished.slice(9).map((ci) => {
+      const [x, z] = centre(ci);
+      return Math.hypot(x - 250, z - 700);
+    });
+    for (let i = 1; i < d.length; i++) expect(d[i]).toBeGreaterThanOrEqual(d[i - 1] - 1e-9);
   });
 
   it('reuses cached chunks when the camera comes back instead of rebuilding', () => {
