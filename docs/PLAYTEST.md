@@ -52,7 +52,7 @@ Automated tests only prove the mechanics work; they cannot say whether they feel
 
 | Question | Constants |
 | --- | --- |
-| Can you see far enough down the hill in portrait? | `CAM_HEIGHT`, `CAM_DIST`, `CAM_LOOK_AHEAD`, `CAM_LOOK_UP`, `CAM_FOV` |
+| Can you see far enough down the hill in portrait? | `CAM_HEIGHT`, `CAM_DIST`, `CAM_LOOK_AHEAD`, `CAM_LOOK_UP`, `CAM_FOV`, `CAM_LOOK_FAR`, `CAM_LOOK_SLOPE`, `CAM_LOOK_TILT_MAX` |
 | Does speed feel fast? | `CAM_FOV_SPEED`, `CAM_SPEED_DIST` |
 | Does the camera turn with you without making you seasick? | `CAM_YAW_RATE`, `CAM_POS_RATE` |
 | Can you read the swing and the aim arrow while hitched? | `CAM_HITCH_DIST`, `CAM_HITCH_HEIGHT` |

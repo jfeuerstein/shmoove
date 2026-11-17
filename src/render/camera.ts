@@ -7,7 +7,7 @@
 import * as THREE from 'three';
 import { FEEL } from '../sim/constants';
 import { Mode } from '../sim/types';
-import { Surface, topHeight, type World } from '../sim/world';
+import { Surface, terrainHeight, topHeight, type World } from '../sim/world';
 
 export interface CamTarget {
   /** Interpolated skater position. */
@@ -35,6 +35,7 @@ export class ChaseCamera {
   private yaw = 0;
   private followY = 0;
   private slope = 0;
+  private tilt = 0;
   private extraDist = 0;
   private extraHeight = 0;
   private pull = 1;
@@ -60,6 +61,7 @@ export class ChaseCamera {
     this.followY = t.y;
     this.lastY = t.y;
     this.slope = 0;
+    this.tilt = 0;
     this.extraDist = 0;
     this.extraHeight = 0;
     this.pull = 1;
@@ -137,11 +139,13 @@ export class ChaseCamera {
     }
 
     this.camera.position.set(cx, cy, cz);
-    _look.set(
-      t.x + fx * F.CAM_LOOK_AHEAD,
-      this.followY + F.CAM_LOOK_UP + this.slope * F.CAM_LOOK_AHEAD * 0.9,
-      t.z + fz * F.CAM_LOOK_AHEAD,
-    );
+    // Look where the ground goes: down into the city when it falls away ahead, up the hill when
+    // it rises. This is what fills a portrait frame with streets instead of sky.
+    const far = F.CAM_LOOK_FAR;
+    const ahead = terrainHeight(world, t.x + fx * far, t.z + fz * far) - terrainHeight(world, t.x, t.z);
+    const wantTilt = Math.max(-F.CAM_LOOK_TILT_MAX, Math.min(F.CAM_LOOK_TILT_MAX, ahead * F.CAM_LOOK_SLOPE));
+    this.tilt += (wantTilt - this.tilt) * ease(2);
+    _look.set(t.x + fx * F.CAM_LOOK_AHEAD, this.followY + F.CAM_LOOK_UP + this.tilt, t.z + fz * F.CAM_LOOK_AHEAD);
     this.camera.lookAt(_look);
 
     const wantFov = F.CAM_FOV + F.CAM_FOV_SPEED * speedK;
