@@ -1,0 +1,7 @@
+{
+  "drawCalls": 120,
+  "triangles": 180000,
+  "workMeanMs": 10,
+  "workP95Ms": 16.6,
+  "bundleGzipKb": 400
+}
