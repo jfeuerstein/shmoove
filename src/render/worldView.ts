@@ -7,7 +7,8 @@ import * as THREE from 'three';
 import type { World } from '../sim/world';
 import { MeshBuilder } from './geom';
 import { inkMaterial } from './look';
-import { meshRail, meshSolid, meshTerrain } from './worldMesh';
+import { createSea } from './dress/sea';
+import { meshRail, meshSolid, meshTerrain, meshZoneProps } from './worldMesh';
 
 export interface WorldView {
   group: THREE.Group;
@@ -51,17 +52,22 @@ export function createStaticWorldView(world: World): WorldView {
     }
     return b;
   };
-  for (const o of world.solids) meshSolid(bucket(o.cz), o);
-  for (const r of world.rails) meshRail(bucket(r.pts[2]), r, world);
+  for (const o of world.solids) meshSolid(bucket(o.cz), world, o);
+  for (const r of world.rails) meshRail(bucket(r.pts[2]), world, r);
+  for (const z of world.zones) meshZoneProps(bucket(z.z), world, z);
   for (const [k, b] of buckets) add(b, `props_${k}`);
+  const sea = createSea(world);
+  if (sea) group.add(sea.mesh);
 
   return {
     group,
-    update() {
-      // Static: nothing to stream.
+    update(_camX, _camZ, dayFrac) {
+      // Static: nothing to stream; only the sea's wave print drifts.
+      sea?.setTime(dayFrac * 720);
     },
     dispose() {
       for (const g of geos) g.dispose();
+      sea?.dispose();
     },
   };
 }
