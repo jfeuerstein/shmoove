@@ -11,7 +11,7 @@ import { DAY_TICKS, FEEL, resetFeel } from '../../src/sim/constants';
 import { CONDUCTORS } from '../../src/sim/game/content/conductors';
 import { ERRANDS } from '../../src/sim/game/content/errands';
 import { stopZoneId, type ConductorDef } from '../../src/sim/game/conductors';
-import { errandOpen, inZone, type ErrandDef } from '../../src/sim/game/errands';
+import { ZONE_DY, errandOpen, inZone, type ErrandDef } from '../../src/sim/game/errands';
 import { Game, type GameEvent } from '../../src/sim/game/game';
 import { grabPoint, makeVehicleState, pathAt, ticksToArrival, vehicleAt, type CompiledLine } from '../../src/sim/lines';
 import { angleDiff, clamp } from '../../src/sim/math';
@@ -176,6 +176,24 @@ describe('errand content on the city', () => {
     }
     const game = new Game(W, { seed: 1 });
     expect(game.errands.list.map((e) => e.id)).toEqual(ERRANDS.map((e) => e.id));
+  });
+
+  it("no giver's spot takes in a stop's waiting area (the stop's zone and 4 m round it), so waiting for a ride never takes an errand", () => {
+    // Holding a still finger stands a skater still to wait for a ride; inside a giver's spot the
+    // same hold fills the giver's offer instead.
+    const stops = W.zones.filter((z) => z.kind === 'stop');
+    expect(stops.length).toBeGreaterThan(30);
+    const overlaps: string[] = [];
+    for (const e of ERRANDS) {
+      const g = zone(e.giver);
+      for (const s of stops) {
+        // A stop on another level (the needle's top above the summit lawn) is not in reach of the giver.
+        if (Math.abs(g.y - s.y) >= ZONE_DY + 2) continue;
+        const d = Math.hypot(g.x - s.x, g.z - s.z);
+        if (d < g.r + s.r + 4) overlaps.push(`${e.id} (${e.giver}) and ${s.id} ${s.name}: ${d.toFixed(1)} m apart`);
+      }
+    }
+    expect(overlaps).toEqual([]);
   });
 
   it('at least 10 errands, two or more given in each district (by where the giver stands), limits of 2 to 4 minutes', () => {

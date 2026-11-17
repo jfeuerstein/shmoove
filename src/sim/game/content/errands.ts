@@ -14,7 +14,7 @@ export const ERRANDS: readonly ErrandDef[] = [
   {
     id: 'fish_run',
     title: 'Fish before it turns',
-    giver: 'fish_market',
+    giver: 'giver_lonja',
     district: District.DOCKS,
     brief: 'Ride the fish truck up to the Mercado gate, quick.',
     limitTicks: 4 * MIN,
@@ -40,11 +40,11 @@ export const ERRANDS: readonly ErrandDef[] = [
   {
     id: 'saffron',
     title: 'Saffron for the stalls',
-    giver: 'stop_M1_0',
+    giver: 'giver_bulevar',
     district: District.DOCKS,
     brief: 'Catch a moped up the ramp to the Rellano 410 stalls.',
     limitTicks: 2.5 * MIN,
-    hours: [0.3, 0.78],
+    hours: [0.3, 0.77],
     steps: [{ kind: 'rideTo', line: 'M1', zone: 'stop_M1_2' }],
   },
   // ------------------------------------------------------------------ Mercado Steps
@@ -73,7 +73,7 @@ export const ERRANDS: readonly ErrandDef[] = [
   {
     id: 'soup',
     title: "Don't spill the soup",
-    giver: 'clock_tower',
+    giver: 'giver_torre',
     district: District.MERCADO,
     brief: 'Hot soup for the tram crew at the docks. Gently.',
     limitTicks: 2 * MIN,
@@ -95,7 +95,7 @@ export const ERRANDS: readonly ErrandDef[] = [
   {
     id: 'night_keys',
     title: "The night driver's keys",
-    giver: 'stop_T4_2',
+    giver: 'giver_terraza_727',
     district: District.TERRACES,
     brief: 'She left her keys at the bar. Garage, before her shift.',
     limitTicks: 2.5 * MIN,
@@ -114,7 +114,7 @@ export const ERRANDS: readonly ErrandDef[] = [
   {
     id: 'tram9_post',
     title: 'Post for Terraza Alta',
-    giver: 'stop_T3_0',
+    giver: 'giver_terraza_baja',
     district: District.TERRACES,
     brief: 'Ride tram 9 round the zigzag to Terraza Alta.',
     limitTicks: 3.5 * MIN,
@@ -125,7 +125,7 @@ export const ERRANDS: readonly ErrandDef[] = [
   {
     id: 'kite_spool',
     title: 'A kite spool for the ridge',
-    giver: 'funicular_top',
+    giver: 'giver_funicular',
     district: District.ANTENNA,
     brief: 'Cable car up, swap cars at the station, on to the ridge.',
     limitTicks: 2.5 * MIN,
@@ -139,7 +139,7 @@ export const ERRANDS: readonly ErrandDef[] = [
   {
     id: 'radio_valves',
     title: 'Valves for the radio shack',
-    giver: 'summit',
+    giver: 'giver_cumbre',
     district: District.ANTENNA,
     brief: 'Glass valves, downhill to the radio shack. No falls.',
     limitTicks: 2 * MIN,
