@@ -123,8 +123,8 @@ export const LEVELS: readonly Level[] = [
 
 /** The landing the wedding plaza opens off, and the x range it holds level (the plaza plus its blend). */
 export const PLAZA_LEVEL_Z = 462;
-const PLAZA_FLAT_X0 = 8;
-const PLAZA_FLAT_X1 = 72;
+const PLAZA_FLAT_X0 = 12;
+const PLAZA_FLAT_X1 = 68;
 
 /**
  * Height of a level's street (and pad) at x, along its length. Every level crests at x = 0 and
@@ -151,7 +151,7 @@ const FIRST_TILT = 0.0175;
  */
 export const CROSS_FALL = 0.033;
 /** The top Mercado landing is the spawn's lookout apron: steeper, so a new skater rolls off without a push. */
-export const SPAWN_FALL = 0.05;
+export const SPAWN_FALL = 0.048;
 /** The new-game spawn: on the spine at the top landing of the Mercado, facing downhill. */
 export const SPAWN_LEVEL_Z = 566;
 export const SPAWN_Z = 570;

@@ -509,19 +509,26 @@ function dressAntenna(w: World, rng: Rng): void {
 // a level run-in on the landing above and a short run-out past the bottom.
 
 export const HANDRAIL_H = 0.9;
-const RUN_IN = 5;
+const RUN_IN = 4;
 const RUN_OUT = 2.5;
 
 function handrail(w: World, x: number, zLo: number, zHi: number): void {
   const y = (z: number): number => terrainHeight(w, x, z) + HANDRAIL_H;
   const zTop = zHi + RUN_IN;
   const zBot = zLo - RUN_OUT;
-  addRail(w, [x, y(zHi), zTop, x, y(zHi), zHi, x, y(zLo), zLo, x, y(zLo), zBot], 'handrail');
+  // The landing above falls toward the flight: the level run-in sits half that fall higher at the
+  // top of the flight, so it is HANDRAIL_H above the ground at the middle of its length.
+  const yIn = (y(zHi) + y(zTop)) / 2;
+  // Likewise the run-out over the landing below, which falls away from the flight's foot.
+  const yOut = (y(zLo) + y(zBot)) / 2;
+  addRail(w, [x, yIn, zTop, x, yIn, zHi, x, yOut, zLo, x, yOut, zBot], 'handrail');
 }
 
 function dressHandrails(w: World, g: Ground): void {
   for (const st of g.stairs) {
-    const x = st.x + (st.half > STAIR_HALF ? 3 : 2);
+    // The funicular run-out's rail keeps to its west side, on a row of height samples, clear of the
+    // car standing at the base.
+    const x = st.x + (st.x === FUNI_X ? -5 : 2);
     for (const f of st.stepper.flights) handrail(w, x, f.zLo, f.zHi);
   }
   for (const f of g.spine.flights) {

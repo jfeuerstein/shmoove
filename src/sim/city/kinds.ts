@@ -34,7 +34,7 @@ export const SOLID_KINDS = {
 } as const satisfies Record<string, KindInfo>;
 
 export const RAIL_KINDS = {
-  handrail: { styles: 1, note: 'Stair handrail, 0.9 m above the steps, level run-in at the top' },
+  handrail: { styles: 1, note: 'Stair handrail, 0.9 m above the steps, 4 m level run-in at the top, short run-out at the bottom' },
   ledge: { styles: 1, note: 'Edge of a wall, quay, pier or container top' },
   wire: { styles: 1, note: 'Laundry line across a terrace street, 3-5 m up' },
   pipe: { styles: 1, note: 'Docks pipe along a warehouse wall, or the gantry crane rail' },

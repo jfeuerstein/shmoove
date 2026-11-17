@@ -68,18 +68,22 @@ export class Stepper {
       if (zB <= zA + 1e-6) continue;
       const yA = s.h(o.axis, zA);
       const yB = n.h(o.axis, zB);
+      // The fewest flights that keep within the grade limits (a single flight starts and ends on
+      // the spans' edges, which lie on grid lines); mid landings only where one flight is too steep.
       let best = 1;
       let bestErr = Infinity;
-      const ideal = (o.minGrade + o.maxGrade) / 2;
       const maxN = o.midLen > 0 ? 3 : 1;
       for (let k = 1; k <= maxN; k++) {
         const run = zB - zA - o.midLen * (k - 1);
         if (run <= 2) break;
         const g = (yB - yA) / run;
         const out = g < o.minGrade ? o.minGrade - g : g > o.maxGrade ? g - o.maxGrade : 0;
-        const err = out * 100 + Math.abs(g - ideal);
-        if (err < bestErr) {
-          bestErr = err;
+        if (out === 0) {
+          best = k;
+          break;
+        }
+        if (out < bestErr) {
+          bestErr = out;
           best = k;
         }
       }

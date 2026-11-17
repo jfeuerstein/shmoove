@@ -439,6 +439,8 @@ describe('what stands on the hill', () => {
     const B = CITY.bands;
     const stairs = stairRegions(w).filter((r) => r.zMid >= B.mercado && r.zMid < B.terraces && r.medianGrade >= 0.25);
     expect(stairs.length).toBeGreaterThanOrEqual(8);
+    // Steps, not a ramp, and not a cliff: no stair street steeper than 45%.
+    for (const reg of stairs) expect(reg.medianGrade, `stairs near z ${reg.zMid.toFixed(0)}`).toBeLessThanOrEqual(0.45);
 
     const awnings = w.solids.filter((o) => o.kind === 'awning');
     expect(awnings.length).toBeGreaterThanOrEqual(40);
@@ -696,12 +698,47 @@ describe('no traps', () => {
 });
 
 describe('stairs and rails in the real city', () => {
-  it('handrails take a hop from the landing above and carry you down the flight', () => {
+  it('every handrail has a level run-in and sits 0.9 m above the ground all along, over flights no steeper than 45%', () => {
     const w = city.world;
     const rails = w.rails.filter((r) => r.kind === 'handrail');
-    // A spread of handrails across the city.
-    const step = Math.max(1, Math.floor(rails.length / 12));
-    const picks = rails.filter((_, i) => i % step === 0).slice(0, 12);
+    expect(rails.length).toBeGreaterThanOrEqual(60);
+    const bad: string[] = [];
+    for (const r of rails) {
+      const p = r.pts;
+      const at = `rail ${r.index} at ${p[0].toFixed(0)},${p[2].toFixed(0)}`;
+      // The first 4-6 m (from the top) is level within 3 cm.
+      const runIn = Math.hypot(p[3] - p[0], p[5] - p[2]);
+      if (runIn < 4 - 1e-6 || runIn > 6 + 1e-6) bad.push(`${at}: run-in ${runIn.toFixed(2)} m`);
+      if (Math.abs(p[4] - p[1]) > 0.03) bad.push(`${at}: run-in not level (${(p[4] - p[1]).toFixed(3)})`);
+      // 0.9 +- 0.1 m above the ground, every 0.5 m along the whole rail.
+      const n = p.length / 3;
+      for (let i = 0; i + 1 < n; i++) {
+        const len = Math.hypot(p[i * 3 + 3] - p[i * 3], p[i * 3 + 5] - p[i * 3 + 2]);
+        const steps = Math.max(1, Math.ceil(len / 0.5));
+        for (let k = 0; k <= steps; k++) {
+          const f = k / steps;
+          const x = p[i * 3] + (p[i * 3 + 3] - p[i * 3]) * f;
+          const y = p[i * 3 + 1] + (p[i * 3 + 4] - p[i * 3 + 1]) * f;
+          const z = p[i * 3 + 2] + (p[i * 3 + 5] - p[i * 3 + 2]) * f;
+          const above = y - terrainHeight(w, x, z);
+          if (Math.abs(above - 0.9) > 0.1 + 1e-6) {
+            bad.push(`${at}: ${above.toFixed(2)} m above the ground at z ${z.toFixed(1)}`);
+            break;
+          }
+        }
+      }
+      // The flight under its sloped part: between 25% and 45%.
+      const g = Math.abs(p[4] - p[7]) / Math.max(1e-6, Math.hypot(p[6] - p[3], p[8] - p[5]));
+      if (g < 0.25 || g > 0.45 + 0.005) bad.push(`${at}: flight ${(g * 100).toFixed(0)}%`);
+    }
+    expect(bad.slice(0, 20)).toEqual([]);
+  });
+
+  it('handrails take a hop from the landing above and carry you down the flight', () => {
+    const w = city.world;
+    // Every handrail, with the same approach: rolling down the landing above at 6 m/s along the
+    // rail's line, a hop half a metre before its top end.
+    const picks = w.rails.filter((r) => r.kind === 'handrail');
     let passed = 0;
     const fails: string[] = [];
     for (const r of picks) {
@@ -732,7 +769,8 @@ describe('stairs and rails in the real city', () => {
       if (iStart >= 0 && iEnd > iStart && yOut < yIn - 1) passed++;
       else fails.push(`rail ${r.index} at ${x.toFixed(0)},${zTop.toFixed(0)}: start ${iStart} end ${iEnd} ${yIn.toFixed(1)}->${yOut.toFixed(1)}`);
     }
-    expect(passed, fails.join('\n')).toBeGreaterThanOrEqual(Math.max(6, picks.length - 2));
+    expect(fails).toEqual([]);
+    expect(passed).toBe(picks.length);
   });
 });
 
@@ -854,11 +892,8 @@ describe('routes', () => {
             const sz = p[i * 3 - 1] + (dz * k) / steps;
             sampleTerrain(w, sx, sz, TS);
             if (!ok.has(TS.surface)) problems.push(`${id} on surface ${TS.surface} at ${sx.toFixed(0)},${sz.toFixed(0)}`);
-            collideSolids(w, sx, TS.y, sz, 2.6, 3.0, 0.4, WH);
-            if (WH.hit) {
-              const o = w.solids[WH.solid];
-              problems.push(`${id} within 2.6 m of ${o.kind} at ${sx.toFixed(0)},${sz.toFixed(0)}`);
-            }
+            const o = solidWithin(w, sx, TS.y, sz, 2.6, 3.0, 0.4);
+            if (o) problems.push(`${id} within 2.6 m of ${o.kind} at ${sx.toFixed(0)},${sz.toFixed(0)}`);
           }
         }
         // Corner radius over points about 6 m apart.

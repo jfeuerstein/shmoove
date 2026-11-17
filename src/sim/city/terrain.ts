@@ -207,14 +207,19 @@ export function padHeight(L: Level, x: number, z: number): number {
  * edge that falls onto them, so a skater set down at the foot of the first flight rolls off it.
  */
 function docksFoot(z: number): number {
-  return docksHeight(z) + CROSS_FALL * Math.max(0, z - CITY.bands.mercado);
+  return docksHeight(z) + CROSS_FALL * Math.max(0, z - (gridFloor(CITY.bands.mercado + 3) - 3));
 }
 
 /** The last level: the Antenna gate street. */
 export const GATE = LEVELS[LEVELS.length - 1];
 
+/**
+ * A level's crossing on a stair street, snapped out to grid lines like the level itself, so every
+ * flight starts and ends on a row of height samples: the steps have crisp edges in the ground and
+ * a handrail's run-in lies over the landing, not over a lip the grid has rounded off.
+ */
 function levelSpan(L: Level, surf: number): Span {
-  return { z0: L.z0, z1: L.z1, h: (x, z) => streetHeight(L, x, z), surf };
+  return { z0: gridFloor(L.z0), z1: gridCeil(L.z1), h: (x, z) => streetHeight(L, x, z), surf };
 }
 
 function baseSurface(x: number, z: number): Surface {
@@ -353,7 +358,7 @@ export function buildGround(w: World): Ground {
   // --- Mercado stair streets, with the funicular run-out at FUNI_X.
   const stairs: StairStreet[] = [];
   const mercado = LEVELS.slice(0, firstTerrace);
-  const docksSpan: Span = { z0: B.mercado - 12, z1: B.mercado + 3, h: (_x, z) => docksFoot(z), surf: Surface.STREET };
+  const docksSpan: Span = { z0: B.mercado - 12, z1: gridFloor(B.mercado + 3), h: (_x, z) => docksFoot(z), surf: Surface.STREET };
   for (const xs of [...MERCADO_STAIRS, FUNI_X]) {
     const crossesPlaza = xs > PLAZA_BODA.x0 && xs < PLAZA_BODA.x1;
     // Two pieces when the plaza interrupts the street.
@@ -422,13 +427,13 @@ export function buildGround(w: World): Ground {
   for (const [z, x1] of ANTENNA_PATHS) C.paint(Math.min(0, x1), Math.max(0, x1), z - 3.5, z + 3.5, Surface.STREET);
 
   // --- The spine: docks -> stairs through every level -> antenna street -> summit.
-  const spineSpans: Span[] = [{ z0: SPINE_BOTTOM_Z, z1: B.mercado + 3, h: (_x, z) => docksFoot(z), surf: Surface.STREET }];
+  const spineSpans: Span[] = [{ z0: SPINE_BOTTOM_Z, z1: gridFloor(B.mercado + 3), h: (_x, z) => docksFoot(z), surf: Surface.STREET }];
   for (const L of LEVELS) spineSpans.push(levelSpan(L, Surface.STREET));
   const gateTop = streetHeight(GATE, SPINE_X, GATE.z1);
   // Over Antenna Hill the spine is one long stepped path: on smooth paving at this grade a skater
   // reached 29 m/s and drifted off it; on steps they keep to a walking-pace roll and the fall line
   // holds them to it.
-  spineSpans.push({ z0: GATE.z1, z1: SPINE_TOP_Z, h: (_x, z) => Math.max(gateTop, baseHeight(z)), surf: Surface.STAIRS });
+  spineSpans.push({ z0: gridCeil(GATE.z1), z1: SPINE_TOP_Z, h: (_x, z) => Math.max(gateTop, baseHeight(z)), surf: Surface.STAIRS });
   const spine = new Stepper(spineSpans, { axis: SPINE_X, ...STAIR_OPTS });
   C.rect({
     x0: SPINE_X - SPINE_HALF,
