@@ -6,6 +6,7 @@ import { createAudio } from '../audio/index';
 import { Gestures, attachGestures } from '../input/gestures';
 import { createChalkView } from '../render/chalkView';
 import { createCityView } from '../render/cityView';
+import { createHintView } from '../render/hintView';
 import { createMarkersView } from '../render/markersView';
 import { createView } from '../render/view';
 import { DT, FEEL } from '../sim/constants';
@@ -17,6 +18,7 @@ import type { ShellHost } from '../ui/titleShell';
 import { createAudioView } from './audioView';
 import { createDebugPanel, type DebugPanel } from './debugPanel';
 import { createHaptics } from './haptics';
+import { NEW_GAME_DAY_FRAC, isFixture } from './newGame';
 import { getParams } from './params';
 import { appVersion, createPwa } from './pwa';
 import { getRoute } from './routes';
@@ -44,7 +46,8 @@ function boot(): void {
   const uiRoot = document.getElementById('ui') as HTMLElement;
 
   const world = buildWorld(params);
-  const game = new Game(world, { seed: params.seed, startDayFrac: params.t ?? undefined });
+  // A fresh boot is a new game at the new-game clock; a stored save puts its own clock back below.
+  const game = new Game(world, { seed: params.seed, startDayFrac: params.t ?? NEW_GAME_DAY_FRAC });
   const sim = game.sim;
   // Before anything reads game state: a stored save puts progress, chalk lines and the skater back.
   const saves = createSaveGlue(game, { e2e: params.e2e });
@@ -53,6 +56,7 @@ function boot(): void {
   const view = createView(canvas, world, isStreamed(params) ? { worldView: createCityView } : {});
   const chalkView = createChalkView(view.scene, world);
   const markersView = createMarkersView(view.scene, world, game);
+  const hintView = createHintView(view.scene, world);
   const route = getRoute(params.route);
   const panel: DebugPanel | null = params.debug ? createDebugPanel(uiRoot) : null;
   // After the panel, so the UI can keep its controls clear of it.
@@ -79,6 +83,10 @@ function boot(): void {
   };
   let settings: AppSettings = fromStored(saves.settings, saves.appData.settings);
   applySettings(settings, sinks, shakeDefault);
+  // The onboarding lesson follows the hints setting, except in fixtures (an explicit clock, the slice, a route).
+  const fixture = isFixture(params);
+  const syncHints = (): void => game.onboardingSetHints(settings.hints && !fixture);
+  syncHints();
   const storedFacts = (out: Record<string, string | number | boolean>): void => {
     const st = saves.stored();
     let saved: unknown = null;
@@ -112,6 +120,7 @@ function boot(): void {
       const prev = settings;
       settings = patchSettings(settings, patch);
       applySettings(settings, sinks, shakeDefault, prev);
+      syncHints();
       saves.setSettings(toSaveSettings(settings), { ...extraOf(settings) });
     },
     hasSave: () => saves.hasSave,
@@ -121,6 +130,7 @@ function boot(): void {
     },
     newGame() {
       saves.resetSave(true);
+      sim.setDayFrac(NEW_GAME_DAY_FRAC);
       const w = sim.world;
       placePlayer(w, sim.player, w.spawn.x, w.spawn.z, w.spawn.heading);
       prev.x = sim.player.x;
@@ -130,12 +140,14 @@ function boot(): void {
     resetSave() {
       const before = settings;
       saves.resetSave(false);
+      sim.setDayFrac(NEW_GAME_DAY_FRAC);
       // The skater is back at the spawn: do not interpolate from where they were.
       prev.x = sim.player.x;
       prev.y = sim.player.y;
       prev.z = sim.player.z;
       settings = { ...DEFAULT_APP_SETTINGS };
       applySettings(settings, sinks, shakeDefault, before);
+      syncHints();
     },
     quitToTitle() {
       saves.saveNow();
@@ -197,6 +209,7 @@ function boot(): void {
   const draw = (alpha: number, dt: number): void => {
     chalkView.update(game, alpha, dt);
     markersView.update(game, alpha, dt);
+    hintView.update(game, alpha, dt);
     view.render(sim, prev, alpha, dt, pending);
     uiFrame.armed = gestures.isArmed;
     uiFrame.dt = dt;
