@@ -33,6 +33,9 @@ export interface View {
   dispose(): void;
 }
 
+/** Further than any skater moves in one frame: the camera cuts instead of following. */
+const TELEPORT_DIST = 12;
+
 const _grab = new THREE.Vector3();
 const _hand = new THREE.Vector3();
 const _g = makeGroundSample();
@@ -78,6 +81,9 @@ export function createView(canvas: HTMLCanvasElement, world: World, opts: ViewOp
 
   let last = { drawCalls: 0, triangles: 0 };
   let snapped = false;
+  let lastX = 0;
+  let lastY = 0;
+  let lastZ = 0;
   const frame: SkaterFrame = { x: 0, y: 0, z: 0, yaw: 0, mode: 0, steer: 0, speed: 0, vy: 0, hanging: false, groundY: 0, tick: 0 };
   const target: CamTarget = { x: 0, y: 0, z: 0, vx: 0, vz: 0, heading: 0, mode: 0, speed: 0, surface: 0, rideYaw: null };
 
@@ -173,6 +179,11 @@ export function createView(canvas: HTMLCanvasElement, world: World, opts: ViewOp
       target.speed = p.speed;
       target.surface = p.surface;
       target.rideYaw = rideYaw;
+      // A teleport (race start, respawn far away) cuts the camera rather than flying it across town.
+      if (Math.hypot(x - lastX, y - lastY, z - lastZ) > TELEPORT_DIST) snapped = false;
+      lastX = x;
+      lastY = y;
+      lastZ = z;
       if (!snapped) {
         chase.snap(target);
         snapped = true;

@@ -71,3 +71,21 @@ Decisions made without the owner in the room, newest last. Cuts are marked **CUT
 23. **The line map may stretch a long thin network** up to 3x across so it fills a portrait screen.
 24. **Audio starts on the first touch or key** (browser autoplay rules) and follows the sim through
     one `AudioView` per frame; the nearest-ride search for motor sounds runs every sixth frame.
+
+## M5a — Chalk lines and saves
+
+25. **Steer is quantised to 255 levels for everyone, always** (`Game.step`), so a recording is exact
+    and play never differs depending on whether one is running.
+26. **A chalk line starts from a canonical state** (position, heading, speed on the ground; timers
+    reset), so a share code needs four numbers for its start rather than the whole skater.
+27. **A race moves the clock forward** to the recorded time of day minus a three-second countdown,
+    during which the city runs and both skaters wait. Without that the ghost's rides would not be
+    where they were.
+28. **A loop route must be skated:** the finish only counts after the player has left the finish zone.
+29. **Recording refuses under a roof or awning** ("find open ground"): the canonical start places the
+    skater on the highest surface at that spot.
+30. **Import by link.** `?chalk=SK1-…` opens the import box pre-filled. It exists because the e2e
+    harness can tap but not type, and it is a reasonable way to share a line anyway.
+31. **Share-code size.** Run-length coding gives about 0.6 kB for 30 s of steady steering but about
+    7 kB for two minutes of constant dragging. Open: a denser packing before ship.
+32. **Camera cuts on teleport** (race start, far respawn) instead of flying across the map.
