@@ -2,7 +2,7 @@
  * The ground of Santa Rampa: base hill, every street carved into it, surfaces, and the retaining
  * walls that hold the steps. Returns the street geometry the dressing, routes and zones build on.
  */
-import { Surface, fillHeights, fillSurfaces, type World } from '../world';
+import { Surface, fillHeights, fillSurfaces, terrainHeight, type World } from '../world';
 import { Carver } from './carve';
 import {
   APEX_X,
@@ -107,6 +107,8 @@ const PLAZA_SHED = 0.03;
 const VERGE_HALF = 2.4;
 const VERGE_BLEND = 5;
 const VERGE_MAX_RAISE = 1.2;
+/** Metres beyond the parapet's last segment over which the verge eases back down to the bank. */
+const VERGE_END_FADE = 7;
 
 /**
  * Raise the ground just outside an outer hairpin's parapet to the parapet's top (less PARAPET.flush),
@@ -133,6 +135,14 @@ function raiseVerge(w: World, r: Road, a: Arc): void {
       }
     }
   }
+  // The bank beyond the verge, before it is touched: where it stands higher than the verge would
+  // be, the verge is raised all the way, so no gully is left between the bank and the parapet.
+  const bankY = new Float64Array(n + 1);
+  for (let k = 0; k <= n; k++) {
+    const t = a.a0 + (a.da * k) / n;
+    bankY[k] = terrainHeight(w, a.cx + (rOut + w.cell) * dcos(t), a.cz + (rOut + w.cell) * dsin(t));
+  }
+  const fade = VERGE_END_FADE / (Math.abs(a.da) * rFull);
   const row = w.nx + 1;
   const ix0 = Math.max(0, Math.floor((a.cx - rOut - w.minX) / w.cell));
   const ix1 = Math.min(w.nx, Math.ceil((a.cx + rOut - w.minX) / w.cell));
@@ -147,18 +157,25 @@ function raiseVerge(w: World, r: Road, a: Arc): void {
       // Position along the arc, 0..1; outside the arc's sweep, no verge.
       let f = (datan2(z - a.cz, x - a.cx) - a.a0) / a.da;
       f -= Math.floor(f / 2) * 2;
-      if (f > PARAPET.sweep) continue;
-      const target = roadY[Math.round(f * n)] + PARAPET.height + PARAPET.flush;
+      if (f > PARAPET.sweep + fade) continue;
+      const ka = Math.round(Math.min(f, PARAPET.sweep) * n);
+      const target = roadY[ka] + PARAPET.height + PARAPET.flush;
       let wt = 1;
       if (rho > rFull) {
         const t = 1 - (rho - rFull) / VERGE_BLEND;
         wt = t * t * (3 - 2 * t);
       }
+      // Past the parapet's end the verge eases back down, so its end is not a pocket.
+      if (f > PARAPET.sweep) {
+        const t = 1 - (f - PARAPET.sweep) / fade;
+        wt *= t * t * (3 - 2 * t);
+      }
       const k = iz * row + ix;
       const h = w.heights[k];
       // Where the road stands on fill the bank outside falls away from the parapet anyway: raise
-      // it by no more than VERGE_MAX_RAISE.
-      if (target > h) w.heights[k] = h + Math.min(target - h, VERGE_MAX_RAISE) * wt;
+      // it by no more than VERGE_MAX_RAISE, unless the bank beyond stands higher still.
+      const cap = Math.max(VERGE_MAX_RAISE, Math.min(target, bankY[ka]) - h);
+      if (target > h) w.heights[k] = h + Math.min(target - h, cap) * wt;
     }
   }
 }
@@ -467,7 +484,9 @@ export function buildGround(w: World): Ground {
     bx: 8,
     bz: 8,
     h: (x, z) => {
-      const shed = PLAZA_SHED * len2(Math.max(0, pf.x0 - x, x - pf.x1), Math.max(0, pf.z0 - z, z - pf.z1));
+      // Not north of it: there the plaza meets the rising hill, and a strip falling toward the hill
+      // would be a trench at its foot. It stays level, between the platform and the hill.
+      const shed = PLAZA_SHED * len2(Math.max(0, pf.x0 - x, x - pf.x1), Math.max(0, pf.z0 - z));
       // Beside the platform the plaza also falls south, so its side edges drain off it.
       let side = Math.max(0, Math.min(1, Math.max(pf.x0 - x, x - pf.x1) / 4));
       side = side * side * (3 - 2 * side);

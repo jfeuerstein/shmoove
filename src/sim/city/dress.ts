@@ -511,8 +511,10 @@ function dressAntenna(w: World, rng: Rng): void {
       addRail(w, [mx + 0.6 * dcos(a), g + h - 0.8, mz + 0.6 * dsin(a), ax, terrainHeight(w, ax, az) + 0.3, az], 'guy');
     }
     const dx = mx + (mx < 0 ? 7 : -7);
-    const dg = groundRange(w, dx - 1.5, dx + 1.5, mz - 1.5, mz + 1.5);
-    box(w, dx - 1.5, dx + 1.5, mz - 1.5, mz + 1.5, dg.lo - 0.5, dg.hi + 2.5, 'dish', rng.int(2));
+    const dg = groundRange(w, dx - 2.1, dx + 2.1, mz - 2.1, mz + 2.1);
+    // Turned 45 degrees: on the open slope a skater rolling down onto it meets a corner and slides
+    // round, where a square face would pin them.
+    addSolid(w, { cx: dx, cz: mz, hx: 1.5, hz: 1.5, rot: PI / 4, yBase: dg.lo - 0.5, yTop: dg.hi + 2.5, surface: Surface.ROOF, kind: 'dish', style: rng.int(2) });
   }
   // Sheds, and the radio shack off the west path.
   const sheds: [number, number, number][] = [
@@ -631,6 +633,7 @@ function dressParapets(w: World, g: Ground): void {
         let lo = Infinity;
         let road = -Infinity;
         let bank = Infinity;
+        let rise = Infinity;
         for (const t of [t0, (t0 + tm) / 2, tm, (tm + t1) / 2, t1]) {
           const c = dcos(t);
           const sn = dsin(t);
@@ -639,7 +642,12 @@ function dressParapets(w: World, g: Ground): void {
           lo = Math.min(lo, yi, yo);
           road = Math.max(road, yi);
           bank = Math.min(bank, yo);
+          rise = Math.min(rise, terrainHeight(w, a.cx + (R + PARAPET.open) * c, a.cz + (R + PARAPET.open) * sn));
         }
+        const top = Math.max(road + PARAPET.height, bank + PARAPET.flush);
+        // Where the bank climbs steeply just beyond, the road is cut into the hill: the bank turns a
+        // skater by itself, and a wall at its foot would only leave a gutter to be pinned in.
+        if (rise > top + PARAPET.openRise) continue;
         addSolid(w, {
           cx,
           cz,
@@ -647,7 +655,7 @@ function dressParapets(w: World, g: Ground): void {
           hz: PARAPET.half,
           rot: tm + PI / 2,
           yBase: lo - 0.6,
-          yTop: Math.max(road + PARAPET.height, bank + PARAPET.flush),
+          yTop: top,
           surface: Surface.PLAZA,
           kind: 'wall',
           style: 1,
