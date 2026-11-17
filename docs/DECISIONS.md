@@ -74,7 +74,7 @@ Decisions made without the owner in the room, newest last. Cuts are marked **CUT
 
 ## M5a — Chalk lines and saves
 
-25. **Steer is quantised to 255 levels for everyone, always** (`Game.step`), so a recording is exact
+25. **Steer is quantised to 63 levels for everyone, always** (`Game.step`), so a recording is exact
     and play never differs depending on whether one is running.
 26. **A chalk line starts from a canonical state** (position, heading, speed on the ground; timers
     reset), so a share code needs four numbers for its start rather than the whole skater.
@@ -84,8 +84,16 @@ Decisions made without the owner in the room, newest last. Cuts are marked **CUT
 28. **A loop route must be skated:** the finish only counts after the player has left the finish zone.
 29. **Recording refuses under a roof or awning** ("find open ground"): the canonical start places the
     skater on the highest surface at that spot.
-30. **Import by link.** `?chalk=SK1-…` opens the import box pre-filled. It exists because the e2e
+30. **Import by link.** `?chalk=SK2-…` opens the import box pre-filled. It exists because the e2e
     harness can tap but not type, and it is a reasonable way to share a line anyway.
-31. **Share-code size.** Run-length coding gives about 0.6 kB for 30 s of steady steering but about
-    7 kB for two minutes of constant dragging. Open: a denser packing before ship.
+31. **Share-code size: `SK2-` codes with an arithmetic-coded input stream.** Steer is 63 levels
+    (item 25 now reads 63, not 255). The input section is one stream from a hand-written adaptive
+    binary arithmetic coder (32-bit integer interval, 12-bit probabilities per context): each tick's
+    steer as a delta from the last, modelled on the previous delta or on how long steer has been
+    still, then hold toggles and hops as gaps. Decoding is bounded by `ticks` and re-encodes to check
+    the stream byte for byte, so each line has one code. Measured with the real `Gestures` class fed
+    a jittery dragging thumb (three seeds): about 0.7 kB for 30 s, 2.4 kB for 2 minutes and 4.8 kB
+    for 4 minutes (the run-length `SK1-` format gave 6.0 / 23 / 47 kB); steady steering is 0.24 kB
+    for 30 s (was 0.37 kB). `SK1-` codes are rejected as an unknown version, and saved ones are
+    skipped on load.
 32. **Camera cuts on teleport** (race start, far respawn) instead of flying across the map.
