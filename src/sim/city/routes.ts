@@ -336,16 +336,6 @@ function cableLoop(ax: number, az: number, bx: number, bz: number, sep: number):
   return b.xz;
 }
 
-function ellipse(cx: number, cz: number, rx: number, rz: number, phase = 0): number[] {
-  const n = Math.ceil((TAU * Math.max(rx, rz)) / 2);
-  const xz: number[] = [];
-  for (let i = 0; i <= n; i++) {
-    const f = phase + (TAU * i) / n;
-    xz.push(cx + rx * dsin(f), cz + rz * dcos(f));
-  }
-  return xz;
-}
-
 /** Smooth a path's heights in place (a few passes of a 1-2-1 filter). */
 function smoothHeights(path: number[], passes: number, closed: boolean): void {
   const n = path.length / 3;
@@ -459,6 +449,89 @@ function kingPath(w: World): number[] {
   return path;
 }
 
+/**
+ * The blimp's pass: from the summit round the west of the hill at BLIMP.above, then down over the
+ * hill station, where the end of its rope ladder sweeps BLIMP.ladder above the platform from its
+ * north-east corner to its south-west one (a hop from the platform reaches it; standing does not), on down to the
+ * Cerro Sur stop, and back up round the east of the hill. The approach keeps west of the cable
+ * cars' station and the exit south-west of it, crossing the lower cable car's line only high above.
+ */
+export const BLIMP = {
+  above: 38,
+  /**
+   * Height of the ladder's end above the platform on the low pass: above a standing skater's reach
+   * (FEEL.HAND_HEIGHT + FEEL.HITCH_REACH_Y = 3.6 m), well within a hop's (about 4.9 m).
+   */
+  ladder: 4.2,
+  /** Ladder: the strap hangs this far below the blimp's path (S2's anchorY - hang). */
+  drop: 8.8,
+  /** The low pass across the platform, xz, north-east end first. */
+  pass: [25, 1044, 12.5, 1031.5] as const,
+  /** Path metres past each end of the pass that the blimp stays level. */
+  hold: 3,
+  /** Path metres either side of the level stretch over which the blimp descends and climbs. */
+  ramp: 50,
+  /** Least clearance of the ladder's end over whatever is under it, off the pass. */
+  clear: 2.8,
+  spacing: 1.5,
+} as const;
+
+function blimpPath(w: World): number[] {
+  const E = { cx: 0, cz: 1110, rx: 130, rz: 125 };
+  const at = (f: number): [number, number] => [E.cx + E.rx * dsin(f), E.cz + E.rz * dcos(f)];
+  const xz: number[] = [];
+  // Summit (f = 0) round the west of the hill.
+  for (let f = 0; f > -1.9; f -= 0.06) xz.push(...at(f));
+  const [px0, pz0, px1, pz1] = BLIMP.pass;
+  // East toward the hill station, turning south over its north-west corner, then across the platform.
+  xz.push(-90, 1062, -50, 1061, -15, 1060, 8, 1056, 17, 1053, 24, 1048.5, px0, pz0, (px0 + px1) / 2, (pz0 + pz1) / 2, px1, pz1);
+  // Down to the Cerro Sur stop, then round the east of the hill back to the summit.
+  xz.push(6, 1019, 1.5, 1003);
+  for (let f = -PI; f > -TAU + 0.03; f -= 0.06) xz.push(...at(f));
+  xz.push(xz[0], xz[1]);
+  const ctrl: number[] = [];
+  for (let i = 0; i < xz.length; i += 2) ctrl.push(xz[i], 0, xz[i + 1]);
+  const path = smoothPath(ctrl, BLIMP.spacing, true);
+  const n = path.length / 3;
+  // Arc position of each point, and of the pass's two ends.
+  const s = new Float64Array(n);
+  for (let i = 1; i < n; i++) s[i] = s[i - 1] + len2(path[i * 3] - path[i * 3 - 3], path[i * 3 + 2] - path[i * 3 - 1]);
+  const sA = nearestArc(path, px0, pz0);
+  const sB = nearestArc(path, px1, pz1);
+  const high = new Float64Array(n);
+  for (let i = 0; i < n; i++) high[i] = topHeight(w, path[i * 3], path[i * 3 + 2]) + BLIMP.above;
+  // Smooth the high flight like the hill under it (the last point repeats the first).
+  for (let pass = 0; pass < 4; pass++) {
+    const prev = high.slice();
+    for (let i = 0; i < n; i++) {
+      const a = (i - 1 + (n - 1)) % (n - 1);
+      const c = (i + 1) % (n - 1);
+      high[i] = (prev[a] + 2 * prev[i] + prev[c]) / 4;
+    }
+  }
+  // Level across the platform, and a few metres past each end so the ladder (which trails the
+  // blimp) is level all the way over it.
+  const low = topHeight(w, (px0 + px1) / 2, (pz0 + pz1) / 2) + BLIMP.ladder + BLIMP.drop;
+  const hA = sA - BLIMP.hold;
+  const hB = sB + BLIMP.hold;
+  for (let i = 0; i < n; i++) {
+    const x = path[i * 3];
+    const z = path[i * 3 + 2];
+    if (s[i] >= hA && s[i] <= hB) {
+      path[i * 3 + 1] = low;
+      continue;
+    }
+    let under = topHeight(w, x, z);
+    for (let k = 0; k < 8; k++) under = Math.max(under, topHeight(w, x + 2 * dcos((k * PI) / 4), z + 2 * dsin((k * PI) / 4)));
+    const d = s[i] < hA ? hA - s[i] : s[i] - hB;
+    let t = Math.max(0, 1 - d / BLIMP.ramp);
+    t = t * t * (3 - 2 * t);
+    path[i * 3 + 1] = Math.max(high[i] * (1 - t) + low * t, under + BLIMP.drop + BLIMP.clear);
+  }
+  path[(n - 1) * 3 + 1] = path[1];
+  return path;
+}
+
 // ---------------------------------------------------------------------------------------------
 
 interface Spec {
@@ -552,11 +625,11 @@ export function buildRoutes(w: World, g: Ground): Record<string, RouteDef> {
       ['Almacenes Centro', FE.west, 160],
     ],
   });
-  specs.push({ id: 'D3', loop: true, overhead: false, path: ground(fishLoop(g)), stops: [['Lonja', -110, 32], ['Bulevar', -90, BOULEVARD_Z], ['Puerta del Mercado', 20, 306], ['Muelle', -60, 8]] });
+  specs.push({ id: 'D3', loop: true, overhead: false, path: ground(fishLoop(g)), stops: [['Lonja', -110, 32], ['Bulevar', -90, BOULEVARD_Z], ['Puerta del Mercado', 14, 306], ['Muelle', -60, 8]] });
 
   // Mercado.
-  specs.push({ id: 'M1', loop: true, overhead: false, path: ground(boulevardLoop(g, 410, true, 60)), stops: [['Bulevar', 60, BOULEVARD_Z], ['Rampa Oeste', -152, 345], ['Rellano 410', 20, 410], ['Rampa Este', 152, 345]] });
-  specs.push({ id: 'M2', loop: true, overhead: false, path: ground(levelLoop(g, 358, 410, 40)), stops: [['Rellano 358', 40, 358], ['Rampa Oeste', -152, 384], ['Rellano 410', 20, 410], ['Rampa Este', 152, 384]] });
+  specs.push({ id: 'M1', loop: true, overhead: false, path: ground(boulevardLoop(g, 410, true, 60)), stops: [['Bulevar', 60, BOULEVARD_Z], ['Rampa Oeste', -152, 345], ['Rellano 410', 14, 410], ['Rampa Este', 152, 345]] });
+  specs.push({ id: 'M2', loop: true, overhead: false, path: ground(levelLoop(g, 358, 410, 40)), stops: [['Rellano 358', 40, 358], ['Rampa Oeste', -152, 384], ['Rellano 410', 14, 410], ['Rampa Este', 152, 384]] });
   specs.push({ id: 'M3', loop: true, overhead: false, path: ground(paradeLoop()), stops: [['Iglesia', 40, 457], ['Fuente', 62, 469], ['Torre', 40, 481]] });
 
   // Terraces.
@@ -573,8 +646,7 @@ export function buildRoutes(w: World, g: Ground): Record<string, RouteDef> {
 
   // Secrets.
   specs.push({ id: 'S1', loop: true, overhead: false, path: ground(levelLoop(g, 566, 619, 75)), stops: [['Túnel', 75, 566], ['Terraza Baja', 20, 619]] });
-  const blimp = resample(ellipse(0, 1110, 130, 125), (x, z) => topHeight(w, x, z) + 38, true);
-  smoothHeights(blimp, 4, true);
+  const blimp = blimpPath(w);
   specs.push({ id: 'S2', loop: true, overhead: true, path: blimp, stops: [['Cumbre', 0, 1235], ['Cerro Sur', 0, 985]] });
   specs.push({ id: 'S3', loop: true, overhead: true, path: kingPath(w), stops: [['La Aguja', NEEDLE.x, NEEDLE.z], ['Cresta Sur', KING[KING_FAR][0], KING[KING_FAR][1]]] });
 

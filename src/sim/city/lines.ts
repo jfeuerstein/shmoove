@@ -20,6 +20,8 @@ export const HOURS = {
   day: [[0.3, 0.72]],
   dusk: [[0.72, 0.8]],
   night: [[0.8, 0.22]],
+  /** The night bus's laps leave from 0.80 to midnight: each is done in a quarter of a day, home by 0.24. */
+  nightBus: [[0.8, 1]],
   dayDusk: [[0.3, 0.8]],
   dawnNoon: [[0.22, 0.5]],
   dawnAfternoon: [[0.22, 0.65]],
@@ -70,7 +72,7 @@ export const CITY_LINES: readonly CityLineSpec[] = [
   { id: 'T1', name: 'Funicular', kind: 'funicular', district: D.TERRACES, stem: 0, vehicles: 2, cruise: 11, accel: 3, dwell: 5, windows: HOURS.allDay, phase: 440, lane: 0 },
   { id: 'T2', name: 'Tranvía 5', kind: 'tram', district: D.TERRACES, stem: 1, vehicles: 3, cruise: 13, accel: 3, dwell: 4, windows: HOURS.allDay, phase: 6480, lane: 1.6 },
   { id: 'T3', name: 'Tranvía 9', kind: 'tram', district: D.TERRACES, stem: 2, vehicles: 2, cruise: 10, accel: 3, dwell: 3, windows: HOURS.dayDusk, phase: 5250, lane: 1.6 },
-  { id: 'T4', name: 'Nocturno', kind: 'bus', district: D.TERRACES, stem: 3, vehicles: 2, cruise: 11, accel: 3, dwell: 4, windows: HOURS.night, phase: 2268, lane: 3.5 },
+  { id: 'T4', name: 'Nocturno', kind: 'bus', district: D.TERRACES, stem: 3, vehicles: 2, cruise: 18, accel: 5, dwell: 2, windows: HOURS.nightBus, phase: 2800, lane: 3.5 },
   { id: 'A1', name: 'Teleférico Bajo', kind: 'cablecar', district: D.ANTENNA, stem: 0, vehicles: 4, cruise: 7, accel: 3.5, dwell: 4, windows: HOURS.allDay, phase: 2102, lane: 0, hang: 1.8 },
   { id: 'A2', name: 'Teleférico Cumbre', kind: 'cablecar', district: D.ANTENNA, stem: 1, vehicles: 3, cruise: 7, accel: 1.5, dwell: 4, windows: HOURS.dayDusk, phase: 3489, lane: 0, hang: 3.2 },
   { id: 'A3', name: 'Cometas', kind: 'kite', district: D.ANTENNA, stem: 2, vehicles: 5, cruise: 8, accel: 2, dwell: 3, windows: HOURS.windy, phase: 3133, lane: 0 },
@@ -258,8 +260,8 @@ export const MEETINGS: { zone: string; a: string; b: string; everyTicks: number 
   { zone: 'chain_M1_M2', a: 'M2', b: 'M1', everyTicks: 14400 },
   // Tram 9 crosses the funicular track as a car goes by.
   { zone: 'chain_T1_T3', a: 'T1', b: 'T3', everyTicks: 14400 },
-  // Tram 9 and the night bus pass on the west zigzag.
-  { zone: 'chain_T3_T4', a: 'T3', b: 'T4', everyTicks: 14400 },
+  // The night bus comes down the west ramp past tram 5 going up.
+  { zone: 'chain_T2_T4', a: 'T2', b: 'T4', everyTicks: 14400 },
   // A kite overtakes a summit cable car on its way up.
   { zone: 'chain_A2_A3', a: 'A2', b: 'A3', everyTicks: 5400 },
 ];

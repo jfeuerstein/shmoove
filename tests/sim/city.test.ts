@@ -8,7 +8,7 @@ import { angleDiff, clamp, datan2 } from '../../src/sim/math';
 import { Rng } from '../../src/sim/rng';
 import { Sim } from '../../src/sim/sim';
 import { CITY, buildCity, type City } from '../../src/sim/city';
-import { FUNI_X, MERCADO_STAIRS, PLAZA_BODA, SPINE_X } from '../../src/sim/city/layout';
+import { FUNI_X, LEVELS, MERCADO_STAIRS, PLAZA_BODA, SPINE_X } from '../../src/sim/city/layout';
 import { Mode, type SimEvent } from '../../src/sim/types';
 import {
   Surface,
@@ -834,6 +834,9 @@ const BANDS: Record<string, [number, number]> = {
   S2: [30, 45],
   S3: [5, 45],
 };
+/** Plan radius round the hill station inside which the blimp may be below its band. */
+const BLIMP_DIP = 60;
+
 
 function pathLength(p: number[]): number {
   let s = 0;
@@ -932,9 +935,16 @@ describe('routes', () => {
       if (!r || !r.overhead) continue;
       const [lo, hi] = BANDS[id];
       const p = r.path;
+      const hs = findZone(w, 'hill_station');
+      const s2 = w.lines.find((l) => l.id === 'S2');
+      // How far the blimp's ladder hangs below its path.
+      const ladder = s2 ? s2.hang - s2.anchorY : 0;
       for (let i = 0; i < p.length; i += 3) {
         const above = p[i + 1] - topHeight(w, p[i], p[i + 2]);
-        expect(above, `${id} at ${p[i].toFixed(0)},${p[i + 2].toFixed(0)}`).toBeGreaterThanOrEqual(lo);
+        // The blimp comes down to the hill station once a lap (its own test checks the low pass):
+        // within BLIMP_DIP of it, its ladder only has to stay a hop above whatever is under it.
+        const dip = id === 'S2' && hs !== null && Math.hypot(p[i] - hs.x, p[i + 2] - hs.z) < BLIMP_DIP;
+        expect(above, `${id} at ${p[i].toFixed(0)},${p[i + 2].toFixed(0)}`).toBeGreaterThanOrEqual(dip ? ladder + 2.6 : lo);
         expect(above, `${id} at ${p[i].toFixed(0)},${p[i + 2].toFixed(0)}`).toBeLessThanOrEqual(hi);
       }
     }
@@ -1015,6 +1025,29 @@ describe('routes', () => {
       }
     }
     expect(worst, `farthest at ${at}`).toBeLessThanOrEqual(90);
+  });
+
+  it('no ground stop stands where the spine or a stair street crosses a landing or terrace street', () => {
+    // A vehicle waiting there would block the run downhill. Mercado landings are crossed by the
+    // spine, the stair streets and the funicular's run-out; terrace streets by the spine.
+    const w = city.world;
+    const problems: string[] = [];
+    for (const l of w.lines) {
+      if (l.overhead) continue;
+      l.allStops.forEach((_st, k) => {
+        const z = findZone(w, `stop_${l.id}_${k}`);
+        if (!z) return;
+        for (const L of LEVELS) {
+          if (z.z < L.z0 || z.z > L.z1) continue;
+          const P = PLAZA_BODA;
+          // The wedding plaza interrupts the stair streets that reach it; the funicular's own stops are on its track.
+          const onPlaza = z.x > P.x0 && z.x < P.x1 && z.z > P.z0 && z.z < P.z1;
+          const axes = L.terrace || onPlaza ? [SPINE_X] : [SPINE_X, ...MERCADO_STAIRS, ...(l.id === 'T1' ? [] : [FUNI_X])];
+          for (const a of axes) if (Math.abs(z.x - a) < 9) problems.push(`${l.id} stop ${k} at ${z.x.toFixed(1)},${z.z.toFixed(1)} is ${Math.abs(z.x - a).toFixed(1)} m from the street at x ${a}`);
+        }
+      });
+    }
+    expect(problems).toEqual([]);
   });
 
   it('every stop has a zone at it', () => {

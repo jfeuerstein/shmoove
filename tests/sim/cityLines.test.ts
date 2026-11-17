@@ -3,9 +3,10 @@ import { buildCity, type City } from '../../src/sim/city';
 import { MEETINGS, buildCityLines } from '../../src/sim/city/lines';
 import { DAY_TICKS, FEEL, resetFeel } from '../../src/sim/constants';
 import { grabPoint, inWindows, makeVehicleState, vehicleAt, type CompiledLine, type VehicleState } from '../../src/sim/lines';
+import { Game, type GameEvent } from '../../src/sim/game/game';
 import { placePlayer } from '../../src/sim/player';
 import { Sim } from '../../src/sim/sim';
-import { NO_INPUT, type SimEvent } from '../../src/sim/types';
+import { Mode, NO_INPUT, type SimEvent } from '../../src/sim/types';
 import { District, Surface, collideSolids, findZone, makeWallHit, terrainSurface, topHeight } from '../../src/sim/world';
 
 let city: City;
@@ -42,7 +43,8 @@ const ROSTER: {
   { id: 'T1', kind: 'funicular', district: D.TERRACES, stem: 0, vehicles: 2, hours: [[0, 1]] },
   { id: 'T2', kind: 'tram', district: D.TERRACES, stem: 1, vehicles: 3, hours: [[0, 1]] },
   { id: 'T3', kind: 'tram', district: D.TERRACES, stem: 2, vehicles: 2, hours: [[DAY, NIGHT]] },
-  { id: 'T4', kind: 'bus', district: D.TERRACES, stem: 3, vehicles: 2, hours: [[NIGHT, DAWN]] },
+  // Night only: its laps leave from nightfall to midnight, so the last is home before dawn.
+  { id: 'T4', kind: 'bus', district: D.TERRACES, stem: 3, vehicles: 2, hours: [[NIGHT, 1]] },
   { id: 'A1', kind: 'cablecar', district: D.ANTENNA, stem: 0, vehicles: 4, hours: [[0, 1]] },
   { id: 'A2', kind: 'cablecar', district: D.ANTENNA, stem: 1, vehicles: 3, hours: [[DAY, NIGHT]] },
   { id: 'A3', kind: 'kite', district: D.ANTENNA, stem: 2, vehicles: 5, hours: [[0.35, 0.7]] },
@@ -100,9 +102,15 @@ describe('the roster', () => {
   });
 
   it('compiles every line quickly, the same way each time', () => {
-    const t0 = performance.now();
-    const again = buildCityLines(city.world, city.routes);
-    expect(performance.now() - t0).toBeLessThan(150);
+    // Best of five, so a busy machine (other test workers) does not fail it: the work takes ~15 ms.
+    let best = Infinity;
+    let again = buildCityLines(city.world, city.routes);
+    for (let k = 0; k < 5; k++) {
+      const t0 = performance.now();
+      again = buildCityLines(city.world, city.routes);
+      best = Math.min(best, performance.now() - t0);
+    }
+    expect(best).toBeLessThan(150);
     expect(again.map((l) => [l.period, l.length, l.phaseTicks])).toEqual(city.world.lines.map((l) => [l.period, l.length, l.phaseTicks]));
   });
 
@@ -128,6 +136,22 @@ describe('the roster', () => {
       }
       expect(activeSamples, r.id).toBeGreaterThan(0);
     }
+  });
+
+  it('keeps the night bus off the road by day: no T4 vehicle between 0.25 and 0.78', () => {
+    const l = line('T4');
+    let night = 0;
+    for (let t = 0; t < DAY_TICKS; t += 10) {
+      for (let i = 0; i < l.vehicles; i++) {
+        vehicleAt(l, i, t, vs);
+        const f = t / DAY_TICKS;
+        if (f > 0.25 && f < 0.78) expect(vs.active, `T4 vehicle ${i} at ${f.toFixed(3)}`).toBe(false);
+        else if (vs.active) night++;
+        // Every lap is home (back at the terminus) by 0.24.
+        if (vs.active && vs.lapTick < l.runTicks && f < 0.5) expect(f, 'lap still running').toBeLessThan(0.24);
+      }
+    }
+    expect(night).toBeGreaterThan(0);
   });
 
   it('sends the blimp on exactly one pass a day and the ghost tram only after midnight', () => {
@@ -178,6 +202,32 @@ describe('the roster', () => {
       }
     }
     expect(problems.slice(0, 60)).toEqual([]);
+  });
+
+  it('keeps every corner of every ground vehicle body at least 1 m from any solid, all lap', () => {
+    const solids = city.world.solids.filter((o) => !o.oneWay);
+    const problems: string[] = [];
+    for (const l of city.world.lines) {
+      if (l.overhead || l.bodyHeight <= 0) continue;
+      for (let t = 0; t < l.period; t += 10) {
+        vehicleAt(l, 0, t - l.phaseTicks, vs);
+        for (const [a, b] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) {
+          // Corner of the body rectangle: along the heading and to its side.
+          const cx = vs.x + vs.hx * l.bodyHalfLen * a - vs.hz * l.bodyHalfWid * b;
+          const cz = vs.z + vs.hz * l.bodyHalfLen * a + vs.hx * l.bodyHalfWid * b;
+          for (const o of solids) {
+            if (o.yTop <= vs.y + 0.4 || o.yBase >= vs.y + l.bodyHeight) continue;
+            const dx = cx - o.cx;
+            const dz = cz - o.cz;
+            const lx = Math.abs(dx * o.cosR + dz * o.sinR) - o.hx;
+            const lz = Math.abs(-dx * o.sinR + dz * o.cosR) - o.hz;
+            const d = Math.hypot(Math.max(lx, 0), Math.max(lz, 0));
+            if (d < 1.0) problems.push(`${l.id} corner ${d.toFixed(2)} m from ${o.kind} at ${cx.toFixed(1)},${cz.toFixed(1)}`);
+          }
+        }
+      }
+    }
+    expect(problems.slice(0, 20)).toEqual([]);
   });
 
   it('never lets two vehicles of different ground lines overlap, all day', () => {
@@ -455,4 +505,87 @@ describe('two-link chains at the meetings', () => {
       expect(run.events.some((e) => e.type === 'bail')).toBe(false);
     });
   }
+});
+
+describe('the blimp', () => {
+  it('runs only on its one pass of the day', () => {
+    const l = line('S2');
+    let on = 0;
+    for (let t = 0; t < DAY_TICKS; t++) {
+      vehicleAt(l, 0, t, vs);
+      if (!vs.active) continue;
+      on++;
+      // Active only from its 0.76 departure until its lap is done.
+      const since = t - Math.round(0.76 * DAY_TICKS);
+      expect(since, `active at ${t}`).toBeGreaterThanOrEqual(0);
+      expect(since, `active at ${t}`).toBeLessThan(l.runTicks);
+    }
+    expect(on).toBeGreaterThan(0);
+  });
+
+  it('sweeps its ladder a hop above the hill station platform for 3 s, out of standing reach', () => {
+    // Standing, a hand reaches HAND_HEIGHT + HITCH_REACH_Y above the board; a hop adds its apex.
+    const l = line('S2');
+    const hs = findZone(city.world, 'hill_station');
+    expect(hs).not.toBeNull();
+    if (!hs) return;
+    const hopApex = (FEEL.HOP_V * FEEL.HOP_V) / (2 * FEEL.GRAVITY);
+    let ticks = 0;
+    for (let t = 0; t < DAY_TICKS; t++) {
+      vehicleAt(l, 0, t, vs);
+      if (!vs.active) continue;
+      grabPoint(l, vs, gp);
+      const o = topHeight(city.world, gp.x, gp.z);
+      if (Math.abs(o - hs.y) > 0.05 || Math.hypot(gp.x - hs.x, gp.z - hs.z) > 20) continue;
+      const need = gp.y - (hs.y + FEEL.HAND_HEIGHT);
+      // Over the platform the ladder is never low enough to take standing.
+      expect(need, 'out of standing reach').toBeGreaterThan(FEEL.HITCH_REACH_Y + 0.3);
+      if (need <= FEEL.HITCH_REACH_Y + hopApex * 0.8) ticks++;
+    }
+    expect(ticks / 60).toBeGreaterThanOrEqual(3);
+  });
+
+  it('a skater waiting on the hill station platform at 0.76 hops onto its ladder, is carried high, and finds the secret', () => {
+    resetFeel();
+    const l = line('S2');
+    const w = city.world;
+    const hs = findZone(w, 'hill_station');
+    if (!hs) throw new Error('no hill_station');
+    const game = new Game(w, { seed: 1, startDayFrac: 0.76 });
+    const sim = game.sim;
+    const p = sim.player;
+    // Wait on the platform's west half, where the ladder passes.
+    placePlayer(w, p, 19, 1038.5, 0);
+    const events: GameEvent[] = [];
+    let hitched = -1;
+    let high = 0;
+    const V = makeVehicleState();
+    const G = { x: 0, y: 0, z: 0 };
+    for (let i = 0; i < 4 * 60 * 60 && (hitched < 0 || i < hitched + 60 * 60); i++) {
+      let hop = false;
+      let hold = false;
+      let steer = 0;
+      if (p.mode === Mode.HITCH) hold = true;
+      else {
+        vehicleAt(l, 0, sim.tick, V);
+        if (V.active) {
+          grabPoint(l, V, G);
+          const d = Math.hypot(G.x - p.x, G.z - p.z);
+          // Closed loop: arm as the ladder comes near, hop when its end is about to pass.
+          hold = d < 4;
+          hop = p.mode === Mode.GROUND && d < 1.6 && G.y - (p.y + FEEL.HAND_HEIGHT) > FEEL.HITCH_REACH_Y;
+          // Shuffle under the ladder's line of travel.
+          const want = Math.atan2(G.x - p.x, G.z - p.z);
+          if (d < 12 && p.mode === Mode.GROUND) steer = Math.max(-1, Math.min(1, -2 * (((want - p.heading + 3 * Math.PI) % (2 * Math.PI)) - Math.PI)));
+        }
+      }
+      game.step({ steer, hold, hop });
+      for (const e of game.events) events.push(e);
+      if (hitched < 0 && p.mode === Mode.HITCH && w.lines[p.hLine].id === 'S2') hitched = i;
+      if (hitched >= 0 && p.mode === Mode.HITCH) high = Math.max(high, p.y - topHeight(w, p.x, p.z));
+    }
+    expect(hitched, 'hitched the blimp').toBeGreaterThanOrEqual(0);
+    expect(high, 'carried above 25 m').toBeGreaterThan(25);
+    expect(events.some((e) => e.type === 'secretFound' && e.id === 'blimp')).toBe(true);
+  });
 });
