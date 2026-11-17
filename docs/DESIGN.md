@@ -142,8 +142,8 @@ terminus on time and always finish their run.
 | A2 | Teleférico Cumbre | Antenna | bass | cable cars ×3, overhead | day + dusk | Hill station → summit ridge. |
 | A3 | Cometas | Antenna | harmony | kites ×5, overhead | windy hours 0.35–0.70 | Circles over the hill. |
 | S1 | Tranvía Fantasma | (secret) | lead (Terraces) | ghost tram | 0.00–0.06 only | Disused track; not on the map until ridden. |
-| S2 | El Dirigible | (secret) | lead (Antenna) | blimp, overhead | one pass at 0.76 | Off the timetable. |
-| S3 | Cometa Rey | (secret) | lead (Antenna) | king kite, overhead, `minChain` 4 | 0.35–0.70 | Only catchable as the 4th link; lifts to the Needle. |
+| S2 | El Dirigible | (secret) | lead (Antenna) | blimp, overhead | one lap at 0.76 | Off the timetable. Waits over the hill station platform at 0.76 (ladder a hop above the deck), laps by Cerro Sur and the summit, sets the rider down on the deck again at about 0.996. Stops: Estación del Cerro, Cerro Sur, Cumbre. |
+| S3 | Cometa Rey | (secret) | lead (Antenna) | king kite, overhead, `minChain` 4 | laps leave 0.35–0.70 (0.417, 0.542, 0.667) | Only catchable as the 4th link. Flies its circuit from the Needle by Cresta Sur and back onto the Needle, perches, flies it back the other way and sets its rider down on the Needle. Stops: La Aguja, Cresta Sur, La Aguja. |
 
 **Line map.** Each line's path is split into segments between consecutive stops. Staying hitched to
 a vehicle of that line across a whole segment inks it. A line is complete when every segment is
@@ -159,7 +159,13 @@ inked. The map is complete when all 13 regular lines are. Secret lines appear on
   hitching that line near its conductor's stop: chain N starting from this line, slingshot distance,
   land on a named roof, ride N segments without touching down, beat a time between two stops.
 - **Secrets**: the ghost tram, the blimp, the summit Needle (reached via Cometa Rey, which needs a
-  four-link chain).
+  four-link chain). Each secret line can be finished in one ride and leaves the rider standing:
+  the blimp is caught from the hill station platform as it waits there at dusk and brings its
+  rider back to the deck; the summit chain's ride on Cometa Rey goes out, over the Needle and back
+  round its circuit, inking the line, and ends on the Needle. The way down from the Needle is its
+  guy wire, a grind from the platform's south edge to the summit lawn. The hill station platform
+  has a run-in of steps from the lawn and the spine, so a skater from the summit (up to 14 m/s)
+  can stop on it.
 - **Chalk lines**: start recording anywhere, stop anywhere. The route is the start state, the day
   tick, and the input stream. It exports as a share code (text). Importing or replaying sets the
   clock to the recorded tick and runs the ghost as a second deterministic skater beside the player.

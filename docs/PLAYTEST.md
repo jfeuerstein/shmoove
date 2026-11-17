@@ -123,8 +123,19 @@ An ear has to judge the rest. Mute with `?mute`.
   measured 0.3–1.2 s of slack on each of three releases, with two windows a day. Is it a satisfying
   secret or impossible by hand? Phases and heights in `src/sim/city/lines.ts` and `routes.ts`;
   `CHAIN_GROUND_GRACE`, `HITCH_REACH`, `HITCH_REACH_Y`.
-- The blimp: on the hill station platform at dusk (0.76), hop to its ladder. Is the 4.2 m height a
-  fair hop? `HOP_V`, `HITCH_REACH_Y`.
+- The king kite's ride after the chain is long (about 55 s: out, 5 s perched over the needle, the
+  whole circuit back). Is holding on that long a reward or a chore? Letting go while it perches
+  slings you off the needle at chain speed: does anyone try it, and is it clear they should hold
+  on? S3 `dwell`, `cruise` in `src/sim/city/lines.ts`.
+- The needle's guy wire: 34 m/s at the bottom (`MAX_SPEED`). A thrill, or a blur? Do players find
+  it (roll off the south edge)? Does the landing on the lawn feel right? `NEEDLE_WIRE` in
+  `src/sim/city/layout.ts`; `RAIL_SNAP`, `GRIND_FRICTION`.
+- The hill station's run-in steps: coming down from the summit at speed, do the steps slow you
+  enough to stop on the deck with a held finger, and does it read as a way onto the platform?
+  `HILL_STATION_RUNIN` in `src/sim/city/terrain.ts`; `STAIR_DRAG`, `FOOT_BRAKE`.
+- The blimp: on the hill station platform at dusk (0.76) it waits 5 s with its ladder 4.2 m over the
+  deck; hop to it. Is that a fair hop? Its lap takes nearly three minutes before it drops you 3 m
+  back onto the deck: too long to hang on? `HOP_V`, `HITCH_REACH_Y`; S2 `cruise`.
 - Catching overhead rides that need a hop (crane, cable cars, kites): is the swipe-up-and-hold
   natural?
 - Is a wait of up to two minutes for tram 5, or up to four for a handcart or fish truck, too long?

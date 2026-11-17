@@ -91,6 +91,11 @@ Acceptance:
       minutes, no bails before it; then the ghost tram, the summit chain and king kite, the blimp;
       three save/load points end in the same state; about 7 s of test time. The blimp's first
       segment cannot be inked (DECISIONS 79). Independent check pending
+- [x] Secrets a player can finish (M6h): the blimp is caught at the hill station and sets you down
+      there, the summit chain's king-kite ride inks S3, a guy wire down from the needle, run-in
+      steps onto the hill station platform, quieter errand givers clear of stops, saves keep the
+      day. Full-game run: every line complete, no bails, map at 51.5 min, all secrets at 67.3 min
+      (DECISIONS 88–93). Independent check pending
 - [ ] Final docs and audit
 
 Acceptance:

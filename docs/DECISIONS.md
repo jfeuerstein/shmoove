@@ -364,3 +364,52 @@ without leaning on a wall (see PLAYTEST); a save from before onboarding starts t
     and UI are each under 3 ms at p95. Single windows go over 16.6 ms p95 at times (Antenna 23.3
     once at load 2.6) for the same reason. Submit cost is set by the renderer and the look, not by
     the code this task owned; budgets were not raised and the route was not shortened.
+
+## M6h — Secrets a player can finish, rides that set you down
+
+88. **The blimp's lap starts and ends over the hill station platform.** Its first segment could
+    never be inked (it started 28 m above the summit) and it vanished with its rider on the ladder.
+    Its one lap now leaves at 0.76 from a stop over the platform (Estación del Cerro: it waits 5 s,
+    ladder 4.2 m above the deck, out of standing reach and in a hop's), runs by Cerro Sur and the
+    summit (Cumbre) and arrives back over the deck at 0.9965, where it goes and the rider drops 3 m
+    onto the deck. Cruise went from 6 to 6.5 m/s so the lap with its third stop still ends before
+    midnight (the timetable test keeps the lap inside the day).
+89. **The king kite is a shuttle on its circuit, not a loop: the brief's way could not work.** The
+    brief asked for its stops to move so the summit chain's catch comes before the first stop's
+    segment, without touching the chain's timing. That cannot be done under the ink rule: the chain
+    catches the kite 35 m after Cresta Sur, a segment only inks if the ride starts within 12 m of its
+    start, a loop's segments cover the whole circuit, and the only gentle way off is the kite going
+    out of service at the end of a lap (letting go slings you at chain speed, +8.8 m/s at four
+    links, off a 4 m platform). So the lap's end must be the needle, the catch is far from it, and
+    the segments before the catch stay unridden; a stop near the catch would change the kite's
+    speed there. Instead the line runs out and back on the same circuit: the way out is the old lap
+    tick for tick (same stops, same phase relative to the chain, so the chain and its windows are
+    unchanged), then it perches on the needle 5 s and flies the circuit back the other way, which
+    inks both segments for a rider who held on, and goes out of service on the needle, setting
+    them down. One lap every 90 s (period 5400) instead of every 45 s; laps leave at 0.417, 0.542
+    and 0.667. `tests/sim/citySummit.test.ts` changed in one number only: its run is 6600 ticks
+    instead of 4000, because the drop onto the needle now comes after the way back; its assertions
+    and the route's touches are unchanged.
+90. **The needle's guy wire.** A straight 'guy' rail from 0.4 m off the needle platform's south
+    edge, 0.3 m below its top, to the lawn east of the spine stairs (9, 1180), 44 m lower: rolling
+    or hopping off that edge snaps onto it, it reaches `MAX_SPEED` and lands gently on the lawn
+    (impact about 6 m/s). It falls further than a skater at `MAX_SPEED` could grind up plus a hop,
+    so it is no way up; the needle test now says that instead of "no rail within 8 m". It passes
+    6–9 m west of the summit cable car's cables.
+91. **The hill station platform gets run-in steps, not a lower lip or a parapet.** A flight of steps
+    (STAIRS surface on a ramp, drawn as treads) from the lawn and the spine down flush onto the
+    deck's north edge, x 6–27, west of the cable cars' station so the cable paths (which follow the
+    ground under them) are untouched. The steps' drag takes a 14 m/s skater to about 7 m/s by the
+    deck, where a planted foot stops them; a parapet would bail anyone hitting it above 12 m/s.
+92. **Errand givers.** A giver whose offer was withdrawn without being taken stays quiet for 45 s
+    (transient: a save does not keep it). Seven givers that stood on or beside a stop now stand at
+    spots of their own nearby (`GIVERS` in `src/sim/city/zones.ts`, kind 'giver', same names),
+    which meant editing the giver ids in `src/sim/game/content/errands.ts`. Saffron's hours end at
+    0.77 instead of 0.78: from its new spot the last moped could leave before a skater reached the
+    stop.
+93. **Saves keep the day (version 2), and the resume spot follows landings.** The safe spot also
+    refreshes on the first grounded tick after any ride, grind, wallride or air (in
+    `src/sim/player.ts`, the safe-spot block only). The full-game check takes saves only once the
+    bot stands still on a planted foot with the safe spot under it, so a load starts from exactly
+    where it stood (before, it could be up to 2 m and a walking pace away).
+
