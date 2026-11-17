@@ -25,6 +25,8 @@ export interface RectCarve {
   /** Restrict cliff flags to this x range (z edges) or z range (x edges). */
   cliffLo?: number;
   cliffHi?: number;
+  /** Evaluate the target height at the vertex's own x in the side blends (h is defined beyond the rect). */
+  actualX?: boolean;
 }
 
 export interface PathCarve {
@@ -92,7 +94,7 @@ export class Carver {
         const wt = wz * fade(Math.abs(x - cx), c.bx);
         if (wt <= 0) continue;
         const k = iz * this.row + ix;
-        w.heights[k] += (c.h(cx, cz) - w.heights[k]) * wt;
+        w.heights[k] += (c.h(c.actualX ? x : cx, cz) - w.heights[k]) * wt;
       }
     }
     // Cells: paint inside, clear old cliff flags inside, flag the new edges.

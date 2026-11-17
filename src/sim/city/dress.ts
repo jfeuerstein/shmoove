@@ -19,8 +19,8 @@ import {
   levelHeight,
   type Level,
 } from './layout';
-import { ROAD_HALF, SPINE_X, STAIR_HALF } from './layout';
-import type { Ground } from './terrain';
+import { PARAPET, ROAD_HALF, SPINE_X, STAIR_HALF } from './layout';
+import { HILL_STATION_PLATFORM, type Ground } from './terrain';
 
 interface Range {
   lo: number;
@@ -437,7 +437,8 @@ function dressAntenna(w: World, rng: Rng): void {
   // Hill station platform.
   const hs = HILL_STATION;
   const yh = baseHeight((hs.z0 + hs.z1) / 2);
-  box(w, 20, 40, 1035, 1045, yh - 0.5, yh + 1.0, 'platform', 1, Surface.PLAZA);
+  const pf = HILL_STATION_PLATFORM;
+  box(w, pf.x0, pf.x1, pf.z0, pf.z1, yh - 0.5, yh + 1.0, 'platform', 1, Surface.PLAZA);
   // The summit antenna and the needle.
   const gN = terrainHeight(w, NEEDLE.x, NEEDLE.z);
   const top = needleTop();
@@ -500,8 +501,6 @@ function paintFlightStrips(w: World, g: Ground): void {
   }
 }
 
-/** Parapet along the outside of every outer hairpin: height above the road, offset beyond its edge, segment length. */
-export const PARAPET = { height: 0.8, out: 0.9, seg: 4, half: 0.3 } as const;
 
 /**
  * A low parapet round the outside of each outer hairpin of the switchback roads, so a skater who
@@ -521,12 +520,20 @@ function dressParapets(w: World, g: Ground): void {
         const tm = (t0 + t1) / 2;
         const cx = a.cx + R * dcos(tm);
         const cz = a.cz + R * dsin(tm);
+        // A wall from the road; from the bank outside (higher, where the road is cut into the
+        // hill) its top is nearly flush, so a skater coming down the bank rolls over it onto the
+        // road instead of being pinned against it.
         let lo = Infinity;
-        let hi = -Infinity;
+        let road = -Infinity;
+        let bank = -Infinity;
         for (const t of [t0, tm, t1]) {
-          const y = terrainHeight(w, a.cx + (R - PARAPET.half) * dcos(t), a.cz + (R - PARAPET.half) * dsin(t));
-          lo = Math.min(lo, y);
-          hi = Math.max(hi, y);
+          const c = dcos(t);
+          const sn = dsin(t);
+          const yi = terrainHeight(w, a.cx + (R - 1) * c, a.cz + (R - 1) * sn);
+          const yo = terrainHeight(w, a.cx + (R + 1) * c, a.cz + (R + 1) * sn);
+          lo = Math.min(lo, yi, yo);
+          road = Math.max(road, yi);
+          bank = Math.max(bank, yo);
         }
         addSolid(w, {
           cx,
@@ -535,7 +542,7 @@ function dressParapets(w: World, g: Ground): void {
           hz: PARAPET.half,
           rot: tm + PI / 2,
           yBase: lo - 0.6,
-          yTop: hi + PARAPET.height,
+          yTop: Math.max(road + PARAPET.height, bank + PARAPET.flush),
           surface: Surface.PLAZA,
           kind: 'wall',
           style: 1,

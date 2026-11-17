@@ -71,6 +71,11 @@ export const ROAD_HALF = 7;
 /** Inner hairpin radius and the x of the outer hairpin centres. */
 export const INNER_R = 13;
 export const OUTER_X = 152;
+/**
+ * The low parapet round the outside of each outer hairpin: height above the road, how far its top
+ * may stand above the verge outside it, its offset beyond the road's edge, segment length, half thickness.
+ */
+export const PARAPET = { height: 0.8, flush: 0.25, out: 0.9, seg: 4, half: 0.3 } as const;
 /** The docks boulevard: the bottom of both switchback roads. */
 export const BOULEVARD_Z = 258;
 
@@ -81,7 +86,7 @@ export const LANDING_HALF = 8;
 export const TERRACE_FRONTS = [612, 666, 720, 774, 828, 882, 936] as const;
 export const PAD_STREET = 14;
 export const PAD_DEPTH = 33;
-export const PAD_TILT = 0.02;
+export const PAD_TILT = 0.0275;
 
 export interface Level {
   /** Street centre line. */
@@ -186,11 +191,17 @@ export function crossWeight(L: Level, x: number): number {
  */
 export function streetHeight(L: Level, x: number, z: number): number {
   const wt = crossWeight(L, x);
-  if (wt <= 0) return levelHeight(L, x);
-  const fall = L.z === SPAWN_LEVEL_Z && Math.abs(x - SPINE_X) <= SPINE_HALF + CROSS_PAD + CROSS_FADE ? SPAWN_FALL : CROSS_FALL;
   const zz = z < L.z0 ? L.z0 : z > L.z1 ? L.z1 : z;
-  return levelHeight(L, x) + wt * fall * (zz - L.z1);
+  // Away from the crossings a Mercado landing dishes toward its centre line, so a skater rolling
+  // slowly along it drifts off the stalls and walls at its edges rather than being held there.
+  const dish = L.terrace || (L.z === PLAZA_LEVEL_Z && x > PLAZA_FLAT_X0 && x < PLAZA_FLAT_X1) ? 0 : LANDING_DISH * (1 - wt) * Math.abs(zz - L.z);
+  if (wt <= 0) return levelHeight(L, x) + dish;
+  const fall = L.z === SPAWN_LEVEL_Z && Math.abs(x - SPINE_X) <= SPINE_HALF + CROSS_PAD + CROSS_FADE ? SPAWN_FALL : CROSS_FALL;
+  return levelHeight(L, x) + dish + wt * fall * (zz - L.z1);
 }
+
+/** Cross fall of a Mercado landing toward its centre line. */
+export const LANDING_DISH = 0;
 
 // ---------------------------------------------------------------------------------------------
 // Strips and stair streets.
