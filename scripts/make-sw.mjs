@@ -53,7 +53,9 @@ const FILES = ${JSON.stringify(files, null, 0)};
 const INDEX = new URL('index.html', self.registration.scope).href;
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(FILES)));
+  // cache: 'reload' skips the HTTP cache: a host that caches index.html (GitHub Pages: 10 min) would
+  // otherwise hand the new precache the old page, which names a script the new cache does not hold.
+  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(FILES.map((f) => new Request(f, { cache: 'reload' })))));
 });
 
 self.addEventListener('activate', (event) => {
