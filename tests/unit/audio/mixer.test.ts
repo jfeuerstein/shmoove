@@ -251,6 +251,14 @@ describe('mixer: noise layer and cues', () => {
     expect(scaleNote(TRACKS[2], 8) - scaleNote(TRACKS[2], 1)).toBe(12);
   });
 
+  it('non-finite view numbers never produce non-finite levels (they would kill the Web Audio engine)', () => {
+    const m = new Mixer();
+    const s = m.update(view({ speed: NaN, dayFrac: NaN, nearRideDist: NaN, nearRideKind: 'tram' }), [], LINES, DT);
+    for (const k of ['wheelLevel', 'wheelCutoff', 'clatterRate', 'windLevel', 'windFreq', 'motorLevel', 'grindPitch', 'daylight'] as const) {
+      expect(Number.isFinite(s[k])).toBe(true);
+    }
+  });
+
   it('grinds sustain between grindStart and grindEnd, pitch following speed', () => {
     const m = new Mixer();
     const g = view({ mode: Mode.GRIND, surface: -1, speed: 8 });

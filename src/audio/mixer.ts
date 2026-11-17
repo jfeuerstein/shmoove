@@ -305,7 +305,8 @@ export class Mixer {
 
   private noiseLayer(v: MixView): void {
     const st = this.state;
-    const speed = Math.max(0, v.speed);
+    // Non-finite inputs would reach AudioParams, which throw on NaN and take the engine down.
+    const speed = Number.isFinite(v.speed) ? Math.max(0, v.speed) : 0;
     const onGround = v.surface >= 0 && v.mode !== Mode.AIR && v.mode !== Mode.GRIND;
     const lvl = onGround ? wheelLevelFor(speed) : 0;
     let cutoff = 250 + 5200 * lvl;
@@ -367,7 +368,7 @@ export class Mixer {
 
     st.grindPitch = 900 + 110 * Math.min(speed, 30);
     // Daylight: 1 through the day, easing to 0 across dusk and back up through dawn.
-    const f = ((v.dayFrac % 1) + 1) % 1;
+    const f = Number.isFinite(v.dayFrac) ? ((v.dayFrac % 1) + 1) % 1 : 0.5;
     st.daylight = f < 0.22 || f >= 0.8 ? 0 : f < 0.3 ? (f - 0.22) / 0.08 : f < 0.72 ? 1 : 1 - (f - 0.72) / 0.08;
   }
 }
