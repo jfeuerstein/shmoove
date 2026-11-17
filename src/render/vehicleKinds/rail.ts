@@ -24,7 +24,7 @@ interface CarInks {
 function inksFor(line: CompiledLine): CarInks {
   const { base } = line.livery;
   if (line.kind === 'ghosttram') {
-    return { base, upper: shade(base, 0.96), glass: GHOST_GLASS, glassGlow: 1, board: INK.cobalt, boardGlow: 0, lamp: GHOST_GLASS };
+    return { base, upper: shade(base, 0.96), glass: GHOST_GLASS, glassGlow: 0.55, board: INK.cobalt, boardGlow: 0, lamp: GHOST_GLASS };
   }
   return { base, upper: base, glass: GLASS, glassGlow: 0.85, board: INK.mango, boardGlow: 1, lamp: INK.white };
 }
@@ -67,9 +67,9 @@ export function tram(b: MeshBuilder, line: CompiledLine): void {
   // Pantograph: a base, a folded diamond frame and the contact bar.
   const py = H;
   b.box(0, py + 0.08, 0.4, 0.45, 0.08, 0.35, 1, 0, INK.ink, {});
-  b.beam(0, py + 0.16, 0.1, 0, py + 0.95, 0.9, 0.04, INK.ink);
-  b.beam(0, py + 0.95, 0.9, 0, py + 1.55, 0.45, 0.04, INK.ink);
-  b.beam(-0.7, py + 1.58, 0.45, 0.7, py + 1.58, 0.45, 0.045, shade(liv.accent, 0.8));
+  b.beam(0, py + 0.16, 0.1, 0, py + 0.95, 0.9, 0.07, INK.ink);
+  b.beam(0, py + 0.95, 0.9, 0, py + 1.55, 0.45, 0.07, INK.ink);
+  b.beam(-0.75, py + 1.6, 0.45, 0.75, py + 1.6, 0.45, 0.08, liv.accent);
   // Rear bumper and the grab bar.
   b.box(0, 0.62, -L - 0.12, W * 0.9, 0.12, 0.12, 1, 0, INK.ink, {});
   grabBar(b, line, -L - 0.1, 0.7, 0.5);

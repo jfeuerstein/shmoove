@@ -2,10 +2,11 @@
  * Overhead rides. Origin is the moving carriage itself (trolley, cable grip, kite, airship); the
  * strap hangs from (0, anchorY, -anchorBack) to the pink handle at the grab point.
  */
+import * as THREE from 'three';
 import type { CompiledLine } from '../../sim/lines';
 import { MeshBuilder, shade } from '../geom';
 import { INK } from '../look';
-import { face, figure, flank, flanks, handle, ngon, pattern, prismX, prismZ, rect, roofMark, strap, type Plane } from './paint';
+import { face, figure, flank, flanks, handle, lift, ngon, pattern, poly, prismX, prismZ, rect, roofMark, strap, type Plane } from './paint';
 
 const GLASS = 0x2a2f6e;
 
@@ -40,15 +41,15 @@ export function crane(b: MeshBuilder, line: CompiledLine): void {
   // Twin cables down to the hook block.
   const z = -line.anchorBack;
   const gy = line.anchorY - line.hang;
-  const blockTop = gy + 1.15;
-  for (const x of [0.28, -0.28]) b.beam(x, line.anchorY, z, x * 0.6, blockTop, z, 0.025, INK.ink);
+  const blockTop = gy + 1.3;
+  for (const x of [0.32, -0.32]) b.beam(x, line.anchorY, z, x * 0.75, blockTop, z, 0.045, INK.ink);
   // Hook block with hazard slashes, then the hook: the shank and the pink handle.
-  b.box(0, blockTop - 0.3, z, 0.38, 0.3, 0.22, 1, 0, INK.mango, { bottom: true });
-  const hz: Plane = { o: [0, 0, z - 0.245], u: [1, 0, 0], v: [0, 1, 0], n: [0, 0, -1] };
-  pattern(b, hz, 3, -0.36, 0.36, blockTop - 0.58, blockTop - 0.02, INK.ink);
-  const hzf: Plane = { o: [0, 0, z + 0.245], u: [1, 0, 0], v: [0, 1, 0], n: [0, 0, 1] };
-  pattern(b, hzf, 3, -0.36, 0.36, blockTop - 0.58, blockTop - 0.02, INK.ink);
-  b.beam(0, blockTop - 0.6, z, 0, gy + 0.34, z, 0.05, INK.ink);
+  b.box(0, blockTop - 0.35, z, 0.5, 0.35, 0.3, 1, 0, INK.mango, { bottom: true });
+  const hz: Plane = { o: [0, 0, z - 0.325], u: [1, 0, 0], v: [0, 1, 0], n: [0, 0, -1] };
+  pattern(b, hz, 3, -0.48, 0.48, blockTop - 0.68, blockTop - 0.02, INK.ink);
+  const hzf: Plane = { o: [0, 0, z + 0.325], u: [1, 0, 0], v: [0, 1, 0], n: [0, 0, 1] };
+  pattern(b, hzf, 3, -0.48, 0.48, blockTop - 0.68, blockTop - 0.02, INK.ink);
+  b.beam(0, blockTop - 0.7, z, 0, gy + 0.34, z, 0.06, INK.ink);
   handle(b, 0, gy, z);
   // The hook's curl under the handle.
   b.beam(0.26, gy, z, 0.3, gy - 0.22, z, 0.045, INK.ink);
@@ -93,59 +94,74 @@ export function cablecar(b: MeshBuilder, line: CompiledLine): void {
  * needs a chain) is more than twice the size, with a crown. Three frames: the tail waves.
  */
 export function kite(b: MeshBuilder, line: CompiledLine, frame: number): void {
-  const liv = line.livery;
   const king = line.minChainN > 1;
   const S = king ? 2.3 : 1;
+  // The sail is painted on both faces and turned 40 degrees off the line of travel, so it shows a
+  // face (never an edge) to a camera behind it, beside it or above it.
+  const body = new MeshBuilder();
+  const keel = kiteBody(body, line, frame, S, king);
+  const m = new THREE.Matrix4().makeRotationY(0.7);
+  b.append(body, m);
+  const kt = new THREE.Vector3(keel[0], keel[1], keel[2]).applyMatrix4(m);
+  // The kite line: from the keel tip down to the handle.
+  const gz = -line.anchorBack;
+  const gy = line.anchorY - line.hang;
+  b.beam(kt.x, kt.y, kt.z, 0, gy + 0.34, gz, 0.03, INK.ink);
+  handle(b, 0, gy, gz);
+}
+
+/** The kite itself, facing back and up; returns where its line is tied (the keel tip). */
+function kiteBody(b: MeshBuilder, line: CompiledLine, frame: number, S: number, king: boolean): [number, number, number] {
+  const liv = line.livery;
   const f = ((frame % 3) + 3) % 3;
-  // The sail leans back 35 degrees: it faces the flyer, behind and below.
   const lean = 0.6;
   const vy = Math.cos(lean);
   const vz = Math.sin(lean);
-  const ny = -vz;
-  const nz = vy;
-  // Sail plane: u across (+x), v up the spine; it faces away from travel (n toward -z, down).
-  const P: Plane = { o: [0, 0, 0], u: [1, 0, 0], v: [0, vy, vz], n: [0, -ny, -nz] };
+  const nrm: [number, number, number] = [0, vz, -vy];
+  const at = (u: number, v: number, d = 0): [number, number, number] => [u, v * vy + nrm[1] * d, v * vz + nrm[2] * d];
   const top = 1.7 * S;
   const bot = -1.7 * S;
   const half = 1.25 * S;
   const cross = 0.45 * S;
-  const quads = [
-    [0, top, half, cross, 0, cross * 0.4],
-    [0, top, 0, cross * 0.4, -half, cross],
-    [-half, cross, 0, cross * 0.4, 0, bot],
-    [0, cross * 0.4, half, cross, 0, bot],
-  ];
-  for (let i = 0; i < 4; i++) {
-    const q = quads[i];
-    face(b, sailPts(P, q), -nzLike(P)[0], -nzLike(P)[1], -nzLike(P)[2], i % 2 === 0 ? liv.base : liv.stripe);
-  }
-  // Back of the sail.
-  const back: Plane = { o: [0, -0.02 * ny, -0.02 * nz], u: P.u, v: P.v, n: [0, ny, nz] };
-  face(b, sailPts(back, [-half, cross, 0, top, half, cross, 0, bot]), 0, -ny, -nz, shade(liv.base, 0.8));
-  // The livery pattern across the sail in the accent, and a crown for the king.
-  const front: Plane = { o: [0, -ny * 0.03, -nz * 0.03], u: P.u, v: P.v, n: P.n };
-  pattern(b, front, liv.pattern, -half * 0.5, half * 0.5, -0.65 * S, 0.1 * S, liv.accent);
-  if (king) {
-    const c: Plane = { o: [0, -ny * 0.05, -nz * 0.05], u: P.u, v: P.v, n: P.n };
-    const cy = 0.55 * S;
-    const w = 0.55 * S;
-    const h = 0.55 * S;
-    pattern(b, c, 0, -w, w, cy - 0.12 * S, cy, INK.mango);
-    for (const k of [-1, 0, 1]) {
-      const cx = k * w * 0.75;
-      const tri = [cx - 0.22 * S, cy, cx + 0.22 * S, cy, cx, cy + h * (k === 0 ? 1.1 : 0.8)];
-      faceOn(b, c, tri, INK.mango);
-      faceOn(b, c, [cx - 0.07 * S, cy + h * (k === 0 ? 1.1 : 0.8), cx + 0.07 * S, cy + h * (k === 0 ? 1.1 : 0.8), cx + 0.07 * S, cy + h * (k === 0 ? 1.1 : 0.8) + 0.14 * S, cx - 0.07 * S, cy + h * (k === 0 ? 1.1 : 0.8) + 0.14 * S], INK.pink);
+  const mid = cross * 0.4;
+  for (const side of [1, -1]) {
+    // Each face: four panels in two inks, the pattern on both wings in the accent, spars.
+    const n: [number, number, number] = [0, nrm[1] * side, nrm[2] * side];
+    const P: Plane = { o: [0, n[1] * 0.01, n[2] * 0.01], u: [1, 0, 0], v: [0, vy, vz], n };
+    poly(b, P, [0, top, half, cross, 0, mid], side > 0 ? liv.base : liv.stripe);
+    poly(b, P, [0, top, 0, mid, -half, cross], side > 0 ? liv.stripe : liv.base);
+    poly(b, P, [-half, cross, 0, mid, 0, bot], side > 0 ? liv.base : liv.stripe);
+    poly(b, P, [0, mid, half, cross, 0, bot], side > 0 ? liv.stripe : liv.base);
+    const front = lift(P, 0.03);
+    pattern(b, front, liv.pattern, 0.08 * S, half * 0.62, -0.75 * S, 0.0, liv.accent);
+    pattern(b, front, liv.pattern, -half * 0.62, -0.08 * S, -0.75 * S, 0.0, liv.accent);
+    if (king) {
+      const c = lift(P, 0.06);
+      const cy = 0.5 * S;
+      const w = 0.55 * S;
+      const h = 0.55 * S;
+      rect(b, c, -w, cy - 0.14 * S, w, cy, INK.pink);
+      for (const k of [-1, 0, 1]) {
+        const cx = k * w * 0.75;
+        const tipY = cy + h * (k === 0 ? 1.1 : 0.8);
+        poly(b, c, [cx - 0.22 * S, cy, cx + 0.22 * S, cy, cx, tipY], INK.pink);
+        poly(b, lift(c, 0.02), [cx - 0.08 * S, tipY, cx + 0.08 * S, tipY, cx + 0.08 * S, tipY + 0.16 * S, cx - 0.08 * S, tipY + 0.16 * S], INK.paper);
+      }
     }
   }
-  // Spars.
-  const sp = (u: number, v: number): [number, number, number] => [u, v * vy - ny * 0.06, v * vz - nz * 0.06];
-  const a = sp(0, top);
-  const c0 = sp(0, bot);
-  const l = sp(-half, cross);
-  const r = sp(half, cross);
+  const a = at(0, top, 0.06);
+  const c0 = at(0, bot, 0.06);
+  const l = at(-half, cross, 0.06);
+  const r = at(half, cross, 0.06);
   b.beam(a[0], a[1], a[2], c0[0], c0[1], c0[2], 0.035 * S, INK.ink);
   b.beam(l[0], l[1], l[2], r[0], r[1], r[2], 0.035 * S, INK.ink);
+  // Keel: a double-sided fin under the spine, where the line is tied.
+  const k0 = at(0, mid);
+  const k1 = at(0, bot * 0.55);
+  const kt = at(0, (mid + bot * 0.55) / 2 - 0.15 * S, 0.75 * S);
+  const keel = [k0[0], k0[1], k0[2], k1[0], k1[1], k1[2], kt[0], kt[1], kt[2]];
+  face(b, keel, -1, kt[1], kt[2], liv.accent);
+  face(b, keel, 1, kt[1], kt[2], liv.accent);
   // Tail: a waving string of bows from the bottom point, three frames.
   const tail = king ? 10 : 8;
   const seg = 0.7 * S;
@@ -161,7 +177,7 @@ export function kite(b: MeshBuilder, line: CompiledLine, frame: number): void {
     const col = i % 2 === 0 ? liv.accent : liv.stripe;
     const bw = 0.3 * S;
     const bh = 0.16 * S;
-    // A bow: two triangles meeting at the knot, double-sided, facing back along the tail.
+    // A bow: two triangles meeting at the knot, double-sided.
     for (const s of [1, -1]) {
       const tri = [x, y, z, x + s * bw, y + bh, z, x + s * bw, y - bh, z];
       face(b, tri, x, y, z + 1, col);
@@ -171,31 +187,7 @@ export function kite(b: MeshBuilder, line: CompiledLine, frame: number): void {
     py = y;
     pz = z;
   }
-  // The kite line: from the bridle down to the handle.
-  const br = sp(0, cross * 0.4);
-  const gz = -line.anchorBack;
-  const gy = line.anchorY - line.hang;
-  b.beam(br[0], br[1] - 0.05, br[2] - 0.05, 0, gy + 0.34, gz, 0.03, INK.ink);
-  handle(b, 0, gy, gz);
-}
-
-function sailPts(P: Plane, uv: number[]): number[] {
-  const out: number[] = [];
-  for (let i = 0; i < uv.length; i += 2) {
-    const u = uv[i];
-    const v = uv[i + 1];
-    out.push(P.o[0] + u * P.u[0] + v * P.v[0], P.o[1] + u * P.u[1] + v * P.v[1], P.o[2] + u * P.u[2] + v * P.v[2]);
-  }
-  return out;
-}
-
-function nzLike(P: Plane): [number, number, number] {
-  return [P.o[0] + P.n[0], P.o[1] + P.n[1], P.o[2] + P.n[2]];
-}
-
-function faceOn(b: MeshBuilder, P: Plane, uv: number[], color: number): void {
-  const pts = sailPts(P, uv);
-  face(b, pts, pts[0] - P.n[0], pts[1] - P.n[1], pts[2] - P.n[2], color);
+  return kt;
 }
 
 /** 3x5 block letters, rows top to bottom, '1' = filled. */
@@ -293,8 +285,8 @@ export function blimp(b: MeshBuilder, line: CompiledLine, frame: number): void {
           const on = col < 3 && g[row * 3 + col] === '1';
           if (on && run < 0) run = col;
           if (!on && run >= 0) {
-            const ua = dir * (start - (c * 4 + run) * px);
-            const ub = dir * (start - (c * 4 + col) * px);
+            const ua = dir * ((c * 4 + run) * px - start);
+            const ub = dir * ((c * 4 + col) * px - start);
             const v1 = ph * 2.5 - row * ph;
             rect(b, P, Math.min(ua, ub), v1 - ph, Math.max(ua, ub), v1, liv.stripe);
             run = -1;

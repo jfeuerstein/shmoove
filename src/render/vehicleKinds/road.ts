@@ -11,7 +11,7 @@ const GLASS = 0x2a2f6e;
 /** A fish in profile on a flank, nose forward (+u), drawn as quads: body, tail, fins, eye, gills. */
 function fish(b: MeshBuilder, P: Plane, cu: number, cv: number, size: number, body: number, detail: number): void {
   const L = size;
-  const Hh = size * 0.36;
+  const Hh = size * 0.3;
   // Body: an elongated hexagon.
   poly(b, P, [cu - L * 0.55, cv, cu - L * 0.2, cv - Hh, cu + L * 0.3, cv - Hh, cu + L * 0.55, cv, cu + L * 0.3, cv + Hh, cu - L * 0.2, cv + Hh], body);
   // Tail fan.
@@ -61,8 +61,10 @@ export function truck(b: MeshBuilder, line: CompiledLine): void {
   b.box(0, (deck + H) / 2, bc, W, (H - deck) / 2, bh, 1, 0, liv.base, { bottom: true });
   for (const s of [1, -1]) {
     const P = flank(s, W);
-    pattern(b, P, liv.pattern, bz0 + 0.12, bz1 - 0.12, deck + 0.12, deck + 0.55, liv.stripe, liv.accent);
-    fish(b, P, bc, (deck + 0.65 + H) / 2 + 0.05, Math.min(bh * 1.55, 3.4), liv.accent, liv.stripe);
+    pattern(b, P, liv.pattern, bz0 + 0.12, bz1 - 0.12, deck + 0.08, deck + 0.42, liv.stripe, liv.accent);
+    // The fish fills the panel above the pattern: about 0.88 x size tall (fins may touch the edges) with its fins, 1.4 x long.
+    const room = H - 0.1 - (deck + 0.5);
+    fish(b, P, bc + 0.1, deck + 0.5 + room * 0.47, Math.min((bh * 2 - 0.4) / 1.4, room / 0.75), liv.accent, liv.stripe);
   }
   roofMark(b, liv, H, W * 0.82, bz0 + 0.2, bz1 - 0.2);
   // Box corner trims.
