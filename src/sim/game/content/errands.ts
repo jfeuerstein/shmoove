@@ -130,9 +130,9 @@ export const ERRANDS: readonly ErrandDef[] = [
     limitTicks: 2.5 * MIN,
     hours: [0.3, 0.74],
     steps: [
-      { kind: 'rideTo', line: 'A1', zone: 'hill_station' },
-      { kind: 'chain', links: 2, at: 'hill_station' },
-      { kind: 'rideTo', line: 'A2', zone: 'summit' },
+      { kind: 'rideTo', line: 'A1', zone: 'stop_A1_1' },
+      { kind: 'chain', links: 2, at: 'stop_A2_0' },
+      { kind: 'rideTo', line: 'A2', zone: 'stop_A2_1' },
     ],
   },
   {

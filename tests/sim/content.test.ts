@@ -476,6 +476,60 @@ describe('errands played for real', () => {
     expect(kinds, r.trace.join('\n')).toEqual(['errandStep', 'errandStep', 'errandDone']);
     expect(game.sim.player.y).toBeGreaterThan(base.y + 60);
   });
+
+  it('downhill across open hill: valves from the summit to the radio shack, without a fall', () => {
+    const game = newGame(0.4);
+    acceptAt(game, 'radio_valves');
+    const to = zone('radio_shack');
+    const r = play(game, 3 * 3600, (sim, i) => ({ steer: steerFor(sim.player, to.x, to.z, i) }), errandOver);
+    expect(r.events.filter((e) => e.type.startsWith('errand')).map((e) => e.type), r.trace.join('\n')).toEqual(['errandStep', 'errandDone']);
+  });
+
+  it('two cable cars as one chain: a kite spool from the funicular top to the ridge', () => {
+    const game = newGame(0.4);
+    acceptAt(game, 'kite_spool');
+    const A1 = line('A1');
+    const A2 = line('A2');
+    /** Under the strap of a car standing at stop k. */
+    const under = (L: CompiledLine, k: number): [number, number] => {
+      const s = standingPose(L, k);
+      return [s.x - s.hx * L.anchorBack, s.z - s.hz * L.anchorBack];
+    };
+    const a1 = under(A1, 0);
+    const a2 = under(A2, 0);
+    const standing = (L: CompiledLine, k: number, tick: number): boolean => {
+      for (let i = 0; i < L.vehicles; i++) {
+        vehicleAt(L, i, tick, VS);
+        if (VS.active && Math.abs(VS.s - L.allStops[k].s) < 0.05 && Math.hypot(VS.vx, VS.vz) < 0.05) return true;
+      }
+      return false;
+    };
+    let leg = 0;
+    const r = play(
+      game,
+      4 * 3600,
+      (sim, i) => {
+        const p = sim.player;
+        if (p.mode === Mode.HITCH) {
+          const H = sim.world.lines[p.hLine];
+          if (H.index === A1.index) {
+            vehicleAt(H, p.hVeh, sim.tick, VS);
+            // At the hill station, let go as a summit car waits beside it.
+            if (Math.abs(VS.s - A1.allStops[1].s) < 3 && standing(A2, 0, sim.tick)) {
+              leg = 1;
+              return { hold: false };
+            }
+          }
+          return { hold: true };
+        }
+        const [tx, tz] = leg === 0 ? a1 : a2;
+        return { steer: steerFor(p, tx, tz, i), ...armFor(sim, leg === 0 ? A1 : A2) };
+      },
+      errandOver,
+    );
+    const kinds = r.events.filter((e) => e.type.startsWith('errand')).map((e) => e.type);
+    expect(kinds, r.trace.join('\n')).toEqual(['errandStep', 'errandStep', 'errandStep', 'errandDone']);
+  });
 });
 
 /** Seconds from letting go to the punch in the stopToStop plays, for the report. */
