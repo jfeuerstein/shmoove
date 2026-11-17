@@ -63,7 +63,6 @@ function boot(): void {
   attachGestures(canvas, gestures);
   const view = createView(canvas, world, isStreamed(params) ? { worldView: createCityView } : {});
   const chalkView = createChalkView(view.scene, world);
-  (window as unknown as Record<string, unknown>).__scene = view.scene;
   const markersView = createMarkersView(view.scene, world, game);
   const route = getRoute(params.route);
   const panel: DebugPanel | null = params.debug ? createDebugPanel(uiRoot) : null;
@@ -255,7 +254,6 @@ function boot(): void {
     haptics.frame(pending, pendingGame, dt);
     t1 = performance.now();
     cur[PART.haptics] = t1 - t0;
-    cur[PART.haptics] = (globalThis as unknown as Record<string, number>).__built ?? 0;
     t0 = t1;
     audio.update(audioView(sim, ui.paused), pending, world.lines, dt);
     cur[PART.audio] = performance.now() - t0;

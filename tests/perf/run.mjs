@@ -85,10 +85,8 @@ async function tour({ url, browser }, t, problems) {
   const page = await context.newPage();
   watchProblems(page, problems);
   try {
-    const t0 = Date.now();
     await page.goto(url + `/?route=tour&e2e&mute&t=${t}` + extraParams(), { waitUntil: 'commit' });
     await waitForReady(page, 60_000);
-    console.log(`[tour ${t}] ready after ${Date.now() - t0} ms`);
     return await page.evaluate(
       ({ hold, maxPoints }) => {
         const h = window.__skitch;
