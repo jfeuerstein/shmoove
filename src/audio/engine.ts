@@ -86,7 +86,7 @@ export class Engine {
   private motorIdle = 0;
   private motorKind: MotorKind | null = null;
 
-  private players: Player[] = [];
+  private readonly players: Player[] = [];
   private appliedGen = 0;
   private appliedRev = 0;
   private duckTarget = 1;
@@ -289,11 +289,15 @@ export class Engine {
     }
 
     if (!m.hold) for (const p of this.players) this.schedulePlayer(p, now);
-    this.players = this.players.filter((p) => {
-      if (p.dieAt > now) return true;
-      p.out.disconnect();
-      return false;
-    });
+    // Drop finished players, compacting in place (no new array per frame).
+    const ps = this.players;
+    let kept = 0;
+    for (let i = 0; i < ps.length; i++) {
+      const p = ps[i];
+      if (p.dieAt > now) ps[kept++] = p;
+      else p.out.disconnect();
+    }
+    ps.length = kept;
 
     for (const c of m.cues) this.cue(c, now + NOW_LEAD);
     this.noiseLayer(m, now, dt);
@@ -554,7 +558,7 @@ export class Engine {
   dispose(): void {
     this.stopMotor();
     for (const p of this.players) p.out.disconnect();
-    this.players = [];
+    this.players.length = 0;
     for (const n of this.persistent) {
       try {
         n.stop();
