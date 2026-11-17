@@ -39,7 +39,7 @@ import {
   type Level,
 } from './layout';
 import { buildRoad, type Arc, type Road } from './roads';
-import { datan2, dcos, dsin } from '../math';
+import { datan2, dcos, dsin, len2 } from '../math';
 import { STAIR_OPTS, Stepper, type Span } from './stepper';
 
 export interface StairStreet {
@@ -142,7 +142,7 @@ function raiseVerge(w: World, r: Road, a: Arc): void {
     const z = w.minZ + iz * w.cell;
     for (let ix = ix0; ix <= ix1; ix++) {
       const x = w.minX + ix * w.cell;
-      const rho = Math.hypot(x - a.cx, z - a.cz);
+      const rho = len2(x - a.cx, z - a.cz);
       if (rho < rin || rho > rOut) continue;
       // Position along the arc, 0..1; outside the arc's sweep, no verge.
       let f = (datan2(z - a.cz, x - a.cx) - a.a0) / a.da;
@@ -187,7 +187,8 @@ function crown(w: World): void {
       const x = w.minX + ix * w.cell;
       const ax = Math.abs(x);
       const edge = Math.max(0, ax - BERM_X);
-      const q = Math.abs(x - NEEDLE.x) < CROWN.ridgeW ? 1 - ((x - NEEDLE.x) / CROWN.ridgeW) ** 2 : 0;
+      const qx = (x - NEEDLE.x) / CROWN.ridgeW;
+      const q = Math.abs(qx) < 1 ? 1 - qx * qx : 0;
       const ridge = u * CROWN.ridgeH * q * q;
       const xr = Math.min(ax, CROWN.reach);
       w.heights[iz * row + ix] = y0 + CROWN.fallZ * (z - CROWN.z0) + t * CROWN.fallX * (Math.sqrt(xr * xr + 4) - 2) + ridge + BERM_K * edge * edge;
@@ -466,7 +467,7 @@ export function buildGround(w: World): Ground {
     bx: 8,
     bz: 8,
     h: (x, z) => {
-      const shed = PLAZA_SHED * Math.hypot(Math.max(0, pf.x0 - x, x - pf.x1), Math.max(0, pf.z0 - z, z - pf.z1));
+      const shed = PLAZA_SHED * len2(Math.max(0, pf.x0 - x, x - pf.x1), Math.max(0, pf.z0 - z, z - pf.z1));
       // Beside the platform the plaza also falls south, so its side edges drain off it.
       let side = Math.max(0, Math.min(1, Math.max(pf.x0 - x, x - pf.x1) / 4));
       side = side * side * (3 - 2 * side);
