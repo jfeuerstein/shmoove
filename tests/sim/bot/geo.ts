@@ -1,10 +1,10 @@
 /**
  * What the bot knows about the city: the same things a player can read off the world and the
- * timetable (where a line's vehicles stand at each stop, which way they face, when the next one is
- * due). Read-only lookups; nothing here touches a Game.
+ * timetable (where a line's vehicles stand at each stop and which way they face, whether one is
+ * standing there now). Read-only lookups; nothing here touches a Game.
  */
 import { DAY_TICKS } from '../../../src/sim/constants';
-import { grabPoint, makeVehicleState, pathAt, vehicleAt, type CompiledLine, type VehicleState } from '../../../src/sim/lines';
+import { grabPoint, makeVehicleState, vehicleAt, type CompiledLine, type VehicleState } from '../../../src/sim/lines';
 import type { World } from '../../../src/sim/world';
 
 export interface Pose {
@@ -23,7 +23,6 @@ export interface Pose {
 
 const _vs = makeVehicleState();
 const _gp = { x: 0, y: 0, z: 0 };
-const _pa = { x: 0, y: 0, z: 0, hx: 0, hz: 1 };
 
 export function lineById(w: World, id: string): CompiledLine {
   const l = w.lines.find((x) => x.id === id);
@@ -49,12 +48,6 @@ export function stopPose(l: CompiledLine, k: number): Pose {
     }
   }
   throw new Error(`${l.id} never stands at stop ${k}`);
-}
-
-/** Point on the line's path at arc position s. */
-export function pathPoint(l: CompiledLine, s: number): { x: number; y: number; z: number } {
-  pathAt(l, s, _pa);
-  return { x: _pa.x, y: _pa.y, z: _pa.z };
 }
 
 /** Is vehicle state v standing at stop k? */

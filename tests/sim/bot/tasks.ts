@@ -5,7 +5,7 @@ import { FEEL } from '../../../src/sim/constants';
 import { lineSegments, segmentSlack } from '../../../src/sim/game/progress';
 import { grabPoint, makeVehicleState, vehicleAt, type CompiledLine } from '../../../src/sim/lines';
 import { Mode, type InputFrame } from '../../../src/sim/types';
-import { atStop, frac, lineById, stopIndex, stopPose } from './geo';
+import { atStop, lineById, stopIndex, stopPose } from './geo';
 import type { Skater, Task } from './skater';
 
 const V = makeVehicleState();
@@ -89,19 +89,6 @@ export function go(label: string, pts: readonly XZ[], opts: GoOpts = {}): Task {
   };
 }
 
-/** Stay about a spot until `until` holds (circling, since landings fall away a little). */
-export function loiter(label: string, x: number, z: number, until: (b: Skater) => boolean, max = 60 * 60 * 3): Task {
-  return {
-    label,
-    step(b, out) {
-      if (until(b)) return 'done';
-      if (b.taskTicks > max) return b.fail('waited too long');
-      b.steerTo(out, x, z);
-      return 'run';
-    },
-  };
-}
-
 /** Do something for a number of ticks (carve, hop on the spot). */
 export function act(label: string, ticks: number, fn: (b: Skater, out: InputFrame, i: number) => void): Task {
   return {
@@ -129,14 +116,8 @@ export interface RideSpec {
   wait?: XZ;
   /** Metres to the left of the bumper to wait for a ground ride (negative: to the right). */
   side?: number;
-  /** Metres behind the bumper along the lane. */
-  back?: number;
-  /** Give up waiting after this many ticks. */
+  /** Give up waiting after this many ticks (default 4 minutes). */
   maxWait?: number;
-  /** Let go this many ticks after arriving at `to` (default: as soon as it stands there). */
-  linger?: number;
-  /** Steer while riding (default: quiet the swing). */
-  steer?: (b: Skater, out: InputFrame) => void;
   /** Catch a vehicle wherever it comes past the wait point, not only one standing at `at`. */
   anywhere?: boolean;
 }
@@ -172,8 +153,6 @@ export function ride(label: string, spec: RideSpec): Task {
   let wx = 0;
   let wz = 0;
   let phase: 'wait' | 'ride' | 'off' = 'wait';
-  let arrived = -1;
-  let tries = 0;
   let caughtVeh = -1;
   let slackAt = 0;
   const maxWait = spec.maxWait ?? 60 * 60 * 4;
@@ -197,11 +176,10 @@ export function ride(label: string, spec: RideSpec): Task {
           wx = pose.gx;
           wz = pose.gz;
         } else {
+          // Beside the bumper, out of the vehicle's way: left of travel is (-hz, hx).
           const side = spec.side ?? 2.6;
-          const back = spec.back ?? 0;
-          // Left of travel is (-hz, hx).
-          wx = pose.gx - pose.hx * back - pose.hz * side;
-          wz = pose.gz - pose.hz * back + pose.hx * side;
+          wx = pose.gx - pose.hz * side;
+          wz = pose.gz + pose.hx * side;
         }
       }
       // A load puts the skater down off the ride: wait again.
@@ -244,21 +222,15 @@ export function ride(label: string, spec: RideSpec): Task {
           // Off the ride without letting go: it went out of service or the strap slipped.
           const missing = segs.filter((s) => !prog.inked[s]);
           if (missing.length === 0) return 'done';
-          tries++;
           b.note(`dropped by ${line.id} #${caughtVeh}, missing segs ${missing.join(',')}`);
           return b.fail(`${line.id} dropped the skater before segments ${missing.join(',')} were inked`);
         }
         out.hold = true;
-        if (spec.steer) spec.steer(b, out);
-        else b.quiet(out);
+        b.quiet(out);
         vehicleAt(line, p.hVeh, b.tick, V);
-        const allInked = segs.every((s) => prog.inked[s]);
-        if (allInked && atStop(line, V, kTo)) {
-          if (arrived < 0) arrived = b.taskTicks;
-          if (b.taskTicks - arrived >= (spec.linger ?? 0)) {
-            out.hold = false;
-            phase = 'off';
-          }
+        if (segs.every((s) => prog.inked[s]) && atStop(line, V, kTo)) {
+          out.hold = false;
+          phase = 'off';
         }
         return 'run';
       }
@@ -267,7 +239,6 @@ export function ride(label: string, spec: RideSpec): Task {
         out.hold = false;
         return 'run';
       }
-      void tries;
       return 'done';
     },
   };
@@ -288,5 +259,3 @@ function fresh(l: CompiledLine, vi: number, tick: number, k: number, slack: numb
   } else ds *= V.dir;
   return ds > -25 && ds < slack * 0.6;
 }
-
-export { frac };

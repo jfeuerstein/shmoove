@@ -62,7 +62,7 @@ function play(save?: SavePoint): Played {
   const t0 = performance.now();
   resetFeel();
   let game = newGame(world);
-  const bot = new Skater(game, fullGamePlan(world));
+  const bot = new Skater(game, fullGamePlan());
   const book = newBook(game);
   const r = makeRunner(game, bot, book);
   let mapTick = -1;

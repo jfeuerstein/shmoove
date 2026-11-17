@@ -4,14 +4,14 @@
  * steer, a held touch, a swipe up). It never writes to the sim or the game.
  *
  * A plan is a list of tasks run in order. Each task is a small controller: roll along waypoints,
- * loiter at a spot until something is due, wait for a named line at a stop and catch it, ride it
+ * wait for a named line at a stop (circling, since landings fall away) and catch it, ride it
  * until a stop and let go. A task that cannot go on (the ride it was on is gone, a catch was missed
  * past retrying) fails the run with a note saying where and when, rather than trying something else:
  * the plan is a test of the game, and a failure is a finding.
  */
-import { DT, FEEL } from '../../../src/sim/constants';
+import { FEEL } from '../../../src/sim/constants';
 import type { Game } from '../../../src/sim/game/game';
-import { grabPoint, makeVehicleState, vehicleAt, type CompiledLine, type VehicleState } from '../../../src/sim/lines';
+import { grabPoint, makeVehicleState, vehicleAt } from '../../../src/sim/lines';
 import { angleDiff, clamp, datan2, dcos, dsin } from '../../../src/sim/math';
 import { Mode, type InputFrame, type PlayerState } from '../../../src/sim/types';
 import { topHeight, type World } from '../../../src/sim/world';
@@ -172,14 +172,5 @@ export class Skater {
         }
       }
     }
-  }
-
-  vehicle(L: CompiledLine, k: number, out: VehicleState = V): VehicleState {
-    vehicleAt(L, k, this.tick, out);
-    return out;
-  }
-
-  seconds(ticks: number): number {
-    return ticks * DT;
   }
 }

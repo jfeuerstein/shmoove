@@ -1,13 +1,12 @@
 /**
  * The itinerary: from a new game at the lookout to a complete line map, then the secret lines.
  */
-import type { World } from '../../../src/sim/world';
 import { Mode } from '../../../src/sim/types';
 import type { Task } from './skater';
 import { needleLap, summitRun } from './secrets';
 import { act, go, ride } from './tasks';
 
-export function mapPlan(_w: World): Task[] {
+export function mapPlan(): Task[] {
   return [
     // The lesson's first two steps, on the lookout: carve both ways, then a hop.
     act('carve', 60, (_b, out, i) => {
@@ -114,6 +113,6 @@ export function secretPlan(): Task[] {
   ];
 }
 
-export function fullGamePlan(w: World): Task[] {
-  return [...mapPlan(w), ...secretPlan()];
+export function fullGamePlan(): Task[] {
+  return [...mapPlan(), ...secretPlan()];
 }
