@@ -609,7 +609,8 @@ function paintFlightStrips(w: World, g: Ground): void {
  */
 function dressParapets(w: World, g: Ground): void {
   for (const road of [g.east, g.west]) {
-    for (const a of road.outer) {
+    // Not round the bottom bend, on the level docks: a skater who runs wide there just rolls out onto them.
+    for (const a of road.outer.slice(1)) {
       const R = a.r + ROAD_HALF + PARAPET.out;
       // From the bottom of the bend, where the road stands on fill, round to PARAPET.sweep of it:
       // at the top the road is cut into the hill and the bank stops a skater by itself.

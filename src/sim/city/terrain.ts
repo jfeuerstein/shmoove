@@ -71,6 +71,7 @@ function gridCeil(z: number): number {
 const BERM_X = 172;
 const BERM_K = 0.045;
 const BERM_RAMP = 60;
+const BERM_Z0 = 292;
 
 /**
  * Curl the ground up near the world's side edges (above the docks), so the fall line never points
@@ -80,9 +81,10 @@ function berm(w: World): void {
   const row = w.nx + 1;
   for (let iz = 0; iz <= w.nz; iz++) {
     const z = w.minZ + iz * w.cell;
-    if (z < CITY.bands.mercado) continue;
-    // The curl grows in over BERM_RAMP above the docks, so it does not start as a cliff at their edge.
-    const t = Math.min(1, (z - CITY.bands.mercado) / BERM_RAMP);
+    if (z < BERM_Z0) continue;
+    // The curl grows in over BERM_RAMP, from above the switchbacks' bottom bends (which lie at the
+    // docks' level), so it does not start as a cliff at the docks' edge.
+    const t = Math.min(1, (z - BERM_Z0) / BERM_RAMP);
     const k = BERM_K * t * t * (3 - 2 * t);
     for (let ix = 0; ix <= w.nx; ix++) {
       const d = Math.abs(w.minX + ix * w.cell) - BERM_X;
