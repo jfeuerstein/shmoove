@@ -80,7 +80,7 @@ const CSS = `
 .sk-rec.sk-on{display:flex}
 .sk-recdot{display:block;width:11px;height:11px;border-radius:50%;background:var(--sk-pink);box-shadow:0 0 0 2px rgba(255,46,136,.35)}
 .sk-reclabel{color:var(--sk-pink)}
-.sk-count{position:absolute;left:50%;top:32%;display:none;padding:8px;gap:2px;transform:translate(-50%,-50%);--sk-cw:58px}
+.sk-count{position:absolute;left:50%;top:32%;display:none;padding:8px;gap:2px;transform:translate(-50%,-50%);--sk-cw:58px;--sk-ch:87px}
 .sk-count.sk-on{display:flex}
 .sk-count.sk-pop1{transform:translate(-50%,-50%) scale(1.22)}
 .sk-count.sk-pop2{transform:translate(-50%,-50%) scale(1.08)}
