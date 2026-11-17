@@ -182,6 +182,7 @@ export function createUi(root: HTMLElement, game: Game, sound: UiSound | null): 
   chalkBtn.addEventListener('pointerup', onChalkUp);
   chalkBtn.addEventListener('pointercancel', onChalkCancel);
   chalkBtn.addEventListener('click', onChalkClick);
+  let lastChalkMode = '';
   const recording = new ClassSlot(hud, 'sk-recording');
   const racing = new ClassSlot(hud, 'sk-racing');
 
@@ -341,10 +342,11 @@ export function createUi(root: HTMLElement, game: Game, sound: UiSound | null): 
       const cm = game.chalk.mode;
       recording.set(cm === 'recording');
       racing.set(cm === 'countdown' || cm === 'racing');
-      chalkBtn.setAttribute(
-        'aria-label',
-        cm === 'recording' ? 'Stop drawing' : cm === 'idle' ? 'Chalk lines' : 'Abandon the race',
-      );
+      // Only touch the DOM when the mode changes.
+      if (cm !== lastChalkMode) {
+        lastChalkMode = cm;
+        chalkBtn.setAttribute('aria-label', cm === 'recording' ? 'Stop drawing' : cm === 'idle' ? 'Chalk lines' : 'Abandon the race');
+      }
       chalkHud.update(f.dt);
       twos.update(f.dt);
     },
