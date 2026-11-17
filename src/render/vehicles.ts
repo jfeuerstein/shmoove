@@ -1,78 +1,36 @@
 /**
- * Ride vehicles: one geometry per line (built from its kind and livery), one mesh per vehicle,
- * placed each frame from the timetable. Local frame: +z is the direction of travel, origin on the
- * path (ground level for ground rides, the carriage for overhead rides).
+ * Ride vehicles: a few geometries per line (built from its kind and livery: animation frames on
+ * twos, or the funicular's up/down stepping), one mesh per vehicle, placed each frame from the
+ * timetable. Local frame: +z is the direction of travel, origin on the path (ground level for
+ * ground rides, the carriage for overhead rides). Kind builders live in `vehicleKinds/`.
  */
 import * as THREE from 'three';
 import { DT } from '../sim/constants';
 import { grabPoint, makeVehicleState, vehicleAt, type CompiledLine, type VehicleState } from '../sim/lines';
 import { terrainHeight, topHeight, type World } from '../sim/world';
-import { MeshBuilder, shade } from './geom';
-import { INK, inkMaterial, shadowMaterial } from './look';
+import { MeshBuilder } from './geom';
+import { inkMaterial, shadowMaterial } from './look';
+import { buildKind, shadowSize, variantCount } from './vehicleKinds';
 
-const GLASS = 0x2a2f6e;
+/** Vehicles further than this from the camera are not drawn, m. */
+export const VEHICLE_DRAW_DIST = 240;
+/** Blob shadows are drawn only within this distance of the camera, m. */
+export const VEHICLE_SHADOW_DIST = 120;
+/** Sim ticks per animation frame: 60 Hz / 5 = 12 Hz, "on twos". */
+const TWOS = 5;
 
-/** A chunky rail car: skirt, window band, stripe, roof, lit destination boards, rear grab bar. */
-function railCar(b: MeshBuilder, line: CompiledLine, opts: { roofStep: boolean }): void {
-  const L = line.bodyHalfLen;
-  const W = line.bodyHalfWid;
-  const H = line.bodyHeight;
-  const { base, stripe, accent } = line.livery;
-  const skirt = H * 0.42;
-  const band = H * 0.3;
-  b.box(0, 0.35 + skirt / 2, 0, W, skirt / 2, L, 1, 0, base, { bottom: true });
-  b.box(0, 0.35 + skirt + band / 2, 0, W - 0.06, band / 2, L - 0.06, 1, 0, GLASS, { glow: 0.85 });
-  b.box(0, 0.35 + skirt + band + (H - skirt - band - 0.35) / 2, 0, W, (H - skirt - band - 0.35) / 2, L, 1, 0, base, { top: stripe });
-  // Livery stripe along both flanks, readable from a distance.
-  b.box(0, 0.35 + skirt * 0.62, 0, W + 0.03, skirt * 0.16, L * 0.96, 1, 0, stripe, { noTop: true });
-  // Window pillars.
-  const pillars = Math.max(2, Math.round(L / 1.1));
-  for (let i = 0; i <= pillars; i++) {
-    const z = -L + (i * 2 * L) / pillars;
-    b.box(0, 0.35 + skirt + band / 2, z, W + 0.01, band / 2, 0.09, 1, 0, base, { noTop: true });
-  }
-  // Destination boards front and back.
-  b.box(0, H - 0.42, L + 0.02, W * 0.6, 0.2, 0.03, 1, 0, INK.ink, { glow: 0 });
-  b.box(0, H - 0.42, L + 0.05, W * 0.5, 0.12, 0.02, 1, 0, INK.mango, { glow: 1 });
-  b.box(0, H - 0.42, -L - 0.05, W * 0.5, 0.12, 0.02, 1, 0, INK.mango, { glow: 1 });
-  // Headlamps.
-  b.box(W * 0.6, 0.9, L + 0.03, 0.14, 0.12, 0.03, 1, 0, INK.white, { glow: 1 });
-  b.box(-W * 0.6, 0.9, L + 0.03, 0.14, 0.12, 0.03, 1, 0, INK.white, { glow: 1 });
-  // Roof mark: a big accent block, the line's signature from above.
-  b.box(0, H + 0.14, 0, W * 0.55, 0.14, L * 0.45, 1, 0, accent, {});
-  if (opts.roofStep) b.box(0, H + 0.36, L * 0.25, W * 0.4, 0.1, L * 0.18, 1, 0, stripe, {});
-  // Wheels as dark blocks.
-  for (const z of [-L * 0.62, L * 0.62]) b.box(0, 0.3, z, W * 0.92, 0.3, 0.5, 1, 0, INK.ink, { bottom: true });
-  // Rear bumper and the grab bar a skater hitches to.
-  const back = -line.anchorBack;
-  b.box(0, 0.62, -L - 0.12, W * 0.9, 0.12, 0.12, 1, 0, INK.ink, {});
-  b.beam(-0.5, line.anchorY, back, 0.5, line.anchorY, back, 0.05, INK.pink, 0.6);
-  b.beam(-0.5, line.anchorY, back, -0.5, 0.7, -L - 0.1, 0.035, INK.pink);
-  b.beam(0.5, line.anchorY, back, 0.5, 0.7, -L - 0.1, 0.035, INK.pink);
+/** How many geometry variants (animation frames, or funicular stepping) a line's vehicles use. */
+export function vehicleVariants(line: CompiledLine): number {
+  return variantCount(line.kind);
 }
 
-/** Geometry for one vehicle of `line`. Kinds not drawn specially fall back to a livery box. */
-export function buildVehicleGeometry(line: CompiledLine): THREE.BufferGeometry {
+/**
+ * Geometry for one vehicle of `line`. `variant` picks the animation frame (wrapped), or for the
+ * funicular 0 = stepped for climbing, 1 = stepped for descending.
+ */
+export function buildVehicleGeometry(line: CompiledLine, variant = 0): THREE.BufferGeometry {
   const b = new MeshBuilder();
-  switch (line.kind) {
-    case 'tram':
-    case 'ghosttram':
-    case 'bus':
-      railCar(b, line, { roofStep: false });
-      break;
-    case 'funicular':
-      railCar(b, line, { roofStep: true });
-      break;
-    default: {
-      const L = Math.max(line.bodyHalfLen, 0.8);
-      const W = Math.max(line.bodyHalfWid, 0.6);
-      const H = Math.max(line.bodyHeight, 1.2);
-      const y = line.overhead ? -H / 2 : H / 2 + 0.2;
-      b.box(0, y, 0, W, H / 2, L, 1, 0, line.livery.base, { top: line.livery.stripe, bottom: true });
-      b.box(0, y, 0, W + 0.03, H * 0.12, L * 0.9, 1, 0, line.livery.stripe, { noTop: true });
-      if (line.overhead) b.beam(0, -H, 0, 0, line.anchorY - line.hang, -line.anchorBack, 0.04, shade(line.livery.accent, 1));
-    }
-  }
+  buildKind(b, line, variant);
   return b.build();
 }
 
@@ -85,6 +43,11 @@ export interface VehicleView {
   update(tick: number, alpha: number): void;
   /** World position of a vehicle's grab point at the same instant (for the strap). */
   grabAt(line: number, vehicle: number, tick: number, alpha: number, out: THREE.Vector3): void;
+  /**
+   * Camera position for distance culling (vehicles beyond VEHICLE_DRAW_DIST hidden, shadows beyond
+   * VEHICLE_SHADOW_DIST hidden). Until it is first called, everything in service is drawn.
+   */
+  setCamera(x: number, y: number, z: number): void;
   dispose(): void;
 }
 
@@ -95,22 +58,27 @@ export function createVehicleView(world: World): VehicleView {
   const shadowMat = shadowMaterial();
   const shadowGeo = new THREE.PlaneGeometry(1, 1);
   shadowGeo.rotateX(-Math.PI / 2);
-  const geos: THREE.BufferGeometry[] = [];
+  const geos: THREE.BufferGeometry[][] = [];
   const meshes: THREE.Mesh[][] = [];
   const shadows: THREE.Mesh[][] = [];
   for (const line of world.lines) {
-    const geo = buildVehicleGeometry(line);
-    geos.push(geo);
+    const n = vehicleVariants(line);
+    const variants: THREE.BufferGeometry[] = [];
+    for (let v = 0; v < n; v++) variants.push(buildVehicleGeometry(line, v));
+    geos.push(variants);
+    const [sw, sl] = shadowSize(line);
     const row: THREE.Mesh[] = [];
     const srow: THREE.Mesh[] = [];
     for (let i = 0; i < line.vehicles; i++) {
-      const m = new THREE.Mesh(geo, mat);
+      const m = new THREE.Mesh(variants[0], mat);
       m.rotation.order = 'YXZ';
+      m.visible = false;
       group.add(m);
       row.push(m);
       const s = new THREE.Mesh(shadowGeo, shadowMat);
-      s.scale.set(Math.max(1.5, line.bodyHalfWid * 2 + 1.6), 1, Math.max(1.5, line.bodyHalfLen * 2 + 1.6));
+      s.scale.set(sw, 1, sl);
       s.renderOrder = 2;
+      s.visible = false;
       group.add(s);
       srow.push(s);
     }
@@ -118,22 +86,46 @@ export function createVehicleView(world: World): VehicleView {
     shadows.push(srow);
   }
 
+  let haveCam = false;
+  let camX = 0;
+  let camY = 0;
+  let camZ = 0;
+  const drawD2 = VEHICLE_DRAW_DIST * VEHICLE_DRAW_DIST;
+  const shadowD2 = VEHICLE_SHADOW_DIST * VEHICLE_SHADOW_DIST;
+
   return {
     group,
     update(tick, alpha) {
       const back = (alpha - 1) * DT;
+      const anim = Math.floor(tick / TWOS);
       for (let li = 0; li < world.lines.length; li++) {
         const line = world.lines[li];
+        const variants = geos[li];
         for (let i = 0; i < line.vehicles; i++) {
           const m = meshes[li][i];
           const s = shadows[li][i];
           vehicleAt(line, i, tick, _v);
-          m.visible = _v.active;
-          s.visible = _v.active;
-          if (!_v.active) continue;
+          if (!_v.active) {
+            m.visible = false;
+            s.visible = false;
+            continue;
+          }
           const x = _v.x + _v.vx * back;
           const y = _v.y + _v.vy * back;
           const z = _v.z + _v.vz * back;
+          let d2 = 0;
+          if (haveCam) {
+            const dx = x - camX;
+            const dy = y - camY;
+            const dz = z - camZ;
+            d2 = dx * dx + dy * dy + dz * dz;
+          }
+          if (d2 > drawD2) {
+            m.visible = false;
+            s.visible = false;
+            continue;
+          }
+          m.visible = true;
           m.position.set(x, y, z);
           const yaw = Math.atan2(_v.hx, _v.hz);
           let pitch = 0;
@@ -144,8 +136,13 @@ export function createVehicleView(world: World): VehicleView {
             pitch = Math.atan2(front - rear, 2 * d);
           }
           m.rotation.set(-pitch, yaw, 0);
-          s.position.set(x, (line.overhead ? topHeight(world, x, z) : y) + 0.04, z);
-          s.rotation.y = yaw;
+          if (line.kind === 'funicular') m.geometry = variants[pitch < -0.01 ? 1 : 0];
+          else if (variants.length > 1) m.geometry = variants[(anim + i) % variants.length];
+          s.visible = d2 <= shadowD2;
+          if (s.visible) {
+            s.position.set(x, (line.overhead ? topHeight(world, x, z) : y) + 0.04, z);
+            s.rotation.y = yaw;
+          }
         }
       }
     },
@@ -156,8 +153,14 @@ export function createVehicleView(world: World): VehicleView {
       const back = (alpha - 1) * DT;
       out.set(_g.x + _v.vx * back, _g.y + _v.vy * back, _g.z + _v.vz * back);
     },
+    setCamera(x, y, z) {
+      haveCam = true;
+      camX = x;
+      camY = y;
+      camZ = z;
+    },
     dispose() {
-      for (const g of geos) g.dispose();
+      for (const row of geos) for (const g of row) g.dispose();
       shadowGeo.dispose();
       shadowMat.dispose();
     },
