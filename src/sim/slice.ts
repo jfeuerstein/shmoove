@@ -100,7 +100,9 @@ export function buildSlice(seed = 1, funiPhase: number = FUNI_PHASE): World {
     const gE = baseHeight(z);
     // Leave the terrace, the stairs and their run-out open on the east side.
     if (z + 17 < S.stairZ0 - 24 || z > S.terraceZ1 + 8) {
-      addSolid(w, { cx: 26, cz: z + 8, hx: 7, hz: 8.5, yBase: gE - 1, yTop: gE + hEast, kind: 'building', style: style++ });
+      // Below the stairs the row sits further back, leaving the rail's run-out clear.
+      const cx = z < S.stairZ0 ? 30 : 26;
+      addSolid(w, { cx, cz: z + 8, hx: 7, hz: 8.5, yBase: gE - 1, yTop: gE + hEast, kind: 'building', style: style++ });
     } else {
       addSolid(w, { cx: 44, cz: z + 8, hx: 8, hz: 8.5, yBase: gE - 1, yTop: gE + hEast + 4, kind: 'building', style: style++ });
     }

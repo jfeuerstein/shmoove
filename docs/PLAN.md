@@ -6,25 +6,28 @@ The gate for every milestone is `npm run gate`: typecheck, lint, unit tests, det
 driven by scripted input, a Playwright run at 390x844 with touch emulation that plays a scripted route
 and saves screenshots (reviewed against DESIGN.md), and the frame-time/budget check.
 
-## M0 — Foundations `[~]`
+## M0 — Foundations `[x]`
 
 - [x] CLAUDE.md, DESIGN.md, PLAN.md, agent definitions
-- [ ] Scaffold: Vite + TS strict + ESLint (sim purity rules) + Vitest + Playwright e2e + perf harness + `npm run gate`
+- [x] Scaffold: Vite + TS strict + ESLint (sim purity rules) + Vitest + Playwright e2e + perf harness + `npm run gate`
 
 Acceptance: fresh clone passes `npm install`, `npm run build`, `npm test`; `npm run gate` runs end to end.
 
-## M1 — Feel slice `[ ]` (tag `m1`)
+## M1 — Feel slice `[x]` (tag `m1`)
 
 One street, one tram, one funicular, one staircase with a handrail.
 
-- [ ] Sim core: world queries, deterministic math, line kinematics
-- [ ] Movement controller: ground, air, hop, grind, wallride, bail
-- [ ] Hitch, slingshot, chain
-- [ ] Gesture input (touch + keyboard)
-- [ ] Core look: ink material, halftone shadow, riso post pass
-- [ ] Chase camera
-- [ ] Debug panel exposing every `FEEL` constant
-- [ ] docs/PLAYTEST.md first pass
+- [x] Sim core: world queries, deterministic math, line kinematics
+- [x] Movement controller: ground, air, hop, grind, wallride, bail, vehicle bodies
+- [x] Hitch, slingshot, chain
+- [x] Gesture input (touch + keyboard)
+- [x] Core look: ink material, halftone shadow, riso post pass
+- [x] Chase camera
+- [x] Debug panel exposing every `FEEL` constant
+- [x] docs/PLAYTEST.md first pass
+
+Result: 147 unit + sim tests, 3 e2e routes (carve/hop, hitch/whip/sling, grind) with screenshots,
+perf on the slice at 4x throttle: 23 draw calls, 27k triangles, 2.7 ms mean / 8.3 ms p95 work.
 
 Acceptance:
 - Sim tests (scripted input): rolls downhill and reaches terminal speed; carves; hops; grinds the

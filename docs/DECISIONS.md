@@ -30,3 +30,24 @@ Decisions made without the owner in the room, newest last. Cuts are marked **CUT
     cars" in the brief are covered by one crane, two trams and two cable-car lines.
 11. **Frame-time gate measures main-thread work** (sim + scene update + render submit) under 4x CPU
     throttle. Headless Chrome rasterises on the CPU, so its GPU time says nothing about a phone.
+
+## M1 — Feel slice
+
+12. **Steer drives the swing.** While hitched, carving is a strong torque on the pendulum, not a
+    gentle lean. Passive timing alone gave exits within about ±30°; carving out and cracking back
+    gives the big whip and lets the player aim a chain. The swing also sustains itself at a minimum
+    amplitude so there is always something to time.
+13. **Bumpers are grabbed as they pass.** A ground ride cannot be hitched from in front of its
+    bumper (`HITCH_AHEAD`), otherwise the skater is dragged through the vehicle body.
+14. **Vehicles are solid.** They shove, bail head-on, and their roofs bounce. Riding on a moving roof
+    was cut: it needs moving-platform support in the controller, and the bounce is a better trick.
+    **CUT:** standing on vehicle roofs.
+15. **Slow wall contact slides, it does not bounce.** With no push button a bounce at low speed
+    traps the skater against a wall on a slope; below 3 m/s the board turns along the wall instead.
+16. **Timetable phase.** Lines take a `phase` offset so designed meetings between lines (chain
+    opportunities) recur on every lap rather than by luck.
+17. **Flat normals in the shader.** The ink shader derives face normals from derivatives, so meshes
+    carry only position and colour. Colour management is off: inks are authored and output in display
+    space, as a printer would think of them.
+18. **Camera yaw follows the ride while hitched,** not the swinging skater, so the swing reads
+    against a steady frame.

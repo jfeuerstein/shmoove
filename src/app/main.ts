@@ -1,138 +1,132 @@
-// Temporary boot: a harness fixture that proves build, input, the fixed-step loop and the test hook
-// work end to end. The lead replaces this file with the real game boot.
-import {
-  BoxGeometry,
-  Color,
-  DirectionalLight,
-  HemisphereLight,
-  Mesh,
-  MeshLambertMaterial,
-  PerspectiveCamera,
-  Scene,
-  WebGLRenderer,
-} from 'three';
+/**
+ * Boot and main loop. Fixed 60 Hz sim steps from an accumulator; rendering interpolates. With
+ * `?e2e` nothing runs on its own: the test harness advances time through the hook.
+ */
+import { Gestures, attachGestures } from '../input/gestures';
+import { createView } from '../render/view';
+import { DT } from '../sim/constants';
+import { Sim } from '../sim/sim';
+import { buildSlice } from '../sim/slice';
+import { MODE_NAMES, type InputFrame, type SimEvent } from '../sim/types';
+import { createDebugPanel, type DebugPanel } from './debugPanel';
 import { getParams } from './params';
-import { installHook, type SkitchPerfStats, type SkitchTestState } from './testHook';
+import { getRoute } from './routes';
+import { installHook } from './testHook';
 
-const STEP_MS = 1000 / 60;
 const MAX_CATCH_UP = 4;
-const SPIN_PER_TICK = 0.02;
-const CAMERA_Z = 6;
-const FOV_DEG = 50;
+const STATS_CAP = 20000;
 
-const params = getParams();
-const canvas = document.getElementById('game');
-if (!(canvas instanceof HTMLCanvasElement)) throw new Error('#game canvas missing');
+function boot(): void {
+  const params = getParams();
+  const canvas = document.getElementById('game') as HTMLCanvasElement;
+  const ui = document.getElementById('ui') as HTMLElement;
 
-const renderer = new WebGLRenderer({ canvas, antialias: false });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-renderer.setClearColor(new Color('#D9D2C3'), 1);
+  const world = buildSlice(params.seed);
+  const sim = new Sim(world, { seed: params.seed, startDayFrac: params.t ?? undefined });
+  const gestures = new Gestures();
+  attachGestures(canvas, gestures);
+  const view = createView(canvas, world);
+  const route = getRoute(params.route);
+  const panel: DebugPanel | null = params.debug ? createDebugPanel(ui) : null;
 
-const scene = new Scene();
-const camera = new PerspectiveCamera(FOV_DEG, 1, 0.1, 100);
-camera.position.set(0, 0, CAMERA_Z);
-scene.add(new HemisphereLight(0xffffff, 0x8a7f6a, 1.2));
-const sun = new DirectionalLight(0xffffff, 1.6);
-sun.position.set(2, 3, 4);
-scene.add(sun);
-const cube = new Mesh(
-  new BoxGeometry(0.8, 0.8, 0.8),
-  new MeshLambertMaterial({ color: new Color('#FFAE1A'), flatShading: true }),
-);
-cube.rotation.x = 0.5;
-scene.add(cube);
+  const prev = { x: sim.player.x, y: sim.player.y, z: sim.player.z };
+  const pending: SimEvent[] = [];
+  const eventLog: string[] = [];
+  const scripted: InputFrame = { steer: 0, hold: false, hop: false };
+  let routeTick = 0;
 
-function resize(): void {
-  const w = window.innerWidth;
-  const h = window.innerHeight;
-  renderer.setSize(w, h, false);
-  camera.aspect = w / h;
-  camera.updateProjectionMatrix();
+  const step = (): void => {
+    prev.x = sim.player.x;
+    prev.y = sim.player.y;
+    prev.z = sim.player.z;
+    let input = gestures.sample();
+    if (route) {
+      route(sim, routeTick++, scripted);
+      input = scripted;
+      // The script may have moved the skater: do not interpolate across that.
+      prev.x = sim.player.x;
+      prev.y = sim.player.y;
+      prev.z = sim.player.z;
+    }
+    sim.step(input);
+    for (const e of sim.events) {
+      pending.push(e);
+      if (eventLog.length < 4096) eventLog.push(e.type);
+    }
+  };
+
+  let workMs: number[] = [];
+  let frames = 0;
+  let lastWork = 0;
+  const draw = (alpha: number, dt: number): void => {
+    view.render(sim, prev, alpha, dt, pending);
+    pending.length = 0;
+    panel?.update(sim, { ...view.info(), workMs: lastWork });
+  };
+
+  window.addEventListener('resize', () => view.resize());
+
+  let acc = 0;
+  let lastTime = 0;
+  const frame = (now: number): void => {
+    requestAnimationFrame(frame);
+    const t0 = performance.now();
+    const dt = lastTime === 0 ? DT : Math.min(0.1, (now - lastTime) / 1000);
+    lastTime = now;
+    acc += dt;
+    let steps = 0;
+    while (acc >= DT && steps < MAX_CATCH_UP) {
+      step();
+      acc -= DT;
+      steps++;
+    }
+    // Drop time we could not simulate rather than spiral.
+    if (acc > DT) acc = 0;
+    draw(acc / DT, dt);
+    lastWork = performance.now() - t0;
+    frames++;
+    if (workMs.length < STATS_CAP) workMs.push(lastWork);
+  };
+
+  installHook({
+    ready: true,
+    manual: params.e2e,
+    advance(ticks) {
+      for (let i = 0; i < ticks; i++) step();
+      draw(1, Math.max(1, ticks) * DT);
+      frames++;
+    },
+    state() {
+      const p = sim.player;
+      const events = eventLog.splice(0, eventLog.length);
+      return {
+        tick: sim.tick,
+        mode: MODE_NAMES[p.mode],
+        x: p.x,
+        y: p.y,
+        z: p.z,
+        speed: p.speed,
+        chain: p.chain,
+        hitchedLine: p.mode === 4 ? world.lines[p.hLine].id : null,
+        dayFrac: sim.dayFrac,
+        events,
+        steer: p.steer,
+        armed: gestures.isArmed,
+        feelRows: panel ? document.querySelectorAll('[data-feel]').length : 0,
+      };
+    },
+    stats() {
+      const info = view.info();
+      return { frames, workMs: workMs.slice(), drawCalls: info.drawCalls, triangles: info.triangles };
+    },
+    resetStats() {
+      workMs = [];
+      frames = 0;
+    },
+  });
+
+  if (params.e2e) draw(1, DT);
+  else requestAnimationFrame(frame);
 }
-resize();
-window.addEventListener('resize', resize);
 
-// Input: the current touch x in CSS px, or null when no finger is down.
-let touchX: number | null = null;
-canvas.addEventListener('pointerdown', (e) => {
-  touchX = e.clientX;
-});
-canvas.addEventListener('pointermove', (e) => {
-  if (touchX !== null) touchX = e.clientX;
-});
-const release = (): void => {
-  touchX = null;
-};
-canvas.addEventListener('pointerup', release);
-canvas.addEventListener('pointercancel', release);
-
-// Sim state for the fixture.
-let tick = 0;
-let cubeX = 0;
-
-function step(): void {
-  if (touchX !== null) {
-    const halfH = Math.tan((FOV_DEG * Math.PI) / 360) * CAMERA_Z;
-    const halfW = halfH * camera.aspect;
-    cubeX = ((touchX / window.innerWidth) * 2 - 1) * halfW;
-  }
-  cube.position.x = cubeX;
-  cube.rotation.y += SPIN_PER_TICK;
-  tick++;
-}
-
-// Perf stats since the last reset.
-let workMs: number[] = [];
-let drawCalls = 0;
-let triangles = 0;
-
-function render(): void {
-  renderer.render(scene, camera);
-  drawCalls = renderer.info.render.calls;
-  triangles = renderer.info.render.triangles;
-}
-
-function frame(steps: number): void {
-  const t0 = performance.now();
-  for (let i = 0; i < steps; i++) step();
-  render();
-  workMs.push(performance.now() - t0);
-}
-
-let acc = 0;
-let last = -1;
-function loop(now: number): void {
-  if (last >= 0) acc += now - last;
-  last = now;
-  let steps = 0;
-  while (acc >= STEP_MS && steps < MAX_CATCH_UP) {
-    acc -= STEP_MS;
-    steps++;
-  }
-  if (steps === MAX_CATCH_UP) acc = Math.min(acc, STEP_MS);
-  frame(steps);
-  requestAnimationFrame(loop);
-}
-
-installHook({
-  ready: false,
-  manual: params.e2e,
-  advance(ticks: number): void {
-    if (!params.e2e) throw new Error('advance() is only available with ?e2e');
-    frame(Math.max(0, Math.floor(ticks)));
-  },
-  state(): SkitchTestState {
-    return { tick, mode: 'BOOT', x: cubeX, y: 0, z: 0, speed: 0, chain: 0, hitchedLine: null, dayFrac: 0 };
-  },
-  stats(): SkitchPerfStats {
-    return { frames: workMs.length, workMs: workMs.slice(), drawCalls, triangles };
-  },
-  resetStats(): void {
-    workMs = [];
-  },
-});
-
-render();
-if (!params.e2e) requestAnimationFrame(loop);
-const hook = window.__skitch;
-if (hook) hook.ready = true;
+boot();

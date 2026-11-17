@@ -9,6 +9,15 @@ export interface SkitchTestState {
   chain: number;
   hitchedLine: string | null;
   dayFrac: number;
+  /** Types of the sim events since the previous state() call, in order. */
+  events?: string[];
+  /** Smoothed steer applied to the board, and whether the touch is armed to hitch. */
+  steer?: number;
+  armed?: boolean;
+  /** Rows in the feel panel (0 when it is not open). */
+  feelRows?: number;
+  /** Anything else a screen wants a route to be able to assert on. */
+  ui?: Record<string, string | number | boolean>;
 }
 
 export interface SkitchPerfStats {

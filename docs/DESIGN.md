@@ -73,6 +73,9 @@ The sim is a point skater with a heading, on a heightfield with boxes, rails and
   the chain is alive adds a link. Each link adds `LINK_BONUS` exit speed, up to the cap. Re-catching
   the same vehicle keeps the chain but adds no link. A bail ends it.
 - **Gates.** A line may declare `minChain`: it can only be caught as the Nth link (the summit kite).
+- **Vehicle bodies.** Ground rides are solid: they shove a slow skater aside, bail one they meet
+  head-on at speed, and bounce one who comes down on the roof (which keeps a chain alive). A bumper
+  can only be grabbed from beside or behind it, as it comes past.
 
 Every constant above lives in `FEEL` (`src/sim/constants.ts`) and in the `?debug` panel.
 
@@ -177,7 +180,8 @@ Painted-bus maximalism, printed on a risograph.
   with CSS and inline SVG. No images, no web fonts.
 
 Render contract (`src/render/look.ts`): every world mesh uses `inkMaterial()` with attributes
-`position`, `normal` (flat) and `color`; optional `glow` (0..1, lit at night).
+`position` and `color`; optional `glow` (0..1, lit at night). No normals: faces are flat-shaded from
+screen-space derivatives. Geometry is built with `MeshBuilder` (`src/render/geom.ts`).
 
 ## 8. Sound
 
