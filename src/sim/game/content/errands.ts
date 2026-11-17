@@ -18,7 +18,7 @@ export const ERRANDS: readonly ErrandDef[] = [
     district: District.DOCKS,
     brief: 'Ride the fish truck up to the Mercado gate, quick.',
     limitTicks: 4 * MIN,
-    hours: [0.22, 0.46],
+    hours: [0.22, 0.4],
     steps: [
       { kind: 'hitch', line: 'D3' },
       { kind: 'rideTo', line: 'D3', zone: 'stop_D3_2' },
@@ -29,11 +29,11 @@ export const ERRANDS: readonly ErrandDef[] = [
     title: 'Luggage off the ferry',
     giver: 'ferry_pier',
     district: District.DOCKS,
-    brief: 'A suitcase rides the crane hook to the crane yard.',
+    brief: 'A suitcase rides the crane hook to the east quay.',
     limitTicks: 3 * MIN,
     steps: [
       { kind: 'hitch', line: 'D1' },
-      { kind: 'rideTo', line: 'D1', zone: 'crane_yard', noBail: true },
+      { kind: 'rideTo', line: 'D1', zone: 'stop_D1_2', noBail: true },
     ],
   },
   {
@@ -128,7 +128,7 @@ export const ERRANDS: readonly ErrandDef[] = [
     district: District.ANTENNA,
     brief: 'Cable car up, swap cars at the station, on to the ridge.',
     limitTicks: 2.5 * MIN,
-    hours: [0.3, 0.77],
+    hours: [0.3, 0.74],
     steps: [
       { kind: 'rideTo', line: 'A1', zone: 'hill_station' },
       { kind: 'chain', links: 2, at: 'hill_station' },
