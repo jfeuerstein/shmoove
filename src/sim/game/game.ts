@@ -1,6 +1,6 @@
 /**
  * The game layer above the sim: deterministic reducers over sim state and events (line-map
- * progress and chalk lines now; errands, conductors and secrets later).
+ * progress, chalk lines, errands, conductor challenges and secrets).
  *
  * `Game.step` is the only way time advances: it steps the sim, then every reducer in a fixed order.
  * A reducer owns its own state, reads `game.sim` and `game.sim.events`, and pushes GameEvents.
@@ -14,7 +14,12 @@ import { Sim, type SimOpts } from '../sim';
 import type { InputFrame } from '../types';
 import type { World } from '../world';
 import { ChalkReducer, STEER_LEVELS, type ChalkState, type CommandResult } from './chalk';
+import { ConductorsReducer, type ConductorDef, type ConductorState } from './conductors';
+import { CONDUCTORS } from './content/conductors';
+import { ERRANDS } from './content/errands';
+import { ErrandsReducer, type ErrandDef, type ErrandFailReason, type ErrandState } from './errands';
 import { ProgressReducer, createProgress, type Progress } from './progress';
+import { SecretsReducer, type SecretId, type SecretState } from './secrets';
 
 export type GameEvent =
   | { type: 'segmentInked'; line: number; segment: number }
@@ -30,7 +35,26 @@ export type GameEvent =
   | { type: 'chalkGo' }
   /** A race ended. `ticks` is 0 when the player never reached the finish (timed out). */
   | { type: 'chalkFinish'; id: string; ticks: number; ghostTicks: number; won: boolean; best: boolean }
-  | { type: 'chalkAbort' };
+  | { type: 'chalkAbort' }
+  /** An errand's offer appeared (the skater entered its giver's zone). */
+  | { type: 'errandOffer'; id: string }
+  | { type: 'errandStart'; id: string }
+  /** Step `step` (index) of the active errand was completed. */
+  | { type: 'errandStep'; id: string; step: number }
+  /** `best`: a new best time for this errand. */
+  | { type: 'errandDone'; id: string; ticks: number; best: boolean }
+  | { type: 'errandFail'; id: string; reason: ErrandFailReason }
+  /** `line` is the line index. */
+  | { type: 'conductorStart'; line: number }
+  | { type: 'conductorPunch'; line: number }
+  | { type: 'conductorFail'; line: number }
+  | { type: 'secretFound'; id: SecretId };
+
+/** Game construction options: the sim's, plus the errand and conductor content (the city's by default). */
+export interface GameOpts extends SimOpts {
+  errands?: readonly ErrandDef[];
+  conductors?: readonly ConductorDef[];
+}
 
 export interface GameReducer {
   /** Stable name of the reducer's section in a save. */
@@ -67,6 +91,9 @@ export class Game {
   readonly sim: Sim;
   readonly progress: Progress;
   readonly chalk: ChalkState;
+  readonly errands: ErrandState;
+  readonly conductors: ConductorState;
+  readonly secrets: SecretState;
   /** Events from the most recent step (cleared at the start of each step). */
   readonly events: GameEvent[] = [];
   /** The quantised input the last step applied. */
@@ -74,17 +101,32 @@ export class Game {
   /** Reducers in step order. */
   readonly reducers: readonly GameReducer[];
   private readonly chalkReducer: ChalkReducer;
+  /** Public for observers that need lookups (where an errand's target is); state changes only through commands. */
+  readonly errandsReducer: ErrandsReducer;
+  readonly conductorsReducer: ConductorsReducer;
   private readonly simInput: InputFrame = { steer: 0, hold: false, hop: false };
   /** Events raised by commands between steps; they come out with the next step's events. */
   private readonly queued: GameEvent[] = [];
 
-  constructor(world: World, opts: SimOpts = {}) {
+  constructor(world: World, opts: GameOpts = {}) {
     this.sim = new Sim(world, opts);
     this.progress = createProgress(world.lines);
     this.chalkReducer = new ChalkReducer(world);
     this.chalk = this.chalkReducer.state;
+    this.errandsReducer = new ErrandsReducer(world, opts.errands ?? ERRANDS);
+    this.errands = this.errandsReducer.state;
+    this.conductorsReducer = new ConductorsReducer(world, opts.conductors ?? CONDUCTORS);
+    this.conductors = this.conductorsReducer.state;
+    const secrets = new SecretsReducer(world);
+    this.secrets = secrets.state;
     // Fixed order: later reducers may read what earlier ones did this step.
-    this.reducers = [new ProgressReducer(this.progress, world.lines), this.chalkReducer];
+    this.reducers = [
+      new ProgressReducer(this.progress, world.lines),
+      this.chalkReducer,
+      this.errandsReducer,
+      this.conductorsReducer,
+      secrets,
+    ];
   }
 
   /** One tick: steps the sim, then every game reducer in a fixed order. The only way time advances. */
@@ -136,6 +178,10 @@ export class Game {
   }
   chalkRename(id: string, name: string): CommandResult {
     return this.chalkReducer.renameLine(id, name);
+  }
+  /** Give up the errand in progress (it fails with reason 'abandon'). */
+  errandAbandon(): CommandResult {
+    return this.errandsReducer.abandon(this);
   }
   /** Why recording cannot start right now, or '' if it can. */
   chalkCannotRecord(): string {

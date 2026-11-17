@@ -6,6 +6,7 @@ import { createAudio } from '../audio/index';
 import { Gestures, attachGestures } from '../input/gestures';
 import { createChalkView } from '../render/chalkView';
 import { createCityView } from '../render/cityView';
+import { createMarkersView } from '../render/markersView';
 import { createView } from '../render/view';
 import { DT, FEEL } from '../sim/constants';
 import { Game, type GameEvent } from '../sim/game/game';
@@ -51,6 +52,7 @@ function boot(): void {
   attachGestures(canvas, gestures);
   const view = createView(canvas, world, isStreamed(params) ? { worldView: createCityView } : {});
   const chalkView = createChalkView(view.scene, world);
+  const markersView = createMarkersView(view.scene, world, game);
   const route = getRoute(params.route);
   const panel: DebugPanel | null = params.debug ? createDebugPanel(uiRoot) : null;
   // After the panel, so the UI can keep its controls clear of it.
@@ -190,6 +192,7 @@ function boot(): void {
   const uiFrame = { game, armed: false, simEvents: pending, gameEvents: pendingGame, dt: 0 };
   const draw = (alpha: number, dt: number): void => {
     chalkView.update(game, alpha, dt);
+    markersView.update(game, alpha, dt);
     view.render(sim, prev, alpha, dt, pending);
     uiFrame.armed = gestures.isArmed;
     uiFrame.dt = dt;
