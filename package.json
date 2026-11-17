@@ -7,13 +7,16 @@
     "node": ">=22.12.0"
   },
   "scripts": {
-    "dev": "vite",
-    "build": "tsc --noEmit && vite build",
+    "dev": "node scripts/make-icons.mjs && vite",
+    "build": "tsc --noEmit && npm run build:app",
+    "build:app": "node scripts/make-icons.mjs && vite build && node scripts/make-sw.mjs",
+    "icons": "node scripts/make-icons.mjs",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "lint": "eslint . --max-warnings 0",
     "test": "vitest run",
     "e2e": "node tests/e2e/run.mjs",
+    "e2e:pwa": "node tests/e2e/pwa.mjs",
     "perf": "node tests/perf/run.mjs",
     "gate": "node scripts/gate.mjs"
   },

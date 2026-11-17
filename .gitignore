@@ -6,3 +6,6 @@ artifacts/
 .vite/
 coverage/
 .claude/worktrees/
+
+# Generated at build time by scripts/make-icons.mjs
+public/*.png
