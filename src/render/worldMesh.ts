@@ -46,7 +46,7 @@ export function meshTerrain(b: MeshBuilder, w: World, ix0: number, iz0: number, 
       } else if (surface === Surface.WATER) {
         color = shade(color, 0.94 + 0.1 * hash2(ix >> 1, iz));
       } else {
-        color = shade(color, 0.97 + 0.06 * hash2(ix, iz));
+        color = shade(color, 0.985 + 0.03 * hash2(ix >> 1, iz >> 1));
       }
       const a = b.vert(x0, h00, z0, color);
       const c = b.vert(x1, h10, z0, color);
@@ -58,7 +58,7 @@ export function meshTerrain(b: MeshBuilder, w: World, ix0: number, iz0: number, 
   }
 }
 
-const BUILDING_INKS = [INK.mango, INK.pink, INK.teal, INK.cobalt, INK.brick, INK.sand, INK.white, 0xf58fb4];
+const BUILDING_INKS = [INK.mango, INK.pink, INK.teal, INK.cobalt, INK.brick, INK.sand, INK.leaf, 0xf58fb4];
 
 /** A solid as a dressed box: walls in a flat ink, a paler lid, windows on buildings. */
 export function meshSolid(b: MeshBuilder, o: Solid): void {

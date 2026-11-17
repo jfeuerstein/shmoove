@@ -32,7 +32,6 @@ const WH = makeWallHit();
 
 /** Pauses that stop event spam; not feel. */
 const DENIED_COOLDOWN = 0.6;
-const POST_SLING_COOLDOWN = 0.12;
 
 export function endChain(ctx: SimCtx, reason: 'land' | 'bail'): void {
   const p = ctx.player;
@@ -234,7 +233,9 @@ export function stepHitch(ctx: SimCtx, hold: boolean): void {
   p.onSolid = grounded ? G.solid : -1;
 
   const hop = p.hopBuffer > 0;
-  if (p.hitchTime >= F.HITCH_MIN_TIME && (!hold || hop)) sling(ctx, hop);
+  // No release until the strap has taken up the slack: before that the skater's velocity is a
+  // blend of where they were going and where the rope puts them, and would throw them anywhere.
+  if (p.hitchTime >= Math.max(F.HITCH_MIN_TIME, F.YANK_TIME) && (!hold || hop)) sling(ctx, hop);
 }
 
 /** Release with the slingshot. */
@@ -286,7 +287,7 @@ function detach(ctx: SimCtx): void {
   p.lastLine = p.hLine;
   p.lastVeh = p.hVeh;
   p.relatchCooldown = FEEL.RELATCH_COOLDOWN;
-  p.hitchCooldown = POST_SLING_COOLDOWN;
+  p.hitchCooldown = FEEL.HITCH_COOLDOWN;
   p.chainAlive = 1;
   p.chainGround = 0;
   p.coyote = 0;
@@ -296,21 +297,25 @@ function detach(ctx: SimCtx): void {
   p.modeTime = 0;
 }
 
-const _aim = { x: 0, z: 0, speed: 0 };
+export interface SlingPreview {
+  x: number;
+  z: number;
+  speed: number;
+}
 
-/** The exit vector a release would give right now (for the aim tick). Null when not hitched. */
-export function slingPreview(ctx: SimCtx): { x: number; z: number; speed: number } | null {
+/** The exit vector a release would give right now (for the aim tick). False when not hitched. */
+export function slingPreview(ctx: SimCtx, out: SlingPreview): boolean {
   const p = ctx.player;
-  if (p.mode !== Mode.HITCH) return null;
+  if (p.mode !== Mode.HITCH) return false;
   const F = FEEL;
   const sh = len2(p.vx, p.vz);
   if (sh > 0.5) {
-    _aim.x = p.vx / sh;
-    _aim.z = p.vz / sh;
+    out.x = p.vx / sh;
+    out.z = p.vz / sh;
   } else {
-    _aim.x = dsin(p.heading);
-    _aim.z = dcos(p.heading);
+    out.x = dsin(p.heading);
+    out.z = dcos(p.heading);
   }
-  _aim.speed = Math.min(Math.max(sh * F.SLING_GAIN, F.SLING_MIN) + F.LINK_BONUS * p.chain, Math.max(F.SLING_CAP, sh));
-  return _aim;
+  out.speed = Math.min(Math.max(sh * F.SLING_GAIN, F.SLING_MIN) + F.LINK_BONUS * p.chain, Math.max(F.SLING_CAP, sh));
+  return true;
 }

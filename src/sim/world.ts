@@ -303,6 +303,12 @@ export function sampleTerrain(w: World, x: number, z: number, out: TerrainSample
   out.surface = w.surfaces[iz * w.nx + ix];
 }
 
+/** Surface type of the terrain cell under (x, z). */
+export function terrainSurface(w: World, x: number, z: number): number {
+  sampleTerrain(w, x, z, _ts);
+  return _ts.surface;
+}
+
 export function terrainHeight(w: World, x: number, z: number): number {
   sampleTerrain(w, x, z, _ts);
   return _ts.y;

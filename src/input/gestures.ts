@@ -23,6 +23,7 @@ export class Gestures {
   private touching = false;
   private downT = 0;
   private downX = 0;
+  private downY = 0;
   private anchorX = 0;
   private x = 0;
   private armed = false;
@@ -52,6 +53,7 @@ export class Gestures {
     this.touching = true;
     this.downT = this.now;
     this.downX = x;
+    this.downY = y;
     this.anchorX = x;
     this.x = x;
     this.armed = false;
@@ -63,7 +65,10 @@ export class Gestures {
   move(x: number, y: number): void {
     if (!this.touching) return;
     this.x = x;
-    if (!this.armed && Math.abs(x - this.downX) > FEEL.DRAG_DEADZONE_PX) this.carveOnly = true;
+    // Sideways travel before arming makes this touch a pure carve. A mostly-vertical flick does
+    // not: swipe-up-and-hold has to stay able to arm.
+    const dx = Math.abs(x - this.downX);
+    if (!this.armed && dx > FEEL.DRAG_DEADZONE_PX && dx > Math.abs(y - this.downY)) this.carveOnly = true;
     const range = FEEL.STEER_RANGE_PX;
     if (x - this.anchorX > range) this.anchorX = x - range;
     else if (x - this.anchorX < -range) this.anchorX = x + range;

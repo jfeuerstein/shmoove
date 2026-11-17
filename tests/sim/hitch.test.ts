@@ -480,3 +480,14 @@ describe('overhead rides, gates and service hours', () => {
     expect(sim.player.mode).not.toBe(Mode.HITCH);
   });
 });
+
+describe('review fixes', () => {
+  it('a quick tap on a passing ride never throws the skater back against its travel', () => {
+    for (let holdTicks = 1; holdTicks <= 24; holdTicks++) {
+      const r = towAndRelease(holdTicks);
+      // The tram climbs along +z: the throw may be wide (the catch swings the skater in from the
+      // side) but never has a component back down the hill.
+      expect(r.vz).toBeGreaterThan(1);
+    }
+  });
+});

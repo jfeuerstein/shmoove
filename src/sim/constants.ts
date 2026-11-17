@@ -75,7 +75,8 @@ export const FEEL_DEFS = {
   HITCH_AHEAD: [0.8, -2, 6, 'Hitch', 'How far ahead of a bumper you can be and still grab it, m'],
   HAND_HEIGHT: [1.0, 0.3, 2, 'Hitch', 'Height of the grabbing hand above the board, m'],
   RELATCH_COOLDOWN: [0.7, 0, 3, 'Hitch', 'Time before the same vehicle can be re-caught, s'],
-  HITCH_MIN_TIME: [0.18, 0, 1, 'Hitch', 'Shortest hitch before a release registers, s'],
+  HITCH_COOLDOWN: [0.12, 0, 1, 'Hitch', 'Time after a release before anything can be caught, s'],
+  HITCH_MIN_TIME: [0.18, 0, 1, 'Hitch', 'Shortest hitch before a release registers, s (never shorter than YANK_TIME)'],
   YANK_TIME: [0.28, 0, 1, 'Hitch', 'Time the strap takes to pull you into line, s'],
   REEL_RATE: [3.5, 0.5, 15, 'Hitch', 'How fast the strap shortens to its length, m/s'],
   SWING_FREQ: [2.8, 0.5, 8, 'Hitch', 'Pendulum rate at reference ride speed, rad/s'],
@@ -106,6 +107,7 @@ export const FEEL_DEFS = {
   // --- Bail
   RIDE_BAIL_SPEED: [13, 3, 40, 'Bail', 'Closing speed with a vehicle body that bails you, m/s'],
   RIDE_ROOF_BOUNCE: [8.5, 0, 20, 'Bail', 'Bounce speed off a vehicle roof, m/s'],
+  SAFE_MARGIN: [6, 0, 20, 'Bail', 'A respawn point must be this far from water, m'],
   BAIL_TIME: [1.3, 0.3, 4, 'Bail', 'Length of the tumble, s'],
   BAIL_FRICTION: [10, 1, 40, 'Bail', 'Slide deceleration while bailed, m/s^2'],
 

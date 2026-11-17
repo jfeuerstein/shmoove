@@ -218,9 +218,9 @@ export function createSky(): THREE.Mesh {
       float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
       void main() {
         vec3 d = normalize(vDir);
-        float t = clamp(d.y * 1.6 + 0.08, 0.0, 1.0);
-        // Hard two-tone sky joined by a dot screen instead of a smooth gradient.
-        float band = halftone(gl_FragCoord.xy, uDotPx * 1.6, 1.0 - t);
+        // Flat upper sky; a band of big print dots carries it into the horizon ink.
+        float t = clamp(d.y * 3.4 + 0.04, 0.0, 1.0);
+        float band = halftone(gl_FragCoord.xy, uDotPx * 2.4, 1.0 - t);
         vec3 col = mix(uSkyTop, uSkyHorizon, band);
         float sun = dot(d, uSunDir);
         col = mix(col, uSunColor, step(0.9972, sun));

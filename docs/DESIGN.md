@@ -26,7 +26,7 @@ per sim tick: `{ steer: -1..1, hold: boolean, hop: boolean }`.
 | Gesture | Result |
 | --- | --- |
 | Touch and drag left/right | **Carve.** `steer` = horizontal offset from touch-down / `STEER_RANGE_PX`. |
-| Touch and keep still for `HOLD_ARM_TIME` | **Hold** arms. While armed, the skater hitches to the nearest ride in reach the moment one is in reach. Dragging after arming still steers (leans the swing while hitched). |
+| Touch without dragging sideways for `HOLD_ARM_TIME` | **Hold** arms. While armed, the skater hitches to the nearest ride in reach the moment one is in reach. Dragging after arming still steers (leans the swing while hitched). |
 | Drag past the dead zone before arming | That touch is a pure carve; it never hitches. Lift and press again to grab. |
 | Lift the finger while hitched | **Release**: slingshot. |
 | Swipe up (fast upward flick) | **Hop.** On the ground: ollie. On a rail or wall: jump off. While hitched: release with extra height. The touch stays armed if the finger stays down, so *swipe-up-and-hold* hops into an overhead ride. |
@@ -51,8 +51,14 @@ The sim is a point skater with a heading, on a heightfield with boxes, rails and
 - **WALL** — wallride: airborne contact with a wall at a shallow angle. Low gravity for a moment,
   then drop off or hop to wall-jump. Riding over the top lip puts you on the roof.
 - **HITCH** — attached to a ride by a strap. See below.
-- **BAIL** — head-on wall hit at speed, very hard landing, or water. A short tumble, chain lost,
-  then back on the board at a standstill (water puts you back at the last safe ground).
+- **BAIL** — head-on wall hit at speed, very hard landing, a vehicle, or water. A short tumble, chain
+  lost, then back on the board at a standstill (water puts you back at the last safe ground, well
+  clear of the edge, facing away from it).
+
+Smaller rules that keep a push-less skater moving: a board that stalls facing uphill kickturns and
+rolls back down; a slow square hit on a wall turns the board along the wall (a fast one bounces
+back); the edge of the world turns you round; rolling onto an awning throws you; entering a rail
+adds a little speed and a rail too flat to slide on lets you step off.
 
 ### Hitch, slingshot, chain
 
@@ -65,16 +71,20 @@ The sim is a point skater with a heading, on a heightfield with boxes, rails and
   minimum swing, and `steer` as a lean torque. When the ride corners, the skater cracks the whip.
   Height follows the ground, or hangs under an overhead ride.
 - **Slingshot.** On release the skater leaves in the direction they are actually moving (ride
-  velocity + swing velocity), at `speed * SLING_GAIN + LINK_BONUS * chain`, capped at `SLING_CAP`,
-  with a small upward pop. Release mid-swing to fling wide; release at the end of a swing to go
-  straight. An aim tick on the ground shows the current exit vector.
+  velocity + swing velocity), at `max(speed * SLING_GAIN, SLING_MIN) + LINK_BONUS * chain`, capped at
+  `SLING_CAP` (or the speed they already had, if higher), with an upward pop (`SLING_POP`, plus up to
+  `SLING_VY_CARRY` of any climb the tow was giving, plus `SLING_HOP_POP` on a swipe-up release).
+  Release mid-swing to fling wide; release at the end of a swing to go straight. An aim arrow on the
+  ground shows the current exit vector. A release only registers once the strap has taken up its
+  slack (`YANK_TIME`). If the ride leaves service, or drags the skater round a corner behind a wall,
+  the strap lets go without a sling.
 - **Chain.** A chain is alive from a release until the skater has rolled on the ground for
   `CHAIN_GROUND_GRACE`. Air, grinds and wallrides do not end it. Catching a *different* vehicle while
   the chain is alive adds a link. Each link adds `LINK_BONUS` exit speed, up to the cap. Re-catching
   the same vehicle keeps the chain but adds no link. A bail ends it.
 - **Gates.** A line may declare `minChain`: it can only be caught as the Nth link (the summit kite).
 - **Vehicle bodies.** Ground rides are solid: they shove a slow skater aside, bail one they meet
-  head-on at speed, and bounce one who comes down on the roof (which keeps a chain alive). A bumper
+  head-on or who rams their back at speed, and bounce one who comes down on the roof (which keeps a chain alive). A bumper
   can only be grabbed from beside or behind it, as it comes past.
 
 Every constant above lives in `FEEL` (`src/sim/constants.ts`) and in the `?debug` panel.
@@ -215,7 +225,7 @@ input (touch) ──> InputFrame ──> Sim.step() ──> SimState + SimEvents
                                                         └──> ui / game systems
 ```
 
-- Fixed step 60 Hz, accumulator in `src/app/loop.ts`, at most 4 catch-up steps per frame.
+- Fixed step 60 Hz, accumulator in `src/app/main.ts`, at most 4 catch-up steps per frame.
 - The sim never reads wall-clock time, the DOM or a random source other than its seeded RNG, and uses
   only deterministic math (`src/sim/math.ts`). Two sims with the same world, seed and input stream
   are bit-identical on any engine. That is what makes ghosts and scripted tests exact.

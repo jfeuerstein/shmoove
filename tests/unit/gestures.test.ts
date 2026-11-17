@@ -133,3 +133,18 @@ describe('one-thumb gestures', () => {
     expect(g.key('KeyQ', true)).toBe(false);
   });
 });
+
+describe('review fixes', () => {
+  beforeEach(() => resetFeel());
+
+  it('a diagonal flick that drifts sideways still arms when held', () => {
+    const g = new Gestures();
+    g.down(200, 700);
+    g.sample();
+    g.move(200 + FEEL.DRAG_DEADZONE_PX + 8, 700 - FEEL.SWIPE_UP_PX * 1.3);
+    expect(g.sample().hop).toBe(true);
+    let hold = false;
+    for (let i = 0; i < 20; i++) hold = g.sample().hold;
+    expect(hold).toBe(true);
+  });
+});

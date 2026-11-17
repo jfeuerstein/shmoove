@@ -1,4 +1,9 @@
 // M1 feel slice, route 1: roll, carve, hop. Also checks the feel panel is complete.
+import { readFileSync } from 'node:fs';
+
+// One row per FEEL constant: count the definitions in the source of truth.
+const FEEL_KEYS = (readFileSync(new URL('../../../src/sim/constants.ts', import.meta.url), 'utf8').match(/^ {2}[A-Z][A-Z0-9_]*: \[/gm) ?? []).length;
+
 const ev = (h, type) => h.some((s) => (s.events ?? []).includes(type));
 
 export default {
@@ -7,7 +12,7 @@ export default {
   steps: [
     { do: 'wait', ticks: 2 },
     { do: 'shot', name: 'spawn' },
-    { do: 'expect', label: 'feel panel lists every constant', test: (s) => s.feelRows > 80 },
+    { do: 'expect', label: 'feel panel lists every constant', test: (s) => FEEL_KEYS > 100 && s.feelRows === FEEL_KEYS },
     { do: 'wait', ticks: 180 },
     { do: 'expect', label: 'gravity alone rolls the skater downhill', test: (s) => s.mode === 'GROUND' && s.speed > 5 && s.z < 330 },
     { do: 'shot', name: 'rolling' },

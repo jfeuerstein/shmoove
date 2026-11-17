@@ -51,3 +51,12 @@ Decisions made without the owner in the room, newest last. Cuts are marked **CUT
     space, as a printer would think of them.
 18. **Camera yaw follows the ride while hitched,** not the swinging skater, so the swing reads
     against a steady frame.
+19. **M1 verification follow-ups.** An independent Opus verifier (11 source mutations, all caught)
+    flagged: a tap release during the strap's yank could throw the skater backwards (fixed: no
+    release before `YANK_TIME`); a bail loop at the water's edge (fixed: respawn points keep
+    `SAFE_MARGIN` from water and face inland); a diagonal swipe-and-hold could not arm (fixed); the
+    e2e panel check was too loose (now exact). Still open, deferred to the M6 clean-up pass: a few
+    smoothing rates in `camera.ts` and bounce factors in `player.ts` are literals rather than `FEEL`
+    entries.
+20. **Milestone tags are local.** The remote for this session only accepts pushes to the working
+    branch, so `m1`…`m6` exist as local tags and as "tag mN" markers in commit subjects.

@@ -94,7 +94,6 @@ describe('carving', () => {
     const radius = (speed: number): number => {
       const sim = newSim();
       teleport(sim, 0, 20, PI / 2, speed);
-      const h0 = sim.player.heading;
       sim.step({ steer: 1, hold: false, hop: false });
       // Let the steer smoothing settle, then measure turn rate against speed.
       run(sim, 20, () => ({ steer: 1 }));
@@ -102,7 +101,6 @@ describe('carving', () => {
       const v = sim.player.speed;
       run(sim, 1, () => ({ steer: 1 }));
       const rate = Math.abs(sim.player.heading - h1) * 60;
-      void h0;
       return v / rate;
     };
     expect(radius(4)).toBeLessThan(radius(16) * 0.5);
@@ -386,5 +384,29 @@ describe('bailing', () => {
     run(sim, 300);
     expect(sim.player.x).toBeLessThanOrEqual(sim.world.maxX);
     expect(sim.player.x).toBeGreaterThanOrEqual(sim.world.minX);
+  });
+});
+
+describe('review fixes', () => {
+  it('a skater who keeps rolling into the sea is put back clear of the edge, facing inland', () => {
+    const sim = newSim();
+    teleport(sim, 0, 30, DOWNHILL, 12);
+    let bails = 0;
+    run(sim, 60 * 40, (s) => {
+      for (const e of s.events) if (e.type === 'bail') bails++;
+      return {};
+    });
+    // One dunking, then they stay ashore: no bail loop at the quay.
+    expect(bails).toBe(1);
+    expect(sim.player.z).toBeGreaterThan(FEEL.SAFE_MARGIN - 2.5);
+  });
+
+  it('one sim step is far inside its time budget', () => {
+    const sim = newSim();
+    const n = 60000;
+    const t0 = performance.now();
+    run(sim, n, (_s, i) => ({ steer: Math.sin(i / 40), hold: i % 400 > 200, hop: i % 97 === 0 }));
+    const ms = (performance.now() - t0) / n;
+    expect(ms).toBeLessThan(0.3);
   });
 });

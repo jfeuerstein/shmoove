@@ -36,6 +36,7 @@ export interface View {
 const _grab = new THREE.Vector3();
 const _hand = new THREE.Vector3();
 const _g = makeGroundSample();
+const _aim = { x: 0, z: 0, speed: 0 };
 
 export function createView(canvas: HTMLCanvasElement, world: World, opts: ViewOpts = {}): View {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance', stencil: false });
@@ -136,13 +137,11 @@ export function createView(canvas: HTMLCanvasElement, world: World, opts: ViewOp
         strap.lookAt(_grab);
         strap.scale.set(0.05, 0.05, len);
         // Aim tick along the exit a release would give now.
-        const pre = slingPreview(sim);
-        if (pre) {
+        if (slingPreview(sim, _aim)) {
           aim.visible = true;
           aim.position.set(x, _g.y + 0.08, z);
-          aim.rotation.y = Math.atan2(pre.x, pre.z);
-          const s = 1.6 + pre.speed * 0.16;
-          aim.scale.set(1.4, 1, s);
+          aim.rotation.y = Math.atan2(_aim.x, _aim.z);
+          aim.scale.set(1.4, 1, 1.6 + _aim.speed * 0.16);
         }
       } else {
         strap.visible = false;

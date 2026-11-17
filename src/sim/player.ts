@@ -18,6 +18,7 @@ import {
   nearestRail,
   railAt,
   sampleGround,
+  terrainSurface,
   topHeight,
   wallBeside,
   type GroundSample,
@@ -171,10 +172,20 @@ export function stepPlayer(ctx: SimCtx, input: InputFrame): void {
     p.safeTimer += DT;
     if (p.safeTimer >= SAFE_INTERVAL) {
       p.safeTimer = 0;
-      p.safeX = p.x;
-      p.safeY = p.y;
-      p.safeZ = p.z;
-      p.safeHeading = p.heading;
+      // Only remember places well clear of water, or a bail at the quay respawns into the sea.
+      const m = F.SAFE_MARGIN;
+      const w = ctx.world;
+      if (
+        terrainSurface(w, p.x + m, p.z) !== Surface.WATER &&
+        terrainSurface(w, p.x - m, p.z) !== Surface.WATER &&
+        terrainSurface(w, p.x, p.z + m) !== Surface.WATER &&
+        terrainSurface(w, p.x, p.z - m) !== Surface.WATER
+      ) {
+        p.safeX = p.x;
+        p.safeY = p.y;
+        p.safeZ = p.z;
+        p.safeHeading = p.heading;
+      }
     }
   }
   p.prevHold = input.hold ? 1 : 0;
@@ -831,7 +842,8 @@ function stepBail(ctx: SimCtx): void {
       p.x = p.safeX;
       p.y = p.safeY;
       p.z = p.safeZ;
-      p.heading = p.safeHeading;
+      // Face back the way they came, away from the water.
+      p.heading = wrapAngle(p.safeHeading + PI);
       sampleGround(w, p.x, p.y, p.z, F.STEP_UP, G2);
       p.surface = G2.surface;
       p.onSolid = G2.solid;
