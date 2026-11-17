@@ -76,7 +76,7 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       caches
         .open(CACHE)
-        .then((cache) => cache.match(INDEX))
+        .then((cache) => cache.match(INDEX, { ignoreVary: true }))
         .then((hit) => hit || fetch(req))
         .catch(() => fetch(req)),
     );
@@ -85,7 +85,9 @@ self.addEventListener('fetch', (event) => {
   event.respondWith(
     caches
       .open(CACHE)
-      .then((cache) => cache.match(req))
+      // Hosts often send Vary: Origin, and module scripts carry an Origin header the precache
+      // requests did not: match on the URL alone.
+      .then((cache) => cache.match(req, { ignoreVary: true }))
       .then((hit) => hit || fetch(req)),
   );
 });

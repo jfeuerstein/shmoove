@@ -1,17 +1,18 @@
-// The milestone gate: typecheck, lint, test, build, e2e, perf, in order. Stops at the first failure
+// The milestone gate: typecheck, lint, test, build, e2e, pwa, perf, in order. Stops at the first failure
 // and prints a summary table with durations. Exit code is non-zero unless every stage passed.
 import { spawnSync } from 'node:child_process';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-// `build` already typechecks; vite build alone avoids running tsc twice.
+// `build` already typechecks; build:app (icons, vite build, service worker) avoids running tsc twice.
 const STAGES = [
   ['typecheck', ['run', 'typecheck']],
   ['lint', ['run', 'lint']],
   ['test', ['test']],
-  ['build', ['exec', '--', 'vite', 'build']],
+  ['build', ['run', 'build:app']],
   ['e2e', ['run', 'e2e']],
+  ['pwa', ['run', 'e2e:pwa']],
   ['perf', ['run', 'perf']],
 ];
 
