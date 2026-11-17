@@ -43,7 +43,8 @@ const ROSTER: {
   { id: 'T1', kind: 'funicular', district: D.TERRACES, stem: 0, vehicles: 2, hours: [[0, 1]] },
   { id: 'T2', kind: 'tram', district: D.TERRACES, stem: 1, vehicles: 3, hours: [[0, 1]] },
   { id: 'T3', kind: 'tram', district: D.TERRACES, stem: 2, vehicles: 2, hours: [[DAY, NIGHT]] },
-  { id: 'T4', kind: 'bus', district: D.TERRACES, stem: 3, vehicles: 2, hours: [[NIGHT, DAWN]] },
+  // Night only: its laps leave from nightfall to midnight, so the last is home before dawn.
+  { id: 'T4', kind: 'bus', district: D.TERRACES, stem: 3, vehicles: 2, hours: [[NIGHT, 1]] },
   { id: 'A1', kind: 'cablecar', district: D.ANTENNA, stem: 0, vehicles: 4, hours: [[0, 1]] },
   { id: 'A2', kind: 'cablecar', district: D.ANTENNA, stem: 1, vehicles: 3, hours: [[DAY, NIGHT]] },
   { id: 'A3', kind: 'kite', district: D.ANTENNA, stem: 2, vehicles: 5, hours: [[0.35, 0.7]] },
@@ -129,6 +130,22 @@ describe('the roster', () => {
       }
       expect(activeSamples, r.id).toBeGreaterThan(0);
     }
+  });
+
+  it('keeps the night bus off the road by day: no T4 vehicle between 0.25 and 0.78', () => {
+    const l = line('T4');
+    let night = 0;
+    for (let t = 0; t < DAY_TICKS; t += 10) {
+      for (let i = 0; i < l.vehicles; i++) {
+        vehicleAt(l, i, t, vs);
+        const f = t / DAY_TICKS;
+        if (f > 0.25 && f < 0.78) expect(vs.active, `T4 vehicle ${i} at ${f.toFixed(3)}`).toBe(false);
+        else if (vs.active) night++;
+        // Every lap is home (back at the terminus) by 0.24.
+        if (vs.active && vs.lapTick < l.runTicks && f < 0.5) expect(f, 'lap still running').toBeLessThan(0.24);
+      }
+    }
+    expect(night).toBeGreaterThan(0);
   });
 
   it('sends the blimp on exactly one pass a day and the ghost tram only after midnight', () => {

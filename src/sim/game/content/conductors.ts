@@ -28,8 +28,8 @@ export const CONDUCTORS: readonly ConductorDef[] = [
   // test takes 37.7 s from letting go; 1.3x.
   { line: 'T3', stop: 1, task: { kind: 'stopToStop', from: 2, to: 0, seconds: 49 } },
   // Let go at Terraza 727 and roll down the spine to the garage at the docks. The steering bot takes
-  // 74.7 s; 1.3x.
-  { line: 'T4', stop: 1, task: { kind: 'stopToStop', from: 2, to: 0, seconds: 97 } },
+  // 78.1 s; 1.3x.
+  { line: 'T4', stop: 1, task: { kind: 'stopToStop', from: 2, to: 0, seconds: 101 } },
   // Drop off the lower cable car onto the hill-station platform.
   { line: 'A1', stop: 0, task: { kind: 'landOn', zone: 'hill_station' } },
   // The summit car leaves the hill station over open slope. Best measured flight 1.30 s (lazy 0.73 s);
