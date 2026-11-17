@@ -1024,6 +1024,32 @@ describe('routes', () => {
     }
   });
 
+  it('no open ground on the docks is more than 90 m from a ground-level stop', () => {
+    const w = city.world;
+    const stops = w.zones.filter((z) => {
+      const m = /^stop_([A-Z]\d)_\d+$/.exec(z.id);
+      return m !== null && !city.routes[m[1]].overhead;
+    });
+    let worst = 0;
+    let at = '';
+    for (let iz = 0; iz < w.nz; iz++) {
+      const z = w.minZ + (iz + 0.5) * w.cell;
+      if (z < 0 || z >= CITY.bands.mercado) continue;
+      for (let ix = 0; ix < w.nx; ix++) {
+        if (w.surfaces[iz * w.nx + ix] === Surface.WATER) continue;
+        const x = w.minX + (ix + 0.5) * w.cell;
+        if (topHeight(w, x, z) > terrainHeight(w, x, z) + 0.05) continue;
+        let near = Infinity;
+        for (const st of stops) near = Math.min(near, Math.hypot(st.x - x, st.z - z));
+        if (near > worst) {
+          worst = near;
+          at = `${x},${z}`;
+        }
+      }
+    }
+    expect(worst, `farthest at ${at}`).toBeLessThanOrEqual(90);
+  });
+
   it('every stop has a zone at it', () => {
     const w = city.world;
     for (const id of LINE_IDS) {

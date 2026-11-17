@@ -227,21 +227,47 @@ function fishLoop(g: Ground): number[] {
   return b.xz;
 }
 
-/** Forklifts: a rounded rectangle round the west warehouses. */
+/** The forklifts' east lobe: the streets it runs along, south of the warehouses and round the east ones. */
+export const FORK_EAST = { south: 64, back: 80, west: 131, east: 172, north: 240 } as const;
+
+/**
+ * Forklifts: a rounded rectangle round the west warehouses, then (after its last stop there) a lobe
+ * out across the east docks: east along the street south of the warehouses, up the far east edge,
+ * back across below the boulevard, down between the east warehouses and home along the street
+ * beside the first.
+ */
 function forkliftLoop(): number[] {
   const R = 8;
+  const r = 6;
+  const E = FORK_EAST;
   const b = new Builder(-82, 92);
-  const corner = (): void => {
-    b.take(b.turtle().arc(R, PI / 2));
+  const left = (rad = R): void => {
+    b.take(b.turtle().arc(rad, PI / 2));
+  };
+  const right = (rad = R): void => {
+    b.take(b.turtle().arc(rad, -PI / 2));
   };
   b.straightTo(-35 - R, 92);
-  corner();
+  left();
   b.straightTo(-35, 250 - R);
-  corner();
+  left();
   b.straightTo(-130 + R, 250);
-  corner();
-  b.straightTo(-130, 92 + R);
-  corner();
+  left();
+  b.straightTo(-130, E.south + R);
+  left();
+  b.straightTo(E.east - R, E.south);
+  left();
+  b.straightTo(E.east, E.north - R);
+  left();
+  b.straightTo(E.west + R, E.north);
+  left();
+  b.straightTo(E.west, E.back + R);
+  // Down between the warehouses and round to the right onto the street home, then up beside the
+  // west warehouses onto the first street.
+  right();
+  b.straightTo(-84, E.back);
+  right(r);
+  right(r);
   b.close();
   return b.xz;
 }
@@ -506,7 +532,26 @@ export function buildRoutes(w: World, g: Ground): Record<string, RouteDef> {
   const craneY = (x: number, z: number): number => topHeight(w, x, z) + 11;
   const crane = resample([-140, 9, 140, 9], craneY, false);
   specs.push({ id: 'D1', loop: false, overhead: true, path: crane, stops: [['Grúa Oeste', -140, 9], ['Grúa Centro', 0, 9], ['Grúa Este', 140, 9]] });
-  specs.push({ id: 'D2', loop: true, overhead: false, path: ground(forkliftLoop()), stops: [['Almacenes Sur', -82, 92], ['Almacenes Este', -35, 170], ['Cocheras', -82, 250], ['Almacenes Oeste', -130, 170]] });
+  // The east docks' stops come after the four round the west warehouses, so those keep their places.
+  const FE = FORK_EAST;
+  specs.push({
+    id: 'D2',
+    loop: true,
+    overhead: false,
+    path: ground(forkliftLoop()),
+    stops: [
+      ['Almacenes Sur', -82, 92],
+      ['Almacenes Este', -35, 170],
+      ['Cocheras', -82, 250],
+      ['Almacenes Oeste', -130, 170],
+      ['Muelle Oeste', -130, 100],
+      ['Contenedores', 40, FE.south],
+      ['Grúa Este', 150, FE.south],
+      ['Muelle Este', FE.east, 170],
+      ['Bulevar Este', 150, FE.north],
+      ['Almacenes Centro', FE.west, 160],
+    ],
+  });
   specs.push({ id: 'D3', loop: true, overhead: false, path: ground(fishLoop(g)), stops: [['Lonja', -110, 32], ['Bulevar', -90, BOULEVARD_Z], ['Puerta del Mercado', 20, 306], ['Muelle', -60, 8]] });
 
   // Mercado.
