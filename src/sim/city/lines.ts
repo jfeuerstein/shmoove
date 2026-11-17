@@ -51,6 +51,8 @@ export interface CityLineSpec {
   minChain?: number;
   /** Strap length, where the city needs a different one from the line-up's. */
   hang?: number;
+  /** Strap position behind the vehicle, where the city needs a different one from the line-up's. */
+  anchorBack?: number;
   /** Day fraction a lap must leave the terminus at (sets the phase; overrides `phase`). */
   departAt?: number;
 }
@@ -74,7 +76,7 @@ export const CITY_LINES: readonly CityLineSpec[] = [
   { id: 'A3', name: 'Cometas', kind: 'kite', district: D.ANTENNA, stem: 2, vehicles: 5, cruise: 8, accel: 2, dwell: 3, windows: HOURS.windy, phase: 3883, lane: 0 },
   { id: 'S1', name: 'Tranvía Fantasma', kind: 'ghosttram', district: D.TERRACES, stem: 3, vehicles: 1, cruise: 12, accel: 2.5, dwell: 4, windows: HOURS.ghost, phase: 0, lane: 1.6, parkHidden: true, secret: true },
   { id: 'S2', name: 'El Dirigible', kind: 'blimp', district: D.ANTENNA, stem: 3, vehicles: 1, cruise: 6, accel: 1, dwell: 5, windows: [[BLIMP_START, BLIMP_START + 0.01]], phase: 0, lane: 0, parkHidden: true, secret: true, departAt: BLIMP_START },
-  { id: 'S3', name: 'Cometa Rey', kind: 'kite', district: D.ANTENNA, stem: 3, vehicles: 1, cruise: 11, accel: 2, dwell: 5, windows: HOURS.windy, phase: 1620, lane: 0, secret: true, minChain: 4, hang: 3.5 },
+  { id: 'S3', name: 'Cometa Rey', kind: 'kite', district: D.ANTENNA, stem: 3, vehicles: 1, cruise: 11, accel: 2, dwell: 5, windows: HOURS.windy, phase: 1620, lane: 0, secret: true, minChain: 4, hang: 3.5, anchorBack: 0, parkHidden: true },
 ];
 
 /** Clearance a ground vehicle's origin keeps from solid walls beyond its half width, metres. */
@@ -212,7 +214,7 @@ export function cityLineDef(w: World, spec: CityLineSpec, route: RouteDef): Line
     windows: spec.windows.map((wd) => [wd[0], wd[1]]),
     parkHidden: spec.parkHidden,
     overhead: route.overhead,
-    anchorBack: ride.anchorBack,
+    anchorBack: spec.anchorBack ?? ride.anchorBack,
     anchorY: ride.anchorY,
     hang: spec.hang ?? ride.hang,
     rope: ride.rope,
