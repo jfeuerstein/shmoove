@@ -1,7 +1,8 @@
 // CPU profile of the perf route (not part of the gate): the same page and throttle as `npm run perf`,
 // with the V8 sampling profiler on for the measured window. Prints the functions with the most self
-// time and the most inclusive time inside the rAF callback. Needs a build with sourcemaps off is fine:
-// names come from the minified bundle, so run `npx vite build --minify false` first for readable names.
+// time and the most inclusive time, and saves artifacts/perf.cpuprofile (opens in Chrome DevTools).
+// Names come from the served bundle: run `npx vite build --minify false` first for readable ones
+// (and `npm run build` again afterwards). Usage: node tests/perf/profile.mjs
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { ROOT, newPhoneContext, waitForReady, withAppAndBrowser } from '../e2e/lib/browser.mjs';
