@@ -181,6 +181,32 @@ describe('the roster', () => {
     expect(problems.slice(0, 60)).toEqual([]);
   });
 
+  it('keeps every corner of every ground vehicle body at least 1 m from any solid, all lap', () => {
+    const solids = city.world.solids.filter((o) => !o.oneWay);
+    const problems: string[] = [];
+    for (const l of city.world.lines) {
+      if (l.overhead || l.bodyHeight <= 0) continue;
+      for (let t = 0; t < l.period; t += 10) {
+        vehicleAt(l, 0, t - l.phaseTicks, vs);
+        for (const [a, b] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) {
+          // Corner of the body rectangle: along the heading and to its side.
+          const cx = vs.x + vs.hx * l.bodyHalfLen * a - vs.hz * l.bodyHalfWid * b;
+          const cz = vs.z + vs.hz * l.bodyHalfLen * a + vs.hx * l.bodyHalfWid * b;
+          for (const o of solids) {
+            if (o.yTop <= vs.y + 0.4 || o.yBase >= vs.y + l.bodyHeight) continue;
+            const dx = cx - o.cx;
+            const dz = cz - o.cz;
+            const lx = Math.abs(dx * o.cosR + dz * o.sinR) - o.hx;
+            const lz = Math.abs(-dx * o.sinR + dz * o.cosR) - o.hz;
+            const d = Math.hypot(Math.max(lx, 0), Math.max(lz, 0));
+            if (d < 1.0) problems.push(`${l.id} corner ${d.toFixed(2)} m from ${o.kind} at ${cx.toFixed(1)},${cz.toFixed(1)}`);
+          }
+        }
+      }
+    }
+    expect(problems.slice(0, 20)).toEqual([]);
+  });
+
   it('never lets two vehicles of different ground lines overlap, all day', () => {
     const ground = city.world.lines.filter((l) => !l.overhead);
     const states = ground.map((l) => Array.from({ length: l.vehicles }, () => makeVehicleState()));
