@@ -196,6 +196,7 @@ describe('hold to accept', () => {
     teleport(timed, -20, -20);
     step(timed, tl, { hold: true }, 60);
     expect(timed.errands.offered).toBeNull();
+    expect(timed.errands.active).toBeNull();
     timed.sim.setDayFrac(0.55);
     step(timed, tl, { hold: true }, OFFER_FILL_TICKS + 2);
     expect(timed.errands.active?.id).toBe('late');
