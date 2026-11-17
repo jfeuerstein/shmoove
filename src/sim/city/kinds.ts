@@ -40,6 +40,3 @@ export const RAIL_KINDS = {
   pipe: { styles: 1, note: 'Docks pipe along a warehouse wall, or the gantry crane rail' },
   guy: { styles: 1, note: 'Guy wire from a mast top down to a ground anchor' },
 } as const satisfies Record<string, KindInfo>;
-
-export type SolidKind = keyof typeof SOLID_KINDS;
-export type RailKind = keyof typeof RAIL_KINDS;

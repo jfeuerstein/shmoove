@@ -2,21 +2,22 @@
 
 Portrait-mode, one-thumb skating game set in Santa Rampa. TypeScript + Three.js + Vite, shipped as an
 installable PWA. Spec: `docs/DESIGN.md`. Progress: `docs/PLAN.md`. Decisions: `docs/DECISIONS.md`.
-Human-only tuning list: `docs/PLAYTEST.md`.
+Human-only tuning list: `docs/PLAYTEST.md`. Task briefs: `docs/briefs/`.
 
 ## Commands
 
 | Command | What it does |
 | --- | --- |
-| `npm run dev` | Vite dev server (add `?debug` for the feel panel, `?slice` for the M1 feel slice) |
-| `npm run build` | Typecheck + production build to `dist/` |
+| `npm run dev` | Draws the icons, then the Vite dev server (add `?debug` for the feel panel, `?slice` for the M1 feel slice; every URL parameter is in `README.md`) |
+| `npm run build` | Typecheck, icons, production build to `dist/`, service worker |
 | `npm run preview` | Serve `dist/` |
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm run lint` | ESLint (includes the sim purity rules) |
 | `npm test` | Vitest: unit tests + deterministic sim tests (headless, no browser) |
-| `npm run e2e` | Playwright at 390x844 with touch: plays the scripted route, saves `artifacts/screens/*.png` |
-| `npm run perf` | Headless Chrome, 4x CPU throttle: frame time, draw calls, triangles vs. budgets |
-| `npm run gate` | All of the above in order. A milestone is done only when this is green |
+| `npm run e2e` | Playwright at 390x844 with touch: plays every route in `tests/e2e/routes/`, fails on a console error or warning, saves `artifacts/screens/*.png` |
+| `npm run e2e:pwa` | The built app installs, works offline and updates through the "new timetable" ticket |
+| `npm run perf` | Headless Chrome, 4x CPU throttle: frame work and game step on the `perfcity` route, draw calls and triangles there and on a viewpoint tour, bundle size, vs. `tests/perf/budgets.json`; writes `artifacts/perf.json` |
+| `npm run gate` | typecheck, lint, test, build, e2e, e2e:pwa, perf in order, stopping at the first failure. A milestone is done only when this is green |
 
 ## Layout
 
@@ -25,8 +26,10 @@ Human-only tuning list: `docs/PLAYTEST.md`.
 - `src/render/` Three.js. Reads sim state, never writes it.
 - `src/audio/` Web Audio synthesis and the stem mixer.
 - `src/ui/` DOM overlay: destination boards, ticket stubs, line map, menus.
-- `src/app/` boot, main loop, saves, debug panel, PWA glue.
-- `tests/unit`, `tests/sim`, `tests/e2e`, `tests/perf`.
+- `src/app/` boot, main loop, saves, settings, haptics, debug panel, PWA glue, test hook.
+- `scripts/` the gate, the icon generator, the service-worker generator.
+- `public/` the manifest and host headers (icons are generated there at build time).
+- `tests/unit`, `tests/sim` (bots in `tests/sim/bot/`), `tests/e2e`, `tests/perf`.
 
 ## Conventions
 

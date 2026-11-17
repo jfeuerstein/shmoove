@@ -48,8 +48,6 @@ export type StepDef = StepMods &
     | { kind: 'air'; seconds: number; at?: string }
   );
 
-export type StepKind = StepDef['kind'];
-
 export interface ErrandDef {
   id: string;
   /** A few words, shown on tickets. */

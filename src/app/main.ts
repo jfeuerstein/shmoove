@@ -2,6 +2,7 @@
  * Boot and main loop. Fixed 60 Hz sim steps from an accumulator; rendering interpolates. With
  * `?e2e` nothing runs on its own: the test harness advances time through the hook.
  */
+import { Mesh, type BufferGeometry, type Object3D } from 'three';
 import { createAudio } from '../audio/index';
 import { Gestures, attachGestures } from '../input/gestures';
 import { createChalkView } from '../render/chalkView';
@@ -13,7 +14,7 @@ import { DT, FEEL, START_DAY_FRAC } from '../sim/constants';
 import { Game, type GameEvent } from '../sim/game/game';
 import { placePlayer } from '../sim/player';
 import { MODE_NAMES, type InputFrame, type SimEvent } from '../sim/types';
-import { districtAt } from '../sim/world';
+import { districtAt, type World } from '../sim/world';
 import { createUi } from '../ui/index';
 import type { ShellHost } from '../ui/titleShell';
 import { createAudioView } from './audioView';
@@ -35,7 +36,7 @@ import {
   type AppSettings,
   type SettingSinks,
 } from './settings';
-import { installHook } from './testHook';
+import { installHook, type SkitchTestState } from './testHook';
 import { buildWorld, isStreamed } from './world';
 
 const MAX_CATCH_UP = 4;
@@ -58,6 +59,63 @@ const VIEW_PART0 = PART[VIEW_PARTS[0]];
  * ride releases (slings) in the frame, and the longest chunk-build piece of the frame (ms).
  */
 const TRACK = ['tick', 'x', 'z', 'district', 'chunk', 'hitches', 'built', 'draws', 'tris', 'slings', 'piece'] as const;
+
+type LineFact = NonNullable<SkitchTestState['lines']>[number];
+
+/**
+ * What a vehicle mesh is painted with: whether its vertex colours include both 0xRRGGBB colours
+ * `a` and `b`, and a 32-bit hash of its vertex colours in order (-1 when it has none).
+ */
+function paintOf(mesh: Object3D | undefined, a: number, b: number): { has: boolean; hash: number } {
+  if (!(mesh instanceof Mesh)) return { has: false, hash: -1 };
+  const col = (mesh.geometry as BufferGeometry).getAttribute('color');
+  if (col === undefined) return { has: false, hash: -1 };
+  let hasA = false;
+  let hasB = false;
+  let h = 0x811c9dc5;
+  for (let i = 0; i < col.count; i++) {
+    const c = (Math.round(col.getX(i) * 255) << 16) | (Math.round(col.getY(i) * 255) << 8) | Math.round(col.getZ(i) * 255);
+    if (c === a) hasA = true;
+    if (c === b) hasB = true;
+    h = Math.imul(h ^ c, 0x01000193);
+  }
+  return { has: hasA && hasB, hash: h >>> 0 };
+}
+
+/**
+ * Test-hook facts about each line's vehicles as drawn: the scene's `vehicles` group holds, per
+ * line in world order, a mesh and its blob shadow for every vehicle (src/render/vehicles.ts).
+ * How the geometry is painted is read once; how many vehicles are drawn is read per call.
+ */
+function lineFacts(scene: Object3D, world: World): () => LineFact[] {
+  let painted: { has: boolean; hash: number }[] | null = null;
+  return () => {
+    const group = scene.getObjectByName('vehicles');
+    const kids = group === undefined ? [] : group.children;
+    if (painted === null) {
+      painted = [];
+      let k = 0;
+      for (const line of world.lines) {
+        const first = paintOf(kids[k], line.livery.base, line.livery.stripe);
+        let has = line.vehicles > 0 && first.has;
+        for (let i = 0; i < line.vehicles; i++, k += 2) {
+          if (!paintOf(kids[k], line.livery.base, line.livery.stripe).has) has = false;
+        }
+        painted.push({ has, hash: first.hash });
+      }
+    }
+    const out: LineFact[] = [];
+    let k = 0;
+    for (let li = 0; li < world.lines.length; li++) {
+      const line = world.lines[li];
+      const lv = line.livery;
+      let drawn = 0;
+      for (let i = 0; i < line.vehicles; i++, k += 2) if (kids[k]?.visible === true) drawn++;
+      out.push({ id: line.id, base: lv.base, stripe: lv.stripe, pattern: lv.pattern, painted: painted[li].has, paint: painted[li].hash, drawn });
+    }
+    return out;
+  };
+}
 
 function boot(): void {
   const params = getParams();
@@ -360,6 +418,7 @@ function boot(): void {
     };
   };
 
+  const lines = lineFacts(view.scene, world);
   installHook({
     ready: true,
     manual: params.e2e,
@@ -387,6 +446,7 @@ function boot(): void {
         steer: p.steer,
         armed: gestures.isArmed,
         feelRows: panel ? document.querySelectorAll('[data-feel]').length : 0,
+        lines: lines(),
         ui: ui.testState(),
         audio: audioState(),
       };

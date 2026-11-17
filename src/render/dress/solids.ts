@@ -409,7 +409,7 @@ function building(b: MeshBuilder, w: World, o: Solid, variant: 0 | 1 | 2 | 3 | 4
     hdisc(b, o.cx, o.yTop + 0.03, o.cz, r * 0.62, 16, INK.paper);
     hdisc(b, o.cx, o.yTop + 0.04, o.cz, r * 0.28, 12, INK.cobalt);
   } else if (o.surface === Surface.ROOF && variant !== 3) {
-    roofClutter(b, w, o, p, acc, acc2);
+    roofClutter(b, o, p, acc, acc2);
   }
 }
 
@@ -527,7 +527,7 @@ function mural(b: MeshBuilder, f: Face, u0: number, u1: number, y0: number, y1: 
 }
 
 /** Water tanks, vents, dishes and laundry on a flat roof, obeying the roof rule. */
-function roofClutter(b: MeshBuilder, w: World, o: Solid, p: Palette, acc: number, acc2: number): void {
+function roofClutter(b: MeshBuilder, o: Solid, p: Palette, acc: number, acc2: number): void {
   if (o.hx < 1.6 || o.hz < 1.6) return;
   const y = o.yTop;
   // Low stuff anywhere: cisterns and vents under ROOF_CLUTTER_MAX.

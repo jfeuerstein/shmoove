@@ -64,7 +64,7 @@ function line(id: string): CompiledLine {
 }
 
 /** Day tick at which the lap vehicle i is on at `tick` left the terminus. */
-function lapStart(l: CompiledLine, v: VehicleState, tick: number): number {
+function lapStart(v: VehicleState, tick: number): number {
   return (((tick - v.lapTick) % DAY_TICKS) + DAY_TICKS) % DAY_TICKS;
 }
 
@@ -128,7 +128,7 @@ describe('the roster', () => {
       for (let t = 0; t < DAY_TICKS; t += 30) {
         for (let i = 0; i < l.vehicles; i++) {
           vehicleAt(l, i, t, vs);
-          let want = inWindows(r.hours, lapStart(l, vs, t) / DAY_TICKS);
+          let want = inWindows(r.hours, lapStart(vs, t) / DAY_TICKS);
           if (r.parkHidden === true && vs.lapTick >= l.runTicks) want = false;
           expect(vs.active, `${r.id} vehicle ${i} at ${t}`).toBe(want);
           if (vs.active) activeSamples++;
@@ -160,7 +160,7 @@ describe('the roster', () => {
       const starts = new Set<number>();
       for (let t = 0; t < DAY_TICKS; t++) {
         vehicleAt(l, 0, t, vs);
-        if (vs.active) starts.add(lapStart(l, vs, t));
+        if (vs.active) starts.add(lapStart(vs, t));
       }
       expect(starts.size, id).toBe(1);
       const [s] = [...starts];

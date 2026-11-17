@@ -10,7 +10,7 @@ import {
   lineSegments,
   mapFraction,
 } from '../../src/sim/game/progress';
-import { makeVehicleState, vehicleAt, type CompiledLine, type VehicleState } from '../../src/sim/lines';
+import { makeVehicleState, vehicleAt, type VehicleState } from '../../src/sim/lines';
 import { datan2 } from '../../src/sim/math';
 import { Mode } from '../../src/sim/types';
 import type { World } from '../../src/sim/world';
@@ -36,7 +36,7 @@ function play(g: Game, ticks: number, hold: (i: number) => boolean = () => true,
   return out;
 }
 
-const stillAt = (L: CompiledLine, s: number) => (v: VehicleState) =>
+const stillAt = (s: number) => (v: VehicleState) =>
   v.active && Math.abs(v.s - s) < 1e-3 && v.vx === 0 && v.vz === 0;
 
 /** Stand `behind` metres behind the vehicle's origin, facing its way (just behind the bumper). */
@@ -48,7 +48,7 @@ function standBehind(g: Game, li: number, veh: number, behind = 6): void {
 /** Set the clock to the first tick vehicle `veh` stands at stop `stop`, and stand behind it. */
 function atStop(g: Game, li: number, veh: number, stop: number): void {
   const L = g.sim.world.lines[li];
-  seekWhen(g.sim, li, veh, stillAt(L, L.allStops[stop].s));
+  seekWhen(g.sim, li, veh, stillAt(L.allStops[stop].s));
   standBehind(g, li, veh);
 }
 
@@ -68,7 +68,7 @@ function hitched(g: Game, li: number, veh: number): boolean {
 function vehicleStillAt(g: Game, li: number, veh: number, stop: number): boolean {
   const L = g.sim.world.lines[li];
   vehicleAt(L, veh, g.sim.tick, vs);
-  return stillAt(L, L.allStops[stop].s)(vs);
+  return stillAt(L.allStops[stop].s)(vs);
 }
 
 const inkedSegs = (ev: GameEvent[], line: number) =>

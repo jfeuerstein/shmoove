@@ -18,6 +18,13 @@ export interface SkitchTestState {
   feelRows?: number;
   /** Audio mixer facts: context running, track (district, -1 none), stems in, full band, wheel level. */
   audio?: { running: boolean; track: number; stems: number; fullBand: boolean; wheel: number };
+  /**
+   * Every ride line in world order: its id; its livery base and stripe (0xRRGGBB) and pattern;
+   * `painted`, whether base and stripe are both in the vertex colours of every one of its vehicle
+   * meshes; `paint`, a hash of the vertex colours its first vehicle is drawn with; and `drawn`, how
+   * many of its vehicles are drawn this frame.
+   */
+  lines?: { id: string; base: number; stripe: number; pattern: number; painted: boolean; paint: number; drawn: number }[];
   /** Anything else a screen wants a route to be able to assert on. */
   ui?: Record<string, string | number | boolean>;
 }

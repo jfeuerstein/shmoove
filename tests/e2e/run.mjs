@@ -50,8 +50,10 @@ async function playRoute(browser, url, route) {
   const page = await context.newPage();
   const problems = [];
   page.on('pageerror', (e) => problems.push(`page error: ${e.message}`));
+  // Any console error or warning fails the route: a clean run prints nothing to either.
   page.on('console', (m) => {
-    if (m.type() === 'error') problems.push(`console error: ${m.text()}`);
+    const t = m.type();
+    if (t === 'error' || t === 'warning' || t === 'assert') problems.push(`console ${t}: ${m.text()}`);
   });
   const cdp = await context.newCDPSession(page);
   const history = [];

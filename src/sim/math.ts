@@ -94,10 +94,3 @@ export function len2(x: number, z: number): number {
 export function len3(x: number, y: number, z: number): number {
   return Math.sqrt(x * x + y * y + z * z);
 }
-
-/** Integer power by repeated multiplication (deterministic). */
-export function ipow(base: number, exp: number): number {
-  let r = 1;
-  for (let i = 0; i < exp; i++) r *= base;
-  return r;
-}
