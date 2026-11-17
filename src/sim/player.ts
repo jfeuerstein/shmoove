@@ -176,7 +176,9 @@ export function stepPlayer(ctx: SimCtx, input: InputFrame): void {
 
   if (p.mode === Mode.GROUND && p.surface !== Surface.WATER) {
     p.safeTimer += DT;
-    if (p.safeTimer >= SAFE_INTERVAL) {
+    // Also on the first grounded tick after a ride, a grind, a wallride or any air (the mode was
+    // set to GROUND this tick), so a save just after stepping off a ride resumes where you landed.
+    if (p.safeTimer >= SAFE_INTERVAL || p.modeTime === 0) {
       p.safeTimer = 0;
       // Only remember places well clear of water, or a bail at the quay respawns into the sea.
       const m = F.SAFE_MARGIN;

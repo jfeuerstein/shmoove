@@ -204,4 +204,57 @@ describe('saves', () => {
     expect(terrainSurface(w, h.sim.player.x, h.sim.player.z)).not.toBe(Surface.WATER);
     expect(h.sim.player.mode).toBe(Mode.GROUND);
   });
+
+  it('a save taken on the first tick after stepping off a ride resumes where the skater landed, not where they boarded', () => {
+    const g = newGame();
+    seekVehicle(g.sim, 0, 0, 60, 1, 60);
+    teleport(g.sim, -1.5, 62, 0, 5);
+    const p = g.sim.player;
+    let boardedAt: [number, number] | null = null;
+    for (let i = 0; i < 1200 && !(boardedAt && p.mode !== Mode.HITCH); i++) {
+      g.step({ steer: 0, hold: true, hop: false });
+      if (!boardedAt && p.mode === Mode.HITCH) boardedAt = [p.x, p.z];
+    }
+    // Let go and wait for the board to touch down.
+    let landed = false;
+    for (let i = 0; i < 600 && !landed; i++) {
+      g.step({ steer: 0, hold: false, hop: false });
+      landed = p.mode === Mode.GROUND;
+    }
+    expect(boardedAt, 'rode the tram').not.toBeNull();
+    expect(landed, 'landed after letting go').toBe(true);
+    if (!boardedAt) return;
+    const data = migrate(roundTrip(exportSave(g, DEFAULT_SETTINGS)));
+    if (!data) throw new Error('should migrate');
+    const h = newGame();
+    importSave(h, data);
+    expect(h.sim.player.x).toBe(p.x);
+    expect(h.sim.player.z).toBe(p.z);
+    expect(Math.hypot(h.sim.player.x - boardedAt[0], h.sim.player.z - boardedAt[1])).toBeGreaterThan(20);
+  });
+
+  it('the day count survives a save; a version 1 save (time of day only) loads on day 0', () => {
+    const g = newGame();
+    g.sim.tick = 3 * DAY_TICKS + 1234;
+    for (let i = 0; i < 10; i++) g.step({ steer: 0, hold: false, hop: false });
+    const saved = roundTrip(exportSave(g, DEFAULT_SETTINGS)) as SaveData;
+    expect(saved.version).toBe(SAVE_VERSION);
+    const data = migrate(saved);
+    if (!data) throw new Error('should migrate');
+    const h = newGame();
+    importSave(h, data);
+    expect(h.sim.tick).toBe(g.sim.tick);
+    expect(Math.floor(h.sim.tick / DAY_TICKS)).toBe(3);
+    // A save from before the day was kept: same everything, no day, version 1.
+    const { day: _day, ...player } = saved.player;
+    const old = migrate({ ...saved, version: 1, player });
+    if (!old) throw new Error('a version 1 save should migrate');
+    expect(old.version).toBe(SAVE_VERSION);
+    expect(old.player.day).toBe(0);
+    const k = newGame();
+    importSave(k, old);
+    expect(k.sim.tick).toBe(1244);
+    // A day that is not a whole, non-negative number is not a save.
+    for (const day of [-1, 1.5, '2', null]) expect(migrate({ ...saved, player: { ...saved.player, day } })).toBeNull();
+  });
 });
