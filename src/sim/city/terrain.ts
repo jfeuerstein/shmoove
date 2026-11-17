@@ -8,17 +8,23 @@ import {
   APEX_X,
   BOULEVARD_Z,
   CITY,
+  CROSS_FALL,
   FUNI_X,
   FUNI_X0,
   FUNI_X1,
   FUNI_Z0,
   FUNI_Z1,
   HILL_STATION,
+  INNER_R,
   LEVELS,
   MERCADO_STAIRS,
+  NEEDLE,
   OUTER_X,
   PAD_DEPTH,
+  PAD_TILT,
   PLAZA_BODA,
+  PARAPET,
+  PLAZA_LEVEL_Z,
   ROAD_HALF,
   SPINE_BOTTOM_Z,
   SPINE_HALF,
@@ -29,9 +35,11 @@ import {
   baseHeight,
   docksHeight,
   levelHeight,
+  streetHeight,
   type Level,
 } from './layout';
-import { buildRoad, type Road } from './roads';
+import { buildRoad, type Arc, type Road } from './roads';
+import { datan2, dcos, dsin, len2 } from '../math';
 import { STAIR_OPTS, Stepper, type Span } from './stepper';
 
 export interface StairStreet {
@@ -61,7 +69,9 @@ function gridCeil(z: number): number {
 
 /** Where the ground starts to curl up at the east and west edges of the world. */
 const BERM_X = 172;
-const BERM_K = 0.06;
+const BERM_K = 0.045;
+const BERM_RAMP = 60;
+const BERM_Z0 = 292;
 
 /**
  * Curl the ground up near the world's side edges (above the docks), so the fall line never points
@@ -71,27 +81,148 @@ function berm(w: World): void {
   const row = w.nx + 1;
   for (let iz = 0; iz <= w.nz; iz++) {
     const z = w.minZ + iz * w.cell;
-    if (z < CITY.bands.mercado) continue;
+    if (z < BERM_Z0) continue;
+    // The curl grows in over BERM_RAMP, from above the switchbacks' bottom bends (which lie at the
+    // docks' level), so it does not start as a cliff at the docks' edge.
+    const t = Math.min(1, (z - BERM_Z0) / BERM_RAMP);
+    const k = BERM_K * t * t * (3 - 2 * t);
     for (let ix = 0; ix <= w.nx; ix++) {
       const d = Math.abs(w.minX + ix * w.cell) - BERM_X;
-      if (d > 0) w.heights[iz * row + ix] += BERM_K * d * d;
+      if (d > 0) w.heights[iz * row + ix] += k * d * d;
+    }
+  }
+}
+
+/** Antenna Hill's paved paths off the spine: z and far end x. */
+export const ANTENNA_PATHS: readonly (readonly [number, number])[] = [
+  [1150, -66],
+  [1110, 66],
+  [1200, 40],
+];
+/** The hill station's platform (dress.ts builds it), and the fall of the plaza away from it. */
+export const HILL_STATION_PLATFORM = { x0: 20, x1: 40, z0: 1035, z1: 1045 } as const;
+const PLAZA_SHED = 0.03;
+
+/** Half width of the verge outside each outer hairpin. */
+const VERGE_HALF = 2.4;
+const VERGE_BLEND = 5;
+const VERGE_MAX_RAISE = 1.2;
+
+/**
+ * Raise the ground just outside an outer hairpin's parapet to the parapet's top (less PARAPET.flush),
+ * fading out beyond: where the bank there is already higher it is left alone.
+ */
+function raiseVerge(w: World, r: Road, a: Arc): void {
+  // From a little beyond the parapet's outer face, so no ground cell on the road itself is lifted.
+  const rin = a.r + ROAD_HALF + PARAPET.out + PARAPET.half;
+  const rFull = rin + 2 * VERGE_HALF;
+  const rOut = rFull + VERGE_BLEND;
+  const n = 64;
+  const roadY = new Float64Array(n + 1);
+  const p = r.pts;
+  for (let k = 0; k <= n; k++) {
+    const t = a.a0 + (a.da * k) / n;
+    const rx = a.cx + a.r * dcos(t);
+    const rz = a.cz + a.r * dsin(t);
+    let best = Infinity;
+    for (let i = 0; i < p.length; i += 3) {
+      const d = (p[i] - rx) * (p[i] - rx) + (p[i + 2] - rz) * (p[i + 2] - rz);
+      if (d < best) {
+        best = d;
+        roadY[k] = p[i + 1];
+      }
+    }
+  }
+  const row = w.nx + 1;
+  const ix0 = Math.max(0, Math.floor((a.cx - rOut - w.minX) / w.cell));
+  const ix1 = Math.min(w.nx, Math.ceil((a.cx + rOut - w.minX) / w.cell));
+  const iz0 = Math.max(0, Math.floor((a.cz - rOut - w.minZ) / w.cell));
+  const iz1 = Math.min(w.nz, Math.ceil((a.cz + rOut - w.minZ) / w.cell));
+  for (let iz = iz0; iz <= iz1; iz++) {
+    const z = w.minZ + iz * w.cell;
+    for (let ix = ix0; ix <= ix1; ix++) {
+      const x = w.minX + ix * w.cell;
+      const rho = len2(x - a.cx, z - a.cz);
+      if (rho < rin || rho > rOut) continue;
+      // Position along the arc, 0..1; outside the arc's sweep, no verge.
+      let f = (datan2(z - a.cz, x - a.cx) - a.a0) / a.da;
+      f -= Math.floor(f / 2) * 2;
+      if (f > PARAPET.sweep) continue;
+      const target = roadY[Math.round(f * n)] + PARAPET.height + PARAPET.flush;
+      let wt = 1;
+      if (rho > rFull) {
+        const t = 1 - (rho - rFull) / VERGE_BLEND;
+        wt = t * t * (3 - 2 * t);
+      }
+      const k = iz * row + ix;
+      const h = w.heights[k];
+      // Where the road stands on fill the bank outside falls away from the parapet anyway: raise
+      // it by no more than VERGE_MAX_RAISE.
+      if (target > h) w.heights[k] = h + Math.min(target - h, VERGE_MAX_RAISE) * wt;
+    }
+  }
+}
+
+/** The summit's crown: its fall toward the spine and toward the south, and where it starts. */
+export const CROWN = { fallX: 0.035, fallZ: 0.035, z0: SPINE_TOP_Z, ramp: 12, ridge0: 1256, ridge1: 1268, ridgeW: 14, ridgeH: 1, reach: 60 } as const;
+
+/**
+ * Replace the flat top of the hill with a crown: from the top of the spine northward the ground
+ * rises CROWN.fallZ, and it rises CROWN.fallX away from the spine on either side, so every point
+ * of the summit falls toward the spine (or down the hill) and nothing up there holds a skater.
+ */
+function crown(w: World): void {
+  const row = w.nx + 1;
+  const y0 = baseHeight(CROWN.z0);
+  for (let iz = 0; iz <= w.nz; iz++) {
+    const z = w.minZ + iz * w.cell;
+    if (z < CROWN.z0) continue;
+    let t = Math.min(1, (z - CROWN.z0) / CROWN.ramp);
+    t = t * t * (3 - 2 * t);
+    // North of the needle a ridge runs along the line through it, so nothing drains straight
+    // onto the mast: the ground there falls away to either side as well as south.
+    let u = Math.min(1, Math.max(0, (z - CROWN.ridge0) / (CROWN.ridge1 - CROWN.ridge0)));
+    u = u * u * (3 - 2 * u);
+    for (let ix = 0; ix <= w.nx; ix++) {
+      const x = w.minX + ix * w.cell;
+      const ax = Math.abs(x);
+      const edge = Math.max(0, ax - BERM_X);
+      const qx = (x - NEEDLE.x) / CROWN.ridgeW;
+      const q = Math.abs(qx) < 1 ? 1 - qx * qx : 0;
+      const ridge = u * CROWN.ridgeH * q * q;
+      const xr = Math.min(ax, CROWN.reach);
+      w.heights[iz * row + ix] = y0 + CROWN.fallZ * (z - CROWN.z0) + t * CROWN.fallX * (Math.sqrt(xr * xr + 4) - 2) + ridge + BERM_K * edge * edge;
     }
   }
 }
 
 /** Grade of a terrace yard up from its street. */
-export const YARD_RISE = 0.025;
+export const YARD_RISE = 0.04;
 
-/** Height of a terrace pad (street or yard) at (x, z). */
+/** Height of a terrace pad (street or yard) at (x, z). The yard rises from the street's back edge. */
 export function padHeight(L: Level, x: number, z: number): number {
-  return levelHeight(L, x) + YARD_RISE * Math.max(0, z - L.z1);
+  if (z <= L.z1) return streetHeight(L, x, z);
+  return streetHeight(L, x, L.z1) + YARD_RISE * (z - L.z1);
+}
+
+/**
+ * The foot of a stair street on the docks: the docks grade, then a short apron above the docks'
+ * edge that falls onto them, so a skater set down at the foot of the first flight rolls off it.
+ */
+function docksFoot(z: number): number {
+  return docksHeight(z) + CROSS_FALL * Math.max(0, z - (gridFloor(CITY.bands.mercado + 3) - 3));
 }
 
 /** The last level: the Antenna gate street. */
 export const GATE = LEVELS[LEVELS.length - 1];
 
+/**
+ * A level's crossing on a stair street, snapped out to grid lines like the level itself, so every
+ * flight starts and ends on a row of height samples: the steps have crisp edges in the ground and
+ * a handrail's run-in lies over the landing, not over a lip the grid has rounded off.
+ */
 function levelSpan(L: Level, surf: number): Span {
-  return { z0: L.z0, z1: L.z1, h: (x) => levelHeight(L, x), surf };
+  return { z0: gridFloor(L.z0), z1: gridCeil(L.z1), h: (x, z) => streetHeight(L, x, z), surf };
 }
 
 function baseSurface(x: number, z: number): Surface {
@@ -104,8 +235,59 @@ function baseSurface(x: number, z: number): Surface {
   return Math.abs(x) < 3 ? Surface.DIRT : Surface.GRASS;
 }
 
+/**
+ * Pave the grass a little wider round each inner hairpin, where a road meets a level's street:
+ * the vehicles' S-bends from road to street cut across those corners.
+ */
+function paveJunctions(w: World, r: Road): void {
+  const reach = ROAD_HALF + JUNCTION_PAVE;
+  const p = r.pts;
+  for (let iz = 0; iz < w.nz; iz++) {
+    const zc = w.minZ + (iz + 0.5) * w.cell;
+    for (let ix = 0; ix < w.nx; ix++) {
+      const ci = iz * w.nx + ix;
+      if (w.surfaces[ci] !== Surface.GRASS) continue;
+      const xc = w.minX + (ix + 0.5) * w.cell;
+      const ax = Math.abs(xc);
+      if (ax < APEX_X - 15 || ax > APEX_X + INNER_R) continue;
+      if (!LEVELS.some((L) => zc > L.z0 - 10 && zc < L.z1 + 10)) continue;
+      for (let i = 0; i < p.length; i += 3) {
+        const dx = p[i] - xc;
+        const dz = p[i + 2] - zc;
+        if (dx * dx + dz * dz <= reach * reach) {
+          w.surfaces[ci] = Surface.STREET;
+          break;
+        }
+      }
+    }
+  }
+}
+
+/** Extra paving beyond a road's edge at the hairpin junctions, m. */
+const JUNCTION_PAVE = 2.5;
+
+/**
+ * The hillside before any street is carved: the base hill, raised across the Mercado and the
+ * Terraces by the same crest the streets have, so the ground between two streets meets both of
+ * them rather than sagging into a pit behind the higher middle of the lower one.
+ */
+export function groundBase(x: number, z: number): number {
+  const y = baseHeight(z);
+  const B = CITY.bands;
+  if (z <= B.mercado + 3 || z >= CREST_Z1) return y;
+  let s = 1;
+  if (z < B.mercado + 18) s = (z - B.mercado - 3) / 15;
+  else if (z > CREST_Z0) s = (CREST_Z1 - z) / (CREST_Z1 - CREST_Z0);
+  s = s * s * (3 - 2 * s);
+  return y + s * PAD_TILT * (APEX_X - Math.min(Math.abs(x), APEX_X));
+}
+
+/** Above the Antenna gate the crest gives way to the open hill. */
+const CREST_Z0 = 945;
+const CREST_Z1 = 965;
+
 export function buildGround(w: World): Ground {
-  fillHeights(w, (_x, z) => baseHeight(z));
+  fillHeights(w, groundBase);
   fillSurfaces(w, baseSurface);
   const C = new Carver(w);
   const B = CITY.bands;
@@ -136,7 +318,7 @@ export function buildGround(w: World): Ground {
         z1: gridCeil(L.z1),
         bx: 4,
         bz: 3,
-        h: (x) => levelHeight(L, x),
+        h: (x, z) => streetHeight(L, x, z),
         surf: () => Surface.STREET,
       });
     } else {
@@ -148,26 +330,30 @@ export function buildGround(w: World): Ground {
         bx: 6,
         bz: 3,
         // The yard rises gently from the street so it drains onto it.
-        h: (x, z) => levelHeight(L, x) + YARD_RISE * Math.max(0, z - L.z1),
+        h: (x, z) => padHeight(L, x, z),
         surf: (_x, z) => (z <= L.z1 ? Surface.STREET : Surface.PLAZA),
+        // The retaining walls stop short of the hairpin junctions, where the vehicles' S-bends
+        // cut the pad's corners; the last few metres are a steep bank instead.
         cliffZ: true,
-        cliffLo: -APEX_X + 4,
-        cliffHi: APEX_X - 4,
+        cliffLo: -APEX_X + 12,
+        cliffHi: APEX_X - 12,
       });
     }
   }
 
   // --- Wedding plaza: flat at the level of its landing.
-  const boda = LEVELS.find((L) => L.z === 462);
+  const boda = LEVELS.find((L) => L.z === PLAZA_LEVEL_Z);
   if (boda) {
+    const yPlaza = levelHeight(boda, (PLAZA_BODA.x0 + PLAZA_BODA.x1) / 2);
     C.rect({
       x0: PLAZA_BODA.x0,
       x1: PLAZA_BODA.x1,
       z0: PLAZA_BODA.z0,
-      z1: PLAZA_BODA.z1,
+      // On to the church's front, so the floor is level right up to the wall behind the stalls.
+      z1: PLAZA_BODA.z1 + 3,
       bx: 4,
       bz: 4,
-      h: () => boda.yEnd,
+      h: () => yPlaza,
       surf: () => Surface.PLAZA,
     });
   }
@@ -175,7 +361,7 @@ export function buildGround(w: World): Ground {
   // --- Mercado stair streets, with the funicular run-out at FUNI_X.
   const stairs: StairStreet[] = [];
   const mercado = LEVELS.slice(0, firstTerrace);
-  const docksSpan: Span = { z0: B.mercado - 12, z1: B.mercado + 3, h: (_x, z) => docksHeight(z), surf: Surface.STREET };
+  const docksSpan: Span = { z0: B.mercado - 12, z1: gridFloor(B.mercado + 3), h: (_x, z) => docksFoot(z), surf: Surface.STREET };
   for (const xs of [...MERCADO_STAIRS, FUNI_X]) {
     const crossesPlaza = xs > PLAZA_BODA.x0 && xs < PLAZA_BODA.x1;
     // Two pieces when the plaza interrupts the street.
@@ -201,6 +387,7 @@ export function buildGround(w: World): Ground {
         bz: 0,
         h: (x, z) => st.h(x, z),
         surf: (_x, z) => st.surf(z),
+        actualX: true,
       });
       stairs.push({ x: xs, half, stepper: st });
     }
@@ -228,13 +415,28 @@ export function buildGround(w: World): Ground {
   const east = buildRoad(false);
   const west = buildRoad(true);
   for (const r of [east, west]) C.path({ pts: r.pts, half: ROAD_HALF, blend: 10, surf: Surface.STREET });
+  for (const r of [east, west]) paveJunctions(w, r);
+
+  // --- Verges outside the outer hairpins, raised to just under the top of the parapet that will
+  // stand on their inner edge: a skater coming down the bank beyond rolls over the parapet onto
+  // the road instead of being pinned against its back.
+  for (const r of [east, west]) {
+    // Not round the bottom bend, which lies on the level docks.
+    for (const a of r.outer.slice(1)) raiseVerge(w, r, a);
+  }
   berm(w);
 
+  // --- Antenna Hill's paths: paving laid on the hillside, which leaves nowhere on them to stop.
+  for (const [z, x1] of ANTENNA_PATHS) C.paint(Math.min(0, x1), Math.max(0, x1), z - 3.5, z + 3.5, Surface.STREET);
+
   // --- The spine: docks -> stairs through every level -> antenna street -> summit.
-  const spineSpans: Span[] = [{ z0: SPINE_BOTTOM_Z, z1: B.mercado + 3, h: (_x, z) => docksHeight(z), surf: Surface.STREET }];
+  const spineSpans: Span[] = [{ z0: SPINE_BOTTOM_Z, z1: gridFloor(B.mercado + 3), h: (_x, z) => docksFoot(z), surf: Surface.STREET }];
   for (const L of LEVELS) spineSpans.push(levelSpan(L, Surface.STREET));
-  const gateTop = levelHeight(GATE, SPINE_X);
-  spineSpans.push({ z0: GATE.z1, z1: SPINE_TOP_Z, h: (_x, z) => Math.max(gateTop, baseHeight(z)), surf: Surface.STREET });
+  const gateTop = streetHeight(GATE, SPINE_X, GATE.z1);
+  // Over Antenna Hill the spine is one long stepped path: on smooth paving at this grade a skater
+  // reached 29 m/s and drifted off it; on steps they keep to a walking-pace roll and the fall line
+  // holds them to it.
+  spineSpans.push({ z0: gridCeil(GATE.z1), z1: SPINE_TOP_Z, h: (_x, z) => Math.max(gateTop, baseHeight(z)), surf: Surface.STAIRS });
   const spine = new Stepper(spineSpans, { axis: SPINE_X, ...STAIR_OPTS });
   C.rect({
     x0: SPINE_X - SPINE_HALF,
@@ -246,19 +448,33 @@ export function buildGround(w: World): Ground {
     h: (x, z) => spine.h(x, z),
     surf: (_x, z) => spine.surf(z),
     cliffX: true,
+    actualX: true,
   });
   // The summit plaza at the top of the spine.
   C.rect({ x0: -10, x1: 10, z0: SPINE_TOP_Z, z1: SPINE_TOP_Z + 8, bx: 4, bz: 4, h: (_x, z) => Math.max(gateTop, baseHeight(z)), surf: () => Surface.PLAZA });
+  crown(w);
 
-  // --- Antenna Hill: the hill station plaza and paved paths off the spine.
+  // --- Antenna Hill: the hill station plaza, crowned so it sheds a skater off every side rather
+  // than holding one at rest beside the bank that rises from its edge.
   const hs = HILL_STATION;
-  C.rect({ x0: hs.x0, x1: hs.x1, z0: hs.z0, z1: hs.z1, bx: 8, bz: 8, h: () => baseHeight((hs.z0 + hs.z1) / 2), surf: () => Surface.PLAZA });
-  for (const [z, x1] of [[1150, -66], [1110, 66], [1200, 40]] as const) {
-    const pts: number[] = [];
-    const n = Math.ceil(Math.abs(x1) / 2);
-    for (let i = 0; i <= n; i++) pts.push((x1 * i) / n, baseHeight(z), z);
-    C.path({ pts, half: 3.5, blend: 4, surf: Surface.STREET });
-  }
+  const yHs = baseHeight((hs.z0 + hs.z1) / 2);
+  const pf = HILL_STATION_PLATFORM;
+  C.rect({
+    x0: hs.x0,
+    x1: hs.x1,
+    z0: hs.z0,
+    z1: hs.z1,
+    bx: 8,
+    bz: 8,
+    h: (x, z) => {
+      const shed = PLAZA_SHED * len2(Math.max(0, pf.x0 - x, x - pf.x1), Math.max(0, pf.z0 - z, z - pf.z1));
+      // Beside the platform the plaza also falls south, so its side edges drain off it.
+      let side = Math.max(0, Math.min(1, Math.max(pf.x0 - x, x - pf.x1) / 4));
+      side = side * side * (3 - 2 * side);
+      return yHs - shed - PLAZA_SHED * Math.max(0, pf.z0 - z) + side * PLAZA_SHED * 1.5 * (z - pf.z1);
+    },
+    surf: () => Surface.PLAZA,
+  });
 
   // The docks stay at the docks grade under everything (the roads leave them level across).
   C.rect({ x0: CITY.minX, x1: CITY.maxX, z0: 0, z1: B.mercado - 1, bx: 0, bz: 0, h: (_x, z) => docksHeight(z), surf: () => -1 });

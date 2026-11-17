@@ -71,6 +71,12 @@ export const ROAD_HALF = 7;
 /** Inner hairpin radius and the x of the outer hairpin centres. */
 export const INNER_R = 13;
 export const OUTER_X = 152;
+/**
+ * The low parapet round the outside of each outer hairpin: height above the road, how far its top
+ * may stand above the verge outside it, its offset beyond the road's edge, segment length, half
+ * thickness, and the share of the bend it runs round from the bottom.
+ */
+export const PARAPET = { height: 0.8, flush: 0.25, out: 0.9, seg: 4, half: 0.3, sweep: 0.75 } as const;
 /** The docks boulevard: the bottom of both switchback roads. */
 export const BOULEVARD_Z = 258;
 
@@ -81,7 +87,7 @@ export const LANDING_HALF = 8;
 export const TERRACE_FRONTS = [612, 666, 720, 774, 828, 882, 936] as const;
 export const PAD_STREET = 14;
 export const PAD_DEPTH = 33;
-export const PAD_TILT = 0.02;
+export const PAD_TILT = 0.0275;
 
 export interface Level {
   /** Street centre line. */
@@ -115,11 +121,61 @@ export const LEVELS: readonly Level[] = [
   })),
 ];
 
-/** Height of a level's street (and pad) at x. Terraces crest at x = 0 and fall PAD_TILT to the ends. */
+/** The landing the wedding plaza opens off, and the x range it holds level (the plaza plus its blend). */
+export const PLAZA_LEVEL_Z = 462;
+const PLAZA_FLAT_X0 = 12;
+const PLAZA_FLAT_X1 = 68;
+
+/**
+ * Height of a level's street (and pad) at x, along its length. Every level crests at x = 0 and
+ * falls PAD_TILT to the hairpin apexes, so a skater at rest on a cross street rolls off to a road
+ * and down it. The plaza landing holds the wedding plaza level and falls more steeply east of it.
+ */
 export function levelHeight(L: Level, x: number): number {
-  if (!L.terrace) return L.yEnd;
   const ax = Math.min(Math.abs(x), APEX_X);
-  return L.yEnd + PAD_TILT * (APEX_X - ax);
+  if (L.z === PLAZA_LEVEL_Z && x > PLAZA_FLAT_X0) {
+    const flat = L.yEnd + PAD_TILT * (APEX_X - PLAZA_FLAT_X0);
+    if (x <= PLAZA_FLAT_X1) return flat;
+    return L.yEnd + ((flat - L.yEnd) * (APEX_X - ax)) / (APEX_X - PLAZA_FLAT_X1);
+  }
+  return L.yEnd + (L === LEVELS[0] ? FIRST_TILT : PAD_TILT) * (APEX_X - ax);
+}
+
+/** The first landing crests lower, so the flight up to it from the docks stays under 45%. */
+const FIRST_TILT = 0.0175;
+
+/**
+ * Every level also falls across its width toward its front (downhill) edge, the edge the flights
+ * below leave from, so a skater who has come to rest anywhere on it rolls on: down a flight where
+ * a stair street crosses, onto the low roofs that line the front edge between them.
+ */
+export const CROSS_FALL = 0.033;
+/** The top Mercado landing is the spawn's lookout apron: steeper, so a new skater rolls off without a push. */
+export const SPAWN_FALL = 0.048;
+/** The new-game spawn: on the spine at the top landing of the Mercado, facing downhill. */
+export const SPAWN_LEVEL_Z = 566;
+export const SPAWN_Z = 570;
+/** Over this x range the plaza landing (the wedding plaza) and the landing above it (whose front edge is the church) keep no cross fall. */
+const NO_FALL_FADE = 4;
+
+/** Weight (0..1) of a level's cross fall at x. */
+export function crossWeight(L: Level, x: number): number {
+  if (L.z !== PLAZA_LEVEL_Z && L.z !== PLAZA_LEVEL_Z + 52) return 1;
+  const d = Math.max(PLAZA_FLAT_X0 - x, x - PLAZA_FLAT_X1);
+  if (d <= 0) return 0;
+  if (d >= NO_FALL_FADE) return 1;
+  const t = d / NO_FALL_FADE;
+  return t * t * (3 - 2 * t);
+}
+
+/**
+ * Height of a level's street at (x, z): its profile along x, plus its cross fall. The fall hangs
+ * from the street's back edge, which keeps the height of the profile.
+ */
+export function streetHeight(L: Level, x: number, z: number): number {
+  const zz = z < L.z0 ? L.z0 : z > L.z1 ? L.z1 : z;
+  const fall = L.z === SPAWN_LEVEL_Z ? SPAWN_FALL : CROSS_FALL;
+  return levelHeight(L, x) + crossWeight(L, x) * fall * (zz - L.z1);
 }
 
 // ---------------------------------------------------------------------------------------------

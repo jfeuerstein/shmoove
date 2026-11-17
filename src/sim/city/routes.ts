@@ -8,7 +8,7 @@ import { PI, TAU, datan2, dcos, dsin, len2, len3 } from '../math';
 import { Surface, addSolid, addZone, terrainHeight, terrainSurface, topHeight, type World } from '../world';
 import { needleTop } from './dress';
 import type { RouteDef } from './index';
-import { BOULEVARD_Z, INNER_R, LEVELS, NEEDLE } from './layout';
+import { BOULEVARD_Z, INNER_R, LEVELS, NEEDLE, levelHeight } from './layout';
 import { Turtle, type Road } from './roads';
 import type { Ground } from './terrain';
 
@@ -227,21 +227,47 @@ function fishLoop(g: Ground): number[] {
   return b.xz;
 }
 
-/** Forklifts: a rounded rectangle round the west warehouses. */
+/** The forklifts' east lobe: the streets it runs along, south of the warehouses and round the east ones. */
+export const FORK_EAST = { south: 64, back: 80, west: 131, east: 172, north: 240 } as const;
+
+/**
+ * Forklifts: a rounded rectangle round the west warehouses, then (after its last stop there) a lobe
+ * out across the east docks: east along the street south of the warehouses, up the far east edge,
+ * back across below the boulevard, down between the east warehouses and home along the street
+ * beside the first.
+ */
 function forkliftLoop(): number[] {
   const R = 8;
+  const r = 6;
+  const E = FORK_EAST;
   const b = new Builder(-82, 92);
-  const corner = (): void => {
-    b.take(b.turtle().arc(R, PI / 2));
+  const left = (rad = R): void => {
+    b.take(b.turtle().arc(rad, PI / 2));
+  };
+  const right = (rad = R): void => {
+    b.take(b.turtle().arc(rad, -PI / 2));
   };
   b.straightTo(-35 - R, 92);
-  corner();
+  left();
   b.straightTo(-35, 250 - R);
-  corner();
+  left();
   b.straightTo(-130 + R, 250);
-  corner();
-  b.straightTo(-130, 92 + R);
-  corner();
+  left();
+  b.straightTo(-130, E.south + R);
+  left();
+  b.straightTo(E.east - R, E.south);
+  left();
+  b.straightTo(E.east, E.north - R);
+  left();
+  b.straightTo(E.west + R, E.north);
+  left();
+  b.straightTo(E.west, E.back + R);
+  // Down between the warehouses and round to the right onto the street home, then up beside the
+  // west warehouses onto the first street.
+  right();
+  b.straightTo(-84, E.back);
+  right(r);
+  right(r);
   b.close();
   return b.xz;
 }
@@ -472,7 +498,8 @@ export const GHOST_CUT = { x0: 56, x1: 94, level: 566 } as const;
 
 export function addRouteStructures(w: World): void {
   const L = LEVELS[levelIndex(GHOST_CUT.level)];
-  const y = L.yEnd;
+  // The street falls toward the hairpin: the lid sits over its highest end.
+  const y = Math.max(levelHeight(L, GHOST_CUT.x0), levelHeight(L, GHOST_CUT.x1));
   addSolid(w, {
     cx: (GHOST_CUT.x0 + GHOST_CUT.x1) / 2,
     cz: L.z,
@@ -505,7 +532,26 @@ export function buildRoutes(w: World, g: Ground): Record<string, RouteDef> {
   const craneY = (x: number, z: number): number => topHeight(w, x, z) + 11;
   const crane = resample([-140, 9, 140, 9], craneY, false);
   specs.push({ id: 'D1', loop: false, overhead: true, path: crane, stops: [['Grúa Oeste', -140, 9], ['Grúa Centro', 0, 9], ['Grúa Este', 140, 9]] });
-  specs.push({ id: 'D2', loop: true, overhead: false, path: ground(forkliftLoop()), stops: [['Almacenes Sur', -82, 92], ['Almacenes Este', -35, 170], ['Cocheras', -82, 250], ['Almacenes Oeste', -130, 170]] });
+  // The east docks' stops come after the four round the west warehouses, so those keep their places.
+  const FE = FORK_EAST;
+  specs.push({
+    id: 'D2',
+    loop: true,
+    overhead: false,
+    path: ground(forkliftLoop()),
+    stops: [
+      ['Almacenes Sur', -82, 92],
+      ['Almacenes Este', -35, 170],
+      ['Cocheras', -82, 250],
+      ['Almacenes Oeste', -130, 170],
+      ['Muelle Oeste', -130, 100],
+      ['Contenedores', 40, FE.south],
+      ['Grúa Este', 150, FE.south],
+      ['Muelle Este', FE.east, 170],
+      ['Bulevar Este', 150, FE.north],
+      ['Almacenes Centro', FE.west, 160],
+    ],
+  });
   specs.push({ id: 'D3', loop: true, overhead: false, path: ground(fishLoop(g)), stops: [['Lonja', -110, 32], ['Bulevar', -90, BOULEVARD_Z], ['Puerta del Mercado', 20, 306], ['Muelle', -60, 8]] });
 
   // Mercado.
@@ -550,8 +596,12 @@ export function addPylons(w: World): void {
     const n = Math.max(1, Math.floor(len / 40));
     for (let k = 1; k <= n; k++) {
       let f = k / (n + 1);
-      // Slide off a street crossing (the spine) along the line.
-      while (terrainSurface(w, ax + (bx - ax) * f, az + (bz - az) * f) === Surface.STREET && f < 0.95) f += 1 / len;
+      // Slide off a street or path crossing (the spine's steps) along the line.
+      const paved = (q: number): boolean => {
+        const s = terrainSurface(w, ax + (bx - ax) * q, az + (bz - az) * q);
+        return s === Surface.STREET || s === Surface.STAIRS;
+      };
+      while (paved(f) && f < 0.95) f += 1 / len;
       const x = ax + (bx - ax) * f;
       const z = az + (bz - az) * f;
       const g = terrainHeight(w, x, z);
