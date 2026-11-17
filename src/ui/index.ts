@@ -17,6 +17,8 @@ import { ConductorHud } from './conductorHud';
 import { ClassSlot, el } from './dom';
 import { SECRET_INFO, failText, taskText, ticksClock } from './errandFormat';
 import { ErrandHud } from './errandHud';
+import { HintStub } from './hint';
+import { injectHintStyle } from './hintStyle';
 import { injectErrandStyle } from './errandStyle';
 import { LedgerScreen } from './ledgerScreen';
 import { injectLedgerStyle } from './ledgerStyle';
@@ -92,6 +94,7 @@ export function createUi(root: HTMLElement, game: Game, sound: UiSound | null, s
   const releaseChalkStyle = injectChalkStyle();
   const releaseErrandStyle = injectErrandStyle();
   const releaseLedgerStyle = injectLedgerStyle();
+  const releaseHintStyle = injectHintStyle();
   const lines = game.sim.world.lines;
   const segs: Segment[][] = lines.map(lineSegments);
 
@@ -104,6 +107,7 @@ export function createUi(root: HTMLElement, game: Game, sound: UiSound | null, s
   const chain = new ChainMeter(game, twos);
   const toasts = new Toasts(sound, twos);
   const stopBoard = new StopBoard(game, stopUp, twos);
+  const hint = new HintStub(game, twos, sound);
   const hold = el('div', 'sk-hold');
   const holdOn = new ClassSlot(hold, 'sk-on');
   const holdFull = new ClassSlot(hold, 'sk-full');
@@ -320,12 +324,14 @@ export function createUi(root: HTMLElement, game: Game, sound: UiSound | null, s
     toasts.el,
     stopBoard.el,
     errandHud.offerEl,
+    hint.el,
     hold,
     chalkHud.el,
     map.el,
     mapBtn,
     chalkBtn,
     ledgerBtn,
+    hint.mapPointer,
     chalkScreen.el,
     ledger.el,
   );
@@ -441,6 +447,7 @@ export function createUi(root: HTMLElement, game: Game, sound: UiSound | null, s
     }
     chalkHud.onEvent(e);
     conductorHud.onEvent(e);
+    hint.onEvent(e);
   };
 
   const onSimEvent = (e: SimEvent): void => {
@@ -532,6 +539,7 @@ export function createUi(root: HTMLElement, game: Game, sound: UiSound | null, s
       offering.set(errandHud.offering);
       conductorHud.update(f.dt);
       shell?.frame(f.dt, f.gameEvents);
+      hint.update(f.dt, mapOpen || chalkOpen || ledgerOpen || (shell !== null && shell.paused));
       twos.update(f.dt);
     },
     get paused(): boolean {
@@ -561,6 +569,9 @@ export function createUi(root: HTMLElement, game: Game, sound: UiSound | null, s
         mapLines: mapOpen ? map.drawn : discovered,
         inkedSegments: inked,
         mapPercent: Math.floor(mapFraction(prog, lines) * 100),
+        hint: hint.hint,
+        hintsDone: hint.doneCount,
+        onboardingComplete: game.onboarding.complete,
         ...chalkTestState(),
         ...ledgerTestState(),
       };
@@ -586,6 +597,7 @@ export function createUi(root: HTMLElement, game: Game, sound: UiSound | null, s
       shell?.dispose();
       hud.remove();
       releaseLedgerStyle();
+      releaseHintStyle();
       releaseErrandStyle();
       releaseChalkStyle();
       releaseStyle();
