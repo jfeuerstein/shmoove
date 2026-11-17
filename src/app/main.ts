@@ -43,7 +43,7 @@ function boot(): void {
   audio.setMuted(params.mute);
   const audioView = createAudioView();
   const ui = createUi(uiRoot, game, audio);
-  // A shared chalk link (?chalk=SK1-...) opens the import box with the code pasted.
+  // A shared chalk link (?chalk=SK2-...) opens the import box with the code pasted.
   const sharedChalk = new URLSearchParams(location.search).get('chalk');
   if (sharedChalk) ui.openChalkImport(sharedChalk);
   // Browsers only start audio from a user gesture: the first touch or key unlocks it.

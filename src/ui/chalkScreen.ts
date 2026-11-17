@@ -280,7 +280,7 @@ export class ChalkScreen {
     const c = this.card('Import a line');
     const box = el('textarea', 'sk-cpaste');
     box.dataset.sk = 'chalkPaste';
-    box.placeholder = 'Paste a SK1- code';
+    box.placeholder = 'Paste a SK2- code';
     box.spellcheck = false;
     box.autocapitalize = 'off';
     box.setAttribute('autocomplete', 'off');
