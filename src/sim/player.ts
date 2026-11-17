@@ -766,14 +766,27 @@ function collideVehicles(ctx: SimCtx): void {
         bail(ctx, 'vehicle');
         return;
       }
+      // Side contact: how fast the skater is going into the flank.
       const vlat = -p.vx * VS.hz + p.vz * VS.hx;
-      if (vlat * side < 0) {
-        const before = len2(p.vx, p.vz);
-        p.vx += vlat * VS.hz;
-        p.vz -= vlat * VS.hx;
-        const after = len2(p.vx, p.vz);
-        if (p.mode === Mode.GROUND && before > 1e-6) {
-          p.speed *= after / before;
+      const into = -vlat * side;
+      if (into > 0) {
+        if (into > F.WALL_BAIL_SPEED) {
+          p.vx = VS.vx * 0.6 - VS.hz * side * 4;
+          p.vz = VS.vz * 0.6 + VS.hx * side * 4;
+          p.vy = 3;
+          bail(ctx, 'vehicle');
+          return;
+        }
+        // Bounce off the flank and get brushed along with the vehicle, rather than stopping
+        // dead: a skater with no push must never be parked by passing traffic.
+        const out = Math.max(into * F.RIDE_SIDE_BOUNCE, F.RIDE_SIDE_NUDGE);
+        const dl = (out - vlat * side) * side;
+        p.vx += -VS.hz * dl + VS.vx * F.RIDE_SIDE_DRAG;
+        p.vz += VS.hx * dl + VS.vz * F.RIDE_SIDE_DRAG;
+        if (into > 1) ctx.events.push({ type: 'wallHit', speed: into });
+        if (p.mode === Mode.GROUND) {
+          const after = len2(p.vx, p.vz);
+          p.speed = after;
           if (after > 0.5) p.heading = datan2(p.vx, p.vz);
         }
       }

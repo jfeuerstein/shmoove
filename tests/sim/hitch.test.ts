@@ -491,3 +491,35 @@ describe('review fixes', () => {
     }
   });
 });
+
+describe('traffic never parks a skater', () => {
+  it('rolling into the flank of a passing tram bounces the skater back instead of stopping them dead', () => {
+    const sim = newSim();
+    seekVehicle(sim, TRAM, 0, 100, 1, 30);
+    // Roll across the street into the side of the climbing tram (its lane is x = -4).
+    teleport(sim, 6, 106, -PI / 2, 7);
+    let hit = false;
+    let after = 0;
+    for (let i = 0; i < 120; i++) {
+      sim.step({ steer: 0, hold: false, hop: false });
+      if (!hit && sim.events.some((e) => e.type === 'wallHit')) {
+        hit = true;
+        after = hSpeed(sim);
+        // Thrown back toward +x, and carried a little the way the tram is going (+z).
+        expect(sim.player.vx).toBeGreaterThan(1);
+        expect(sim.player.vz).toBeGreaterThan(1);
+      }
+    }
+    expect(hit).toBe(true);
+    expect(after).toBeGreaterThan(3);
+    expect(sim.player.mode).not.toBe(Mode.BAIL);
+  });
+
+  it('but T-boning one at full speed is a bail', () => {
+    const sim = newSim();
+    seekVehicle(sim, TRAM, 0, 100, 1, 30);
+    teleport(sim, 9, 106, -PI / 2, 17);
+    const ev = run(sim, 120);
+    expect(ev.some((e) => e.type === 'bail' && e.reason === 'vehicle')).toBe(true);
+  });
+});

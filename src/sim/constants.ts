@@ -106,6 +106,9 @@ export const FEEL_DEFS = {
 
   // --- Bail
   RIDE_BAIL_SPEED: [13, 3, 40, 'Bail', 'Closing speed with a vehicle body that bails you, m/s'],
+  RIDE_SIDE_BOUNCE: [0.5, 0, 1, 'Bail', 'Speed kept bouncing off the side of a vehicle'],
+  RIDE_SIDE_NUDGE: [1.5, 0, 6, 'Bail', 'Least speed a vehicle flank pushes you away with, m/s'],
+  RIDE_SIDE_DRAG: [0.35, 0, 1, 'Bail', 'Share of a vehicle\'s speed it brushes onto you on side contact'],
   RIDE_ROOF_BOUNCE: [8.5, 0, 20, 'Bail', 'Bounce speed off a vehicle roof, m/s'],
   SAFE_MARGIN: [6, 0, 20, 'Bail', 'A respawn point must be this far from water, m'],
   BAIL_TIME: [1.3, 0.3, 4, 'Bail', 'Length of the tumble, s'],
