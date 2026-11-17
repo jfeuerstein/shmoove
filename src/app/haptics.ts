@@ -177,7 +177,10 @@ export interface HapticsOpts {
 
 function defaultVibrate(): ((pattern: number[]) => void) | null {
   if (typeof navigator === 'undefined' || typeof navigator.vibrate !== 'function') return null;
+  const nav = navigator as Navigator & { userActivation?: { hasBeenActive: boolean } };
   return (pattern) => {
+    // Before the first tap Chrome refuses (and logs an error): nothing can be felt yet anyway.
+    if (nav.userActivation && !nav.userActivation.hasBeenActive) return;
     try {
       navigator.vibrate(pattern);
     } catch (_e) {
