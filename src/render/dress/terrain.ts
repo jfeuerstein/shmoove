@@ -355,17 +355,24 @@ function stairTreads(b: MeshBuilder, w: World, ix0: number, iz0: number, ix1: nu
           end++;
         }
       }
-      if (fallZ) steps(b, w, w.minX + ix * c + 0.01, w.minX + end * c - 0.01, w.minZ + iz * c, w.minZ + (iz + 1) * c, gz, true);
-      else steps(b, w, w.minZ + iz * c + 0.01, w.minZ + (iz + 1) * c - 0.01, w.minX + ix * c, w.minX + (ix + 1) * c, gx, false);
+      // Steepest grade along the fall axis in either triangle of the cell sets the step size.
+      const gMax = fallZ
+        ? Math.max(Math.abs(h01 - h00), Math.abs(h11 - h10)) / c
+        : Math.max(Math.abs(h10 - h00), Math.abs(h11 - h01)) / c;
+      if (fallZ) steps(b, w, w.minX + ix * c + 0.01, w.minX + end * c - 0.01, w.minZ + iz * c, w.minZ + (iz + 1) * c, gz, gMax, true);
+      else steps(b, w, w.minZ + iz * c + 0.01, w.minZ + (iz + 1) * c - 0.01, w.minX + ix * c, w.minX + (ix + 1) * c, gx, gMax, false);
       ix = end;
     }
   }
 }
 
-/** Steps across [a0, a1] (the run axis) over the fall-axis span [f0, f1]; `g` is the grade along the fall axis. */
-function steps(b: MeshBuilder, w: World, a0: number, a1: number, f0: number, f1: number, g: number, fallZ: boolean): void {
-  const grade = Math.abs(g);
-  const run = Math.min(0.6, 0.11 / grade);
+/**
+ * Steps across [a0, a1] (the run axis) over the fall-axis span [f0, f1]; `g` is the mean grade
+ * along the fall axis (its sign says which way is down), `gMax` the steepest.
+ */
+function steps(b: MeshBuilder, w: World, a0: number, a1: number, f0: number, f1: number, g: number, gMax: number, fallZ: boolean): void {
+  // A tread sits 6 cm over the ramp at its middle, so its nose stands 6 cm + gMax * run / 2 proud.
+  const run = Math.min(0.6, (2 * (TREAD_MAX - 0.065)) / Math.max(gMax, 1e-3));
   const n = Math.max(1, Math.ceil((f1 - f0) / run - 1e-6));
   const r = (f1 - f0) / n;
   // World point from (run axis, fall axis).
