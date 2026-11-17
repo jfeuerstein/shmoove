@@ -41,10 +41,15 @@ Acceptance:
 ## M2 — City `[~]` (tag `m2`)
 
 - [x] City generator: four districts into the World contract (1068 solids, 213 rails, 85 zones,
-      16 routes, 10 chain spots; builds in about 120 ms). Independent verification running.
-- [~] Chunk mesher + seamless streaming (implementer running)
-- [~] Full look: district dressing, sky, sea, day/night ramps, props (same task)
-- [ ] The city as the default world, e2e routes and perf on it
+      16 routes, 10 chain spots)
+- [x] Chunk mesher + seamless streaming (`src/render/cityView.ts`; resumable chunk builds)
+- [x] Full look: district dressing for every kind, sea, day/night ramps, props; fixture `?world=proptown`
+- [~] City fixes from independent verification (brief: `docs/briefs/m2-cityfix.md`, waits for the
+      ride data which edits the same files): the spawn does not roll, pockets at terrace ends,
+      a flat summit, the Mercado is too sparse near the spine, east docks far from any ride, and
+      four tests that stayed green when their property was broken
+- [ ] The city as the default world, e2e routes and perf on it (first look: `city-spine` route;
+      perf at the spawn 16 draw calls, 42k triangles, 4.4 ms mean / 14.6 ms p95)
 
 Acceptance:
 - Sim tests: generator is deterministic (hash); a no-input skater dropped at the summit reaches the

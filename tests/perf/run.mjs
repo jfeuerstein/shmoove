@@ -39,7 +39,9 @@ async function measure({ url, browser }) {
   try {
     const cdp = await context.newCDPSession(page);
     await cdp.send('Emulation.setCPUThrottlingRate', { rate: CPU_THROTTLE });
-    await page.goto(url + '/?route=perf&mute');
+    // SKITCH_PERF_PARAMS adds URL parameters, e.g. world=city, to measure another world.
+    const extra = process.env.SKITCH_PERF_PARAMS ? '&' + process.env.SKITCH_PERF_PARAMS : '';
+    await page.goto(url + '/?route=perf&mute' + extra);
     await waitForReady(page);
     if (await page.evaluate(() => window.__skitch.manual)) throw new Error('app is in manual mode without ?e2e');
     await sleep(WARMUP_MS);
