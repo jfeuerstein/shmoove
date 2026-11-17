@@ -39,7 +39,7 @@ interface Played {
   game: Game;
   bot: Skater;
   book: Book;
-  /** Absolute tick (of the game it happened in) and day tick of mapComplete, or -1. */
+  /** Tick mapComplete came out on, or -1. */
   mapTick: number;
   /** The book as it stood at mapComplete. */
   atMap: { bails: number; longestStall: number; stallEndAt: number; maxStep: number; jumps: number; ticks: number };
@@ -47,8 +47,6 @@ interface Played {
   savedAt: number;
   /** Game events from the save on (or all of them), as [dayTick, event]. */
   after: [number, GameEvent][];
-  /** Wall time of the run, ms. */
-  ms: number;
 }
 
 /** Ticks of play allowed after the plan ends: the last fall and its recovery. */
@@ -59,7 +57,6 @@ const MAX_TICKS = 8 * DAY_TICKS;
 const PROGRESS_EVENTS = new Set(['segmentInked', 'lineComplete', 'lineDiscovered', 'mapComplete', 'secretFound', 'onboardingComplete']);
 
 function play(save?: SavePoint): Played {
-  const t0 = performance.now();
   resetFeel();
   let game = newGame(world);
   const bot = new Skater(game, fullGamePlan());
@@ -102,7 +99,7 @@ function play(save?: SavePoint): Played {
   }
   if (bot.done && !bot.failure) r.run(SETTLE, undefined, true);
   const after: [number, GameEvent][] = book.events.slice(fromEvent).map((x) => [dayTick(x.tick), x.e]);
-  return { game, bot, book, mapTick, atMap, savedAt, after, ms: performance.now() - t0 };
+  return { game, bot, book, mapTick, atMap, savedAt, after };
 }
 
 const lineIds = (): string[] => world.lines.map((l) => l.id);
@@ -235,6 +232,7 @@ describe('the full game, by play alone', () => {
 
   it('is deterministic: a second run ends in the same state with the same events', () => {
     const again = play();
+    expect(again.game.sim.hash()).toBe(full.game.sim.hash());
     expect(stateHash(again.game)).toBe(stateHash(full.game));
     expect(again.book.events.length).toBe(full.book.events.length);
     expect(again.book.events.map((x) => `${x.tick} ${JSON.stringify(x.e)}`)).toEqual(full.book.events.map((x) => `${x.tick} ${JSON.stringify(x.e)}`));
