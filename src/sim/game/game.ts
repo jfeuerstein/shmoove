@@ -97,6 +97,7 @@ export interface AppliedInput {
   steerQ: number;
   hold: boolean;
   hop: boolean;
+  brake: boolean;
 }
 
 export class Game {
@@ -110,7 +111,7 @@ export class Game {
   /** Events from the most recent step (cleared at the start of each step). */
   readonly events: GameEvent[] = [];
   /** The quantised input the last step applied. */
-  readonly applied: AppliedInput = { steerQ: 0, hold: false, hop: false };
+  readonly applied: AppliedInput = { steerQ: 0, hold: false, hop: false, brake: false };
   /** Reducers in step order. */
   readonly reducers: readonly GameReducer[];
   private readonly chalkReducer: ChalkReducer;
@@ -118,7 +119,7 @@ export class Game {
   readonly errandsReducer: ErrandsReducer;
   readonly conductorsReducer: ConductorsReducer;
   private readonly onboardingReducer: OnboardingReducer;
-  private readonly simInput: InputFrame = { steer: 0, hold: false, hop: false };
+  private readonly simInput: InputFrame = { steer: 0, hold: false, hop: false, brake: false };
   /** Events raised by commands between steps; they come out with the next step's events. */
   private readonly queued: GameEvent[] = [];
 
@@ -157,9 +158,11 @@ export class Game {
     this.applied.steerQ = q;
     this.applied.hold = input.hold;
     this.applied.hop = input.hop;
+    this.applied.brake = input.brake === true;
     this.simInput.steer = q / STEER_LEVELS;
     this.simInput.hold = input.hold;
     this.simInput.hop = input.hop;
+    this.simInput.brake = input.brake === true;
     // A race countdown holds the skater still while the city keeps moving.
     if (this.chalkReducer.holdsSkater()) this.sim.tickOnly();
     else this.sim.step(this.simInput);

@@ -42,14 +42,6 @@ export function endChain(ctx: SimCtx, reason: 'land' | 'bail'): void {
 }
 
 /** Look for a ride in reach and latch onto the nearest. Called while the touch is armed. */
-/** Set by the last `tryHitch`: a ride that could be grabbed is within FOOT_NEAR (or in reach). */
-let rideNear = false;
-
-/** Whether the last `tryHitch` found a ride near enough to coast into (see FOOT_NEAR). */
-export function hitchRideNear(): boolean {
-  return rideNear;
-}
-
 export function tryHitch(ctx: SimCtx): boolean {
   const p = ctx.player;
   const w = ctx.world;
@@ -62,13 +54,9 @@ export function tryHitch(ctx: SimCtx): boolean {
   let bestLine = -1;
   let bestVeh = -1;
   let deniedLine = -1;
-  // How near the nearest ride that could be grabbed is, as a share of reach (1 = just in reach).
-  const nearK = Math.max(R, F.FOOT_NEAR) / R;
-  const nearLimit = nearK * nearK;
-  let near = nearLimit;
   for (let li = 0; li < w.lines.length; li++) {
     const L = w.lines[li];
-    const m = Math.max(R, F.FOOT_NEAR) + L.anchorBack + 1;
+    const m = R + L.anchorBack + 1;
     if (p.x < L.minX - m || p.x > L.maxX + m || p.z < L.minZ - m || p.z > L.maxZ + m) continue;
     for (let vi = 0; vi < L.vehicles; vi++) {
       vehicleAt(L, vi, ctx.tick, VS);
@@ -78,25 +66,19 @@ export function tryHitch(ctx: SimCtx): boolean {
       const dy = handY - GP.y;
       const dz = p.z - GP.z;
       const d = (dx * dx + dz * dz) / (R * R) + (dy * dy) / (Ry * Ry);
-      if (d >= nearLimit) continue;
+      if (d >= best) continue;
       // A bumper is grabbed as it comes past, not from in front of it.
-      const ahead = !L.overhead && dx * VS.hx + dz * VS.hz > F.HITCH_AHEAD;
+      if (!L.overhead && dx * VS.hx + dz * VS.hz > F.HITCH_AHEAD) continue;
       if (li === p.lastLine && vi === p.lastVeh && p.relatchCooldown > 0) continue;
       if (chainNow + 1 < L.minChainN) {
-        if (d < best && !ahead) deniedLine = li;
+        deniedLine = li;
         continue;
       }
-      // Near enough to coast into: in reach, or further off at a height a standing hand reaches
-      // and in front of where the skater is heading (a ride coming up from behind, passing to the
-      // side or hanging overhead is waited for, not chased).
-      if (d < near && (d < 1 || (dy * dy < Ry * Ry && -(dx * p.vx + dz * p.vz) > 0))) near = d;
-      if (d >= best || ahead) continue;
       best = d;
       bestLine = li;
       bestVeh = vi;
     }
   }
-  rideNear = near < nearLimit;
   if (bestLine < 0) {
     if (deniedLine >= 0) {
       ctx.events.push({ type: 'denied', line: deniedLine, need: w.lines[deniedLine].minChainN });

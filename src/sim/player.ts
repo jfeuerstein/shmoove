@@ -5,7 +5,7 @@
  * decreases the heading.
  */
 import { DT, FEEL } from './constants';
-import { endChain, hitchRideNear, stepHitch, tryHitch } from './hitch';
+import { endChain, stepHitch, tryHitch } from './hitch';
 import { makeVehicleState, vehicleAt } from './lines';
 import { angleDiff, approachT, clamp, datan2, dcos, dsin, len2, len3, wrapAngle, PI } from './math';
 import { Mode, type BailReason, type InputFrame, type PlayerState, type SimCtx } from './types';
@@ -136,17 +136,11 @@ export function stepPlayer(ctx: SimCtx, input: InputFrame): void {
   p.steer += (clamp(input.steer, -1, 1) - p.steer) * approachT(F.STEER_SMOOTH, DT);
   const steerDelta = Math.abs(p.steer - steerBefore);
 
-  // Holding reaches for a ride. With none near, it plants a foot: the way to stop and wait.
-  // A ride near enough to coast into keeps a rolling skater rolling; one already standing stays
-  // put and lets it come.
-  let foot = false;
-  if (input.hold && p.mode !== Mode.HITCH && p.mode !== Mode.BAIL && p.hitchCooldown <= 0) {
-    foot = !tryHitch(ctx) && (!hitchRideNear() || p.speed < F.FOOT_STAND);
-  }
+  if (input.hold && p.mode !== Mode.HITCH && p.mode !== Mode.BAIL && p.hitchCooldown <= 0) tryHitch(ctx);
 
   switch (p.mode) {
     case Mode.GROUND:
-      stepGround(ctx, steerDelta, foot);
+      stepGround(ctx, steerDelta, input.brake === true);
       break;
     case Mode.AIR:
       stepAir(ctx);
@@ -258,14 +252,14 @@ function stepGround(ctx: SimCtx, steerDelta: number, foot: boolean): void {
   const rate = Math.min(F.TURN_RATE_MAX, F.LAT_ACCEL_MAX / Math.max(v, 0.5));
   let heading = p.heading - p.steer * rate * DT;
 
-  // Foot down: a still finger, and only at a pace a foot can take. It brakes, holds on anything
-  // but stairs-steep ground, and keeps the board from swinging downhill or being pumped. Dragging
-  // while holding keeps rolling: that is reaching for a ride on the move.
-  const planted = foot && v < F.FOOT_SPEED && Math.abs(p.steer) < F.FOOT_STEER;
+  // Foot down (the finger pulled down): a deliberate brake. It slows the board from any speed,
+  // holds it on anything but stairs-steep ground, and keeps a standing board from swinging
+  // downhill or being pumped. A resting thumb never brakes.
+  const planted = foot;
 
   // A slow board swings toward the fall line.
   const grad = len2(G.gx, G.gz);
-  if (grad > 1e-4 && v < F.FALLLINE_SPEED && p.wallHold <= 0 && !planted) {
+  if (grad > 1e-4 && v < F.FALLLINE_SPEED && p.wallHold <= 0 && !(planted && v < 1)) {
     const delta = angleDiff(datan2(-G.gx, -G.gz), heading);
     const low = 1 - v / F.FALLLINE_SPEED;
     const turn = ((F.FALLLINE_GAIN * F.GRAVITY * grad * Math.abs(dsin(delta))) / Math.max(v, 1)) * low * DT;
@@ -295,7 +289,14 @@ function stepGround(ctx: SimCtx, steerDelta: number, foot: boolean): void {
     }
   }
   // Tic-tac: carving back and forth trickles in speed at walking pace.
-  if (v < F.PUMP_SPEED_CAP && !planted) v = Math.min(F.PUMP_SPEED_CAP, v + F.PUMP_GAIN * steerDelta);
+  // Pumping: carving back and forth drives the board, strongly from a standstill and fading out
+  // toward PUMP_SPEED_CAP. It works on the flat and downhill, not up a hill: `m` is the rise per
+  // metre along the heading, and past PUMP_UPHILL there is nothing to gain.
+  if (v < F.PUMP_SPEED_CAP && !planted && steerDelta > 0) {
+    const flat = m <= 0 ? 1 : Math.max(0, 1 - m / F.PUMP_UPHILL);
+    const room = Math.min(1, 2 * (1 - v / F.PUMP_SPEED_CAP));
+    v = Math.min(F.PUMP_SPEED_CAP, v + F.PUMP_GAIN * steerDelta * flat * room);
+  }
   if (v > F.MAX_SPEED) v = F.MAX_SPEED;
 
   const vh = v * inv;

@@ -8,18 +8,19 @@ type Def = readonly [value: number, min: number, max: number, group: string, not
 export const FEEL_DEFS = {
   // --- Ground
   GRAVITY: [20, 5, 40, 'Ground', 'Gravity, m/s^2. Drives downhill acceleration and air arcs'],
-  ROLL_RESIST: [0.3, 0, 2, 'Ground', 'Constant rolling deceleration, m/s^2'],
-  AIR_DRAG: [0.006, 0, 0.02, 'Ground', 'Quadratic drag; sets terminal speed on a slope'],
+  ROLL_RESIST: [0.15, 0, 2, 'Ground', 'Constant rolling deceleration, m/s^2'],
+  AIR_DRAG: [0.0045, 0, 0.02, 'Ground', 'Quadratic drag; sets terminal speed on a slope'],
   MAX_SPEED: [34, 10, 60, 'Ground', 'Hard speed limit, m/s'],
-  TURN_RATE_MAX: [2.4, 0.5, 6, 'Ground', 'Carve turn rate at low speed, rad/s'],
-  LAT_ACCEL_MAX: [10, 4, 40, 'Ground', 'Grip: max lateral acceleration; widens turns at speed'],
+  TURN_RATE_MAX: [3.0, 0.5, 6, 'Ground', 'Carve turn rate at low speed, rad/s'],
+  LAT_ACCEL_MAX: [18, 4, 40, 'Ground', 'Grip: max lateral acceleration; widens turns at speed'],
   STEER_SMOOTH: [16, 2, 60, 'Ground', 'How fast steer input reaches the board, 1/s'],
   CARVE_SCRUB: [0.06, 0, 0.5, 'Ground', 'Speed lost per second at full carve (fraction)'],
   FALLLINE_GAIN: [1.1, 0, 4, 'Ground', 'How strongly a slow board swings toward downhill'],
   FALLLINE_SPEED: [5, 0.5, 15, 'Ground', 'Above this speed the fall-line drift is gone, m/s'],
-  PUMP_GAIN: [0.55, 0, 3, 'Ground', 'Tic-tac: speed gained per unit of steer change'],
-  PUMP_SPEED_CAP: [2.6, 0, 8, 'Ground', 'Tic-tac stops adding speed above this, m/s'],
-  STAIR_DRAG: [0.85, 0, 4, 'Ground', 'Linear drag on stairs, 1/s (terminal speed = slope accel / this)'],
+  PUMP_GAIN: [0.6, 0, 3, 'Ground', 'Pumping: speed gained per unit of steer change, from a standstill (fades toward the cap)'],
+  PUMP_SPEED_CAP: [7, 0, 12, 'Ground', 'Pumping stops adding speed above this, m/s'],
+  PUMP_UPHILL: [0.06, 0, 0.3, 'Ground', 'Pumping fades to nothing as the ground rises ahead by this much per metre'],
+  STAIR_DRAG: [0.35, 0, 4, 'Ground', 'Linear drag on stairs, 1/s (terminal speed = slope accel / this)'],
   ROUGH_DRAG: [0.3, 0, 2, 'Ground', 'Linear drag on dirt and grass, 1/s'],
   STEP_UP: [0.4, 0.05, 1, 'Ground', 'Tallest ledge the board rolls up onto, m'],
   GROUND_STICK: [0.05, 0, 0.5, 'Ground', 'Gap under the wheels before a crest launches you, m'],
@@ -29,7 +30,7 @@ export const FEEL_DEFS = {
   WALL_BOUNCE: [0.35, 0, 1, 'Ground', 'Speed kept bouncing off a wall head-on'],
   WALL_HEAD_ON: [0.8, 0.3, 1, 'Ground', 'How square a wall hit must be (cos) to bounce back rather than slide'],
   WALL_SLIDE_SPEED: [3, 0, 12, 'Ground', 'Below this speed a square hit turns you along the wall instead of bouncing, m/s'],
-  WALL_BAIL_SPEED: [12, 3, 40, 'Ground', 'Speed into a wall that bails you, m/s'],
+  WALL_BAIL_SPEED: [20, 3, 40, 'Ground', 'Speed into a wall that bails you, m/s'],
 
   // --- Air
   AIR_STEER: [1.3, 0, 5, 'Air', 'Turn rate of horizontal velocity in the air, rad/s'],
@@ -53,7 +54,7 @@ export const FEEL_DEFS = {
   RAIL_ENTRY_VY: [2.5, -5, 10, 'Grind', 'Must be rising slower than this to snap, m/s'],
   GRIND_ALIGN: [0.25, 0, 0.95, 'Grind', 'Minimum alignment (cos) between velocity and rail'],
   GRIND_MIN_SPEED: [4, 0, 12, 'Grind', 'Speed floor on entering a rail, m/s'],
-  GRIND_ENTRY_BOOST: [1, 0, 6, 'Grind', 'Speed added on entering a rail, m/s'],
+  GRIND_ENTRY_BOOST: [3.5, 0, 6, 'Grind', 'Speed added on entering a rail, m/s'],
   GRIND_FRICTION: [0.5, 0, 5, 'Grind', 'Rail deceleration, m/s^2'],
   GRIND_EXIT_POP: [2.6, 0, 8, 'Grind', 'Upward speed leaving the end of a rail, m/s'],
   GRIND_HOP_SIDE: [2.8, 0, 8, 'Grind', 'Sideways speed from steer when hopping off a rail, m/s'],
@@ -74,16 +75,12 @@ export const FEEL_DEFS = {
   WALL_COOLDOWN: [0.35, 0, 1.5, 'Wall', 'Time before another wallride, s'],
 
   // --- Hitch
-  HITCH_REACH: [4.5, 1, 10, 'Hitch', 'Hand-to-strap distance that latches, m'],
+  HITCH_REACH: [6.5, 1, 10, 'Hitch', 'Hand-to-strap distance that latches, m'],
   HITCH_REACH_Y: [2.6, 0.5, 8, 'Hitch', 'Vertical reach to a strap, m'],
   HITCH_AHEAD: [0.8, -2, 6, 'Hitch', 'How far ahead of a bumper you can be and still grab it, m'],
   HAND_HEIGHT: [1.0, 0.3, 2, 'Hitch', 'Height of the grabbing hand above the board, m'],
   RELATCH_COOLDOWN: [0.7, 0, 3, 'Hitch', 'Time before the same vehicle can be re-caught, s'],
-  FOOT_SPEED: [7, 0, 20, 'Hitch', 'Holding still with no ride near plants a foot below this speed, m/s'],
-  FOOT_STEER: [0.12, 0, 1, 'Hitch', 'Carve beyond this keeps the foot up: a still finger stops you, a dragging one rides on'],
-  FOOT_STAND: [0.6, 0, 3, 'Hitch', 'Slower than this you are standing: the foot stays down even as a ride comes near, m/s'],
-  FOOT_BRAKE: [4, 0, 12, 'Hitch', 'How hard the planted foot brakes, m/s^2 (also the steepest ground it holds on)'],
-  FOOT_NEAR: [25, 0, 60, 'Hitch', 'A ride you could grab within this distance, ahead of where you are rolling, keeps the foot up so you coast into it, m'],
+  FOOT_BRAKE: [6, 0, 12, 'Hitch', 'Pull down: how hard the dragged foot brakes, m/s^2 (also the steepest ground it holds on)'],
   HITCH_COOLDOWN: [0.12, 0, 1, 'Hitch', 'Time after a release before anything can be caught, s'],
   HITCH_MIN_TIME: [0.18, 0, 1, 'Hitch', 'Shortest hitch before a release registers, s (never shorter than YANK_TIME)'],
   YANK_TIME: [0.28, 0, 1, 'Hitch', 'Time the strap takes to pull you into line, s'],
@@ -109,8 +106,8 @@ export const FEEL_DEFS = {
   TOW_SNAP_HEIGHT: [0.5, 0, 2, 'Hitch', 'Behind a ground ride, within this of the ground you are held on it, m'],
 
   // --- Slingshot and chain
-  SLING_GAIN: [1.14, 0.8, 2, 'Sling', 'Exit speed = release speed x this'],
-  SLING_MIN: [6.5, 0, 15, 'Sling', 'Floor for the base exit speed, m/s'],
+  SLING_GAIN: [1.2, 0.8, 2, 'Sling', 'Exit speed = release speed x this'],
+  SLING_MIN: [11, 0, 20, 'Sling', 'Floor for the base exit speed, m/s'],
   LINK_BONUS: [2.2, 0, 8, 'Sling', 'Exit speed added per chain link, m/s'],
   SLING_CAP: [29, 10, 60, 'Sling', 'Cap on exit speed, m/s'],
   SLING_POP: [4.6, 0, 12, 'Sling', 'Upward pop on release, m/s'],
@@ -129,7 +126,7 @@ export const FEEL_DEFS = {
   BAIL_KNOCK_SIDE: [4, 0, 12, 'Bail', 'Sideways speed a vehicle knocks you clear with when it bails you, m/s'],
   BAIL_KNOCK_UP: [3, 0, 10, 'Bail', 'Upward speed a vehicle knocks you with when it bails you, m/s'],
   SAFE_MARGIN: [6, 0, 20, 'Bail', 'A respawn point must be this far from water, m'],
-  BAIL_TIME: [1.3, 0.3, 4, 'Bail', 'Length of the tumble, s'],
+  BAIL_TIME: [0.9, 0.3, 4, 'Bail', 'Length of the tumble, s'],
   BAIL_FRICTION: [10, 1, 40, 'Bail', 'Slide deceleration while bailed, m/s^2'],
 
   // --- Touch
@@ -138,6 +135,7 @@ export const FEEL_DEFS = {
   STEER_RANGE_PX: [86, 20, 300, 'Touch', 'Drag distance for full steer, px'],
   SWIPE_UP_PX: [64, 20, 300, 'Touch', 'Upward travel that counts as a swipe, px'],
   SWIPE_UP_TIME: [0.2, 0.05, 0.6, 'Touch', 'Window in which that travel must happen, s'],
+  BRAKE_PULL_PX: [72, 20, 300, 'Touch', 'Pulling the finger down this far from where it landed drags a foot, px'],
 
   // --- Camera
   CAM_DIST: [6.4, 2, 20, 'Camera', 'Distance behind the skater, m'],

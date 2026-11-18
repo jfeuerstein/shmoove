@@ -6,6 +6,8 @@
  * - A touch that stays within the dead zone for HOLD_ARM_TIME arms `hold`. A touch that moves
  *   sideways first is a pure carve and never arms. Dragging after arming still steers.
  * - A fast upward flick is a hop (one tick). It does not end or disarm the touch.
+ * - Pulling the finger down past BRAKE_PULL_PX from where it landed drags a foot (brake) until it
+ *   comes back up. A thumb that just rests on the glass never brakes.
  *
  * The recogniser is clocked by sim ticks (call `sample()` once per tick), so scripted touches
  * replay identically in the e2e harness. Pointer events only feed positions in.
@@ -26,6 +28,7 @@ export class Gestures {
   private downY = 0;
   private anchorX = 0;
   private x = 0;
+  private braking = false;
   private armed = false;
   private carveOnly = false;
   private hopQueued = false;
@@ -36,8 +39,9 @@ export class Gestures {
   private keyRight = false;
   private keyHold = false;
   private keyHop = false;
+  private keyBrake = false;
 
-  private readonly frame: InputFrame = { steer: 0, hold: false, hop: false };
+  private readonly frame: InputFrame = { steer: 0, hold: false, hop: false, brake: false };
 
   /** True while a finger is on the glass (for UI hints). */
   get isTouching(): boolean {
@@ -56,6 +60,7 @@ export class Gestures {
     this.downY = y;
     this.anchorX = x;
     this.x = x;
+    this.braking = false;
     this.armed = false;
     this.carveOnly = false;
     this.trail.length = 0;
@@ -65,6 +70,10 @@ export class Gestures {
   move(x: number, y: number): void {
     if (!this.touching) return;
     this.x = x;
+    // Pulled down far enough: brake, until the finger comes most of the way back.
+    const pull = y - this.downY;
+    if (pull > FEEL.BRAKE_PULL_PX) this.braking = true;
+    else if (pull < FEEL.BRAKE_PULL_PX * 0.6) this.braking = false;
     // Sideways travel before arming makes this touch a pure carve. A mostly-vertical flick does
     // not: swipe-up-and-hold has to stay able to arm.
     const dx = Math.abs(x - this.downX);
@@ -89,6 +98,7 @@ export class Gestures {
 
   up(): void {
     this.touching = false;
+    this.braking = false;
     this.armed = false;
     this.carveOnly = false;
     this.trail.length = 0;
@@ -106,6 +116,10 @@ export class Gestures {
         return true;
       case 'Space':
         this.keyHold = pressed;
+        return true;
+      case 'ArrowDown':
+      case 'KeyS':
+        this.keyBrake = pressed;
         return true;
       case 'ArrowUp':
       case 'KeyW':
@@ -129,6 +143,7 @@ export class Gestures {
     this.frame.steer = steer < -1 ? -1 : steer > 1 ? 1 : steer;
     this.frame.hold = (this.touching && this.armed) || this.keyHold;
     this.frame.hop = this.hopQueued || this.keyHop;
+    this.frame.brake = (this.touching && this.braking) || this.keyBrake;
     this.hopQueued = false;
     this.keyHop = false;
     return this.frame;

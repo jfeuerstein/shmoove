@@ -64,6 +64,7 @@ describe('the blimp', () => {
     for (let i = 0; i < 4 * 3600; i++) {
       let hop = false;
       let hold = false;
+      let brake = false;
       let steer = 0;
       if (p.mode === Mode.HITCH) hold = true;
       else if (!wasHitched) {
@@ -77,8 +78,8 @@ describe('the blimp', () => {
           hop = p.mode === Mode.GROUND && d < 1.6;
           if (d > 0.8 && p.mode === Mode.GROUND) steer = steerFor(game, G.x, G.z);
         }
-      } else hold = p.speed < FEEL.FOOT_SPEED;
-      game.step({ steer, hold, hop });
+      } else brake = true;
+      game.step({ steer, hold, hop, brake });
       for (const e of game.sim.events) {
         sim.push(e);
         if (e.type === 'hitch') hitches++;
@@ -197,9 +198,9 @@ describe('the hill station platform', () => {
       for (let i = 0; i < 60 * 60 && still < 0; i++) {
         while (k < wps.length - 1 && Math.hypot(wps[k][0] - p.x, wps[k][1] - p.z) < 4) k++;
         const deck = onDeck(game);
-        // Steer for the deck; once on it and slow enough, hold a still finger: a planted foot.
-        const brake = deck && p.speed < FEEL.FOOT_SPEED;
-        game.step({ steer: brake ? 0 : steerFor(game, wps[k][0], wps[k][1]), hold: brake, hop: false });
+        // Steer for the deck; once on it, pull down: a dragged foot.
+        const brake = deck;
+        game.step({ steer: brake ? 0 : steerFor(game, wps[k][0], wps[k][1]), hold: false, hop: false, brake });
         for (const e of game.sim.events) events.push(e);
         if (p.z < PF.z1 + 15) peak = Math.max(peak, p.speed);
         if (onDeck(game) && p.speed < 0.05) still = i;

@@ -26,7 +26,7 @@ export function run(sim: Sim, ticks: number, script: Script = () => ({})): SimEv
   const events: SimEvent[] = [];
   for (let i = 0; i < ticks; i++) {
     const inp = script(sim, i);
-    sim.step({ steer: inp.steer ?? 0, hold: inp.hold ?? false, hop: inp.hop ?? false });
+    sim.step({ steer: inp.steer ?? 0, hold: inp.hold ?? false, hop: inp.hop ?? false, brake: inp.brake ?? false });
     for (const e of sim.events) events.push(e);
   }
   return events;
@@ -36,7 +36,7 @@ export function run(sim: Sim, ticks: number, script: Script = () => ({})): SimEv
 export function runUntil(sim: Sim, maxTicks: number, pred: (sim: Sim) => boolean, script: Script = () => ({})): number {
   for (let i = 0; i < maxTicks; i++) {
     const inp = script(sim, i);
-    sim.step({ steer: inp.steer ?? 0, hold: inp.hold ?? false, hop: inp.hop ?? false });
+    sim.step({ steer: inp.steer ?? 0, hold: inp.hold ?? false, hop: inp.hop ?? false, brake: inp.brake ?? false });
     if (pred(sim)) return i + 1;
   }
   return -1;

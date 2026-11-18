@@ -506,6 +506,36 @@ under **Cut** at the end.
      `tests/unit/nightLights.test.ts` holds the shares and checks the day dressing against hashes
      recorded before the change.
 
+## M7 — After the first human playtest
+
+112. **The first thumb said it feels clunky, slow and bad**: objectives confusing, the city empty
+     and bland, the UI overwhelming, and play as short bursts of dull movement between being
+     dragged slowly by vehicles and crawling at walking pace looking for speed. Every check before
+     this was a bot or a screenshot; none of them measured whether it was fun. Measured afterwards
+     on an ordinary descent of the spine (the best case: always downhill): mean speed off a ride
+     7.8 m/s, above 14 m/s 6 % of the time, mean speed on a ride 5.0 m/s. Rides cruise at 2.2 to
+     13 m/s, pumping topped out at 2.6 m/s, and the main way down the hill is stairs with drag
+     chosen to be unpleasant. Items 113–115 are the first answer; rides, the city's life, goals
+     and the HUD follow.
+113. **A resting thumb never brakes; pulling down does.** Item 77 (and 107) stopped the board
+     whenever a still finger rested on the glass below 7 m/s with no ride ahead. In a one-thumb
+     game the thumb rests on the glass, so players were stopped at the spawn and every time they
+     slowed, with nothing to tell them why: most of "crawling at 1 mph". Superseded: the brake is
+     now a deliberate gesture, the finger pulled down `BRAKE_PULL_PX` from where it landed (or the
+     down arrow), at any speed, braking at `FOOT_BRAKE` and holding on a slope. Hold is only ever
+     a hand out for a ride. `InputFrame` gains `brake`.
+114. **Twice as fast.** Stairs no longer punish (`STAIR_DRAG` 0.85 → 0.35) and rails pay
+     (`GRIND_ENTRY_BOOST` 1 → 3.5); less rolling and air drag; carving turns harder
+     (`TURN_RATE_MAX` 2.4 → 3.0, `LAT_ACCEL_MAX` 10 → 18); reach is longer (`HITCH_REACH` 4.5 →
+     6.5 m); any release throws you at 11 m/s or more (`SLING_MIN` 6.5 → 11, `SLING_GAIN` 1.14 →
+     1.2), so even a slow ride is a slingshot; walls bail only above 20 m/s and a bail lasts 0.9 s.
+     The same descent now averages 13.4 m/s, above 14 m/s 34 % of the time.
+115. **Pumping is real.** Carving back and forth drives the board up to `PUMP_SPEED_CAP` 7 m/s
+     (was 2.6), on the flat and downhill only: it fades to nothing by a rise of `PUMP_UPHILL`
+     (6 %). This keeps the rule that matters (no push button; to go up the hill you hitch) while
+     ending the dead state where a stalled skater could not get anywhere. If the owner reads "no
+     push" more strictly than this, lower the cap.
+
 ## Cut
 
 What the original design promised and the game does not have, or has smaller, with why.

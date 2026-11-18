@@ -8,6 +8,8 @@ export interface InputFrame {
   hold: boolean;
   /** Swipe-up edge: true for exactly one tick per swipe. */
   hop: boolean;
+  /** Finger pulled down: drag a foot. Slows the board and holds it still, on a slope too. */
+  brake?: boolean;
 }
 
 export const NO_INPUT: Readonly<InputFrame> = Object.freeze({ steer: 0, hold: false, hop: false });
