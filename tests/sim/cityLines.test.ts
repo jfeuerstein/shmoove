@@ -423,7 +423,7 @@ interface ChainRun {
  * (`sign` picks the side), let go `release` ticks after the overtake moment, re-arm, and ride
  * whatever is caught for a second.
  */
-function chainRun(aId: string, bId: string, o: Overtake, lead: number, release: number, whip: number, sign: number): ChainRun {
+function chainRun(aId: string, bId: string, o: Overtake, lead: number, release: number, whip: number, sign: number, far = false): ChainRun {
   const a = line(aId);
   const b = line(bId);
   const sim = new Sim(city.world, { seed: 1, startDayFrac: 0 });
@@ -433,7 +433,8 @@ function chainRun(aId: string, bId: string, o: Overtake, lead: number, release: 
   const B = makeVehicleState();
   vehicleAt(a, o.va, sim.tick + 90, A);
   vehicleAt(b, o.vb, o.tick, B);
-  const side = (B.x - A.x) * -A.hz + (B.z - A.z) * A.hx >= 0 ? 1 : -1;
+  // On b's side of a's lane, or (`far`) the other side, out of b's reach while waiting for a.
+  const side = ((B.x - A.x) * -A.hz + (B.z - A.z) * A.hx >= 0 ? 1 : -1) * (far ? -1 : 1);
   const off = a.bodyHalfWid + 0.9;
   placePlayer(city.world, sim.player, A.x - A.hz * side * off, A.z + A.hx * side * off, Math.atan2(A.hx, A.hz));
   sim.player.speed = Math.min(3, a.cruise * 0.5);
@@ -473,7 +474,11 @@ function chainRun(aId: string, bId: string, o: Overtake, lead: number, release: 
   return { links, events };
 }
 
-/** Search release time and whip length for a script that chains a into b. */
+/**
+ * Search release time, whip length and which side of a's lane to wait on for a script that chains
+ * a into b. The search runs with the test, so it re-finds itself whenever the controller or the
+ * timetable changes.
+ */
 function findCityChain(aId: string, bId: string, zone: string): { params: number[]; run: ChainRun } {
   resetFeel();
   const o = findOvertake(aId, bId, zone);
@@ -481,8 +486,10 @@ function findCityChain(aId: string, bId: string, zone: string): { params: number
     for (let release = -150; release <= 150; release += 6) {
       for (const whip of [0, 16, 28]) {
         for (const sign of [1, -1]) {
-          const run = chainRun(aId, bId, o, lead, release, whip, sign);
-          if (run.links === 2) return { params: [lead, release, whip, sign], run };
+          for (const far of [false, true]) {
+            const run = chainRun(aId, bId, o, lead, release, whip, sign, far);
+            if (run.links === 2) return { params: [lead, release, whip, sign, far ? 1 : 0], run };
+          }
         }
       }
     }
