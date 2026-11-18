@@ -48,6 +48,30 @@ describe('the line-up world', () => {
   });
 });
 
+/** Is line k's grab point the nearest of any active ride's to the skater's hand, as the hitch measures it? */
+function nearestIs(sim: Sim, k: number): boolean {
+  const p = sim.player;
+  let best = Infinity;
+  let line = -1;
+  for (const L of world.lines) {
+    for (let i = 0; i < L.vehicles; i++) {
+      vehicleAt(L, i, sim.tick, vs);
+      if (!vs.active) continue;
+      grabPoint(L, vs, gp);
+      // The hitch's own measure: plan distance over reach, height over vertical reach.
+      const dy = gp.y - (p.y + FEEL.HAND_HEIGHT);
+      const d = ((gp.x - p.x) ** 2 + (gp.z - p.z) ** 2) / FEEL.HITCH_REACH ** 2 + (dy * dy) / FEEL.HITCH_REACH_Y ** 2;
+      // A bumper not yet come past cannot be grabbed (HITCH_AHEAD).
+      if (!L.overhead && (p.x - gp.x) * vs.hx + (p.z - gp.z) * vs.hz > FEEL.HITCH_AHEAD) continue;
+      if (d < best) {
+        best = d;
+        line = L.index;
+      }
+    }
+  }
+  return line === k || sim.player.mode === Mode.HITCH;
+}
+
 /**
  * Put a skater where a player would wait for this line: rolling beside a ground ride's lane just
  * ahead of it, or standing under an overhead ride's strap. Returns the sim, clock set.
@@ -87,7 +111,9 @@ describe('every line-up ride can be hitched', () => {
             }
           }
         }
-        sim.step({ steer: 0, hold: true, hop });
+        // Hand out only while this ride's strap is the nearest: the strap is thrown 14 m (DECISIONS
+        // 119), and a hand out early catches the ride in the next lane.
+        sim.step({ steer: 0, hold: nearestIs(sim, k), hop });
         for (const e of sim.events) if (e.type === 'hitch' && e.line === k) hitchedAt = i;
       }
       expect(hitchedAt, 'hitched within 20 s').toBeGreaterThanOrEqual(0);
