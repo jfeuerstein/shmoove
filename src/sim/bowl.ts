@@ -601,6 +601,12 @@ function layout(seed: number, attempt: number): Layout | null {
     if (g < 0.06 || g > 0.28) continue;
     const k = makeKick(rng, x, z, -gx / g, -gz / g);
     if (!kickFits(sh, sh.pipes, k, 34)) continue;
+    // A shoulder, not a saddle or a ridge: the ground across the kicker's line is nearly straight.
+    const c = kickCrest(k);
+    const across =
+      (naturalHeight(sh, c.x + k.fz * 12, c.z - k.fx * 12) + naturalHeight(sh, c.x - k.fz * 12, c.z + k.fx * 12)) / 2 -
+      naturalHeight(sh, c.x, c.z);
+    if (Math.abs(across) > 0.5) continue;
     const reach = k.run + k.top + k.back;
     if (discSlope(sh, k.x + k.fx * reach * 0.5, k.z + k.fz * reach * 0.5, reach * 0.5) > 0.32) continue;
     sh.kicks.push(k);
@@ -801,8 +807,9 @@ function terrainDiscSlope(t: Terrain, x: number, z: number, radius: number): num
  * Build the bowl for a seed. Same seed, bit-identical terrain.
  *
  * Layouts are drawn from the seed until one passes the floor-slope, spawn and pad checks on the
- * finished, interpolated surface; later attempts soften the hills, so the search always ends (over
- * seeds 1 to 300 the first or second attempt almost always passes).
+ * finished, interpolated surface; later attempts soften the hills. Over seeds 1 to 300 every seed
+ * passes, nearly always on the first or second attempt; running out of attempts throws rather than
+ * hand back a bowl that broke its own rules.
  */
 export function makeBowl(seed: number): Bowl {
   const grid = new Float32Array(GRID_N * GRID_N);
