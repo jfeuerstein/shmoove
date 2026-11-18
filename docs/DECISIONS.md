@@ -22,3 +22,14 @@ Things decided without the owner, newest last. Overrule any of them.
 6. **Models by task.** Lead (Fable): contracts, the mover, gears, camera, palette, integration.
    Opus: the app shell, the bowl generator, bots, verification. Sonnet: touch input, the PWA shell
    and deploy, the debug panel.
+7. **Carving downhill still gains speed.** "The stick only reaches gear 2" holds on level ground.
+   On a slope the fall line pulls whether you carve or tuck; carving only bleeds the excess faster.
+   Holding forward from the spawn ramp reaches gear 4 for a moment. Making carve cancel gravity
+   would feel like glue.
+8. **Camera sits closer and steeper than a third-person game's.** The mover is about two thirds
+   down the screen (above the thumb), the horizon is just under the HUD, and the ground fills the
+   rest. A flatter chase camera spent 40% of a portrait screen on sky.
+9. **Tuned feel values are applied on every boot**, not only with `?debug`, so a tuning session
+   carries over to plain play on the same phone. "Reset all" in the panel clears them.
+10. **A `?flat` world exists for tests** that need level ground (run speed, the debug panel's
+   slider check). The game itself always uses the bowl.

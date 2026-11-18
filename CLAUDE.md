@@ -3,36 +3,41 @@
 Portrait-mode, one-thumb 3D survivor where speed is the build. Pitch and design: `docs/PITCH.md`.
 Milestones and status: `docs/PLAN.md`.
 
-**State of the repo:** restarted from scratch. There is no code yet; M0 in `docs/PLAN.md` creates the
-toolchain. The commands and layout below are the contract M0 builds to. Update this file in the
-commit that makes any of it real or different.
+**State of the repo:** M0 is built and the M1 feel slice is playable: one mover on a seeded bowl,
+three control schemes, the debug panel. No enemies, weapons or run structure yet (M2 on).
 
 ## Stack
 
 TypeScript + Three.js (WebGL2) + Vite, shipped as an installable offline PWA.
 
-## Commands (from M0)
+## Commands
 
 | Command | What it does |
 | --- | --- |
-| `npm run dev` | Vite dev server (`?debug` for the feel panel) |
-| `npm run build` | Typecheck, production build to `dist/`, service worker |
+| `npm run dev` | Draws the icons, then the Vite dev server |
+| `npm run build` | Typecheck, icons, production build to `dist/`, service worker |
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm run lint` | ESLint, including the sim purity rules |
 | `npm test` | Vitest: unit tests and deterministic sim tests with bots (headless) |
-| `npm run e2e` | Playwright at 390x844 with touch; fails on a console error or warning; saves screenshots |
-| `npm run perf` | Headless Chrome at 4x CPU throttle against `tests/perf/budgets.json` |
-| `npm run gate` | All of the above in order. A milestone is done only when this is green |
+| `npm run e2e` | Playwright at 390x844 with touch: every route in `tests/e2e/routes/`; fails on a console error or warning; saves `artifacts/screens/*.png` |
+| `npm run e2e:pwa` | The built app installs, works offline and updates through the bottom bar |
+| `npm run perf` | Headless Chrome at 4x CPU throttle against `tests/perf/budgets.json`; writes `artifacts/perf.json` |
+| `npm run gate` | All of the above in order, stopping at the first failure. A milestone is done only when this is green |
 
-## Layout (from M0)
+URL parameters: `?debug` (feel panel), `?scheme=tuck|lift|swipe`, `?seed=N` (map), `?flat` (level
+ground, for tests), `?hook` (`window.__shmoove` test hook), `?perf`.
+
+## Layout
 
 - `src/sim/` deterministic simulation. Pure TypeScript. Fixed 60 Hz step, seeded RNG.
-- `src/input/` touch gestures -> `InputFrame`.
-- `src/render/` Three.js. Reads sim state, never writes it.
-- `src/audio/` Web Audio synthesis and the gear-driven stem mixer.
-- `src/ui/` DOM overlay: HUD, level-up cards, menus.
-- `src/app/` boot, main loop, saves, settings, haptics, debug panel, PWA glue, test hook.
+  `mover.ts` (carve, tuck, hop), `flow.ts` (gears), `bowl.ts` (the map), `constants.ts` (`FEEL`).
+- `src/input/` touch gestures -> `InputFrame`. `gestures.ts` is pure; `touch.ts` binds the DOM.
+- `src/render/` Three.js. Reads sim state, never writes it. `camera.ts`, `look.ts` (palette).
+- `src/ui/` DOM overlay: HUD, stick view, debug panel (level-up cards and menus later).
+- `src/app/` boot, main loop, settings, platform glue, PWA, test hook.
+- `scripts/` the gate, the icon generator, the service-worker generator.
 - `tests/unit`, `tests/sim` (bots in `tests/sim/bot/`), `tests/e2e`, `tests/perf`.
+- `docs/briefs/` one file per delegated task.
 
 ## Conventions
 
@@ -59,17 +64,19 @@ TypeScript + Three.js (WebGL2) + Vite, shipped as an installable offline PWA.
 Fable is the scarce resource; Opus does the bulk of the work.
 
 - **Fable (lead):** architecture and plan, interface contracts, the movement controller
-  (`src/sim/mover.ts`), gears and Wake loop logic (`src/sim/flow.ts`, `src/sim/wake.ts`), the camera
+  (`src/sim/mover.ts`), gears and Wake loop logic (`src/sim/flow.ts`, `src/sim/wake.ts` from M2), the camera
   (`src/render/camera.ts`), the core look (`src/render/look.ts`), integration, and debugging anything
   Opus has failed at twice.
-- **Opus subagents:** everything with a clear contract: scaffolding, build config, test harness, bowl
-  generation, enemies and the spawn director, weapons and passives, UI screens, audio, saves, PWA
-  setup, docs, refactors, and all independent verification.
+- **Opus subagents:** contract-bound work that needs design judgement: bowl generation, the app
+  shell and render views, enemies and the spawn director, weapons and passives, bots and balance
+  tests, and all independent verification.
+- **Sonnet subagents:** contract-bound work that is mostly plumbing: input gesture logic, PWA setup
+  and deploy, the debug panel and settings, simple UI screens, saves, docs, mechanical refactors.
 
 Delegation rules:
 
-- Agents are defined in `.claude/agents/implementer.md` and `.claude/agents/verifier.md`
-  (`model: opus`). Pass the model explicitly on every spawn as well.
+- Agents are defined in `.claude/agents/implementer.md` and `.claude/agents/verifier.md`. Pass the
+  model explicitly on every spawn (`opus` or `sonnet` as above); the brief names it too.
 - Every brief states: the goal, the files the agent owns, the interfaces to match, the acceptance
   tests, and what to return (a short summary and the list of changed files, never file contents).
 - Independent tasks run in parallel in separate git worktrees and are merged by the lead.
