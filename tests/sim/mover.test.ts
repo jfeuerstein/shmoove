@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { FEEL } from '../../src/sim/constants';
 import { hashSimState, Sim } from '../../src/sim/sim';
-import { flatTerrain } from '../../src/sim/terrain';
+import { flatTerrain, terrainFromHeight } from '../../src/sim/terrain';
 import { EV_CHAIN_LOST, EV_CLEAN_HOP, EV_GEAR_DOWN, EV_HOP, EV_LAND, type InputFrame } from '../../src/sim/types';
 import { FORWARD, halfPipeTerrain, launch, run, slopeTerrain, steer, tableTerrain, TUCK } from './fixtures';
 
@@ -339,6 +339,23 @@ describe('terrain', () => {
       if ((sim.state.events & EV_LAND) !== 0) landings++;
     }
     expect(landings).toBe(0);
+  });
+
+  it('crossing a side slope, a tucked mover is pulled down the fall line', () => {
+    // The ground rises toward +x and falls gently toward +z; the mover starts along +z.
+    const sim = new Sim(terrainFromHeight((x, z) => 0.7 * x - 0.07 * z, 2000));
+    launch(sim, 9);
+    run(sim, TUCK, 120);
+    expect(sim.state.mover.x).toBeLessThan(-8);
+    expect(sim.state.mover.vx).toBeLessThan(-5);
+  });
+
+  it('a tucked mover settles into the bottom of a falling half-pipe and keeps gaining speed', () => {
+    const sim = new Sim(halfPipeTerrain(16, 7, 0.075));
+    sim.state.mover.x = 6;
+    run(sim, TUCK, 900);
+    expect(Math.abs(sim.state.mover.x)).toBeLessThan(6);
+    expect(sim.state.mover.gear).toBeGreaterThanOrEqual(3);
   });
 
   it('swings up a half-pipe wall and back', () => {

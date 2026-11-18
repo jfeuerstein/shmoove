@@ -63,27 +63,21 @@ export function makeMover(terrain: Terrain): MoverState {
   return m;
 }
 
-/** Set the velocity to `speed` along the surface in the horizontal direction `yaw`. */
+/**
+ * Set the velocity to `speed` along the surface, heading `yaw` as seen from above.
+ *
+ * The tangent is the one whose horizontal part points along `yaw`, with the vertical part solved
+ * from the surface. (Projecting the horizontal heading onto the surface along the normal is not the
+ * same thing: on a side slope it swings the heading uphill and cancels the pull of the fall line.)
+ */
 function setTangentVelocity(m: MoverState, yaw: number, speed: number): void {
   const hx = dsin(yaw);
   const hz = dcos(yaw);
-  const d = hx * m.nx + hz * m.nz;
-  let tx = hx - d * m.nx;
-  let ty = -d * m.ny;
-  let tz = hz - d * m.nz;
-  const l = len3(tx, ty, tz);
-  if (l < 1e-6) {
-    tx = hx;
-    ty = 0;
-    tz = hz;
-  } else {
-    tx /= l;
-    ty /= l;
-    tz /= l;
-  }
-  m.vx = tx * speed;
-  m.vy = ty * speed;
-  m.vz = tz * speed;
+  const ty = m.ny > 1e-6 ? -(hx * m.nx + hz * m.nz) / m.ny : 0;
+  const k = speed / len3(hx, ty, hz);
+  m.vx = hx * k;
+  m.vy = ty * k;
+  m.vz = hz * k;
 }
 
 /** Drop the part of the velocity that points into or out of the ground, keeping the speed. */
