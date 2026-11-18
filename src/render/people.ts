@@ -5,10 +5,9 @@
  * skater's routes run: not within 2 m of a ride's lane, not on a rail or its run-in, not in the
  * middle third of a stair street (nor on the landings that continue it), not on a street.
  *
- * Static figures are baked into their chunk's mesh twice, once per pose; the chunk's draw range
- * picks the pose (12 Hz, "on twos") and, by trimming figures off its ends in a fixed order, how
- * many are out at this hour. Walkers and birds move, so they live in one small dynamic mesh for
- * the whole city view (`LifeLayer`), rewritten in place each frame.
+ * Chunks plan who lives in them when they are built; one small dynamic mesh for the whole city
+ * view (`LifeLayer`, one draw call) draws the figures, walkers and birds near the camera, rewritten
+ * in place on twos (12 Hz) from pose templates, with the crowd thinning by district and hour.
  *
  * Everything is deterministic from the world and cell indices (`hash2`).
  */
@@ -551,7 +550,7 @@ export function planBirds(w: World, life: ChunkLife, r: Rail): void {
 }
 
 // ---------------------------------------------------------------------------------------------
-// The moving layer: walkers and birds
+// The life layer: every figure, walker and bird of the city in one mesh
 
 /** Sim ticks per animation frame (12 Hz), and ticks in a day (src/sim/lines.ts DAY_TICKS). */
 const TWOS = 5;
@@ -560,57 +559,84 @@ const DAY_TICKS = 43200;
 export const SCATTER_R = 6;
 const FLY_S = 2.4;
 const AWAY_S = 14;
-/** Most walkers and birds drawn at once, and how far from the camera they are drawn, m. */
-const MAX_WALKERS = 18;
-const MAX_BIRDS = 100;
-const WALKER_R = 80;
-const BIRD_R = 60;
+/**
+ * People are drawn within PEOPLE_R of the camera and birds within BIRD_R, m; beyond, they are a
+ * few pixels, and the triangle budget is better spent near the path. At most this many of each.
+ */
+export const PEOPLE_R = 60;
+export const BIRD_R = 50;
+const MAX_PEOPLE = 90;
+const MAX_BIRDS = 80;
+/** A chunk's things are looked at only when its centre is this close (its half diagonal past the radius). */
+const CHUNK_REACH = PEOPLE_R + 45;
 
 /** A chunk's life as the layer reads it each frame. */
 export interface LiveChunk {
   life: ChunkLife;
-  /** Seconds (game clock) each flock last scattered, by bird index; -1e9 never. */
+  /** Chunk centre, m. */
+  cx: number;
+  cz: number;
+  /** Seconds (game clock) each bird's flock last scattered, by bird index; -1e9 never. */
   scattered: Float64Array;
 }
 
-export function liveChunk(life: ChunkLife): LiveChunk {
-  return { life, scattered: new Float64Array(life.birds.length / 4).fill(-1e9) };
+export function liveChunk(life: ChunkLife, cx: number, cz: number): LiveChunk {
+  return { life, cx, cz, scattered: new Float64Array(life.birds.length / 4).fill(-1e9) };
 }
 
 export interface LifeLayer {
   mesh: THREE.Mesh;
   /**
-   * Draw the walkers and birds of `chunks` for the camera at (camX, camZ) and the skater at
-   * (skX, skZ). Everything moves on twos, so the buffers are rewritten only when the 12 Hz frame
-   * or `version` (bumped by the caller whenever the chunk list changes) is new.
+   * Draw the people, walkers and birds of `chunks` for the camera at (camX, camZ) and the skater
+   * at (skX, skZ). Everything moves on twos, so the buffers are rewritten only when the 12 Hz
+   * frame or `version` (bumped by the caller whenever the chunk list changes) is new.
    */
   update(chunks: readonly LiveChunk[], nChunks: number, version: number, camX: number, camZ: number, skX: number, skZ: number, dayFrac: number): void;
+  /** Figures, walkers and birds drawn in the latest rewrite. */
+  counts(): { people: number; birds: number };
   dispose(): void;
 }
 
-const WALK_POSES = 2;
+/** A pose built once in a local frame (origin at the feet, facing +z); `part` says which ink each vertex takes. */
+interface Template {
+  pos: Float32Array;
+  part: Uint8Array;
+  col: Float32Array;
+  idx: Uint32Array;
+  nv: number;
+}
+
+/** Part codes in a figure template's colours: 1 shirt, 2 legs, 3 skin, 4 hair, 5 load. */
+const PART_FIG: Figure = { x: 0, y: 0, z: 0, fx: 0, fz: 1, kind: Kind.STAND, shirt: 0x010101, legs: 0x020202, skin: 0x030303, hair: 0x040404, load: 0x050505, keep: 0 };
+
+function templateOf(b: MeshBuilder): Template {
+  const g = b.build();
+  const pos = Float32Array.from(g.getAttribute('position').array as Float32Array);
+  const col = Float32Array.from(g.getAttribute('color').array as Float32Array);
+  const nv = pos.length / 3;
+  const part = new Uint8Array(nv);
+  for (let i = 0; i < nv; i++) part[i] = Math.round(col[i * 3] * 255);
+  const index = g.getIndex();
+  const idx = new Uint32Array(index ? (index.array as ArrayLike<number>) : []);
+  g.dispose();
+  return { pos, part, col, idx, nv };
+}
+
+const KINDS = 5;
 
 export function createLifeLayer(w: World, makeBuilder: () => MeshBuilder): LifeLayer {
-  // Walker templates: one per pose, white-shirted; colours are written per walker.
-  const walkT: { pos: Float32Array; part: Uint8Array; idx: Uint32Array; nv: number }[] = [];
-  for (let p = 0; p < WALK_POSES; p++) {
-    const b = makeBuilder();
-    // Part colours are encoded in the template colour: 1 shirt, 2 legs, 3 skin, 4 hair.
-    const fig: Figure = { x: 0, y: 0, z: 0, fx: 0, fz: 1, kind: Kind.WALK, shirt: 0x010101, legs: 0x020202, skin: 0x030303, hair: 0x040404, load: 0, keep: 0 };
-    meshFigure(b, fig, p);
-    const g = b.build();
-    const pos = g.getAttribute('position').array as Float32Array;
-    const col = g.getAttribute('color').array as Float32Array;
-    const nv = pos.length / 3;
-    const part = new Uint8Array(nv);
-    for (let i = 0; i < nv; i++) part[i] = Math.round(col[i * 3] * 255);
-    const index = g.getIndex();
-    const idx = new Uint32Array(index ? (index.array as ArrayLike<number>) : []);
-    walkT.push({ pos: Float32Array.from(pos), part, idx, nv });
-    g.dispose();
+  // Figure templates by kind and pose.
+  const figT: Template[] = [];
+  for (let k = 0; k < KINDS; k++) {
+    for (let p = 0; p < 2; p++) {
+      const b = makeBuilder();
+      PART_FIG.kind = k as Kind;
+      meshFigure(b, PART_FIG, p);
+      figT.push(templateOf(b));
+    }
   }
-  // Bird templates: perched (pose 0), and two flying wing beats.
-  const birdT: { pos: Float32Array; col: Float32Array; idx: Uint32Array; nv: number }[] = [];
+  // Bird templates: perched, then two wing beats.
+  const birdT: Template[] = [];
   for (let p = 0; p < 3; p++) {
     const b = makeBuilder();
     const ink = 0x3a3a52;
@@ -620,7 +646,6 @@ export function createLifeLayer(w: World, makeBuilder: () => MeshBuilder): LifeL
     } else {
       b.box(0, 0, 0, 0.05, 0.04, 0.1, 1, 0, ink, { top: 0x6b6b85 });
       const up = p === 1 ? 0.18 : -0.08;
-      // Two wing triangles, double-sided.
       for (const s of [-1, 1]) {
         const a = b.vert(s * 0.04, 0.02, -0.06, ink);
         const c = b.vert(s * 0.04, 0.02, 0.07, ink);
@@ -629,33 +654,37 @@ export function createLifeLayer(w: World, makeBuilder: () => MeshBuilder): LifeL
         b.tri(a, d, c);
       }
     }
-    const g = b.build();
-    const pos = Float32Array.from(g.getAttribute('position').array as Float32Array);
-    const col = Float32Array.from(g.getAttribute('color').array as Float32Array);
-    const index = g.getIndex();
-    birdT.push({ pos, col, idx: new Uint32Array(index ? (index.array as ArrayLike<number>) : []), nv: pos.length / 3 });
-    g.dispose();
+    birdT.push(templateOf(b));
   }
-  const maxWalkV = Math.max(...walkT.map((t) => t.nv));
-  const maxWalkI = Math.max(...walkT.map((t) => t.idx.length));
-  const maxBirdV = Math.max(...birdT.map((t) => t.nv));
-  const maxBirdI = Math.max(...birdT.map((t) => t.idx.length));
-  const capV = MAX_WALKERS * maxWalkV + MAX_BIRDS * maxBirdV;
-  const capI = MAX_WALKERS * maxWalkI + MAX_BIRDS * maxBirdI;
+  let maxFigV = 0;
+  let maxFigI = 0;
+  for (const t of figT) {
+    maxFigV = Math.max(maxFigV, t.nv);
+    maxFigI = Math.max(maxFigI, t.idx.length);
+  }
+  let maxBirdV = 0;
+  let maxBirdI = 0;
+  for (const t of birdT) {
+    maxBirdV = Math.max(maxBirdV, t.nv);
+    maxBirdI = Math.max(maxBirdI, t.idx.length);
+  }
+  const capV = MAX_PEOPLE * maxFigV + MAX_BIRDS * maxBirdV;
+  const capI = MAX_PEOPLE * maxFigI + MAX_BIRDS * maxBirdI;
   const pos = new Float32Array(capV * 3);
   const col = new Float32Array(capV * 3);
   const idx = new Uint32Array(capI);
   const geo = new THREE.BufferGeometry();
   const posA = new THREE.BufferAttribute(pos, 3);
   const colA = new THREE.BufferAttribute(col, 3);
+  const idxA = new THREE.BufferAttribute(idx, 1);
   posA.setUsage(THREE.DynamicDrawUsage);
   colA.setUsage(THREE.DynamicDrawUsage);
-  const idxA = new THREE.BufferAttribute(idx, 1);
   idxA.setUsage(THREE.DynamicDrawUsage);
   geo.setAttribute('position', posA);
   geo.setAttribute('color', colA);
   geo.setIndex(idxA);
   geo.setDrawRange(0, 0);
+  // Plain ink: the world ink would print pavers on heads and shoulders.
   const mesh = new THREE.Mesh(geo, inkMaterial());
   mesh.name = 'life';
   mesh.frustumCulled = false;
@@ -665,44 +694,41 @@ export function createLifeLayer(w: World, makeBuilder: () => MeshBuilder): LifeL
   let ni = 0;
   let lastFrame = -1;
   let lastVersion = -1;
-  const put = (tp: Float32Array, tidx: Uint32Array, tnv: number, x: number, y: number, z: number, cs: number, sn: number, colour: (i: number, k: number) => void): void => {
-    const base = nv;
-    for (let i = 0; i < tnv; i++) {
-      const lx = tp[i * 3];
-      const ly = tp[i * 3 + 1];
-      const lz = tp[i * 3 + 2];
-      const k = (base + i) * 3;
-      // Yaw: local +z goes to (sn, cs), local +x to (cs, -sn).
-      pos[k] = x + lx * cs + lz * sn;
-      pos[k + 1] = y + ly;
-      pos[k + 2] = z - lx * sn + lz * cs;
-      colour(i, k);
-    }
-    for (let j = 0; j < tidx.length; j++) idx[ni + j] = tidx[j] + base;
-    ni += tidx.length;
-    nv += tnv;
-  };
-  const setRGB = (k: number, c: number): void => {
+  let people = 0;
+  let birds = 0;
+
+  const ink = (k: number, c: number): void => {
     col[k] = ((c >> 16) & 255) / 255;
     col[k + 1] = ((c >> 8) & 255) / 255;
     col[k + 2] = (c & 255) / 255;
   };
-  let curFig: Figure | null = null;
-  let curPart: Uint8Array | null = null;
-  const walkColour = (i: number, k: number): void => {
-    const f = curFig;
-    const part = curPart;
-    if (f === null || part === null) return;
-    const pc = part[i];
-    setRGB(k, pc === 1 ? f.shirt : pc === 2 ? f.legs : pc === 3 ? f.skin : f.hair);
-  };
-  let curBird: Float32Array | null = null;
-  const birdColour = (i: number, k: number): void => {
-    const c = curBird;
-    if (c === null) return;
-    col[k] = c[i * 3];
-    col[k + 1] = c[i * 3 + 1];
-    col[k + 2] = c[i * 3 + 2];
+
+  /** Copy a template in at (x, y, z), yawed so local +z faces (sn, cs); `f` colours a figure, else the template's own inks. */
+  const put = (t: Template, x: number, y: number, z: number, cs: number, sn: number, f: Figure | null): void => {
+    const base = nv;
+    const tp = t.pos;
+    for (let i = 0; i < t.nv; i++) {
+      const lx = tp[i * 3];
+      const ly = tp[i * 3 + 1];
+      const lz = tp[i * 3 + 2];
+      const k = (base + i) * 3;
+      // Local +x goes to (cs, -sn), local +z to (sn, cs): a proper rotation, so windings hold.
+      pos[k] = x + lx * cs + lz * sn;
+      pos[k + 1] = y + ly;
+      pos[k + 2] = z - lx * sn + lz * cs;
+      if (f === null) {
+        col[k] = t.col[i * 3];
+        col[k + 1] = t.col[i * 3 + 1];
+        col[k + 2] = t.col[i * 3 + 2];
+      } else {
+        const pc = t.part[i];
+        ink(k, pc === 1 ? f.shirt : pc === 2 ? f.legs : pc === 3 ? f.skin : pc === 4 ? f.hair : f.load);
+      }
+    }
+    const ti = t.idx;
+    for (let j = 0; j < ti.length; j++) idx[ni + j] = ti[j] + base;
+    ni += ti.length;
+    nv += t.nv;
   };
 
   return {
@@ -715,21 +741,37 @@ export function createLifeLayer(w: World, makeBuilder: () => MeshBuilder): LifeL
       lastVersion = version;
       nv = 0;
       ni = 0;
-      // Positions step on twos too: the clock of the frame, not of the moment.
+      people = 0;
+      birds = 0;
+      // Positions step on twos as well: the clock of the animation frame.
       const t = (frame * TWOS) / 60;
-      let walkers = 0;
-      let birds = 0;
+      const r2 = PEOPLE_R * PEOPLE_R;
+      const b2 = BIRD_R * BIRD_R;
       for (let c = 0; c < nChunks; c++) {
         const lc = chunks[c];
+        const ddx = lc.cx - camX;
+        const ddz = lc.cz - camZ;
+        if (ddx * ddx + ddz * ddz > CHUNK_REACH * CHUNK_REACH) continue;
         const life = lc.life;
         const share = outShare(life.district, dayFrac);
-        for (let wi = 0; wi < life.walkers.length && walkers < MAX_WALKERS; wi++) {
+        const figs = life.figures;
+        for (let fi = 0; fi < figs.length && people < MAX_PEOPLE; fi++) {
+          const f = figs[fi];
+          if (f.keep >= share) continue;
+          const dx = f.x - camX;
+          const dz = f.z - camZ;
+          if (dx * dx + dz * dz > r2) continue;
+          // Poses alternate on twos, staggered so a crowd never moves in step.
+          put(figT[f.kind * 2 + ((frame + fi) & 1)], f.x, f.y, f.z, f.fz, f.fx, f);
+          people++;
+        }
+        for (let wi = 0; wi < life.walkers.length && people < MAX_PEOPLE; wi++) {
           const wk = life.walkers[wi];
           if (wk.fig.keep >= share) continue;
           const dx = wk.ax - camX;
           const dz = wk.az - camZ;
-          if (dx * dx + dz * dz > WALKER_R * WALKER_R) continue;
-          // Back and forth along the beat, a short pause at each end.
+          if (dx * dx + dz * dz > r2) continue;
+          // Back and forth along the beat, with a short pause at each end.
           const u = (t + wk.phase) / (wk.leg + 0.8);
           const lap = Math.floor(u);
           const fr = Math.min(1, ((u - lap) * (wk.leg + 0.8)) / wk.leg);
@@ -744,11 +786,9 @@ export function createLifeLayer(w: World, makeBuilder: () => MeshBuilder): LifeL
             hz = -hz;
           }
           const hl = Math.sqrt(hx * hx + hz * hz) || 1;
-          const tp = walkT[fr >= 1 ? 0 : (frame + wi) & 1];
-          curFig = wk.fig;
-          curPart = tp.part;
-          put(tp.pos, tp.idx, tp.nv, x, terrainHeight(w, x, z), z, hz / hl, hx / hl, walkColour);
-          walkers++;
+          const tp = fr >= 1 ? figT[Kind.STAND * 2] : figT[Kind.WALK * 2 + ((frame + wi) & 1)];
+          put(tp, x, terrainHeight(w, x, z), z, hz / hl, hx / hl, wk.fig);
+          people++;
         }
         const bd = life.birds;
         for (let bi = 0; bi < bd.length && birds < MAX_BIRDS; bi += 4) {
@@ -757,7 +797,7 @@ export function createLifeLayer(w: World, makeBuilder: () => MeshBuilder): LifeL
           const bz = bd[bi + 2];
           const dx = bx - camX;
           const dz = bz - camZ;
-          if (dx * dx + dz * dz > BIRD_R * BIRD_R) continue;
+          if (dx * dx + dz * dz > b2) continue;
           const k = bi >> 2;
           const sx = bx - skX;
           const sz = bz - skZ;
@@ -767,28 +807,20 @@ export function createLifeLayer(w: World, makeBuilder: () => MeshBuilder): LifeL
             for (let j = 0; j < bd.length; j += 4) if (bd[j + 3] === bd[bi + 3]) lc.scattered[j >> 2] = t;
             since = 0;
           }
+          if (since >= FLY_S && since < AWAY_S) continue;
           const yaw = hash2(k, bd[bi + 3]) * 6.283;
           const cs = Math.cos(yaw);
           const sn = Math.sin(yaw);
           if (since >= 0 && since < FLY_S) {
             // Up and away, wings beating on twos.
-            const tp = birdT[1 + ((frame + k) & 1)];
-            curBird = tp.col;
             const d = since * (3 + 2 * hash2(k, 3));
-            put(tp.pos, tp.idx, tp.nv, bx + sn * d, by + since * 2.5, bz + cs * d, cs, sn, birdColour);
-          } else if (since >= FLY_S && since < AWAY_S) {
-            continue;
+            put(birdT[1 + ((frame + k) & 1)], bx + sn * d, by + since * 2.5, bz + cs * d, cs, sn, null);
           } else {
-            const tp = birdT[0];
-            curBird = tp.col;
-            put(tp.pos, tp.idx, tp.nv, bx, by, bz, cs, sn, birdColour);
+            put(birdT[0], bx, by, bz, cs, sn, null);
           }
           birds++;
         }
       }
-      curFig = null;
-      curPart = null;
-      curBird = null;
       geo.setDrawRange(0, ni);
       if (ni > 0) {
         posA.clearUpdateRanges();
@@ -801,6 +833,9 @@ export function createLifeLayer(w: World, makeBuilder: () => MeshBuilder): LifeL
         idxA.addUpdateRange(0, ni);
         idxA.needsUpdate = true;
       }
+    },
+    counts() {
+      return { people, birds };
     },
     dispose() {
       geo.dispose();
