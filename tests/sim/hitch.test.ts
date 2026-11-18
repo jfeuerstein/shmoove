@@ -307,9 +307,13 @@ describe('chains', () => {
       const events: SimEvent[] = [];
       let hitched = -1;
       let released = -1;
-      for (let i = 0; i < 700; i++) {
+      for (let i = 0; i < 900; i++) {
         // Let go for a moment, then keep the touch armed.
         const gap = hitched >= 0 && i >= hitched + gapAt && i < hitched + gapAt + 6;
+        // RELATCH_COOLDOWN is 2.5 s, longer than a chain lives on the ground after a plain release
+        // (CHAIN_GROUND_GRACE), so the script keeps the chain's ground clock at zero, as if the
+        // skater were bouncing on the tram's roof: only the re-catch rule is under test.
+        if (released >= 0 && sim.player.chainAlive === 1) sim.player.chainGround = 0;
         sim.step({ steer: 0, hold: !gap, hop: false });
         for (const e of sim.events) {
           events.push(e);
