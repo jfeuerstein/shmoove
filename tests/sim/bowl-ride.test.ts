@@ -1,6 +1,6 @@
 /** Real rides over the generated bowl: the shapes have to make (and give back) speed. */
 import { describe, expect, it } from 'vitest';
-import { makeBowl, type Bowl } from '../../src/sim/bowl';
+import { BOWL_RADIUS, makeBowl, type Bowl } from '../../src/sim/bowl';
 import { gearFloor } from '../../src/sim/flow';
 import { Rng } from '../../src/sim/rng';
 import { Sim } from '../../src/sim/sim';
@@ -10,6 +10,8 @@ import { TUCK, launch, run, steer } from './fixtures';
 
 const SEEDS = [1, 2, 3, 4, 5];
 const FLOOR_R = 130;
+/** A mover that gets this close to the edge is leaning on the clamp, not riding the ground. */
+const EDGE_MARGIN = 5;
 
 const bowls = new Map<number, Bowl>();
 function bowl(seed: number): Bowl {
@@ -67,10 +69,11 @@ describe('riding the bowl', () => {
     }
   });
 
-  it('movers launched at 25 m/s into the rim at 16 angles stay inside and are back on the floor within 10 s', () => {
+  it('movers launched at 25 m/s into the rim at 16 angles turn on the bank short of the edge and are back on the floor within 10 s', () => {
     for (const seed of SEEDS) {
       const b = bowl(seed);
       for (let i = 0; i < 16; i++) {
+        let furthest = 0;
         const a = (i / 16) * 2 * Math.PI;
         const sim = new Sim(startAt(b, Math.sin(a) * 126, Math.cos(a) * 126, a));
         launch(sim, 25);
@@ -80,7 +83,7 @@ describe('riding the bowl', () => {
         for (let t = 0; t < 600; t++) {
           sim.step(TUCK);
           const r = Math.hypot(m.x, m.z);
-          expect(r).toBeLessThanOrEqual(b.radius + 1e-9);
+          furthest = Math.max(furthest, r);
           if (r > FLOOR_R + 5) onRim = true;
           if (onRim && r < FLOOR_R) {
             back = true;
@@ -88,11 +91,13 @@ describe('riding the bowl', () => {
           }
         }
         expect({ seed, angle: i, onRim, back }).toEqual({ seed, angle: i, onRim: true, back: true });
+        // It turns round on the bank well short of the edge; the mover's clamp never has to stop it.
+        expect({ seed, angle: i, inside: furthest < BOWL_RADIUS - EDGE_MARGIN }).toEqual({ seed, angle: i, inside: true });
       }
     }
   });
 
-  it('60 s of seeded random stick and hops never leaves the radius or produces a non-finite number', () => {
+  it('60 s of seeded random stick and hops stays well inside the edge and never produces a non-finite number', () => {
     for (const seed of SEEDS) {
       const b = bowl(seed);
       const sim = new Sim(b);
@@ -100,6 +105,8 @@ describe('riding the bowl', () => {
       const m = sim.state.mover;
       let input: InputFrame = TUCK;
       let hold = 0;
+      let worst = 0;
+      let r = 0;
       for (let t = 0; t < 60 * 60; t++) {
         if (hold <= 0) {
           hold = 10 + rng.int(60);
@@ -114,8 +121,11 @@ describe('riding the bowl', () => {
         const hop = rng.chance(1 / 30);
         sim.step(hop ? { ...input, hop: true } : input);
         expect(allFinite(m)).toBe(true);
-        expect(Math.hypot(m.x, m.z)).toBeLessThanOrEqual(b.radius + 1e-9);
+        r = Math.hypot(m.x, m.z);
+        if (r > worst) worst = r;
       }
+      // The radius clamp would hide a mover that reached the edge, so require it never got near.
+      expect({ seed, inside: worst < BOWL_RADIUS - EDGE_MARGIN }).toEqual({ seed, inside: true });
     }
   });
 
