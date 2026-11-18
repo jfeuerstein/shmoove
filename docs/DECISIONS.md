@@ -593,6 +593,30 @@ under **Cut** at the end.
      for budget: wall murals beside the spine (the existing building murals stay), shop names as
      shapes, vendors inside stalls, more than two poses, people beyond 60 m.
 
+122. **Finds: things to find and things they earn** (brief M7f; the owner: "cool reasons to explore
+     the city"). A reducer counts what any world places: painted tiles (`world.pickups`), spots and
+     landmarks (zones), and routes (a `routeStart` and a `routeEnd` zone of one name). Decided here:
+     a tile counts from the feet to the head (1.7 m of body), swept along the path since the last
+     tick, so a fast or airborne skater cannot slip between ticks; a move of more than 4 m in a tick
+     is a teleport and only its end counts. A spot is a cylinder of its radius and half-height
+     max(4 m, radius), found through the path of the last 6 ticks if any of them was airborne or at
+     8 m/s. A landmark's postcard needs its radius in plan and 8 m in height. A best line needs two
+     tricks (one is not a line) and belongs to the district where it ended. Routes are checked on
+     the same 6-tick beat as zones, so run times are multiples of 0.1 s. Tile steps scale to worlds
+     with fewer than 60 tiles (round(step x total / 60), at least 1). Unlock tables are fixed in
+     `finds.ts` (5 tile decks, 5 spot decks, 12 postcard kits); a world with more landmarks or
+     districts than a table cycles it with a numeral ("Sea Salt II"). Unlocks are re-derived from the
+     finds on load, so a save cannot lose one. The tile, spot and route rules are game rules, not
+     feel: they are constants in `finds.ts`, not `FEEL`. Tiles are drawn by a dynamic mesh rewritten
+     on twos (the city's people do the same) rather than instancing: the ink shader has no
+     per-instance colour, and three tier geometries instanced would be three draw calls; the bursts
+     are a second mesh, drawn only while one flies. Two draw calls with tiles and a burst in view,
+     none without. The save is version 3; a version 2 save loads with nothing found. The barrio had
+     not merged, so the e2e route plays the fixture `?world=finds` (the slice with twelve tiles,
+     three spots, two landmarks and a route). Left for a thumb: tile size (1 m) and hang height,
+     the chime's climb, whether 8 m/s is the right bar for a spot, and how busy three tickets at once
+     feel when a tile, an unlock and a stamp come together.
+
 ## Cut
 
 What the original design promised and the game does not have, or has smaller, with why.
