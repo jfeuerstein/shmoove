@@ -17,7 +17,12 @@ export type ToastKind =
   | 'errand-fail'
   | 'conductor'
   | 'conductor-punch'
-  | 'secret';
+  | 'secret'
+  | 'tile'
+  | 'spot'
+  | 'postcard'
+  | 'unlock'
+  | 'best';
 
 export interface Toast<T> {
   id: number;
