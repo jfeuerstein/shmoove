@@ -5,9 +5,11 @@ what to return. The verifier gets the same file.
 
 | Brief | Milestone | Model | Status |
 | --- | --- | --- | --- |
-| `m0-app-shell.md` | M0 | opus | out |
+| `m0-app-shell.md` | M0 | opus | merged |
 | `m1-bowl.md` | M1 | opus | out |
-| `m1-input.md` | M1 | sonnet | out |
+| `m1-input.md` | M1 | sonnet | merged |
+| `m0-pwa.md` | M0 | sonnet | out |
+| `m1-debug-panel.md` | M1 | sonnet | out |
 
 Common to every brief:
 
