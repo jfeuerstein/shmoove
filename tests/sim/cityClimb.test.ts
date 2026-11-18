@@ -8,6 +8,7 @@ import { placePlayer } from '../../src/sim/player';
 import { Sim } from '../../src/sim/sim';
 import { Mode } from '../../src/sim/types';
 import { findZone } from '../../src/sim/world';
+import { wouldCatch } from './helpers';
 
 let city: City;
 beforeAll(() => {
@@ -137,7 +138,9 @@ function climb(legs: Leg[], startZone: string, endZone: string, maxTicks: number
             if (L.overhead && high && d < 2.5 && p.mode === Mode.GROUND) hop = true;
           }
         }
-        hold = nearestWanted && nearest < 9;
+        // And only when the hand would catch the wanted ride: the strap is thrown 14 m, so a hand out
+        // near a lane catches whatever passes first (DECISIONS 119).
+        hold = nearestWanted && nearest < 9 && wouldCatch(sim) === L.index;
       }
     }
     sim.step({ steer, hold, hop });

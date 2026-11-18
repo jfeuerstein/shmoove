@@ -18,7 +18,6 @@ beforeAll(() => {
 const D = District;
 const DAWN = 0.22;
 const DAY = 0.3;
-const DUSK = 0.72;
 const NIGHT = 0.8;
 
 /** DESIGN section 5, written out independently of the ride data. */

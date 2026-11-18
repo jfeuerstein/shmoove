@@ -1,9 +1,10 @@
 import { DAY_TICKS, resetFeel } from '../../src/sim/constants';
 import { compileLine, makeVehicleState, vehicleAt, type LineDef, type VehicleState } from '../../src/sim/lines';
+import { tryHitch } from '../../src/sim/hitch';
 import { placePlayer } from '../../src/sim/player';
-import { Sim } from '../../src/sim/sim';
+import { Sim, clonePlayer } from '../../src/sim/sim';
 import { buildSlice } from '../../src/sim/slice';
-import type { InputFrame, SimEvent } from '../../src/sim/types';
+import type { InputFrame, SimCtx, SimEvent } from '../../src/sim/types';
 import { District, Surface, createWorld, fillSurfaces, finalizeWorld, type World } from '../../src/sim/world';
 
 export type Script = (sim: Sim, i: number) => Partial<InputFrame>;
@@ -120,4 +121,19 @@ export function seekWhen(sim: Sim, li: number, veh: number, pred: (v: VehicleSta
     }
   }
   throw new Error(`vehicle ${veh} of line ${L.id} never satisfies the condition`);
+}
+
+/**
+ * The line a held touch would catch this tick (the hitch's own choice, on a copy of the skater),
+ * or -1. Bots hold only when it is the ride they want: the strap is thrown 14 m (DECISIONS 119),
+ * so a hand out near a lane catches whatever passes first, as a player's would.
+ */
+export function wouldCatch(ctx: SimCtx): number {
+  return wouldCatchVehicle(ctx)?.line ?? -1;
+}
+
+/** As `wouldCatch`, with the vehicle; null when nothing would be caught. */
+export function wouldCatchVehicle(ctx: SimCtx): { line: number; veh: number } | null {
+  const probe: SimCtx = { world: ctx.world, tick: ctx.tick, player: clonePlayer(ctx.player), events: [] };
+  return tryHitch(probe) ? { line: probe.player.hLine, veh: probe.player.hVeh } : null;
 }
