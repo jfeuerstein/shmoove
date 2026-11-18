@@ -5,7 +5,7 @@
 import * as THREE from 'three';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { ChaseCamera, type CamTarget } from '../../src/render/camera';
-import { resetFeel } from '../../src/sim/constants';
+import { FEEL, resetFeel } from '../../src/sim/constants';
 import { Mode } from '../../src/sim/types';
 import { Surface, addSolid, createWorld, fillHeights, fillSurfaces, finalizeWorld, pointBlocked, terrainHeight, type World } from '../../src/sim/world';
 
@@ -213,7 +213,7 @@ describe('chase camera under low cover', () => {
     // Out from under it, the camera goes back up to its usual place.
     const out = target(w, 0, 30, 0, 5);
     for (let i = 0; i < 300; i++) cam.update(out, w, 1 / 60);
-    expect(cam.camera.position.y).toBeGreaterThan(3.5);
+    expect(cam.camera.position.y).toBeGreaterThan(FEEL.CAM_HEIGHT * 0.9);
   });
 
   it('does not look down through an awning at a skater below and beyond it', () => {

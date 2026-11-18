@@ -514,7 +514,7 @@ const now = (): number => performance.now();
 export function createCityView(world: World, camera?: () => THREE.Camera): CityView {
   const group = new THREE.Group();
   group.name = 'city';
-  const mat = inkMaterial();
+  const mat = inkMaterial({ world: true });
   const g = chunkGrid(world);
   const bk = bucketWorld(world, g);
   const jobs: (ChunkJob | null)[] = new Array<ChunkJob | null>(g.ncx * g.ncz * 2).fill(null);

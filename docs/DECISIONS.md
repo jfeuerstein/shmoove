@@ -536,6 +536,23 @@ under **Cut** at the end.
      ending the dead state where a stalled skater could not get anywhere. If the owner reads "no
      push" more strictly than this, lower the cap.
 
+116. **Second verdict: it looks bad, speed is not fun or rewarding, the city is not fun to explore.**
+     Full-size frames showed why: two-thirds of the screen was flat untextured ground under a high
+     camera (nothing streams past, so no speed reads at any speed); cream roofs merged into cream
+     walls with no line between them; and the city is open terraces looked down on, with nothing
+     beside or above the skater. The look and camera answer is item 117; the city answer is a new
+     district built as a street canyon with braided lines (brief `m7e-barrio`), played and judged
+     by the owner before it is rolled out to the rest of the hill.
+117. **The print gets a key plate, the ground gets a texture, the camera gets down.** Ink outlines
+     wherever the scene steps in depth, drawn in the print pass from the depth buffer, fading out
+     by the haze. Pavers on anything walkable and courses on walls, printed by the world's ink
+     shader from world position (no geometry), fading before they shimmer: the ground now streams
+     under the board. Clouds and a haloed sun in the sky; a little more saturation; half the
+     misregistration (wide, it read as a blurred screen). The camera sits lower and closer
+     (`CAM_HEIGHT` 4.2 → 2.9, `CAM_DIST` 6.4 → 5.4), is wider (`CAM_FOV` 76 → 80, +16 at speed),
+     rolls into carves (`CAM_BANK`), and paper streaks rush out from the heading above
+     `CAM_STREAK_SPEED`.
+
 ## Cut
 
 What the original design promised and the game does not have, or has smaller, with why.

@@ -138,17 +138,17 @@ export const FEEL_DEFS = {
   BRAKE_PULL_PX: [72, 20, 300, 'Touch', 'Pulling the finger down this far from where it landed drags a foot, px'],
 
   // --- Camera
-  CAM_DIST: [6.4, 2, 20, 'Camera', 'Distance behind the skater, m'],
-  CAM_HEIGHT: [4.2, 0.5, 12, 'Camera', 'Height above the skater, m'],
-  CAM_LOOK_AHEAD: [10, 0, 20, 'Camera', 'Look target distance ahead of the skater, m'],
-  CAM_LOOK_UP: [0.2, -2, 5, 'Camera', 'Look target height above the board, m'],
+  CAM_DIST: [5.4, 2, 20, 'Camera', 'Distance behind the skater, m'],
+  CAM_HEIGHT: [2.9, 0.5, 12, 'Camera', 'Height above the skater, m'],
+  CAM_LOOK_AHEAD: [12, 0, 20, 'Camera', 'Look target distance ahead of the skater, m'],
+  CAM_LOOK_UP: [0.9, -2, 5, 'Camera', 'Look target height above the board, m'],
   CAM_LOOK_FAR: [32, 5, 80, 'Camera', 'How far ahead the camera reads the ground to decide its tilt, m'],
   CAM_LOOK_SLOPE: [0.6, 0, 1.5, 'Camera', 'How much of the rise or fall ahead goes into the look target'],
   CAM_LOOK_TILT_MAX: [5, 0, 12, 'Camera', 'Most the look target moves up or down for the ground ahead, m'],
   CAM_FRAME_MAX: [22, 5, 40, 'Camera', 'Most the skater may sit below the centre of the view, degrees: the camera pitches down to keep them in frame'],
-  CAM_FOV: [76, 40, 100, 'Camera', 'Vertical field of view at rest, degrees'],
-  CAM_FOV_SPEED: [12, 0, 40, 'Camera', 'Extra field of view at top speed, degrees'],
-  CAM_SPEED_DIST: [3, 0, 12, 'Camera', 'Extra distance at top speed, m'],
+  CAM_FOV: [80, 40, 100, 'Camera', 'Vertical field of view at rest, degrees'],
+  CAM_FOV_SPEED: [16, 0, 40, 'Camera', 'Extra field of view at top speed, degrees'],
+  CAM_SPEED_DIST: [1.8, 0, 12, 'Camera', 'Extra distance at top speed, m'],
   CAM_YAW_RATE: [3.2, 0.5, 15, 'Camera', 'How fast the camera swings behind your direction, 1/s'],
   CAM_POS_RATE: [9, 1, 40, 'Camera', 'How tightly the camera follows position, 1/s'],
   CAM_HITCH_DIST: [3.5, 0, 12, 'Camera', 'Extra distance while hitched, m'],
@@ -156,7 +156,7 @@ export const FEEL_DEFS = {
   CAM_AIR_HEIGHT: [1.2, 0, 8, 'Camera', 'Extra height while airborne, m'],
   CAM_UPHILL_HEIGHT: [2.5, 0, 10, 'Camera', 'Extra height when heading uphill, m'],
   CAM_MIN_CLEAR: [1.2, 0.2, 5, 'Camera', 'Minimum camera height above ground and roofs, m'],
-  CAM_TOP_SPEED: [28, 10, 50, 'Camera', 'Speed at which the speed effects are at full, m/s'],
+  CAM_TOP_SPEED: [24, 10, 50, 'Camera', 'Speed at which the speed effects are at full, m/s'],
   CAM_SHAKE: [0.12, 0, 1, 'Camera', 'Shake scale on stairs, landings and bails'],
   CAM_AIR_FOLLOW: [0.45, 0.05, 1, 'Camera', 'Height follow in the air and on walls, as a share of CAM_POS_RATE (hops read as hops)'],
   CAM_CLIMB_RATE: [2.5, 0.2, 15, 'Camera', 'How fast the measured climb settles, 1/s'],
@@ -171,6 +171,9 @@ export const FEEL_DEFS = {
   CAM_STAIR_SPEED: [6, 0.5, 20, 'Camera', 'Speed on stairs at which the rattle is full, m/s'],
   CAM_TILT_RATE: [2, 0.2, 15, 'Camera', 'How fast the look target tilts for the ground ahead, 1/s'],
   CAM_FOV_RATE: [3, 0.2, 15, 'Camera', 'How fast the field of view follows speed, 1/s'],
+  CAM_BANK: [6, 0, 20, 'Camera', 'How far the camera rolls into a full carve at speed, degrees'],
+  CAM_BANK_RATE: [7, 0.5, 30, 'Camera', 'How fast the roll follows the carve, 1/s'],
+  CAM_STREAK_SPEED: [9, 0, 30, 'Camera', 'Speed streaks start above this, m/s (full at CAM_TOP_SPEED)'],
 } as const satisfies Record<string, Def>;
 
 export type FeelKey = keyof typeof FEEL_DEFS;
