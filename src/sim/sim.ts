@@ -15,6 +15,8 @@ function copyMover(dst: MoverState, src: MoverState): void {
   dst.grounded = src.grounded;
   dst.tucked = src.tucked;
   dst.sliding = src.sliding;
+  dst.latched = src.latched;
+  dst.latchYaw = src.latchYaw;
   dst.airTicks = src.airTicks;
   dst.groundTicks = src.groundTicks;
   dst.hopBuffer = src.hopBuffer;

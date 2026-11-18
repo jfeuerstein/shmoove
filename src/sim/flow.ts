@@ -31,7 +31,7 @@ export function gearForSpeed(speed: number): number {
 export function stepGear(s: SimState): void {
   const m = s.mover;
   if (m.gear < GEAR_COUNT && m.speed >= gearFloor(m.gear + 1)) {
-    m.gear++;
+    while (m.gear < GEAR_COUNT && m.speed >= gearFloor(m.gear + 1)) m.gear++;
     m.gearHold = 0;
     s.events |= EV_GEAR_UP;
     return;

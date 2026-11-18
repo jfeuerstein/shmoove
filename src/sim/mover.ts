@@ -24,6 +24,8 @@ const N: Vec3 = { x: 0, y: 1, z: 0 };
 /** Below this speed the direction of travel means nothing and the stick sets it outright. */
 const STILL = 0.5;
 const PAD_COOLDOWN_TICKS = 30;
+/** A powerslide is over when the mover is within this of where the stick points, rad. */
+const SLIDE_DONE = 0.3;
 
 export function makeMover(terrain: Terrain): MoverState {
   const m: MoverState = {
@@ -38,6 +40,8 @@ export function makeMover(terrain: Terrain): MoverState {
     grounded: true,
     tucked: true,
     sliding: false,
+    latched: false,
+    latchYaw: 0,
     airTicks: 0,
     groundTicks: 0,
     hopBuffer: 0,
@@ -124,6 +128,25 @@ function holdInside(m: MoverState, terrain: Terrain): boolean {
   return true;
 }
 
+/**
+ * The world yaw the stick is asking for. The stick is read against the view, which swings behind
+ * the mover as it turns, so a stick held to one side keeps turning. Pulled back is different: the
+ * direction is fixed when the stick goes back and held until it comes forward again, so pulling
+ * back turns you round once instead of spinning you for as long as you hold it.
+ */
+function wantedYaw(m: MoverState, s: SimState, input: InputFrame): number {
+  const stickAngle = datan2(input.steerX, input.steerY);
+  if (Math.abs(stickAngle) <= FEEL.slideAngle) {
+    m.latched = false;
+    return s.viewYaw - stickAngle;
+  }
+  if (!m.latched) {
+    m.latched = true;
+    m.latchYaw = s.viewYaw - stickAngle;
+  }
+  return m.latchYaw;
+}
+
 function hop(m: MoverState, s: SimState): void {
   if (m.landPending) {
     // Clean: the landing costs nothing and the hop adds a little, less the faster you already go.
@@ -186,21 +209,24 @@ function stepGround(m: MoverState, s: SimState, input: InputFrame, terrain: Terr
   if (speed < 0) speed = 0;
 
   if (steering) {
-    const stickAngle = datan2(input.steerX, input.steerY);
-    const want = s.viewYaw - stickAngle;
+    const want = wantedYaw(m, s, input);
     if (speed < STILL) {
       yaw = want;
     } else {
-      m.sliding = Math.abs(stickAngle) > FEEL.slideAngle && speed > FEEL.runSpeed * 0.6;
+      const off = angleDiff(want, yaw);
+      // A powerslide lasts while the mover is still coming round to a pulled-back stick.
+      m.sliding = m.latched && speed > FEEL.runSpeed * 0.6 && Math.abs(off) > SLIDE_DONE;
       let maxTurn = Math.min(FEEL.turnMax, FEEL.grip / speed) * DT;
       if (m.sliding) maxTurn *= FEEL.slideTurn;
-      const turn = clamp(angleDiff(want, yaw), -maxTurn, maxTurn);
+      const turn = clamp(off, -maxTurn, maxTurn);
       yaw += turn;
       if (speed > FEEL.runSpeed) speed -= FEEL.carveScrub * Math.abs(turn) * speed;
       if (m.sliding) speed = Math.max(0, speed - FEEL.slideBrake * DT);
     }
     const target = FEEL.runSpeed * steerLen;
     if (!m.sliding && speed < target) speed = Math.min(target, speed + FEEL.runAccel * DT);
+  } else {
+    m.latched = false;
   }
   if (speed > FEEL.maxSpeed) speed = FEEL.maxSpeed;
 
@@ -261,7 +287,7 @@ function stepAir(m: MoverState, s: SimState, input: InputFrame, terrain: Terrain
 
   const hs = len2(m.vx, m.vz);
   if (input.carve && hs > STILL && len2(input.steerX, input.steerY) > 1e-3) {
-    const want = s.viewYaw - datan2(input.steerX, input.steerY);
+    const want = wantedYaw(m, s, input);
     const yaw = datan2(m.vx, m.vz);
     const turned = yaw + clamp(angleDiff(want, yaw), -FEEL.airTurn * DT, FEEL.airTurn * DT);
     m.vx = dsin(turned) * hs;
@@ -305,10 +331,10 @@ export function stepMover(s: SimState, input: InputFrame, terrain: Terrain): voi
   const py = m.y;
   const pz = m.z;
 
+  // A tap stays live for a few ticks so one made just before touchdown still hops on landing.
   if (input.hop) m.hopBuffer = FEEL.hopBufferTicks + 1;
+  if (m.grounded && m.hopBuffer > 0) hop(m, s);
   if (m.hopBuffer > 0) m.hopBuffer--;
-
-  if (m.grounded && (input.hop || m.hopBuffer > 0)) hop(m, s);
   if (m.grounded) stepGround(m, s, input, terrain);
   else stepAir(m, s, input, terrain);
 

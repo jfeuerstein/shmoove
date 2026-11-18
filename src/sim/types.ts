@@ -52,6 +52,10 @@ export interface MoverState {
   tucked: boolean;
   /** In a powerslide (stick pulled back at speed). */
   sliding: boolean;
+  /** The stick is pulled back and the turn-around direction is fixed until it comes forward again. */
+  latched: boolean;
+  /** The yaw a pulled-back stick is turning toward. */
+  latchYaw: number;
   /** Ticks since leaving the ground; 0 while grounded. */
   airTicks: number;
   /** Ticks since touching down. */

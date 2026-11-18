@@ -38,8 +38,8 @@ const DEFS = {
   slideTurn: { v: 2.2, min: 1, max: 4, step: 0.1, group: 'carve', note: 'How much tighter a powerslide turns' },
   slideBrake: { v: 14, min: 0, max: 40, step: 1, group: 'carve', note: 'Braking in a powerslide, m/s2' },
   // tuck
-  tuckDrag: { v: 0.035, min: 0, max: 0.3, step: 0.005, group: 'tuck', note: 'Drag while tucked, 1/s. Lower holds speed longer on the flat' },
-  rollFriction: { v: 0.6, min: 0, max: 4, step: 0.1, group: 'tuck', note: 'Constant slowing while tucked, m/s2. Also the gentlest slope that still rolls' },
+  tuckDrag: { v: 0.03, min: 0, max: 0.3, step: 0.005, group: 'tuck', note: 'Drag while tucked, 1/s. Lower holds speed longer on the flat' },
+  rollFriction: { v: 0.4, min: 0, max: 4, step: 0.1, group: 'tuck', note: 'Constant slowing while tucked, m/s2. Also the gentlest slope that still rolls' },
   // hop
   hopSpeed: { v: 7, min: 3, max: 14, step: 0.25, group: 'hop', note: 'Upward speed of a hop, m/s' },
   hopBufferTicks: { v: 9, min: 0, max: 20, step: 1, group: 'hop', note: 'How early a tap before landing still counts, ticks' },
