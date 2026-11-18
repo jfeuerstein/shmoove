@@ -1,0 +1,26 @@
+# Briefs
+
+One file per delegated task. A brief is the contract: goal, owned files, interfaces, acceptance,
+what to return. The verifier gets the same file.
+
+| Brief | Milestone | Model | Status |
+| --- | --- | --- | --- |
+| `m0-app-shell.md` | M0 | opus | out |
+| `m1-bowl.md` | M1 | opus | out |
+| `m1-input.md` | M1 | sonnet | out |
+
+Common to every brief:
+
+- Read `CLAUDE.md` first. Work only in the files the brief says you own. If you need a change
+  anywhere else, stop and report it.
+- You start in a fresh git worktree. Run `npm ci` once. Commit on the branch you were started on, in
+  small commits that say why. Do not push or merge.
+- Lead-owned, never edited: `src/sim/{types,terrain,constants,mover,flow,sim,math,rng}.ts`,
+  `src/render/{camera,look}.ts`, `src/input/source.ts`, `package.json`, the config files.
+- No new dependencies. No asset files. No placeholders, TODOs or stubs. No `any`.
+- For tooling mechanics only (how a runner starts a server, captures console errors, throttles the
+  CPU), you may read the pre-restart versions with `git show 63fa105:<path>` (for example
+  `tests/e2e/run.mjs`, `tests/perf/run.mjs`). That was a different game: take mechanics, not content,
+  and leave no trace of its names.
+- Return: a short summary (what was built, decisions made, anything cut or uncertain), the commands
+  you ran with pass/fail, and the list of changed files. Never file contents.

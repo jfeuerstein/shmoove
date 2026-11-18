@@ -13,11 +13,18 @@ export interface FeelDef {
   min: number;
   max: number;
   step: number;
-  group: 'run' | 'carve' | 'tuck' | 'hop' | 'air' | 'ground' | 'gears' | 'view' | 'camera';
+  group: 'input' | 'run' | 'carve' | 'tuck' | 'hop' | 'air' | 'ground' | 'gears' | 'view' | 'camera';
   note: string;
 }
 
 const DEFS = {
+  // input (read by src/input, never by the sim)
+  stickRadiusPx: { v: 56, min: 20, max: 140, step: 2, group: 'input', note: 'Thumb travel for full stick, CSS px' },
+  stickDeadPx: { v: 8, min: 0, max: 30, step: 1, group: 'input', note: 'Thumb travel that still reads as centred, CSS px' },
+  tapMaxMs: { v: 180, min: 60, max: 400, step: 10, group: 'input', note: 'Longest touch that is still a tap, ms' },
+  tapSlopPx: { v: 12, min: 2, max: 40, step: 1, group: 'input', note: 'Furthest a tap may wander, CSS px' },
+  swipeSpeed: { v: 1.2, min: 0.3, max: 4, step: 0.1, group: 'input', note: 'Upward thumb speed that is a flick, CSS px per ms (swipe scheme)' },
+  swipeMinPx: { v: 28, min: 8, max: 80, step: 2, group: 'input', note: 'Shortest flick, CSS px (swipe scheme)' },
   // run
   runSpeed: { v: 10, min: 4, max: 16, step: 0.5, group: 'run', note: 'Top speed from the stick alone on the flat, m/s' },
   runAccel: { v: 22, min: 5, max: 60, step: 1, group: 'run', note: 'How hard the stick pushes below run speed, m/s2' },
@@ -62,13 +69,13 @@ const DEFS = {
   viewFollow: { v: 3.2, min: 0.5, max: 10, step: 0.1, group: 'view', note: 'How fast the view swings behind your direction of travel, 1/s' },
   viewMinSpeed: { v: 2, min: 0, max: 8, step: 0.25, group: 'view', note: 'Below this speed the view stops swinging, m/s' },
   // camera
-  camDist: { v: 7.5, min: 3, max: 20, step: 0.25, group: 'camera', note: 'Distance behind the mover in gear 1, m' },
-  camHeight: { v: 4.6, min: 1, max: 15, step: 0.2, group: 'camera', note: 'Height above the mover in gear 1, m' },
+  camDist: { v: 8.5, min: 3, max: 20, step: 0.25, group: 'camera', note: 'Distance behind the mover in gear 1, m' },
+  camHeight: { v: 5.4, min: 1, max: 15, step: 0.2, group: 'camera', note: 'Height above the mover in gear 1, m' },
   camDistPerGear: { v: 1.1, min: 0, max: 4, step: 0.1, group: 'camera', note: 'Pull-back per gear, m' },
   camHeightPerGear: { v: 0.7, min: 0, max: 3, step: 0.1, group: 'camera', note: 'Rise per gear, m' },
-  camLookAhead: { v: 9, min: 0, max: 30, step: 0.5, group: 'camera', note: 'How far ahead of the mover the camera aims, m' },
-  camFov: { v: 64, min: 40, max: 100, step: 1, group: 'camera', note: 'Vertical field of view in gear 1, degrees' },
-  camFovPerGear: { v: 4, min: 0, max: 10, step: 0.5, group: 'camera', note: 'Field of view added per gear, degrees' },
+  camLookAhead: { v: 10, min: 0, max: 30, step: 0.5, group: 'camera', note: 'How far ahead of the mover the camera aims, m' },
+  camFov: { v: 76, min: 40, max: 110, step: 1, group: 'camera', note: 'Vertical field of view in gear 1, degrees' },
+  camFovPerGear: { v: 3.5, min: 0, max: 10, step: 0.5, group: 'camera', note: 'Field of view added per gear, degrees' },
   camPosRate: { v: 9, min: 1, max: 30, step: 0.5, group: 'camera', note: 'How tightly the camera tracks the mover, 1/s' },
   camZoomRate: { v: 2.2, min: 0.3, max: 10, step: 0.1, group: 'camera', note: 'How fast pull-back and field of view follow the gear, 1/s' },
   camLandKick: { v: 0.05, min: 0, max: 0.3, step: 0.01, group: 'camera', note: 'Camera dip per m/s of landing impact, m' },
