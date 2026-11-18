@@ -518,18 +518,12 @@ describe('what stands on the hill', () => {
   });
 });
 
-describe('no traps', () => {
-  it('a skater left anywhere above the docks rolls down, rests on flat ground or keeps rolling: 400 drops', () => {
-    // The strict rule: a skater with no push can only come to rest where the ground under them is
-    // nearly level, or where something pins them. So no run may end at rest (under 0.2 m/s for its
-    // last 5 s) where the terrain under the skater is steeper than 1.5%: that is a pin. None rocking
-    // on the spot, at most one bail each, and bails in under 7.5% of runs. The city is skated without
-    // its rides: this is about the ground, not traffic.
+function dropTest(drops: number, seed: number): void {
     const w: World = { ...city.world, lines: [] };
-    const rng = new Rng(4242);
+    const rng = new Rng(seed);
     const ok = new Set<number>([Surface.STREET, Surface.PLAZA, Surface.STAIRS]);
     const starts: [number, number, number][] = [];
-    while (starts.length < 400) {
+    while (starts.length < drops) {
       const ix = rng.int(w.nx);
       const iz = rng.int(w.nz);
       const x = w.minX + (ix + 0.5) * w.cell;
@@ -589,7 +583,19 @@ describe('no traps', () => {
     expect(problems, measured).toEqual([]);
     // Bails stay rare: under 7.5 % of runs (was 5 % for the old board; measured 5.5 %).
     expect(bailRuns / starts.length, measured).toBeLessThan(0.075);
+}
+
+describe('no traps', () => {
+  it('a skater left anywhere above the docks rolls down, rests on flat ground or keeps rolling: 400 drops', () => {
+    dropTest(400, 4242);
   }, 120_000);
+
+  // The board is twice as fast as when the 400 drops were chosen and reaches more of the hill:
+  // a second, larger set from another seed (DECISIONS 126).
+  it('the same for 800 more drops from another seed', () => {
+    dropTest(800, 777);
+  }, 240_000);
+
 
   it('a skater at rest in the middle of any landing on a stair street starts rolling again', () => {
     // Landings found by walking each stair street's axis: a stretch of at least 4 m flatter than
