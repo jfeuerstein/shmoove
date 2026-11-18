@@ -32,6 +32,7 @@ repairing. Numbers in the outcomes refer to `docs/DECISIONS.md`.
 | [m6h-secrets-finishable](m6h-secrets-finishable.md) | implementer | Secrets a player can finish, rides that set you down, saves that keep the day | Merged; decisions 94–99 |
 | [m6i-verify-final](m6i-verify-final.md) | verifier | Check the onboarding fixes, finishable secrets, the planted foot and the camera | Running alongside M6j; its report goes to the lead and is not in this tree |
 | [m6j-final-docs-audit](m6j-final-docs-audit.md) | implementer | Documents that match the code, two small defects, the ship audit | This task; decisions 102–105 |
+| [m7a-controller-fallout](m7a-controller-fallout.md) | implementer | The game in line with the new controller: the brake end to end, re-specified tests, every scripted run re-found by a command | Decisions 121–127; three city tests left for the lead (crossings, the D2-T2 overtake, the 800-drop findings) |
 
 ## Re-finding the scripted runs
 
