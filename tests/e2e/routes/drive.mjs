@@ -7,7 +7,7 @@ const FORWARD = { steerX: 0, steerY: 1, carve: true };
 
 export default {
   name: 'drive',
-  query: '?hook',
+  query: '?hook&flat',
   async run(t) {
     const { page, hook, check } = t;
     await hook.pause(true);

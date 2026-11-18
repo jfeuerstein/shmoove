@@ -16,7 +16,7 @@ async function settle(hook, ticks) {
 
 export default {
   name: 'debug',
-  query: '?debug&hook',
+  query: '?debug&hook&flat',
   async run(t) {
     const { page, hook, check } = t;
     await hook.pause(true);

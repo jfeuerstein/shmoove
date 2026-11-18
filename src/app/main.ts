@@ -14,6 +14,7 @@ import type { InputSource, Scheme } from '../input/source';
 import { TouchInput } from '../input/touch';
 import { DT } from '../sim/constants';
 import { Sim } from '../sim/sim';
+import { BOWL_RADIUS, makeBowl } from '../sim/bowl';
 import { flatTerrain, type Terrain } from '../sim/terrain';
 import { makeInputFrame } from '../sim/types';
 import { DebugPanel } from '../ui/debugPanel';
@@ -26,12 +27,9 @@ import { registerPwa } from './pwa';
 import { browserStorage, Settings } from './settings';
 import { HookInput, installTestHook, type TestHook } from './testHook';
 
-/** Radius of the play area until the bowl lands, m (the bowl's own radius). */
-const PLAY_RADIUS = 170;
-
 /** The one place the terrain is made. */
-function makeTerrain(_params: Params): Terrain {
-  return flatTerrain(PLAY_RADIUS);
+function makeTerrain(params: Params): Terrain {
+  return params.flat ? flatTerrain(BOWL_RADIUS) : makeBowl(params.seed);
 }
 
 /** The one place the input source is made: the thumb, with the test hook's script laid over it. */

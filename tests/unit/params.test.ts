@@ -4,7 +4,7 @@ import { parseParams } from '../../src/app/params';
 describe('parseParams', () => {
   it('has defaults for an empty query', () => {
     for (const q of ['', '?']) {
-      expect(parseParams(q)).toEqual({ debug: false, hook: false, perf: false, seed: 1, scheme: 'tuck' });
+      expect(parseParams(q)).toEqual({ debug: false, hook: false, perf: false, flat: false, seed: 1, scheme: 'tuck' });
     }
   });
 
