@@ -67,12 +67,25 @@ export interface Rail {
 export interface Zone {
   id: string;
   name: string;
-  /** 'spawn', 'stop', 'errand', 'conductor', 'secret', 'landmark'. */
+  /** 'spawn', 'stop', 'errand', 'conductor', 'secret', 'landmark', 'spot' (a named gap or place found by skating through it). */
   kind: string;
   x: number;
   y: number;
   z: number;
   r: number;
+}
+
+/** Something to find: a painted tile hanging in the air on a line, a detour or a hiding place. */
+export interface Pickup {
+  /** Index in `World.pickups`. */
+  index: number;
+  /** 'tile' today; the kind decides what is drawn and counted. */
+  kind: string;
+  x: number;
+  y: number;
+  z: number;
+  /** 0 on the obvious lines (a trail that teaches the route), 1 on a detour, 2 hidden. */
+  tier: number;
 }
 
 export interface Band {
@@ -96,6 +109,8 @@ export interface World {
   solids: Solid[];
   rails: Rail[];
   zones: Zone[];
+  /** Things to find, in a fixed order (their index is their identity in saves). */
+  pickups: Pickup[];
   lines: CompiledLine[];
   bands: Band[];
   spawn: { x: number; z: number; heading: number };
@@ -141,6 +156,7 @@ export function createWorld(o: WorldOpts): World {
     solids: [],
     rails: [],
     zones: [],
+    pickups: [],
     lines: [],
     bands: [{ district: District.DOCKS, zMin: -Infinity, zMax: Infinity }],
     spawn: { x: 0, z: 0, heading: 0 },
@@ -217,6 +233,12 @@ export function addRail(w: World, pts: ArrayLike<number>, kind = 'handrail'): Ra
 export function addZone(w: World, z: Zone): Zone {
   w.zones.push(z);
   return z;
+}
+
+export function addPickup(w: World, kind: string, x: number, y: number, z: number, tier = 0): Pickup {
+  const p: Pickup = { index: w.pickups.length, kind, x, y, z, tier };
+  w.pickups.push(p);
+  return p;
 }
 
 export function findZone(w: World, id: string): Zone | null {

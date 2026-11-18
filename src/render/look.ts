@@ -57,6 +57,9 @@ export const LOOK = {
   uSunColor: { value: rgb(INK.white) },
   /** Halftone dot pitch in device pixels. */
   uDotPx: { value: 7 },
+  /** Printed paver size on the ground and course height on walls, m. */
+  uPaver: { value: 0.8 },
+  uCourse: { value: 0.9 },
 };
 
 const HALFTONE_GLSL = /* glsl */ `
@@ -101,6 +104,8 @@ const INK_FRAG = /* glsl */ `
   uniform float uNight;
   uniform vec3 uGlowColor;
   uniform float uDotPx;
+  uniform float uPaver;
+  uniform float uCourse;
   varying vec3 vColor;
   varying vec3 vWorld;
   varying float vGlow;
@@ -114,6 +119,31 @@ const INK_FRAG = /* glsl */ `
     float darkness = (0.28 - ndl) / 1.0;
     float dots = halftone(gl_FragCoord.xy, uDotPx, darkness);
     vec3 base = vColor * uLitTint;
+    #ifdef WORLD_PRINT
+      // Printed texture from where the surface is in the world, so the ground streams past under
+      // the board (flat colour gives the eye nothing to judge speed by) and walls have a scale:
+      // pavers in a running bond on anything walkable, courses on walls. Both fade out before
+      // they get fine enough on screen to shimmer.
+      if (n.y > 0.72) {
+        vec2 p = vWorld.xz / uPaver;
+        p.x += 0.5 * step(1.0, mod(floor(p.y), 2.0));
+        vec2 f = fract(p);
+        vec2 w = fwidth(p);
+        float fade = 1.0 - smoothstep(0.12, 0.45, max(w.x, w.y));
+        float jx = smoothstep(0.0, w.x * 1.5 + 0.018, min(f.x, 1.0 - f.x));
+        float jy = smoothstep(0.0, w.y * 1.5 + 0.018, min(f.y, 1.0 - f.y));
+        float joint = (1.0 - min(jx, jy)) * fade;
+        float h = fract(sin(dot(floor(p), vec2(127.1, 311.7))) * 43758.5453);
+        base *= 1.0 + (h - 0.5) * 0.16 * fade;
+        base = mix(base, base * 0.7, joint);
+      } else if (abs(n.y) < 0.3) {
+        float c = vWorld.y / uCourse;
+        float f = fract(c);
+        float w = fwidth(c);
+        float fade = 1.0 - smoothstep(0.12, 0.45, w);
+        base = mix(base, base * 0.82, (1.0 - smoothstep(0.0, w * 1.5 + 0.03, min(f, 1.0 - f))) * fade);
+      }
+    #endif
     vec3 col = mix(base, base * uShadowInk, dots);
     // Lamps and windows come on at night, and ignore the shadow screen.
     col = mix(col, uGlowColor, clamp(vGlow * uNight, 0.0, 1.0));
@@ -123,13 +153,18 @@ const INK_FRAG = /* glsl */ `
 `;
 
 let sharedInk: THREE.ShaderMaterial | null = null;
+let sharedWorldInk: THREE.ShaderMaterial | null = null;
 
 /**
- * The material for all world geometry. One shared instance by default (one program, one state);
- * pass `{ unique: true }` for a variant (e.g. double-sided).
+ * The material for all ink geometry. One shared instance by default (one program, one state);
+ * pass `{ unique: true }` for a variant (e.g. double-sided). `{ world: true }` is the shared
+ * material for the static world (terrain, buildings, props): the same ink plus the printed
+ * pavers and courses, which things that move (the skater, rides, markers) must not carry.
  */
-export function inkMaterial(opts: { unique?: boolean; doubleSided?: boolean } = {}): THREE.ShaderMaterial {
-  if (!opts.unique && !opts.doubleSided && sharedInk) return sharedInk;
+export function inkMaterial(opts: { unique?: boolean; doubleSided?: boolean; world?: boolean } = {}): THREE.ShaderMaterial {
+  const shared = !opts.unique && !opts.doubleSided;
+  if (shared && opts.world && sharedWorldInk) return sharedWorldInk;
+  if (shared && !opts.world && sharedInk) return sharedInk;
   const m = new THREE.ShaderMaterial({
     uniforms: {
       uSunDir: LOOK.uSunDir,
@@ -141,14 +176,18 @@ export function inkMaterial(opts: { unique?: boolean; doubleSided?: boolean } = 
       uNight: LOOK.uNight,
       uGlowColor: LOOK.uGlowColor,
       uDotPx: LOOK.uDotPx,
+      uPaver: LOOK.uPaver,
+      uCourse: LOOK.uCourse,
     },
+    defines: opts.world ? { WORLD_PRINT: 1 } : {},
     vertexShader: INK_VERT,
     fragmentShader: INK_FRAG,
     vertexColors: true,
     side: opts.doubleSided ? THREE.DoubleSide : THREE.FrontSide,
   });
-  m.name = 'ink';
-  if (!opts.unique && !opts.doubleSided) sharedInk = m;
+  m.name = opts.world ? 'ink-world' : 'ink';
+  if (shared && opts.world) sharedWorldInk = m;
+  else if (shared) sharedInk = m;
   return m;
 }
 
@@ -250,14 +289,30 @@ export function createSky(): THREE.Mesh {
       varying vec3 vDir;
       ${HALFTONE_GLSL}
       float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+      float vnoise(vec2 p) {
+        vec2 i = floor(p);
+        vec2 f = fract(p);
+        f = f * f * (3.0 - 2.0 * f);
+        return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x), f.y);
+      }
       void main() {
         vec3 d = normalize(vDir);
         // Flat upper sky; a band of big print dots carries it into the horizon ink.
         float t = clamp(d.y * 3.4 + 0.04, 0.0, 1.0);
         float band = halftone(gl_FragCoord.xy, uDotPx * 2.4, 1.0 - t);
         vec3 col = mix(uSkyTop, uSkyHorizon, band);
+        // Clouds: flat cut-paper shapes low in the sky, with a printed underside.
+        vec2 cp = vec2(atan(d.z, d.x) * 2.6, d.y * 11.0);
+        float cn = vnoise(cp) * 0.62 + vnoise(cp * 2.3 + 7.1) * 0.38;
+        float where = smoothstep(0.04, 0.12, d.y) * (1.0 - smoothstep(0.34, 0.6, d.y));
+        float cloud = smoothstep(0.56, 0.58, cn) * where;
+        float under = smoothstep(0.56, 0.58, vnoise(cp + vec2(0.0, 0.16)) * 0.62 + vnoise((cp + vec2(0.0, 0.16)) * 2.3 + 7.1) * 0.38) * where;
+        vec3 cloudInk = mix(vec3(1.0, 0.985, 0.95), uSkyTop * 1.25 + 0.12, uNight * 0.8);
+        col = mix(col, mix(cloudInk, cloudInk * vec3(0.84, 0.86, 0.96), halftone(gl_FragCoord.xy, uDotPx * 1.2, 0.5 * (1.0 - under))), cloud);
+        // The sun (or moon): a flat disc in a ring of print dots.
         float sun = dot(d, uSunDir);
-        col = mix(col, uSunColor, step(0.9972, sun));
+        float halo = halftone(gl_FragCoord.xy, uDotPx * 1.5, 0.8 * smoothstep(0.976, 0.9955, sun));
+        col = mix(col, uSunColor, max(step(0.9955, sun), halo * 0.85));
         // Stars: sparse dots on a direction grid.
         vec2 g = vec2(atan(d.z, d.x) * 40.0, d.y * 60.0);
         float star = step(0.985, hash(floor(g))) * step(length(fract(g) - 0.5), 0.16) * step(0.05, d.y);
@@ -347,6 +402,8 @@ export interface Riso {
   /** Render `scene` through the print pass (or straight to the screen when disabled). */
   render(renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.Camera): void;
   setSize(width: number, height: number, pixelRatio: number): void;
+  /** How fast the skater is going, 0..1 of full speed, and a clock in seconds: drives the speed streaks. */
+  setSpeed(k: number, time: number): void;
   enabled: boolean;
   dispose(): void;
 }
@@ -363,11 +420,24 @@ export function createRiso(): Riso {
     magFilter: THREE.LinearFilter,
     generateMipmaps: false,
   });
+  // Depth is read back by the print pass to draw ink outlines where the scene steps in depth.
+  const depth = new THREE.DepthTexture(4, 4);
+  depth.minFilter = THREE.NearestFilter;
+  depth.magFilter = THREE.NearestFilter;
+  target.depthTexture = depth;
   const mat = new THREE.ShaderMaterial({
     uniforms: {
       tScene: { value: target.texture },
+      tDepth: { value: depth },
       uTexel: { value: new THREE.Vector2(1, 1) },
       uPx: { value: 2 },
+      uNear: { value: 0.3 },
+      uFar: { value: 1200 },
+      uInk: { value: rgb(INK.ink) },
+      uFogFar: LOOK.uFogFar,
+      uNight: LOOK.uNight,
+      uSpeed: { value: 0 },
+      uTime: { value: 0 },
     },
     vertexShader: /* glsl */ `
       varying vec2 vUv;
@@ -378,8 +448,16 @@ export function createRiso(): Riso {
     `,
     fragmentShader: /* glsl */ `
       uniform sampler2D tScene;
+      uniform sampler2D tDepth;
       uniform vec2 uTexel;
       uniform float uPx;
+      uniform float uNear;
+      uniform float uFar;
+      uniform vec3 uInk;
+      uniform float uFogFar;
+      uniform float uNight;
+      uniform float uSpeed;
+      uniform float uTime;
       varying vec2 vUv;
       float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
       float vnoise(vec2 p) {
@@ -388,19 +466,62 @@ export function createRiso(): Riso {
         f = f * f * (3.0 - 2.0 * f);
         return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x), f.y);
       }
+      // View distance, m, from the depth buffer.
+      float dist(vec2 uv) {
+        float z = texture2D(tDepth, uv).x * 2.0 - 1.0;
+        return (2.0 * uNear * uFar) / (uFar + uNear - z * (uFar - uNear));
+      }
       void main() {
-        // Plate offsets in device pixels: fixed, like a real mis-fed sheet.
-        vec2 offPink = vec2(1.15, 0.55) * uPx * uTexel;
-        vec2 offCobalt = vec2(-0.7, 0.95) * uPx * uTexel;
+        // Plate offsets in device pixels: fixed, like a real mis-fed sheet. Slight: a wide offset
+        // reads as a blurred screen, not as print.
+        vec2 offPink = vec2(0.62, 0.3) * uPx * uTexel;
+        vec2 offCobalt = vec2(-0.4, 0.52) * uPx * uTexel;
         vec3 c = texture2D(tScene, vUv).rgb;
         c.r = texture2D(tScene, vUv + offPink).r;
         c.b = texture2D(tScene, vUv + offCobalt).b;
+
+        // The key plate: an ink line wherever the scene steps in depth (silhouettes, roof edges,
+        // the skater against the street). Second differences, so a receding floor draws nothing.
+        // The line thins out with distance and is gone by the haze, so the far city stays quiet.
+        vec2 o = uTexel * uPx * 0.9;
+        float d = dist(vUv);
+        float dl = dist(vUv - vec2(o.x, 0.0));
+        float dr = dist(vUv + vec2(o.x, 0.0));
+        float du = dist(vUv + vec2(0.0, o.y));
+        float dd = dist(vUv - vec2(0.0, o.y));
+        float nearest = min(d, min(min(dl, dr), min(du, dd)));
+        float step2 = abs(dl + dr - 2.0 * d) + abs(du + dd - 2.0 * d);
+        float line = smoothstep(0.035, 0.09, step2 / nearest);
+        line *= 1.0 - smoothstep(uFogFar * 0.45, uFogFar * 0.95, nearest);
+        vec3 ink = mix(uInk, uInk * 0.6 + vec3(0.0, 0.02, 0.1), uNight);
+        c = mix(c, ink, line * 0.9);
+
+        // Speed: thin paper streaks rushing out from where you are heading, at the edges of the
+        // sheet. Nothing below a jog; dense at full speed.
+        if (uSpeed > 0.02) {
+          vec2 q = vUv - vec2(0.5, 0.42);
+          q.x *= uTexel.y / uTexel.x;
+          float r = length(q);
+          float a = atan(q.y, q.x);
+          float lane = floor(a * 46.0);
+          float seed = hash(vec2(lane, 3.7));
+          float along = fract(r * (1.6 + seed) - uTime * (1.4 + 2.2 * seed) - seed * 7.0);
+          float dash = smoothstep(0.0, 0.12, along) * (1.0 - smoothstep(0.32, 0.5, along));
+          float thin = 1.0 - smoothstep(0.1, 0.34, abs(fract(a * 46.0) - 0.5));
+          float edge = smoothstep(0.24, 0.62, r);
+          float on = step(1.0 - uSpeed * 0.7, seed);
+          c = mix(c, vec3(1.0, 0.985, 0.95), dash * thin * edge * on * (0.35 + 0.45 * uSpeed));
+        }
+
         // Paper grain and uneven ink lay-down.
         vec2 frag = gl_FragCoord.xy;
         float grain = hash(floor(frag / max(1.0, uPx * 0.5)));
         float density = vnoise(frag / (90.0 * uPx));
-        c *= 0.965 + 0.05 * density;
-        c += (grain - 0.5) * 0.035;
+        c *= 0.975 + 0.04 * density;
+        c += (grain - 0.5) * 0.028;
+        // A little more ink than the plates put down: flat colour should sing, not sit in the paper.
+        float luma = dot(c, vec3(0.299, 0.587, 0.114));
+        c = clamp(mix(vec3(luma), c, 1.18), 0.0, 1.0);
         // Paper shows through: nothing is ever pure black or pure white.
         c = mix(vec3(0.075, 0.07, 0.13), vec3(0.985, 0.965, 0.93), c);
         gl_FragColor = vec4(c, 1.0);
@@ -426,6 +547,9 @@ export function createRiso(): Riso {
         renderer.render(scene, camera);
         return;
       }
+      const cam = camera as THREE.PerspectiveCamera;
+      mat.uniforms.uNear.value = cam.near;
+      mat.uniforms.uFar.value = cam.far;
       renderer.setRenderTarget(target);
       renderer.render(scene, camera);
       renderer.setRenderTarget(null);
@@ -439,8 +563,13 @@ export function createRiso(): Riso {
       mat.uniforms.uPx.value = pixelRatio;
       LOOK.uDotPx.value = 3.6 * pixelRatio;
     },
+    setSpeed(k, time) {
+      mat.uniforms.uSpeed.value = k < 0 ? 0 : k > 1 ? 1 : k;
+      mat.uniforms.uTime.value = time % 1000;
+    },
     dispose() {
       target.dispose();
+      depth.dispose();
       mat.dispose();
       geo.dispose();
     },
