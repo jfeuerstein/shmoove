@@ -561,46 +561,6 @@ under **Cut** at the end.
      and the clock stops while towed. The ride chain (the original design's, which gates the
      summit) is untouched and runs alongside. The sim raises `flow` and `flowEnd`; showing and
      sounding them is the HUD and audio's job (brief `m7d`).
-119. **[M7a] A chalk line records the brake without growing.** Frames widen to 16 bits (brake in
-     bit 8). A line that brakes sets the top bit of its packed tick count (lines are never longer
-     than 2^15 ticks) and adds a fourth section of brake toggles to the coded stream; a line that
-     never brakes codes to exactly the bytes it did before the brake existed, so codes stay
-     canonical and no larger. `CHALK_VERSION` stays 2 (the brief said 1; the codes have been version
-     2 since M5a and nothing has shipped: 109).
-120. **[M7a] The lesson shows the brake once and never needs it.** The first lead to a waiting spot
-     says "PULL DOWN TO STOP" (a pull-down glyph) until the skater stands in the ring, then "HOLD FOR
-     THE RIDE". Once they have stood in a ring, braked to a stop anywhere, or hitched, every later
-     lead says "HOLD FOR THE RIDE" from the start. Completion stays carve, hitch, ink, sling: with
-     6.5 m of reach a ride is caught rolling past, and that teaches the hitch as well. The flag is
-     not saved; a lesson resumed from a save may show the brake once more.
-121. **[M7a] Errands are taken by stopping for them.** A resting thumb is always "holding", so an
-     offer that filled on a hold would be taken by rolling through. It now fills while the skater
-     brakes or stands (under `OFFER_STAND_SPEED`, 1 m/s) in the giver's ring, slower than 4 m/s, not
-     hitched, with no ride in reach; the ticket says "PULL DOWN TO TAKE" (`src/ui/errandHud.ts`, one
-     string outside the brief's files). After an errand starts or ends, another offer fills only once
-     the skater has rolled on (not braking, faster than a stand) or left the giver zones; before,
-     that was "the touch must lift".
-122. **[M7a] The tests that asserted the old design say the new one.** Stairs: top speed on the
-     slice's flight 9–15 m/s (measured 11.9) and over 200 ticks on the steps; the rail at least 15 %
-     quicker over the same flight, top step to bottom (148 ticks against 249, 41 %, with flow), and
-     off the end above 16 m/s (22.5). The old comparison timed the rail to 8 m past the stairs
-     against the stairs to their foot from a start 10 m further down. A square wall hit bails at
-     `WALL_BAIL_SPEED` + 3 and knocks you back without a bail at `WALL_BAIL_SPEED` − 2; a tram flank
-     likewise (from 12 m out: from 9 m the faster skater crosses the lane before the tram arrives).
-     The tumble is over within two ticks of `BAIL_TIME`. The 400-drop city test keeps its exact pin
-     rule and one bail a run at most; its bail share goes from under 5 % to under 7.5 % (measured
-     with flow: 22 of 400, 5.5 %; at most 1 in a run). The Mercado wanderer meets fewer awnings and
-     roofs because it leaves the Mercado early: thresholds 6 bounces, 7 roofs, 50 grinds against a
-     measured 9, 10, 68 (were 12, 30, 40).
-123. **[M7a] Bots brake where they stood, and hold only for the ride they want.** The scripted bots
-     pull down to stand at a stop and to stop short of a target coming up too fast; a plan task can
-     ask for a careful line (`slow`). With 6.5 m of reach a hand out at a stop caught whatever passed
-     in the next lane (the full-game bot caught tram 5 at Bulevar instead of a moped), so the bot
-     holds only when no other line's strap is in reach. The full-game bot's waiting hand is
-     deliberate, not resting: a resting thumb on the full plan catches every ride it passes. The
-     first-launch player bots rest a thumb on the glass whenever they are not steering, as a person
-     does (the brief's acceptance).
-
 119. **The strap is thrown, not reached with** (owner: "latch onto vehicles from further away").
      `HITCH_REACH` 6.5 → 14 m. A catch from beyond `HITCH_SIGHT` (5 m) needs a clear line to the
      grab point (no catching a tram through a house); the strap then reels the skater in at
@@ -616,6 +576,45 @@ under **Cut** at the end.
      keep their timing: the summit chain depends on it. The meetings, the conductor and errand
      limits, the new-game clock and the scripted runs are found again by task M7a. Worst view:
      96 draw calls (was 71), 155k triangles.
+121. **[M7a] A chalk line records the brake without growing.** Frames widen to 16 bits (brake in
+     bit 8). A line that brakes sets the top bit of its packed tick count (lines are never longer
+     than 2^15 ticks) and adds a fourth section of brake toggles to the coded stream; a line that
+     never brakes codes to exactly the bytes it did before the brake existed, so codes stay
+     canonical and no larger. `CHALK_VERSION` stays 2 (the brief said 1; the codes have been version
+     2 since M5a and nothing has shipped: 109).
+122. **[M7a] The lesson shows the brake once and never needs it.** The first lead to a waiting spot
+     says "PULL DOWN TO STOP" (a pull-down glyph) until the skater stands in the ring, then "HOLD FOR
+     THE RIDE". Once they have stood in a ring, braked to a stop anywhere, or hitched, every later
+     lead says "HOLD FOR THE RIDE" from the start. Completion stays carve, hitch, ink, sling: with
+     6.5 m of reach a ride is caught rolling past, and that teaches the hitch as well. The flag is
+     not saved; a lesson resumed from a save may show the brake once more.
+123. **[M7a] Errands are taken by stopping for them.** A resting thumb is always "holding", so an
+     offer that filled on a hold would be taken by rolling through. It now fills while the skater
+     brakes or stands (under `OFFER_STAND_SPEED`, 1 m/s) in the giver's ring, slower than 4 m/s, not
+     hitched, with no ride in reach; the ticket says "PULL DOWN TO TAKE" (`src/ui/errandHud.ts`, one
+     string outside the brief's files). After an errand starts or ends, another offer fills only once
+     the skater has rolled on (not braking, faster than a stand) or left the giver zones; before,
+     that was "the touch must lift".
+124. **[M7a] The tests that asserted the old design say the new one.** Stairs: top speed on the
+     slice's flight 9–15 m/s (measured 11.9) and over 200 ticks on the steps; the rail at least 15 %
+     quicker over the same flight, top step to bottom (148 ticks against 249, 41 %, with flow), and
+     off the end above 16 m/s (22.5). The old comparison timed the rail to 8 m past the stairs
+     against the stairs to their foot from a start 10 m further down. A square wall hit bails at
+     `WALL_BAIL_SPEED` + 3 and knocks you back without a bail at `WALL_BAIL_SPEED` − 2; a tram flank
+     likewise (from 12 m out: from 9 m the faster skater crosses the lane before the tram arrives).
+     The tumble is over within two ticks of `BAIL_TIME`. The 400-drop city test keeps its exact pin
+     rule and one bail a run at most; its bail share goes from under 5 % to under 7.5 % (measured
+     with flow: 22 of 400, 5.5 %; at most 1 in a run). The Mercado wanderer meets fewer awnings and
+     roofs because it leaves the Mercado early: thresholds 6 bounces, 7 roofs, 50 grinds against a
+     measured 9, 10, 68 (were 12, 30, 40).
+125. **[M7a] Bots brake where they stood, and hold only for the ride they want.** The scripted bots
+     pull down to stand at a stop and to stop short of a target coming up too fast; a plan task can
+     ask for a careful line (`slow`). With 6.5 m of reach a hand out at a stop caught whatever passed
+     in the next lane (the full-game bot caught tram 5 at Bulevar instead of a moped), so the bot
+     holds only when no other line's strap is in reach. The full-game bot's waiting hand is
+     deliberate, not resting: a resting thumb on the full plan catches every ride it passes. The
+     first-launch player bots rest a thumb on the glass whenever they are not steering, as a person
+     does (the brief's acceptance).
 
 ## Cut
 
