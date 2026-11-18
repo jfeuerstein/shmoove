@@ -65,7 +65,6 @@ const CSS = `
 .sk-abest{display:grid;grid-template-columns:1fr auto;gap:4px 10px;align-items:baseline;color:var(--sk-ink)}
 .sk-abest b{font-size:16px;font-variant-numeric:tabular-nums}
 .sk-abest b.sk-cnone{color:rgba(27,26,46,.45)}
-.sk-mapfinds{color:var(--sk-cobalt);margin-left:10px}
 `;
 
 let refs = 0;

@@ -4,7 +4,7 @@
  * colour (un-inked segments thin and dashed, inked ones thick and printed off-register), stops, a
  * "you are here" marker, a header with overall progress and a tappable legend. The legend carries a
  * conductor's punch per line and the title strip the number of secrets found. Each district band
- * says how many of its tiles and spots are found, and the title strip the tiles in all.
+ * says how many of its tiles and spots are found.
  */
 import { districtFinds } from '../sim/game/finds';
 import type { Game } from '../sim/game/game';
@@ -204,10 +204,8 @@ export class LineMap {
     let secrets = 0;
     for (const id of SECRET_IDS) if (this.game.secrets.found[id] !== undefined) secrets++;
     this.secrets = secrets;
-    const f = this.game.finds;
-    const tiles = f.catalog.tiles.length > 0 ? `<span class="sk-mapfinds">TILES ${f.count}/${f.catalog.tiles.length}</span>` : '';
     this.body.innerHTML =
-      svg + `<div class="sk-maptitle">SANTA RAMPA · LINES<span class="sk-mapsecrets">SECRETS ${secrets}/${SECRET_IDS.length}</span>${tiles}</div>`;
+      svg + `<div class="sk-maptitle">SANTA RAMPA · LINES<span class="sk-mapsecrets">SECRETS ${secrets}/${SECRET_IDS.length}</span></div>`;
   }
 
   private drawLegend(shown: LineGeom[]): void {

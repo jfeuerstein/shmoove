@@ -9,6 +9,7 @@ const near = (s, key, pt) => Math.abs(s.ui[key + 'X'] - pt.x) <= 6 && Math.abs(s
 const at = (key, pt) => ({ do: 'expect', label: `the ${key} control is at (${pt.x}, ${pt.y})`, test: (s) => near(s, key, pt) });
 const tap = (pt) => [{ do: 'down', x: pt.x, y: pt.y }, { do: 'up' }];
 
+const MAP_BTN = { x: 31, y: 31 };
 const LEDGER_BTN = { x: 31, y: 193 };
 const TAB_ALBUM = { x: 195, y: 236 };
 const WEAR_MANGO = { x: 141, y: 383 };
@@ -90,5 +91,10 @@ export default {
     { do: 'wait', ticks: 12 },
     { do: 'expect', label: 'play resumes in the new deck and kit', test: (s) => s.ui.ledgerOpen === false && s.mode !== 'BAIL' },
     { do: 'shot', name: 'worn' },
+    // The line map counts tiles and spots per district.
+    ...tap(MAP_BTN),
+    { do: 'wait', ticks: 18 },
+    { do: 'expect', label: 'the line map opens', test: (s) => s.ui.mapOpen === true },
+    { do: 'shot', name: 'map' },
   ],
 };
