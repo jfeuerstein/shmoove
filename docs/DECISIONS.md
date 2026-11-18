@@ -563,6 +563,22 @@ under **Cut** at the end.
      summit) is untouched and runs alongside. The sim raises `flow` and `flowEnd`; showing and
      sounding them is the HUD and audio's job (brief `m7d`).
 
+119. **The strap is thrown, not reached with** (owner: "latch onto vehicles from further away").
+     `HITCH_REACH` 6.5 → 14 m. A catch from beyond `HITCH_SIGHT` (5 m) needs a clear line to the
+     grab point (no catching a tram through a house); the strap then reels the skater in at
+     `REEL_RATE` 14 m/s (was 3.5), which is a burst of speed in itself. A wall now makes the
+     strap slip by how far it has stretched it (`ropeSlack`), not by how long the strap is, since
+     a long throw starts long. Vertical reach is unchanged, so the blimp still needs its hop.
+120. **Transport every 20 to 30 seconds** (owner: "denser and more frequent public transport").
+     The city's ground lines are faster and far more numerous: forklifts 3 → 9 at 11 m/s, fish
+     trucks 2 → 6 at 13, mopeds 4 → 6 at 14, handcarts 3 → 6 at 8 (were 3.5), funicular 2 → 4 at
+     14, tram 5 3 → 12 at 15, tram 9 2 → 6 at 14, night bus 2 → 4 at 20; 70 vehicles in all,
+     were 36. Headways at a stop: 20–30 s, were 36–120 s. Most ground lines now run the whole
+     working day (`HOURS.dawnDusk`), tram 9 all day. The cable cars, kites and the secret lines
+     keep their timing: the summit chain depends on it. The meetings, the conductor and errand
+     limits, the new-game clock and the scripted runs are found again by task M7a. Worst view:
+     96 draw calls (was 71), 155k triangles.
+
 ## Cut
 
 What the original design promised and the game does not have, or has smaller, with why.

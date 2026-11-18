@@ -75,8 +75,9 @@ export const FEEL_DEFS = {
   WALL_COOLDOWN: [0.35, 0, 1.5, 'Wall', 'Time before another wallride, s'],
 
   // --- Hitch
-  HITCH_REACH: [6.5, 1, 10, 'Hitch', 'Hand-to-strap distance that latches, m'],
+  HITCH_REACH: [14, 1, 30, 'Hitch', 'How far the strap throws: hand-to-grab distance that latches, m'],
   HITCH_REACH_Y: [2.6, 0.5, 8, 'Hitch', 'Vertical reach to a strap, m'],
+  HITCH_SIGHT: [5, 0, 30, 'Hitch', 'Catches from further than this need a clear line to the grab point, m'],
   HITCH_AHEAD: [0.8, -2, 6, 'Hitch', 'How far ahead of a bumper you can be and still grab it, m'],
   HAND_HEIGHT: [1.0, 0.3, 2, 'Hitch', 'Height of the grabbing hand above the board, m'],
   RELATCH_COOLDOWN: [0.7, 0, 3, 'Hitch', 'Time before the same vehicle can be re-caught, s'],
@@ -84,7 +85,7 @@ export const FEEL_DEFS = {
   HITCH_COOLDOWN: [0.12, 0, 1, 'Hitch', 'Time after a release before anything can be caught, s'],
   HITCH_MIN_TIME: [0.18, 0, 1, 'Hitch', 'Shortest hitch before a release registers, s (never shorter than YANK_TIME)'],
   YANK_TIME: [0.28, 0, 1, 'Hitch', 'Time the strap takes to pull you into line, s'],
-  REEL_RATE: [3.5, 0.5, 15, 'Hitch', 'How fast the strap shortens to its length, m/s'],
+  REEL_RATE: [14, 0.5, 40, 'Hitch', 'How fast the strap reels you in to its length, m/s'],
   SWING_FREQ: [2.8, 0.5, 8, 'Hitch', 'Pendulum rate at reference ride speed, rad/s'],
   SWING_REF_SPEED: [8, 2, 20, 'Hitch', 'Ride speed at which SWING_FREQ applies, m/s'],
   SWING_DAMP: [0.9, 0, 3, 'Hitch', 'Swing damping, 1/s'],
