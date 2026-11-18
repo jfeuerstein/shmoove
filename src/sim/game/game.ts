@@ -1,6 +1,6 @@
 /**
  * The game layer above the sim: deterministic reducers over sim state and events (line-map
- * progress, chalk lines, errands, conductor challenges, secrets and onboarding).
+ * progress, chalk lines, errands, conductor challenges, secrets, onboarding and finds).
  *
  * `Game.step` is the only way time advances: it steps the sim, then every reducer in a fixed order.
  * A reducer owns its own state, reads `game.sim` and `game.sim.events`, and pushes GameEvents.
@@ -18,6 +18,7 @@ import { ConductorsReducer, type ConductorDef, type ConductorState } from './con
 import { CONDUCTORS } from './content/conductors';
 import { ERRANDS } from './content/errands';
 import { ErrandsReducer, type ErrandDef, type ErrandFailReason, type ErrandState } from './errands';
+import { FindsReducer, type FindsState, type WearSlot } from './finds';
 import { OnboardingReducer, type HintId, type OnboardingState, type OnboardingStep } from './onboarding';
 import { ProgressReducer, createProgress, type Progress } from './progress';
 import { SecretsReducer, type SecretId, type SecretState } from './secrets';
@@ -55,7 +56,19 @@ export type GameEvent =
   /** An onboarding step was learnt. */
   | { type: 'hintDone'; step: OnboardingStep }
   /** The six lesson steps and the closing tickets are done. */
-  | { type: 'onboardingComplete' };
+  | { type: 'onboardingComplete' }
+  /** A painted tile taken: `count` of `total` now. */
+  | { type: 'tile'; index: number; tier: number; district: number; count: number; total: number }
+  /** A named spot found (passed through in the air or at speed). */
+  | { type: 'spot'; id: string; name: string }
+  /** A landmark reached for the first time. */
+  | { type: 'postcard'; id: string; name: string }
+  /** A new longest flow line in a district; `first` when it is the district's first. */
+  | { type: 'bestLine'; district: number; count: number; first: boolean }
+  /** A new fastest run of a named route, in ticks. */
+  | { type: 'bestRun'; name: string; ticks: number; first: boolean }
+  /** A deck or kit unlocked by finds. */
+  | { type: 'unlock'; id: string; slot: WearSlot; name: string };
 
 /** Game construction options: the sim's, plus the errand and conductor content (the city's by default). */
 export interface GameOpts extends SimOpts {
@@ -108,6 +121,7 @@ export class Game {
   readonly conductors: ConductorState;
   readonly secrets: SecretState;
   readonly onboarding: OnboardingState;
+  readonly finds: FindsState;
   /** Events from the most recent step (cleared at the start of each step). */
   readonly events: GameEvent[] = [];
   /** The quantised input the last step applied. */
@@ -119,6 +133,7 @@ export class Game {
   readonly errandsReducer: ErrandsReducer;
   readonly conductorsReducer: ConductorsReducer;
   private readonly onboardingReducer: OnboardingReducer;
+  private readonly findsReducer: FindsReducer;
   private readonly simInput: InputFrame = { steer: 0, hold: false, hop: false, brake: false };
   /** Events raised by commands between steps; they come out with the next step's events. */
   private readonly queued: GameEvent[] = [];
@@ -137,6 +152,8 @@ export class Game {
     this.onboardingReducer = new OnboardingReducer(world);
     this.onboarding = this.onboardingReducer.state;
     this.onboardingReducer.setHints(opts.hints ?? false);
+    this.findsReducer = new FindsReducer(world);
+    this.finds = this.findsReducer.state;
     // Fixed order: later reducers may read what earlier ones did this step.
     this.reducers = [
       new ProgressReducer(this.progress, world.lines),
@@ -146,6 +163,8 @@ export class Game {
       secrets,
       // Last: it reads what every other reducer did this step (inked segments, errands, races).
       this.onboardingReducer,
+      // After the lesson: nothing reads it, and the reducers before it keep their places.
+      this.findsReducer,
     ];
   }
 
@@ -221,6 +240,10 @@ export class Game {
   /** Start the lesson over. */
   onboardingReset(): void {
     this.onboardingReducer.reset();
+  }
+  /** Put on an unlocked deck or kit (finds). */
+  findsWear(id: string): CommandResult {
+    return this.findsReducer.wear(id);
   }
   /** Why recording cannot start right now, or '' if it can. */
   chalkCannotRecord(): string {
