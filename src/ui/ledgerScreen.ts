@@ -3,11 +3,14 @@
  * every errand as a ticket stub (title, the giver's district, best time or a dash, stamped DONE
  * once delivered; undone ones say where the giver stands, and when). CONDUCTORS lists the 13
  * conductors with line badges, their task and a punch hole. SECRETS shows four rows: found ones
- * by name, the rest as ????? with a hint that does not spoil. The header carries the totals.
+ * by name, the rest as ????? with a hint that does not spoil. ALBUM is the finds (src/ui/album.ts):
+ * tiles, spots, postcards, bests and the wardrobe. The header carries the totals.
  *
- * It changes game state only through Game's commands (abandoning the errand in progress).
+ * It changes game state only through Game's commands (abandoning the errand in progress, putting
+ * on a deck or kit).
  */
 import type { Game } from '../sim/game/game';
+import { albumCounts, renderAlbum } from './album';
 import { SECRET_IDS } from '../sim/game/secrets';
 import { DISTRICT_NAMES } from '../sim/world';
 import { el, makeBadge } from './dom';
@@ -16,9 +19,14 @@ import { FlapRow } from './flap';
 import { boardText } from './format';
 import type { Twos } from './twos';
 
-export type LedgerTab = 'errands' | 'conductors' | 'secrets';
-const TABS: readonly LedgerTab[] = ['errands', 'conductors', 'secrets'];
-const TAB_KEY: Record<LedgerTab, string> = { errands: 'ledgerTabErrands', conductors: 'ledgerTabConductors', secrets: 'ledgerTabSecrets' };
+export type LedgerTab = 'errands' | 'conductors' | 'secrets' | 'album';
+const TABS: readonly LedgerTab[] = ['errands', 'conductors', 'secrets', 'album'];
+const TAB_KEY: Record<LedgerTab, string> = {
+  errands: 'ledgerTabErrands',
+  conductors: 'ledgerTabConductors',
+  secrets: 'ledgerTabSecrets',
+  album: 'ledgerTabAlbum',
+};
 
 export interface LedgerHost {
   close(): void;
@@ -76,8 +84,9 @@ export class LedgerScreen {
     const [e, ec] = mk('errands', 'ERRANDS');
     const [c, cc] = mk('conductors', 'CONDUCTORS');
     const [s, sc] = mk('secrets', 'SECRETS');
-    this.tabEls = { errands: e, conductors: c, secrets: s };
-    this.tabCounts = { errands: ec, conductors: cc, secrets: sc };
+    const [a, ac] = mk('album', 'ALBUM');
+    this.tabEls = { errands: e, conductors: c, secrets: s, album: a };
+    this.tabCounts = { errands: ec, conductors: cc, secrets: sc, album: ac };
     this.body = el('div', 'sk-ledgerbody');
     this.el.append(head, tabs, this.body);
   }
@@ -108,10 +117,11 @@ export class LedgerScreen {
     for (const c of g.conductors.list) if (g.conductors.punched[c.line]) cp++;
     let sf = 0;
     for (const id of SECRET_IDS) if (g.secrets.found[id] !== undefined) sf++;
-    return { errands: [ed, errands.length], conductors: [cp, g.conductors.list.length], secrets: [sf, SECRET_IDS.length] };
+    return { errands: [ed, errands.length], conductors: [cp, g.conductors.list.length], secrets: [sf, SECRET_IDS.length], album: albumCounts(g) };
   }
 
-  render(): void {
+  render(keepScroll = false): void {
+    const scroll = this.body.scrollTop;
     const n = this.counts();
     let done = 0;
     let all = 0;
@@ -128,7 +138,9 @@ export class LedgerScreen {
     this.body.scrollTop = 0;
     if (this.tab === 'errands') this.renderErrands();
     else if (this.tab === 'conductors') this.renderConductors();
+    else if (this.tab === 'album') renderAlbum(this.body, this.game, { tap: () => this.host.tap(), changed: () => this.render(true) });
     else this.renderSecrets();
+    if (keepScroll) this.body.scrollTop = scroll;
   }
 
   // ------------------------------------------------------------------------------------------

@@ -26,7 +26,7 @@ Add them to the address, for example `http://localhost:5173/?slice&debug`.
 | --- | --- |
 | `debug` | Opens the feel panel: every movement and camera constant, live, with COPY to export changes |
 | `slice` | Boots the M1 feel slice (one hill, one tram, one funicular) |
-| `world=NAME` | Boots a named world: `slice`, `lineup`, `proptown`, `city` |
+| `world=NAME` | Boots a named world: `slice`, `lineup`, `proptown`, `city`, `finds` (the slice with tiles, spots and a route) |
 | `t=0.5` | Starts at that time of day, as a fraction of the day (0 midnight, 0.5 noon) |
 | `seed=N` | World and random seed (integer, default 1) |
 | `mute` | Starts with audio muted |

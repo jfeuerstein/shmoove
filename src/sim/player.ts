@@ -255,6 +255,14 @@ function stepFlow(ctx: SimCtx): void {
   }
 }
 
+/**
+ * Keep a line in progress alive without adding a trick to it: its window starts again. For things
+ * found along the way (painted tiles); does nothing when no line is running.
+ */
+export function keepFlow(p: PlayerState): void {
+  if (p.flow > 0) p.flowTime = FEEL.FLOW_WINDOW;
+}
+
 function endFlow(p: PlayerState): void {
   p.flow = 0;
   p.flowTime = 0;

@@ -3,8 +3,10 @@
  * uphill at the top, simplified and fitted), district bands, each discovered line in its livery
  * colour (un-inked segments thin and dashed, inked ones thick and printed off-register), stops, a
  * "you are here" marker, a header with overall progress and a tappable legend. The legend carries a
- * conductor's punch per line and the title strip the number of secrets found.
+ * conductor's punch per line and the title strip the number of secrets found. Each district band
+ * says how many of its tiles and spots are found.
  */
+import { districtFinds } from '../sim/game/finds';
 import type { Game } from '../sim/game/game';
 import { inkedCount, lineSegments, mapFraction, type Segment } from '../sim/game/progress';
 import { SECRET_IDS } from '../sim/game/secrets';
@@ -141,7 +143,14 @@ export class LineMap {
       const y0 = project(pr, 0, z1)[1];
       const y1 = project(pr, 0, z0)[1];
       svg += `<rect x="0" y="${y0.toFixed(1)}" width="${w}" height="${(y1 - y0).toFixed(1)}" fill="${k % 2 ? '#1F3FBF' : '#FFAE1A'}" opacity="${k % 2 ? 0.06 : 0.1}"/>`;
-      svg += `<text x="10" y="${(y1 - 10).toFixed(1)}" font-size="12" font-weight="700" letter-spacing="2.5" fill="#1F3FBF" opacity="0.5">${escapeXml(boardText(DISTRICT_NAMES[band.district]))}</text>`;
+      svg += `<text x="10" y="${(y1 - 10).toFixed(1)}" font-size="12" font-weight="700" letter-spacing="2.5" fill="#1F3FBF" opacity="0.5">${escapeXml(boardText(DISTRICT_NAMES[band.district] ?? ''))}</text>`;
+      const fd = districtFinds(this.game.finds, band.district);
+      if (fd.tilesTotal + fd.spotsTotal > 0) {
+        const parts: string[] = [];
+        if (fd.tilesTotal > 0) parts.push(`TILES ${fd.tiles}/${fd.tilesTotal}`);
+        if (fd.spotsTotal > 0) parts.push(`SPOTS ${fd.spots}/${fd.spotsTotal}`);
+        svg += `<text x="10" y="${(y1 - 26).toFixed(1)}" font-size="11" font-weight="700" letter-spacing="1.5" fill="#FF2E88" opacity="0.85" data-finds="${band.district}">${parts.join(' · ')}</text>`;
+      }
       k++;
     }
     const sel = this.selected;

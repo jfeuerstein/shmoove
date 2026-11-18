@@ -11,7 +11,7 @@ import { makeGroundSample, sampleGround, type World } from '../sim/world';
 import { ChaseCamera, type CamTarget } from './camera';
 import { MeshBuilder } from './geom';
 import { INK, applyTimeOfDay, createRiso, createSky, inkMaterial, type Riso } from './look';
-import { createSkaterView, type SkaterFrame } from './skater';
+import { createSkaterView, type SkaterFrame, type SkaterView } from './skater';
 import { createVehicleView } from './vehicles';
 import { createStaticWorldView, type WorldView } from './worldView';
 
@@ -25,6 +25,8 @@ export interface View {
   readonly scene: THREE.Scene;
   readonly chase: ChaseCamera;
   readonly riso: Riso;
+  /** The skater figure (what it wears is set from the finds wardrobe). */
+  readonly skater: SkaterView;
   /** Draw a frame: `alpha` of the way from `prev` (skater position before the last step) to now. */
   render(sim: Sim, prev: { x: number; y: number; z: number }, alpha: number, dt: number, events: readonly SimEvent[]): void;
   resize(): void;
@@ -111,6 +113,7 @@ export function createView(canvas: HTMLCanvasElement, world: World, opts: ViewOp
     scene,
     chase,
     riso,
+    skater,
     resize,
     partMs,
     render(sim, prev, alpha, dt, events) {

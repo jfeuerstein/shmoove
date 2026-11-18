@@ -240,7 +240,35 @@ on the map once first ridden.
   platform has run-in steps from the lawn and the spine, so a skater from the summit (up to 14 m/s)
   can stop on it by pulling down.
 - **Ledger** (L, or its corner button): errands with best times, conductors' punched tickets, secrets
-  found.
+  found, and the album of finds.
+- **Finds** (`src/sim/game/finds.ts`, brief M7f): reasons to explore, read from the World contract so
+  any world that places them has them.
+  - *Tiles* (`world.pickups` of kind `tile`, tiers 0 trail, 1 detour, 2 hidden): small painted squares
+    hanging in the air, turning on twos, the border's ink saying the tier (mango, pink, cobalt
+    double-framed), the paper face glowing at night. Taken when the body (feet to head) passes within
+    1.8 m, in any mode, along the path since the last tick. Taking one restarts the window of a flow
+    line in progress without adding a trick (`keepFlow` in `player.ts`). A counter ticket shows
+    "TILE 14/60" for two seconds (one at a time, rewritten by the next tile), a burst of paper squares
+    flies off, a bright two-note chime plays a scale step higher for each tile within 3 s of the last
+    (a trail climbs), and the phone taps.
+  - *Spots* (zones of kind `spot`): found the first time the skater passes through one in the air or
+    at 8 m/s or more; nothing marks them in the world. A rubber stamp with the spot's name, a thud.
+  - *Postcards*: one per zone of kind `landmark`, the first time the skater comes within its radius.
+  - *Best lines and runs*: the longest flow line (at least two tricks) that ended without a bail, per
+    district; the fastest run of each route a world defines as a `routeStart` / `routeEnd` zone pair
+    of one name, from leaving the start to entering the end without a bail (zones are checked every
+    6 ticks, so runs are timed to a tenth of a second).
+  - *Unlocks*: decks at 5, 15, 30, 45 and all 60 tiles (Mango Check, Cobalt Stripe, Pink Dip, Sea
+    Bands, Gold Run; on a world with fewer tiles the steps scale down), a kit (shirt, trim and cap)
+    per landmark's postcard, a deck for all the spots of a district. Each comes with a ticket, a
+    four-note fanfare and a run of taps. The skater starts in Street Teal and the Mango Hoodie.
+  - *The album* (the ledger's fourth tab): totals; the wardrobe, where an unlocked deck or kit is put
+    on (`Game.findsWear`) and locked ones say what earns them; tiles per district and tier, hidden
+    ones counted only as "found/?"; the spots, unfound ones as silhouettes of their names; the
+    postcards; the best lines and runs. The line map prints tile and spot counts on each district's
+    band.
+  - The fixture `?world=finds` is the feel slice with twelve tiles, three spots, two landmarks and a
+    route, for looking at all of this on a small world.
 - **Chalk lines** (`src/sim/game/chalk.ts`): start recording anywhere with open sky, stop anywhere
   (up to 4 minutes; up to 20 lines kept; names up to 24 characters). A line is its canonical start
   (position, heading, speed), its time of day and its quantised input stream (63 steer levels).
@@ -250,10 +278,10 @@ on the map once first ridden.
   time minus a three-second countdown and runs the ghost as a second deterministic skater beside
   the player; beat its time to the end zone (a loop must be skated: the finish counts only after
   leaving it). Local only: no backend, no online sharing.
-- **Saves** (`src/sim/game/save.ts`, `src/app/save.ts`): `localStorage`, one slot, version 2 (a
-  version 1 save upgrades). It keeps the resume spot (the last safe spot), the time of day and the
-  day count, settings, and every reducer's state: line map, onboarding, errands, conductors,
-  secrets, chalk lines. Autosaved every 15 s of play and on progress events, with the previous good
+- **Saves** (`src/sim/game/save.ts`, `src/app/save.ts`): `localStorage`, one slot, version 3 (older
+  saves upgrade; a version 2 save loads with nothing found). It keeps the resume spot (the last safe
+  spot), the time of day and the day count, settings, and every reducer's state: line map,
+  onboarding, errands, conductors, secrets, chalk lines, finds. Autosaved every 15 s of play and on progress events, with the previous good
   save kept as a backup; a corrupt save falls back to the backup. App-only settings (reduced motion,
   print pass) and play time live under their own key. NEW GAME keeps settings; RESET SAVE clears
   them too.

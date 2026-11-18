@@ -7,6 +7,7 @@ import { createAudio } from '../audio/index';
 import { Gestures, attachGestures } from '../input/gestures';
 import { createChalkView } from '../render/chalkView';
 import { chunkGrid, chunkOf, createCityView, type CityView } from '../render/cityView';
+import { createFindsView } from '../render/findsView';
 import { createHintView } from '../render/hintView';
 import { createMarkersView } from '../render/markersView';
 import { VIEW_PARTS, createView } from '../render/view';
@@ -17,7 +18,7 @@ import { MODE_NAMES, type InputFrame, type SimEvent } from '../sim/types';
 import { districtAt, type World } from '../sim/world';
 import { createUi } from '../ui/index';
 import type { ShellHost } from '../ui/titleShell';
-import { createAudioView } from './audioView';
+import { createAudioView, createFindsSound } from './audioView';
 import { createDebugPanel, type DebugPanel } from './debugPanel';
 import { createHaptics } from './haptics';
 import { NEW_GAME_DAY_FRAC, isFixture } from './newGame';
@@ -137,12 +138,14 @@ function boot(): void {
   const chalkView = createChalkView(view.scene, world);
   const markersView = createMarkersView(view.scene, world, game);
   const hintView = createHintView(view.scene, world, view.chase.camera);
+  const findsView = createFindsView(view.scene, view.skater);
   const route = getRoute(params.route);
   const panel: DebugPanel | null = params.debug ? createDebugPanel(uiRoot) : null;
   // After the panel, so the UI can keep its controls clear of it.
   const audio = createAudio();
   audio.setMuted(params.mute);
   const audioView = createAudioView();
+  const findsSound = createFindsSound((kind, step) => audio.find(kind, step));
 
   // App shell: settings, PWA, haptics, title / pause / settings screens.
   const query = new URLSearchParams(location.search);
@@ -329,6 +332,7 @@ function boot(): void {
     t0 = t1;
     markersView.update(game, alpha, dt);
     hintView.update(game, alpha, dt);
+    findsView.update(game, pendingGame, view.chase.camera, dt);
     t1 = performance.now();
     cur[PART.markers] = t1 - t0;
     view.render(sim, prev, alpha, dt, pending);
@@ -345,6 +349,7 @@ function boot(): void {
     cur[PART.haptics] = t1 - t0;
     t0 = t1;
     audio.update(audioView(sim, ui.paused), pending, world.lines, dt);
+    findsSound(pendingGame, sim.tick);
     cur[PART.audio] = performance.now() - t0;
     pending.length = 0;
     pendingGame.length = 0;
@@ -449,6 +454,7 @@ function boot(): void {
         lines: lines(),
         ui: ui.testState(),
         audio: audioState(),
+        finds: { drawn: findsView.drawn, bursts: findsView.bursts, count: game.finds.count, deck: game.finds.deck, kit: game.finds.kit },
       };
     },
     stats() {

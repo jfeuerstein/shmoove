@@ -11,7 +11,7 @@ import { Surface, makeGroundSample, sampleGround, terrainSurface, type World } f
 import type { Game } from './game';
 import { ONBOARDING_STEPS, type OnboardingData } from './onboarding';
 
-export const SAVE_VERSION = 2;
+export const SAVE_VERSION = 3;
 
 export interface SaveSettings {
   /** 0..1 */
@@ -25,7 +25,7 @@ export interface SaveSettings {
 export const DEFAULT_SETTINGS: Readonly<SaveSettings> = Object.freeze({ music: 1, sfx: 1, haptics: true, hints: true });
 
 export interface SaveData {
-  version: 2;
+  version: 3;
   savedAtTick: number;
   /** Where the skater resumes (their last safe spot), the time of day and the day count (from 0). */
   player: { x: number; z: number; heading: number; dayTick: number; day: number };
@@ -50,7 +50,7 @@ export function exportSave(game: Game, settings: SaveSettings): SaveData {
   const reducers: Record<string, unknown> = {};
   for (const r of game.reducers) if (r.exportState) reducers[r.key] = r.exportState();
   return {
-    version: 2,
+    version: 3,
     savedAtTick: sim.tick,
     player: { x: p.safeX, z: p.safeZ, heading: p.safeHeading, dayTick: dayTickOf(sim.tick), day: Math.max(0, Math.floor(sim.tick / DAY_TICKS)) },
     settings: cleanSettings(settings),
@@ -135,6 +135,13 @@ const MAX_DAY = 1e6;
 const UPGRADES: Record<number, Upgrade> = {
   // Version 2 saves the day count; a version 1 save kept only the time of day, so it loads on day 0.
   1: (d) => (isRecord(d.player) ? { ...d, version: 2, player: { ...d.player, day: 0 } } : null),
+  // Version 3 keeps finds (tiles, spots, postcards, best lines and runs, the wardrobe); a version 2
+  // save has none, so it loads with nothing found.
+  2: (d) => {
+    const reducers = isRecord(d.reducers) ? { ...d.reducers } : {};
+    delete reducers.finds;
+    return { ...d, version: 3, reducers };
+  },
 };
 
 /** Validate the current version's shape. Required: version and player; the rest defaults. */
@@ -153,7 +160,7 @@ function validate(d: Record<string, unknown>): SaveData | null {
   // A save from before onboarding with anything in it is a player who has learnt the game: no lesson.
   if (reducers.onboarding === undefined && hasProgress(reducers)) reducers.onboarding = learntOnboarding();
   return {
-    version: 2,
+    version: 3,
     savedAtTick: typeof at === 'number' && Number.isInteger(at) && at >= 0 ? at : 0,
     player: { x: p.x, z: p.z, heading: p.heading, dayTick: dt, day },
     settings: cleanSettings(d.settings),

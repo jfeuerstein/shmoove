@@ -17,6 +17,9 @@ import { ConductorHud } from './conductorHud';
 import { ClassSlot, el } from './dom';
 import { SECRET_INFO, failText, taskText, ticksClock } from './errandFormat';
 import { ErrandHud } from './errandHud';
+import { isUnlocked, wardrobe } from '../sim/game/finds';
+import { findsTicket, swatchCss } from './findsFormat';
+import { injectFindsStyle } from './findsStyle';
 import { HintStub, type HintPointerScreen } from './hint';
 import { injectHintStyle } from './hintStyle';
 import { injectErrandStyle } from './errandStyle';
@@ -90,6 +93,9 @@ const LEDGER_ICON =
   '<circle cx="20" cy="21.5" r="2.4" fill="#FF2E88"/>' +
   '</svg><i class="sk-ldot"></i>';
 
+/** How long the tile counter stays up after the last tile, s. */
+const TILE_COUNTER_S = 2;
+
 /** `shell` adds the title, pause, settings, map-complete and rotate screens (src/ui/titleShell.ts). */
 export function createUi(root: HTMLElement, game: Game, sound: UiSound | null, shellHost: ShellHost | null = null): Ui {
   const releaseStyle = injectStyle();
@@ -97,6 +103,7 @@ export function createUi(root: HTMLElement, game: Game, sound: UiSound | null, s
   const releaseErrandStyle = injectErrandStyle();
   const releaseLedgerStyle = injectLedgerStyle();
   const releaseHintStyle = injectHintStyle();
+  const releaseFindsStyle = injectFindsStyle();
   const lines = game.sim.world.lines;
   const segs: Segment[][] = lines.map(lineSegments);
 
@@ -233,7 +240,7 @@ export function createUi(root: HTMLElement, game: Game, sound: UiSound | null, s
   ledgerBtn.type = 'button';
   ledgerBtn.innerHTML = LEDGER_ICON;
   ledgerBtn.dataset.sk = 'ledgerBtn';
-  ledgerBtn.setAttribute('aria-label', 'Ledger: errands, conductors, secrets');
+  ledgerBtn.setAttribute('aria-label', 'Ledger: errands, conductors, secrets, album');
   ledgerBtn.setAttribute('aria-expanded', 'false');
   /** Something new went into the ledger since it was last opened. */
   const news = new ClassSlot(ledgerBtn, 'sk-news');
@@ -447,11 +454,28 @@ export function createUi(root: HTMLElement, game: Game, sound: UiSound | null, s
         news.set(true);
         break;
       default:
+        findsToast(e);
         break;
     }
     chalkHud.onEvent(e);
     conductorHud.onEvent(e);
     hint.onEvent(e);
+  };
+
+  /** Finds: the tile counter (one at a time, two seconds), stamps, postcards, unlocks and bests. */
+  const findsToast = (e: GameEvent): void => {
+    const t = findsTicket(e);
+    if (t === null) return;
+    const data = { line: null, title: t.title, body: t.body, serial: game.sim.tick, stamp: t.stamp };
+    if (t.kind === 'tile') {
+      toasts.counter('tile', data, TILE_COUNTER_S);
+      return;
+    }
+    if (e.type === 'unlock') {
+      const it = game.finds.catalog.unlocks.find((u) => u.item.id === e.id);
+      toasts.show('unlock', { ...data, swatch: it ? swatchCss(it.item) : undefined });
+    } else toasts.show(t.kind, data);
+    if (t.kind !== 'best') news.set(true);
   };
 
   const onSimEvent = (e: SimEvent): void => {
@@ -490,6 +514,24 @@ export function createUi(root: HTMLElement, game: Game, sound: UiSound | null, s
     out.chalkBtnY = Math.round(r.top + r.height / 2);
     if (chalkOpen) chalkScreen.centres(out);
     return out;
+  };
+
+  /** Finds: the counter on screen, the tickets up (kinds, newest first), and the album's figures. */
+  const findsTestState = (): Record<string, string | number | boolean> => {
+    const f = game.finds;
+    const c = f.catalog;
+    const counter = toasts.queue.items.find((t) => t.kind === 'tile');
+    let open = 0;
+    for (const it of wardrobe(c)) if (isUnlocked(f, it.id)) open++;
+    return {
+      findsCounter: counter ? counter.data.title : '',
+      findsTickets: toasts.queue.items.map((t) => t.kind).join(','),
+      findsSpots: Object.keys(f.spots).length,
+      albumTiles: `${f.count}/${c.tiles.length}`,
+      albumSpots: `${Object.keys(f.spots).length}/${c.spots.length}`,
+      albumOpen: open,
+      albumWorn: `${f.deck},${f.kit}`,
+    };
   };
 
   const ledgerTestState = (): Record<string, string | number | boolean> => {
@@ -581,6 +623,7 @@ export function createUi(root: HTMLElement, game: Game, sound: UiSound | null, s
         onboardingComplete: game.onboarding.complete,
         ...chalkTestState(),
         ...ledgerTestState(),
+        ...findsTestState(),
       };
       shell?.testState(out);
       return out;
@@ -603,6 +646,7 @@ export function createUi(root: HTMLElement, game: Game, sound: UiSound | null, s
       ledgerBtn.removeEventListener('click', onLedgerClick);
       shell?.dispose();
       hud.remove();
+      releaseFindsStyle();
       releaseLedgerStyle();
       releaseHintStyle();
       releaseErrandStyle();

@@ -25,6 +25,8 @@ export interface SkitchTestState {
    * many of its vehicles are drawn this frame.
    */
   lines?: { id: string; base: number; stripe: number; pattern: number; painted: boolean; paint: number; drawn: number }[];
+  /** Finds: tiles drawn in the world and bursts flying this frame, tiles taken, the deck and kit worn. */
+  finds?: { drawn: number; bursts: number; count: number; deck: string; kit: string };
   /** Anything else a screen wants a route to be able to assert on. */
   ui?: Record<string, string | number | boolean>;
 }

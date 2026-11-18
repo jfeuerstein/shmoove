@@ -52,6 +52,11 @@ const ERRAND_FAIL = P('errandFail', 5, 30, 60, 12);
 const CONDUCTOR_START = P('conductorStart', 4, 8, 30, 8);
 const CONDUCTOR_PUNCH = P('conductorPunch', 8, 24, 30, 10);
 const SECRET_FOUND = P('secretFound', 9, 10, 40, 10, 40, 10, 40, 60);
+/** Finds: a light tap per tile, a stamp for a spot, a card for a postcard, a run of taps for an unlock. */
+const TILE = P('tile', 2, 7);
+const SPOT = P('spot', 7, 28, 30, 8);
+const POSTCARD = P('postcard', 6, 10, 40, 10);
+const UNLOCK = P('unlock', 8, 10, 40, 10, 40, 10, 40, 40);
 
 /** The hitch thud, plus one short pulse per chain link beyond the first (capped). */
 export function hitchPattern(chain: number): HapticPattern {
@@ -114,6 +119,14 @@ export function patternFor(e: SimEvent | GameEvent): HapticPattern | null {
       return CONDUCTOR_PUNCH;
     case 'secretFound':
       return SECRET_FOUND;
+    case 'tile':
+      return TILE;
+    case 'spot':
+      return SPOT;
+    case 'postcard':
+      return POSTCARD;
+    case 'unlock':
+      return UNLOCK;
     default:
       return null;
   }

@@ -53,6 +53,9 @@ export interface AudioDebug {
 
 export type UiSound = 'tick' | 'punch' | 'ink' | 'fanfare' | 'deny';
 
+/** Sounds of finding things (see Engine.find). */
+export type FindSound = 'tile' | 'spot' | 'unlock';
+
 export interface AudioSystem {
   /** Call from a user gesture. Creates or resumes the AudioContext. Idempotent; never throws (a browser without Web Audio leaves the system silently inert). */
   unlock(): void;
@@ -63,6 +66,8 @@ export interface AudioSystem {
   setVolumes(music: number, sfx: number): void;
   /** One-shot UI sounds: 'tick' (flap of a destination board), 'punch' (ticket punched), 'ink' (line segment inked), 'fanfare' (line or errand complete), 'deny'. */
   ui(name: UiSound): void;
+  /** A find: 'tile' (a chime `step` degrees up a trail), 'spot' (a stamp), 'unlock' (a fanfare). */
+  find(kind: FindSound, step?: number): void;
   debug(): AudioDebug;
   dispose(): void;
 }
@@ -125,6 +130,15 @@ class AudioSystemImpl implements AudioSystem {
     if (!this.engine) return;
     try {
       this.engine.ui(name);
+    } catch (_e) {
+      this.dropEngine();
+    }
+  }
+
+  find(kind: FindSound, step = 0): void {
+    if (!this.engine) return;
+    try {
+      this.engine.find(kind, step);
     } catch (_e) {
       this.dropEngine();
     }
