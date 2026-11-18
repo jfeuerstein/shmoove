@@ -7,14 +7,14 @@ export default {
   params: 'slice&t=0.330556',
   steps: [
     { do: 'wait', ticks: 150 },
-    // Carve right for 36 ticks, counter-steer for 26, then roll straight onto the terrace.
+    // Carve right for 10 ticks, then roll straight onto the terrace (tests/sim/sliceRoutes.test.ts
+    // replays this and SKITCH_FIND_SLICE re-finds it).
     { do: 'down', x: 195, y: 620 },
-    { do: 'move', x: 246.6, y: 620 },
-    { do: 'wait', ticks: 36 },
-    { do: 'move', x: 143.4, y: 620 },
-    { do: 'wait', ticks: 26 },
+    { do: 'move', x: 225, y: 620 },
+    { do: 'wait', ticks: 10 },
+    { do: 'move', x: 165, y: 620 },
     { do: 'up' },
-    { do: 'wait', ticks: 404 },
+    { do: 'wait', ticks: 480 },
     { do: 'expect', label: 'rolled onto the terrace above the stairs', test: (s) => s.mode === 'GROUND' && s.x > 18 && s.x < 22 && s.z < 262 },
     { do: 'shot', name: 'terrace' },
     { do: 'swipeUp', x: 195, y: 650 },
