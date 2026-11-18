@@ -21,20 +21,18 @@ export function mapPlan(): Task[] {
     ride('A2 lap', { line: 'A2', at: 'Estación del Cerro' }),
     ride('A1 down', { line: 'A1', at: 'Estación del Cerro', to: 'Puerta' }),
     ride('T2 lap', { line: 'T2', at: 'Puerta de la Antena', side: -2.6 }),
-    // Day 1, from the top: the funicular down, the stair spine to the plaza (grinding the second
-    // flight's handrail on the way), the wedding parade, then the mopeds down to the docks and the
-    // night bus.
+    // Day 1, from the top: the funicular down, the stairs to the plaza, the wedding parade, then the
+    // mopeds down to the docks and the night bus. Letting go at Base slings the skater onto the
+    // handrail of the flight below the lookout (DECISIONS 114: every release is a slingshot) and off
+    // its foot too fast to stop on the landing, so the way down is the west flight below it and
+    // along the plaza's landing to the church.
     ride('T1 down', { line: 'T1', at: 'Cima', to: 'Base' }),
-    go('to the spine', [
-      [-20, 566],
-      [3, 562],
-      [3, 530],
-    ]),
-    go('down the spine', [
-      [3, 512],
-      [3, 478],
+    go('down the west flight', [
+      [-28, 490],
+      [-28, 464],
+      [0, 462],
       [18, 462],
-    ], { hopAt: [[3, 510.5]] }),
+    ], { slow: 9 }),
     ride('M3 lap', { line: 'M3', at: 'Iglesia' }),
     go('to Rellano 410', [
       [22, 462],
@@ -45,10 +43,9 @@ export function mapPlan(): Task[] {
     ride('M1 down', { line: 'M1', at: 'Rellano 410', to: 'Bulevar' }),
     ride('T4 lap', { line: 'T4', at: 'Garaje' }),
     // Day 2: the mopeds up from the docks to Rellano 410, then a handcart's full lap from there.
-    ride('M1 up', { line: 'M1', at: 'Bulevar', to: 'Rellano 410' }),
+    ride('M1 up', { line: 'M1', at: 'Bulevar', to: 'Rellano 410', anywhere: true }),
     ride('M2 lap', { line: 'M2', at: 'Rellano 410', side: -2.6 }),
-    // Night 2: down the spine to the docks and along the quay to the crane, which starts its run
-    // from the west end just after midnight.
+    // Afternoon 2: down the spine to the docks and along the quay.
     go('down to the docks', [
       [4, 405],
       [4, 300],
@@ -56,9 +53,11 @@ export function mapPlan(): Task[] {
       [-30, 40],
       [-128, 16],
     ]),
-    ride('D1 both ways', { line: 'D1', at: 'Grúa Oeste', to: 'Grúa Centro', segs: [0, 1] }),
-    // Day 3: the fish trucks' first lap from the fish market, then the forklifts' last full lap.
+    // The fish trucks' lap from the fish market; then the crane, which runs all night, both ways
+    // (it fills the night before the forklifts start at dawn); then the forklifts' first full lap.
     ride('D3 lap', { line: 'D3', at: 'Lonja' }),
+    // (Waiting west of the hook: the fish trucks now run under it.)
+    ride('D1 both ways', { line: 'D1', at: 'Grúa Oeste', to: 'Grúa Centro', segs: [0, 1], wait: [-146, 9] }),
     ride('D2 lap', { line: 'D2', at: 'Almacenes Sur' }),
     // Day 4: tram 5 up to the terraces, and tram 9's switchback loop. Tram 5's first run of the day
     // leaves Muelle three minutes after the forklift lap ends: roll across to the foot of the
@@ -86,7 +85,8 @@ export function secretPlan(): Task[] {
       [40, 566],
       [70, 563],
     ]),
-    ride('S1 lap', { line: 'S1', at: 'Túnel', side: -2.6 }),
+    // The ghost tram runs once, just after midnight: wait for it however long it takes.
+    ride('S1 lap', { line: 'S1', at: 'Túnel', side: -2.6, maxWait: 12 * 60 * 60 }),
     // Day 5: back along the landing to the funicular and up to the Antenna gate.
     go('to the funicular', [
       [40, 566],

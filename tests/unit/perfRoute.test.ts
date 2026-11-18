@@ -4,7 +4,7 @@
  * browser, with room to spare, so the gate cannot pass on a run that stood still.
  */
 import { describe, expect, it } from 'vitest';
-import { LEG_TICKS, LEG_WARM, PERF_LEGS, getRoute, routeWindows } from '../../src/app/routes';
+import { LEG_TICKS, LEG_WARM, PERF_LEGS, createLegRoute, routeWindows, type PerfLeg } from '../../src/app/routes';
 import { chunkGrid, chunkOf } from '../../src/render/cityView';
 import { buildCity } from '../../src/sim/city/index';
 import { Game } from '../../src/sim/game/game';
@@ -21,16 +21,20 @@ interface WindowFacts {
   speed: number;
 }
 
-function play(): WindowFacts[] {
-  const world = buildCity(1).world;
+const ENV = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env ?? {};
+let cityWorld: ReturnType<typeof buildCity>['world'] | null = null;
+
+/** Play `legs` as the perfcity route plays PERF_LEGS, through the whole game, and report each timed window. */
+function play(legs: readonly PerfLeg[] = PERF_LEGS): WindowFacts[] {
+  cityWorld ??= buildCity(1).world;
+  const world = cityWorld;
   const game = new Game(world, { seed: 1 });
   const sim = game.sim;
-  const route = getRoute('perfcity');
-  if (route === null) throw new Error('no perfcity route');
+  const route = createLegRoute(legs);
   const grid = chunkGrid(world);
-  const windows = routeWindows('perfcity');
+  const windows = legs.map((leg, k) => ({ name: leg.name, from: k * LEG_TICKS + LEG_WARM, to: (k + 1) * LEG_TICKS }));
   const facts: WindowFacts[] = windows.map((w) => ({ name: w.name, travel: 0, districts: new Set(), hitches: 0, slings: 0, crossings: 0, speed: 0 }));
-  const input: InputFrame = { steer: 0, hold: false, hop: false };
+  const input: InputFrame = { steer: 0, hold: false, hop: false, brake: false };
   let px = 0;
   let pz = 0;
   let pc = -1;
@@ -94,4 +98,32 @@ describe('perfcity route', () => {
       expect(streaming.speed).toBeGreaterThan(10);
     }
   });
+});
+
+// SKITCH_FIND_PERF=1 npx vitest run tests/unit/perfRoute.test.ts --silent=false re-finds PERF_LEGS
+// (src/app/routes.ts) when the controller, the city or the timetable changes: leg by leg in order
+// (what a leg meets depends on when it starts), the start z in its district whose window does what
+// the tests above ask with the most travel.
+describe.skipIf(!ENV.SKITCH_FIND_PERF)('find the perfcity legs', () => {
+  it('prints PERF_LEGS', () => {
+    const ranges: Record<string, [number, number]> = { mercado: [285, 595], terraces: [605, 935], antenna: [945, 1270], streaming: [605, 1270], docks: [10, 275] };
+    const wantDistrict: Record<string, District | -1> = { mercado: District.MERCADO, terraces: District.TERRACES, antenna: District.ANTENNA, streaming: -1, docks: District.DOCKS };
+    const legs: PerfLeg[] = [];
+    for (const name of PERF_LEGS.map((l) => l.name)) {
+      const [z0, z1] = ranges[name];
+      let best: { z: number; score: number } | null = null;
+      for (let z = z0; z <= z1; z += 5) {
+        const f = play([...legs, { name, z }])[legs.length];
+        const d = wantDistrict[name];
+        if (f.travel <= 60 || (d !== -1 && !f.districts.has(d))) continue;
+        if ((name === 'mercado' || name === 'docks') && (f.hitches === 0 || f.slings === 0)) continue;
+        if (name === 'streaming' && (f.crossings < 2 || f.speed <= 12)) continue;
+        if (!best || f.travel > best.score) best = { z, score: f.travel };
+      }
+      expect(best, `no start for the ${name} leg`).not.toBeNull();
+      if (!best) return;
+      legs.push({ name, z: best.z });
+    }
+    console.info(`PERF_LEGS = ${JSON.stringify(legs)}`);
+  }, 600_000);
 });

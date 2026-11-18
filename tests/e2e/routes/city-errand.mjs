@@ -1,5 +1,6 @@
 // M5b things to do: in the city at the new-game spawn (the lookout at the top of the Mercado Steps,
-// where the funicular errand's giver stands), hold still to take the errand, then open the ledger,
+// where the funicular errand's giver stands), stand and pull down to take the errand (a skater
+// braking or standing in a giver's ring takes the offer: DECISIONS 123), then open the ledger,
 // look at each tab and close it. The only open-loop touch script is the first seconds at the
 // spawn; controls are tapped at fixed points, each preceded by an expect that the control's centre
 // (from the UI's test state) is where the route taps, so a layout change fails loudly.
@@ -17,14 +18,19 @@ export default {
   params: 'world=city&t=0.42',
   steps: [
     { do: 'wait', ticks: 2 },
-    { do: 'expect', label: 'starts at the lookout, offered the funicular errand', test: (s) => s.mode === 'GROUND' && s.ui.errandOffered === 'funicular_valve' && s.ui.errandOfferFill === 0 },
-    // Hold still: the touch arms, then the offer's punch fills.
-    { do: 'down', x: 195, y: 560 },
-    { do: 'wait', ticks: 24 },
     {
       do: 'expect',
-      label: 'holding still fills the offer part way',
-      test: (s) => s.armed === true && s.ui.errandOffered === 'funicular_valve' && s.ui.errandOfferFill > 15 && s.ui.errandOfferFill < 90 && s.ui.errandActive === '',
+      label: 'starts at the lookout, standing in the giver ring: the funicular errand is offered and filling',
+      test: (s) => s.mode === 'GROUND' && s.ui.errandOffered === 'funicular_valve' && s.ui.errandOfferFill > 0 && s.ui.errandOfferFill < 30,
+    },
+    // Pull down (the brake) and stay: the offer's punch keeps filling.
+    { do: 'down', x: 195, y: 560 },
+    { do: 'move', x: 195, y: 650 },
+    { do: 'wait', ticks: 14 },
+    {
+      do: 'expect',
+      label: 'pulling down fills the offer part way',
+      test: (s) => s.ui.errandOffered === 'funicular_valve' && s.ui.errandOfferFill > 15 && s.ui.errandOfferFill < 90 && s.ui.errandActive === '',
     },
     { do: 'shot', name: 'errand-offer' },
     { do: 'wait', ticks: 30 },

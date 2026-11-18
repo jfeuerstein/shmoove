@@ -34,8 +34,9 @@ Add them to the address, for example `http://localhost:5173/?slice&debug`.
 | `chalk=SK2-...` | Opens the chalk import box with that share code pasted |
 
 Controls: touch and drag to carve; touch and hold to arm a grab, which hitches the nearest ride in
-reach, or with no ride near plants a foot and stops you; lift to let go (the slingshot); flick up to
-hop. On a keyboard: arrows or A/D steer, Space holds, W or Up hops, M opens the map, L the ledger, P
+reach (a resting thumb never slows you); pull the finger down to brake and stop; lift to let go (the
+slingshot); flick up to hop. On a keyboard: Left/Right or A/D steer, Space holds, W or Up hops, S or
+Down brakes, M opens the map, L the ledger, P
 pauses, Escape closes a screen.
 
 ## Build and preview

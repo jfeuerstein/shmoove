@@ -22,11 +22,14 @@
  * **A ride to catch** leads the player to it rather than announcing it as it goes by: when the skater
  * is heading for a stop (within LEAD_NEAR, no higher than them, on their way) where a ground ride
  * they could grab will stand or pass within LEAD_TICKS, the pointer is over a waiting spot beside the
- * lane (within reach of where the grab point passes, clear of every vehicle's body) and the hint says
- * to press and hold still, which plants a foot and stops them there. Once that ride is within
- * HITCH_NEAR the pointer moves to its grab bar. With no stop to lead to, a ride coming at the skater
- * or standing close by is pointed at directly. Until the hitch is learnt, no ride that needs a hop to
- * reach is ever pointed at.
+ * lane (within reach of where the grab point passes, clear of every vehicle's body). The first time,
+ * the hint teaches the brake there: "pull down to stop" until the skater stands in the ring, then
+ * "hold for the ride". Braking is an option the lesson shows once (`brakeAsk`), not a step: rides
+ * are caught on the move from HITCH_REACH, and a player who catches the ride rolling past has learnt
+ * the hitch. Once they have stood in a ring, braked to a stop anywhere or hitched, later leads say
+ * "hold for the ride" from the start. Once that ride is within HITCH_NEAR the pointer moves to its
+ * grab bar. With no stop to lead to, a ride coming at the skater or standing close by is pointed at
+ * directly. Until the hitch is learnt, no ride that needs a hop to reach is ever pointed at.
  *
  * A step counts whenever its condition happens, even before its hint has shown. Only a release the
  * player makes (lifting the finger, or a flick) counts toward the sling; a ride that lets go of them
@@ -34,8 +37,8 @@
  *
  * Nothing shows with the hints setting off, during a chalk recording or race, or during an errand.
  * Until the hitch step is done (and while the lesson runs with hints on) errands do not offer
- * themselves: a new player's first sight should not be an offer asking them to hold still before
- * they know what holding does (`Game.errandsOpen`).
+ * themselves: a new player's first sight should not be an offer before they know what the game is
+ * (`Game.errandsOpen`).
  *
  * World scans (rides and stops near the skater, ledges ahead, handrail run-ins) run every SCAN_EVERY
  * ticks, only for the hints that could show, with bounding-box rejects and no allocation.
@@ -116,6 +119,8 @@ export const SPOT_CLEAR = 1.2;
 export const LANE_CLEAR = 1.0;
 /** Within this of the waiting spot the skater is waiting there, metres. */
 export const SPOT_NEAR = 3;
+/** Slower than this the skater is standing (in the ring, or braked to a stop), m/s. */
+export const SPOT_STAND_SPEED = 1;
 /** Hitched this long, the sling hint shows (1.5 s). */
 export const SLING_SHOW_TICKS = 90;
 /** A release whose exit speed is at least this times the ride's speed is a whip. */
@@ -181,6 +186,8 @@ export interface OnboardingState {
   inkCatch: boolean;
   /** The ink hint: the stop where the current hitch will ink its first segment ('' if unknown). */
   stopName: string;
+  /** The hint leads to a waiting spot and teaches the brake there: the skater is not standing in the ring and has never stopped (shown once). */
+  brakeAsk: boolean;
   /** What the world pointer is over while `shown` is 'grind', 'hitch' or a catching 'ink'. */
   readonly target: HintTarget;
 }
@@ -524,6 +531,8 @@ export class OnboardingReducer implements GameReducer {
   private lastTick = 0;
   /** A release with another line close: the chain hint holds until the chain ends. */
   private chainWindow = false;
+  /** The brake has been shown and used, or is no longer needed: stood in a ring, braked to a stop, or hitched. */
+  private brakeTaught = false;
   // The current hitch, for the ink hint's stop: arc positions like the progress reducer keeps.
   private hitched = false;
   private hLine = -1;
@@ -548,6 +557,7 @@ export class OnboardingReducer implements GameReducer {
       slingRetry: false,
       inkCatch: false,
       stopName: '',
+      brakeAsk: false,
       target: { kind: 'none', line: -1, veh: -1, rail: -1, x: 0, y: 0, z: 0, hop: false },
     };
   }
@@ -594,6 +604,7 @@ export class OnboardingReducer implements GameReducer {
     st.inkCatch = false;
     st.stopName = '';
     this.hide();
+    this.brakeTaught = false;
     this.groundTicks = 0;
     this.carvedL = false;
     this.carvedR = false;
@@ -639,6 +650,7 @@ export class OnboardingReducer implements GameReducer {
           this.finish(game, 'grind');
           break;
         case 'hitch':
+          this.brakeTaught = true;
           this.finish(game, 'hitch');
           if (e.chain >= 2) this.finish(game, 'chain');
           this.chainWindow = false;
@@ -729,6 +741,10 @@ export class OnboardingReducer implements GameReducer {
     st.inkCatch = st.shown === 'ink' && p.mode !== Mode.HITCH;
     this.aim(st.shown, p.mode === Mode.HITCH);
     if (st.shown === 'ink') this.updateStopName(game);
+    // The brake, once: standing in the ring (or braked to a stop anywhere) is what it teaches.
+    const standing = ground && len2(p.vx, p.vz) < SPOT_STAND_SPEED;
+    if (standing && (game.applied.brake || this.atSpot(p.x, p.z))) this.brakeTaught = true;
+    st.brakeAsk = st.target.kind === 'spot' && !this.brakeTaught;
   }
 
   // ------------------------------------------------------------------------------------------
@@ -965,6 +981,7 @@ export class OnboardingReducer implements GameReducer {
   private hide(): void {
     this.state.shown = '';
     this.state.inkCatch = false;
+    this.state.brakeAsk = false;
     this.state.target.kind = 'none';
   }
 

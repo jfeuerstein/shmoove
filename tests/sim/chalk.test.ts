@@ -16,6 +16,7 @@ import {
   codeFromBytes,
   crc32,
   decodeChalk,
+  decodeFrames,
   encodeChalk,
   isChalkError,
   packChalk,
@@ -226,7 +227,7 @@ describe('steer quantisation', () => {
     g.step({ steer: 0.3, hold: false, hop: false });
     expect(g.applied.steerQ).toBe(9);
     const rd = new FrameReader();
-    rd.reset(Uint8Array.from([packFrame(9, false, false)]));
+    rd.reset(Uint16Array.from([packFrame(9, false, false)]));
     expect(rd.next()?.steer).toBe(9 / 31);
   });
 });
@@ -340,19 +341,167 @@ describe('recording and racing a chalk line', () => {
   });
 });
 
+describe('braking in a chalk line', () => {
+  /**
+   * A run down the slice's street that pulls down to stop, rolls on, carves, hops, brakes part of the
+   * way and ends waiting with a hand out (brake and hold together), through Game like a player.
+   */
+  function recordBraking(): Recording & { brakeTicks: number } {
+    const g = newGame();
+    seekVehicle(g.sim, TRAM, 0, 60, 1, 1500);
+    teleport(g.sim, -1.5, 120, Math.PI, 6);
+    step(g);
+    expect(g.chalkStartRecording()).toEqual({ ok: true });
+    const frames: InputFrame[] = [];
+    let brakeTicks = 0;
+    for (let i = 1; i <= 900; i++) {
+      const brake = (i > 90 && i <= 200) || (i > 420 && i <= 450) || i > 760;
+      const steer = i > 260 && i <= 400 ? 0.3 : i > 520 && i <= 640 ? -0.25 : 0;
+      const f: InputFrame = { steer, hold: i > 820, hop: i === 480, brake };
+      if (brake) brakeTicks++;
+      frames.push(f);
+      step(g, f);
+    }
+    const endHash = hashPlayer(g.sim.player, 0);
+    expect(g.chalkStopRecording('Frenada')).toEqual({ ok: true });
+    step(g);
+    const line = g.chalk.lines[0];
+    return { game: g, line, frames, endHash, hitchAt: [], releaseAt: [], hopAt: [], progressInked: 0, brakeTicks };
+  }
+
+  let rec: (Recording & { brakeTicks: number }) | null = null;
+  const braking = (): Recording & { brakeTicks: number } => (rec ??= recordBraking());
+
+  it('records the brake on exactly the ticks the player pulled down', () => {
+    const r = braking();
+    expect(r.line.ticks).toBe(900);
+    let n = 0;
+    for (let i = 0; i < r.line.ticks; i++) {
+      const b = (r.line.inputs[i] & 256) !== 0;
+      expect(b, `tick ${i + 1}`).toBe(r.frames[i].brake === true);
+      if (b) n++;
+    }
+    expect(n).toBe(r.brakeTicks);
+    const rd = new FrameReader();
+    rd.reset(r.line.inputs);
+    for (let i = 0; i < r.line.ticks; i++) {
+      const f = rd.next();
+      expect(f?.brake).toBe(r.frames[i].brake === true);
+      expect(f?.hold).toBe(r.frames[i].hold);
+    }
+  });
+
+  it('round-trips through its share code with the brake intact', () => {
+    const r = braking();
+    const code = encodeChalk(r.line);
+    const back = decodeChalk(code);
+    if (isChalkError(back)) throw new Error(back.error);
+    expect(back).toEqual(r.line);
+    // The brake flag rides in the top bit of the tick count.
+    const b = packChalk(r.line);
+    const at = ticksAtOf(b);
+    expect(b[at] | (b[at + 1] << 8)).toBe(r.line.ticks | 0x8000);
+  });
+
+  it('its ghost matches a player fed the same inputs tick for tick, and alone ends where the recording did', () => {
+    const r = braking();
+    const g = newGame();
+    expect(g.chalkImport(encodeChalk(r.line))).toEqual({ ok: true });
+    const log = race(g, r.line.id, r.frames.length, (i) => r.frames[i - 1]);
+    // The recording ends at a standstill on its own finish: the player is there at once with it.
+    const raced = log.finish ? log.finish.ticks : r.frames.length;
+    expect(log.matched).toBe(raced - 1);
+    // Alone: the player stays braked at the start so the ghost plays its whole recording.
+    const solo = race(g, r.line.id, r.line.ticks + 10, () => ({ steer: 0, hold: false, hop: false, brake: true }));
+    expect(solo.ghostEndHash).toBe(r.endHash);
+  });
+
+  it('the brake matters: the same line with the brake taken out ends somewhere else', () => {
+    const r = braking();
+    const ctx: SimCtx = { world: r.game.sim.world, tick: r.line.startDayTick, player: createPlayer(), events: [] as SimEvent[] };
+    placeAtStart(ctx.world, ctx, r.line);
+    const rd = new FrameReader();
+    rd.reset(r.line.inputs.map((f) => f & ~256));
+    for (let i = 1; i <= r.line.ticks; i++) {
+      const f = rd.next();
+      if (!f) break;
+      ctx.tick++;
+      ctx.events.length = 0;
+      stepPlayer(ctx, f);
+    }
+    const dz = ctx.player.z - r.line.endZ;
+    const dx = ctx.player.x - r.line.endX;
+    expect(Math.hypot(dx, dz)).toBeGreaterThan(CHALK_END_RADIUS);
+  });
+
+  it('a line without braking codes to the same bytes as before the brake existed', () => {
+    // A fixed line coded by the encoder as it was before braking was recorded.
+    const ticks = 600;
+    const frames = new Uint16Array(ticks);
+    for (let t = 0; t < ticks; t++) {
+      frames[t] = packFrame(Math.abs((Math.floor(t / 4) % 40) - 20) - 10, t >= 200 && t < 320, t % 150 === 149);
+    }
+    expect(encodeChalk(lineFromFrames(frames))).toBe(
+      'SK2-AgxNdWVsbGUgMDg6MDCgMvxYjELKwPM_cs711vywWEDb-QZPt-YHwI3l3HRrfhxApHBNwAAAJkIAQAxDWAIjwBFApCj1kI_oUTM-1516Br2Z-7IJPQeTGAA9jkRcP9AlZZ6QcE48',
+    );
+    // Braking costs only its own section: one pull of the brake adds a few bytes.
+    const braked = frames.slice();
+    for (let t = 400; t < 460; t++) braked[t] |= 256;
+    const plain = encodeChalk(lineFromFrames(frames)).length;
+    const withBrake = encodeChalk(lineFromFrames(braked)).length;
+    expect(withBrake).toBeGreaterThan(plain);
+    expect(withBrake - plain).toBeLessThanOrEqual(12);
+  });
+
+  it('a forged brake flag is caught, or is the one code of another line', () => {
+    // Setting the flag reads a brake section past the stream's end (as zeros), clearing it drops one:
+    // either way the result is an error or a different line whose one code this is.
+    const plain = encodeChalk(busy().line);
+    const flagged = reforge(plain, (b) => {
+      const at = ticksAtOf(b);
+      b[at + 1] |= 0x80;
+      return b;
+    });
+    const f = decodeChalk(flagged);
+    if (isChalkError(f)) expect(f.error).toBe('bad input stream');
+    else {
+      expect(f.inputs.some((v) => (v & 256) !== 0)).toBe(true);
+      expect(encodeChalk(f)).toBe(flagged);
+    }
+    const braked = encodeChalk(braking().line);
+    const unflagged = reforge(braked, (b) => {
+      const at = ticksAtOf(b);
+      b[at + 1] &= 0x7f;
+      return b;
+    });
+    const r = decodeChalk(unflagged);
+    if (isChalkError(r)) expect(r.error).toBe('bad input stream');
+    else {
+      expect(r.inputs.some((v) => (v & 256) !== 0)).toBe(false);
+      expect(encodeChalk(r)).toBe(unflagged);
+    }
+    // A brake section that never brakes is never the code of anything.
+    expect(decodeFrames(new Uint8Array(8), 0, 8, 600, true)).toBeNull();
+  });
+});
+
 /**
  * A random but well-formed line: runs of random length (1 to 255 ticks) of a random steer level and
  * flags, with some stretches where every tick is random (the coder's worst case).
  */
 function randomLine(rng: Rng): ChalkLine {
   const ticks = CHALK_MIN_TICKS + rng.int(CHALK_MAX_TICKS - CHALK_MIN_TICKS + 1);
-  const frames = new Uint8Array(ticks);
+  const frames = new Uint16Array(ticks);
+  // Half the lines brake somewhere; the other half never do (and code without a brake section).
+  const brakes = rng.chance(0.5);
   let t = 0;
   while (t < ticks) {
     const n = Math.min(ticks - t, 1 + rng.int(255));
     const noisy = rng.chance(0.1);
-    const f = packFrame(rng.int(63) - 31, rng.chance(0.5), rng.chance(0.5));
-    for (let k = 0; k < n; k++) frames[t + k] = noisy ? packFrame(rng.int(63) - 31, rng.chance(0.5), rng.chance(0.5)) : f;
+    const f = packFrame(rng.int(63) - 31, rng.chance(0.5), rng.chance(0.5), brakes && rng.chance(0.3));
+    for (let k = 0; k < n; k++) {
+      frames[t + k] = noisy ? packFrame(rng.int(63) - 31, rng.chance(0.5), rng.chance(0.5), brakes && rng.chance(0.5)) : f;
+    }
     t += n;
   }
   const names = ['Escalera', 'Muelle → Mirador', 'ñandú 🛹 run', '', 'a'.repeat(24), 'Línea 7'];
@@ -674,11 +823,11 @@ describe('finishing rules', () => {
  * drags that swing sinusoidally (0.3-1.5 Hz, 20-110 px), still touches that arm the hitch, lifts and
  * upward flicks, with +-1.5 px jitter on every move. Returns the frames the game actually applied.
  */
-function thumbFrames(seed: number, ticks: number): Uint8Array {
+function thumbFrames(seed: number, ticks: number): Uint16Array {
   const g = newGame();
   const ges = new Gestures();
   const rng = new Rng(seed);
-  const frames = new Uint8Array(ticks);
+  const frames = new Uint16Array(ticks);
   const fy = 600;
   let kind = 'lift';
   let left = 0;
@@ -737,10 +886,10 @@ function thumbFrames(seed: number, ticks: number): Uint8Array {
 }
 
 /** Steady steering: a new steer every 20-40 ticks (about every half second), a hop now and then. */
-function steadyFrames(seed: number, ticks: number): Uint8Array {
+function steadyFrames(seed: number, ticks: number): Uint16Array {
   const g = newGame();
   const rng = new Rng(seed);
-  const frames = new Uint8Array(ticks);
+  const frames = new Uint16Array(ticks);
   let steer = 0;
   let next = 0;
   for (let t = 0; t < ticks; t++) {
@@ -754,7 +903,7 @@ function steadyFrames(seed: number, ticks: number): Uint8Array {
   return frames;
 }
 
-function lineFromFrames(frames: Uint8Array, name = 'Muelle 08:00'): ChalkLine {
+function lineFromFrames(frames: Uint16Array, name = 'Muelle 08:00'): ChalkLine {
   const line: ChalkLine = {
     v: 1,
     id: '',
@@ -773,6 +922,11 @@ function lineFromFrames(frames: Uint8Array, name = 'Muelle 08:00'): ChalkLine {
   };
   line.id = chalkId(line);
   return line;
+}
+
+/** Where a packing's tick count is. */
+function ticksAtOf(b: Uint8Array): number {
+  return 2 + b[1] + 2 + 32 + 12;
 }
 
 /** Where a packing's input-stream length starts, and the stream's offset and length. */

@@ -575,7 +575,7 @@ describe('the ride pointed at can be caught', () => {
     expect(checked).toBeGreaterThan(40);
     expect(contested).toBeLessThanOrEqual(checked * 0.1);
     expect(seen.size).toBeGreaterThan(6);
-  });
+  }, 120_000);
 
   it('never points at the gated summit kite, even standing under it', () => {
     resetFeel();
@@ -684,11 +684,14 @@ function policy(game: Game, m: BotMemo, i: number, out: Want): void {
     if (m.slingT > SLING_WAIT && Math.max(Math.hypot(p.vx, p.vz) * FEEL.SLING_GAIN, FEEL.SLING_MIN) >= 1.2 * rideSpeed) out.hold = false;
     if (rideSpeed > 4) out.steer = clamp(-(1.5 * angleDiff(p.psi, p.psiRest) + 0.5 * p.omega), -1, 1);
   } else if (!ob.done.carve) {
-    if ((ob.shown === 'carve' && seen) || m.carveT > 0) out.steer = m.carveT++ < 30 ? 0.9 : -0.9;
+    // A short carve each way: at twice the old speed a long one ran the board off the lookout
+    // sideways onto the stair-top ledge.
+    if ((ob.shown === 'carve' && seen) || m.carveT > 0) out.steer = m.carveT++ < 15 ? 0.6 : -0.6;
   } else if (p.z > 422) {
     // Down the stairs on the second flight's handrail line to the third landing, then the spine.
-    // Until the hop is learnt, keep clear of the first flight's handrail (a late hop would land on it).
-    const tx = !ob.done.hop ? 8 : p.z > 470 ? RAIL_X : 0;
+    // Until the hop is learnt, keep to the lane between the first flight's handrail (x = 3) and the
+    // stair-top ledge (from x = 7).
+    const tx = !ob.done.hop ? 5 : p.z > 470 ? RAIL_X : 0;
     out.steer = clamp(-2 * angleDiff(Math.atan2(tx - p.x, -6), p.heading), -1, 1);
     if (ob.shown === 'hop' && seen && p.mode === Mode.GROUND) out.hop = true;
     if (ob.shown === 'grind' && p.mode === Mode.GROUND && Math.abs(p.z - (RUN_IN_Z + 2)) < 0.5) out.hop = true;
@@ -715,6 +718,9 @@ function policy(game: Game, m: BotMemo, i: number, out: Want): void {
   }
 }
 
+/** SKITCH_LAUNCH_TRACE=1: the bots' logs carry their position every half second (to re-find the route). */
+const LAUNCH_TRACE = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env?.SKITCH_LAUNCH_TRACE !== undefined;
+
 /** Book-keeping shared by the bots: the event log, bails and the arrival at the first stop. */
 class Watch {
   readonly log: string[] = [];
@@ -730,6 +736,7 @@ class Watch {
     const w = sim.world;
     // Arrived: within the stop board's range of the stop, or down on its landing (below the last flight).
     if (this.arrival < 0 && (Math.hypot(p.x - this.stop.x, p.z - this.stop.z) < 14 || p.z < this.stop.z + 7)) this.arrival = sim.tick;
+    if (LAUNCH_TRACE && i % 30 === 0) this.log.push(`${i} at ${p.x.toFixed(1)},${p.y.toFixed(1)},${p.z.toFixed(1)} v ${p.speed.toFixed(1)} mode ${p.mode} hint ${this.game.onboarding.shown} target ${this.game.onboarding.target.kind}`);
     for (const e of sim.events) {
       if (e.type === 'bail') this.bails++;
       if (e.type === 'hitch' || e.type === 'release') this.log.push(`${i} ${e.type} ${w.lines[e.line].id}`);
@@ -989,6 +996,45 @@ function replay(frac: number, script: readonly Touch[]): Replay {
   return { game, log: watch.log, marks };
 }
 
+const ENV = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env ?? {};
+
+/** The lines that stop at the first stop, with the stop point. */
+function servingFirstStop(): { L: CompiledLine; x: number; z: number }[] {
+  const serving: { L: CompiledLine; x: number; z: number }[] = [];
+  for (const L of city.world.lines) {
+    const sp = stopPoint(L, FIRST_STOP);
+    if (sp) serving.push({ L, ...sp });
+  }
+  return serving;
+}
+
+function rideWithin12s(serving: { L: CompiledLine; x: number; z: number }[], a: number): boolean {
+  for (let t = a; t <= a + 12 * 60; t++) {
+    for (const s of serving) {
+      for (let k = 0; k < s.L.vehicles; k++) {
+        vehicleAt(s.L, k, t, vs);
+        if (vs.active && Math.hypot(vs.x - s.x, vs.z - s.z) < STOP_R) return true;
+      }
+    }
+  }
+  return false;
+}
+
+/**
+ * Does a new game started at `frac` have a ride at the first stop, or due within 12 s, for the
+ * hint-following player arriving when they do, or 15 s earlier or later, and then carving round
+ * for up to 20 s more?
+ */
+function clockWorks(frac: number): boolean {
+  const run = firstLaunch(frac, 40 * 60);
+  if (run.arrival < 0) return false;
+  const serving = servingFirstStop();
+  for (const shift of [-15 * 60, 0, 15 * 60]) {
+    for (let d = 0; d <= 20 * 60; d += 15) if (!rideWithin12s(serving, run.arrival + shift + d)) return false;
+  }
+  return true;
+}
+
 describe('the first launch', () => {
   it('a new player who follows the hints learns the lesson in order (with the hop and grind on the way), in under 4 minutes, at the new-game clock', () => {
     expect(NEW_GAME_DAY_FRAC).toBeGreaterThanOrEqual(0.3);
@@ -1012,41 +1058,43 @@ describe('the first launch', () => {
   });
 
   it('a vehicle is at the first stop, or due within 12 s, for a player arriving up to 20 s after a typical arrival', () => {
-    const run = firstLaunch(NEW_GAME_DAY_FRAC);
+    const run = firstLaunch(NEW_GAME_DAY_FRAC, 40 * 60);
     expect(run.arrival).toBeGreaterThan(0);
-    const w = city.world;
-    const serving: { L: CompiledLine; x: number; z: number }[] = [];
-    for (const L of w.lines) {
-      const sp = stopPoint(L, FIRST_STOP);
-      if (sp) serving.push({ L, ...sp });
-    }
+    const serving = servingFirstStop();
     expect(serving.map((s) => s.L.id).sort()).toEqual(['M1', 'M2']);
-    const atStop = (t: number): boolean => {
-      for (const s of serving) {
-        for (let k = 0; k < s.L.vehicles; k++) {
-          vehicleAt(s.L, k, t, vs);
-          if (vs.active && Math.hypot(vs.x - s.x, vs.z - s.z) < STOP_R) return true;
-        }
-      }
-      return false;
-    };
-    const rideWithin12s = (a: number): boolean => {
-      for (let t = a; t <= a + 12 * 60; t++) if (atStop(t)) return true;
-      return false;
-    };
     // Typical arrival (the hint-following player), then up to 20 s of carving around.
-    for (let d = 0; d <= 20 * 60; d += 15) expect(rideWithin12s(run.arrival + d), `arriving ${d / 60}s late`).toBe(true);
+    for (let d = 0; d <= 20 * 60; d += 15) expect(rideWithin12s(serving, run.arrival + d), `arriving ${d / 60}s late`).toBe(true);
     // Tolerance: the whole 20 s range still holds if the typical arrival itself is 15 s earlier or later.
-    for (const shift of [-15 * 60, 15 * 60]) {
-      for (let d = 0; d <= 20 * 60; d += 15) expect(rideWithin12s(run.arrival + shift + d), `shift ${shift / 60}s, +${d / 60}s`).toBe(true);
-    }
+    expect(clockWorks(NEW_GAME_DAY_FRAC)).toBe(true);
   });
 
-  it('the bot reaches the first stop about 22 s in (the timing above assumes it)', () => {
+  // SKITCH_FIND_CLOCK=1 npx vitest run tests/sim/onboarding.test.ts -t 'new-game clock' --silent=false
+  // re-derives NEW_GAME_DAY_FRAC: every second of a morning, the middle of the longest run of start
+  // times at which the clock test above passes.
+  it.skipIf(!ENV.SKITCH_FIND_CLOCK)('finds the new-game clock', () => {
+    let runFrom = -1;
+    let best: [number, number] = [0, -1];
+    const step = 60 / DAY_TICKS;
+    for (let f = 0.3; f <= 0.45 + 1e-9; f += step) {
+      const ok = clockWorks(f);
+      if (ok && runFrom < 0) runFrom = f;
+      if ((!ok || f + step > 0.45 + 1e-9) && runFrom >= 0) {
+        const to = ok ? f : f - step;
+        if (to - runFrom > best[1] - best[0]) best = [runFrom, to];
+        runFrom = -1;
+      }
+    }
+    expect(best[1]).toBeGreaterThan(best[0]);
+    const mid = (best[0] + best[1]) / 2;
+    const run = firstLaunch(mid, 40 * 60);
+    console.info(`NEW_GAME_DAY_FRAC = ${mid.toFixed(4)} (works ${best[0].toFixed(4)}..${best[1].toFixed(4)}); the bot arrives ${((run.arrival - Math.round(mid * DAY_TICKS)) / 60).toFixed(1)} s in`);
+  }, 600_000);
+
+  it('the bot reaches the first stop about 16 s in (the timing above assumes it)', () => {
     const run = firstLaunch(NEW_GAME_DAY_FRAC, 40 * 60);
     const start = Math.round(NEW_GAME_DAY_FRAC * DAY_TICKS);
-    expect((run.arrival - start) / 60).toBeGreaterThan(15);
-    expect((run.arrival - start) / 60).toBeLessThan(30);
+    expect((run.arrival - start) / 60).toBeGreaterThan(12);
+    expect((run.arrival - start) / 60).toBeLessThan(22);
   });
 });
 

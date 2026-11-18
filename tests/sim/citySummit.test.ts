@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { buildCity, type City } from '../../src/sim/city';
-import { resetFeel } from '../../src/sim/constants';
+import { DAY_TICKS, resetFeel } from '../../src/sim/constants';
 import type { CompiledLine } from '../../src/sim/lines';
 import { placePlayer } from '../../src/sim/player';
 import { Sim } from '../../src/sim/sim';
@@ -25,7 +25,8 @@ interface Script {
 }
 
 /**
- * The summit route, found by searching release ticks, hop-releases and whips link by link. It
+ * The summit route, found by searching release ticks, hop-releases and whips link by link
+ * (SKITCH_FIND_SUMMIT=1 npx vitest run tests/sim/findRoutes.test.ts --silent=false prints it). It
  * starts under the lower cable car's base strap at the Antenna gate as a car waits there:
  * ride it to the hill station, let go with a hop as a summit cable car waits beside it, ride
  * that up until a kite comes past, crack the whip and hop onto the kite's strap, ride the kite up
@@ -39,15 +40,15 @@ const SUMMIT: Script = {
   z: 947.2993933173871,
   keys: [
     [0, 0, 1, 1],
-    [1187, 1, 1, 0],
-    [1227, 0, 0, 1],
-    [1232, 0, 1, 0],
-    [1329, -1, 1, 0],
-    [1369, 0, 0, 1],
-    [1374, 0, 1, 0],
-    [3171, -1, 1, 0],
-    [3211, 0, 0, 1],
-    [3216, 0, 1, 0],
+    [1380, -1, 1, 0],
+    [1420, 0, 0, 0],
+    [1425, 0, 1, 0],
+    [1685, -1, 1, 0],
+    [1725, 0, 0, 0],
+    [1730, 0, 1, 0],
+    [3214, 0, 1, 0],
+    [3254, 0, 0, 1],
+    [3259, 0, 1, 0],
   ],
 };
 /** Ticks the run lasts: past the drop onto the needle at the end of the king kite's way back. */
@@ -135,8 +136,16 @@ describe('the summit route', () => {
     const windows: number[] = [];
     for (let k = -4; k <= 2; k++) if (succeeds(replay(SUMMIT, SUMMIT_TICKS, k * WINDOW_PERIOD))) windows.push(k);
     // The whole route takes about a minute inside kite hours (0.35-0.70 of the day), on kites and
-    // a king kite whose laps must start inside them: two windows fit, back to back.
-    expect(windows).toEqual([-1, 0]);
+    // a king kite whose laps must start inside them: the windows come back to back, and include
+    // the two the bots use. (With the 14 m strap, DECISIONS 119, the one before them works too:
+    // measured -2, -1, 0.)
+    expect(windows).toEqual(expect.arrayContaining([-1, 0]));
+    for (let k = 1; k < windows.length; k++) expect(windows[k]).toBe(windows[k - 1] + 1);
+    for (const k of windows) {
+      const at = (SUMMIT.start + k * WINDOW_PERIOD) / DAY_TICKS;
+      expect(at).toBeGreaterThanOrEqual(0.35);
+      expect(at + SUMMIT_TICKS / DAY_TICKS).toBeLessThanOrEqual(0.7 + 0.1);
+    }
   });
 
   it('is forgiving enough for a thumb: each release still works a tenth of a second early or late', () => {
@@ -161,7 +170,9 @@ describe('the summit route', () => {
     let r = replay(SUMMIT, SUMMIT_TICKS, 0, at);
     for (let by = -60; by <= 60 && !r.events.some(([, e]) => e.type === 'denied'); by += 2) r = replay(shifted(by), SUMMIT_TICKS, 0, at);
     const h = hitches(r);
-    expect(h.map((e) => city.world.lines[e.line].id)).toEqual(['A1', 'A2', 'A3']);
+    // Turned away at the king kite: the hand that reached for it may catch another ride after (the
+    // strap reaches 14 m since DECISIONS 119), never the king kite (checked below).
+    expect(h.slice(0, 3).map((e) => city.world.lines[e.line].id)).toEqual(['A1', 'A2', 'A3']);
     const denied = r.events.find(([, e]) => e.type === 'denied');
     expect(denied?.[1]).toMatchObject({ type: 'denied', line: line('S3').index, need: 4 });
     expect(r.events.some(([, e]) => e.type === 'hitch' && e.line === line('S3').index)).toBe(false);

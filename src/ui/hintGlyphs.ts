@@ -65,6 +65,13 @@ function frames(kind: GlyphKind): string[] {
         contact(32, 38) + thumb(32, 13) + arrow('M20 30 H8 M12 26 L8 30 L12 34'),
         thumb(32, 2, true) + arrow('M27 43 L31 33', PINK) + arrow('M37 43 L34 33', PINK),
       ];
+    case 'pull':
+      // Pressed on the glass, dragged down, held there with a bar under it: the brake.
+      return [
+        contact(24, 26) + thumb(24, 1),
+        contact(24, 32) + thumb(24, 7) + arrow('M38 6 V24 M33 19 L38 24 L43 19'),
+        contact(24, 38) + thumb(24, 13) + arrow('M38 12 V30 M33 25 L38 30 L43 25') + `<path d="M12 45 H36" stroke="${PINK}" stroke-width="3" stroke-linecap="round"/>`,
+      ];
     case 'map':
       // An arrow up and left, toward the map button.
       return [arrow('M38 38 L12 12 M12 26 V12 H26'), arrow('M34 34 L8 8 M8 22 V8 H22')];

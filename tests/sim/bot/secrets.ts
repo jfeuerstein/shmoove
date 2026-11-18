@@ -12,7 +12,7 @@ import type { Task } from './skater';
 type Key = readonly [number, number, number, number];
 
 /**
- * The summit route as tests/sim/citySummit.test.ts found it, keyed to the window it opens: under the
+ * The summit route as tests/sim/findRoutes.test.ts finds it (SKITCH_FIND_SUMMIT=1), keyed to the window it opens: under the
  * lower cable car's strap at the Antenna gate as a car stands there, ride it to the hill station,
  * hop off as a summit car waits beside it, ride that until a kite comes past, whip onto the kite,
  * ride it until the king kite swoops past, whip onto that, and hold on.
@@ -25,15 +25,15 @@ export const SUMMIT = {
   starts: [22140, 27540],
   keys: [
     [0, 0, 1, 1],
-    [1187, 1, 1, 0],
-    [1227, 0, 0, 1],
-    [1232, 0, 1, 0],
-    [1329, -1, 1, 0],
-    [1369, 0, 0, 1],
-    [1374, 0, 1, 0],
-    [3171, -1, 1, 0],
-    [3211, 0, 0, 1],
-    [3216, 0, 1, 0],
+    [1380, -1, 1, 0],
+    [1420, 0, 0, 0],
+    [1425, 0, 1, 0],
+    [1685, -1, 1, 0],
+    [1725, 0, 0, 0],
+    [1730, 0, 1, 0],
+    [3214, 0, 1, 0],
+    [3254, 0, 0, 1],
+    [3259, 0, 1, 0],
   ] as readonly Key[],
 } as const;
 
@@ -89,16 +89,18 @@ export function summitRun(label: string): Task {
         out.hold = key[2] === 1;
         out.hop = key[0] === i && key[3] === 1;
         // Check each link took: just after each catch the skater must be on the next ride.
+        // (A second and a half after each release, from the keys: the route is re-found by search.)
+        const rel = SUMMIT.keys.filter((x) => x[2] === 0).map((x) => x[0] + 90);
         const want: [number, string][] = [
           [60, 'A1'],
-          [1300, 'A2'],
-          [1450, 'A3'],
-          [3260, 'S3'],
+          [rel[0], 'A2'],
+          [rel[1], 'A3'],
+          [rel[2], 'S3'],
         ];
         for (const [at, id] of want) {
           if (i === at && (p.mode !== Mode.HITCH || w.lines[p.hLine].id !== id)) return b.fail(`the summit chain broke before ${id} (links ${links.join(' ')})`);
         }
-        if (i >= 3260) phase = 'king';
+        if (i >= rel[2]) phase = 'king';
         return 'run';
       }
       // On the king kite: hold on over the needle and all the way back round its circuit, until it

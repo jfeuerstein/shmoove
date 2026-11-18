@@ -1,7 +1,7 @@
 /**
  * Errands in play: the offer ticket that slides up at the bottom while the skater stands in a
- * giver's zone (title, brief, time limit, a punch circle filling as the hold is kept, HOLD TO
- * TAKE), and the active errand's stub under the destination board (title, the current step as a
+ * giver's zone (title, brief, time limit, a punch circle filling as the skater stops for it, PULL
+ * DOWN TO TAKE), and the active errand's stub under the destination board (title, the current step as a
  * short imperative, a progress figure where there is one, the time left, pink under 20 s).
  * Results (stamped DELIVERED or torn) come out as ticket toasts.
  */
@@ -67,7 +67,7 @@ export class ErrandHud {
     this.oHoursRow = el('span', 'sk-ohours');
     this.oHoursRow.append(el('span', 'sk-cfact', 'Hours'), hours);
     facts.append(el('span', 'sk-cfact', 'Limit'), limit, this.oHoursRow);
-    this.oHold = el('div', 'sk-ohold', 'HOLD TO TAKE');
+    this.oHold = el('div', 'sk-ohold', 'PULL DOWN TO TAKE');
     this.oPunch = el('span', 'sk-opunch');
     this.oPunch.dataset.sk = 'errandPunch';
     t.append(head, title, brief, facts, this.oHold, this.oPunch);
@@ -104,7 +104,7 @@ export class ErrandHud {
     return this.stubKey !== '';
   }
 
-  /** `hints`: show the HOLD TO TAKE line. */
+  /** `hints`: show the PULL DOWN TO TAKE line. */
   update(hints: boolean): void {
     const st = this.game.errands;
     const w = this.game.sim.world;

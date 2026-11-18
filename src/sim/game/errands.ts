@@ -3,10 +3,12 @@
  *
  * An errand is data (`ErrandDef`, the city's list is in `content/errands.ts`): a giver zone, a time
  * limit and an ordered list of steps, each a small pure check over the skater and the sim's events.
- * There are no buttons in play, so an errand is taken by the one extra verb the game has: hold
- * still. Inside the giver's zone, on the board, slower than OFFER_MAX_SPEED, not hitched and with
- * the touch armed while no ride is in reach, the offer fills over OFFER_FILL_TICKS and starts.
- * Releasing the touch empties it; rolling out of the zone withdraws it. One errand at a time. A
+ * There are no buttons in play, so an errand is taken by stopping for it: inside the giver's zone, on
+ * the board, slower than OFFER_MAX_SPEED, not hitched and with no ride in reach, the offer fills over
+ * OFFER_FILL_TICKS while the skater brakes (pulls down) or stands (slower than OFFER_STAND_SPEED), and
+ * starts. A thumb resting on the glass is a hand out for a ride, so rolling through a zone with it
+ * never takes an errand (DECISIONS 113). Rolling on empties the offer; leaving the zone withdraws it.
+ * One errand at a time. A
  * giver whose offer was ignored (withdrawn without being taken) does not offer again for
  * OFFER_SNOOZE_TICKS, so circling near them is not a stream of offers.
  *
@@ -76,7 +78,9 @@ export const RIDE_GRACE_TICKS = 3 * 60;
 const MAX_GRIND_STEP = 1;
 /** Offers fill only below this speed, m/s. */
 export const OFFER_MAX_SPEED = 4;
-/** Hold time that takes an offer: 0.6 s. */
+/** Slower than this, the skater is standing: a stand takes an offer like the brake does, m/s. */
+export const OFFER_STAND_SPEED = 1;
+/** Braking or standing this long takes an offer: 0.6 s. */
 export const OFFER_FILL_TICKS = 36;
 /** A giver whose offer was ignored stays quiet this long: 45 s. */
 export const OFFER_SNOOZE_TICKS = 45 * 60;
@@ -233,7 +237,7 @@ export class ErrandsReducer implements GameReducer {
   private readonly resolved: Resolved[];
   private readonly byId = new Map<string, Resolved>();
   private cur: Resolved | null = null;
-  /** The touch must lift before another offer can fill (after a start or an end). */
+  /** After a start or an end, the skater must roll on (not braking, not standing) or leave the giver zones before another offer can fill. */
   private needLift = false;
   /** Giver zone id -> tick its last offer was ignored (withdrawn without being taken). */
   private readonly snoozed = new Map<string, number>();
@@ -318,7 +322,7 @@ export class ErrandsReducer implements GameReducer {
     const p = sim.player;
     if (this.state.active && this.cur) this.stepActive(game, this.cur, this.state.active);
     else this.stepOffer(game);
-    if (!game.applied.hold) this.needLift = false;
+    if (!game.applied.brake && planSpeed(p) >= OFFER_STAND_SPEED) this.needLift = false;
     this.px = p.x;
     this.py = p.y;
     this.pz = p.z;
@@ -332,7 +336,7 @@ export class ErrandsReducer implements GameReducer {
     const sim = game.sim;
     const p = sim.player;
     let here: Resolved | null = null;
-    // Onboarding holds offers back until the player has learnt what holding still does.
+    // Onboarding holds offers back until the player has learnt the hitch.
     if (p.mode !== Mode.HITCH && p.mode !== Mode.BAIL && game.errandsOpen) {
       const f = sim.dayFrac;
       for (const r of this.resolved) {
@@ -354,9 +358,12 @@ export class ErrandsReducer implements GameReducer {
       st.offerFill = 0;
       if (id !== null) game.events.push({ type: 'errandOffer', id });
     }
-    if (!here) return;
-    const holding = game.applied.hold && !this.needLift;
-    if (holding && p.mode !== Mode.AIR && planSpeed(p) < OFFER_MAX_SPEED && !rideInReach(sim)) {
+    if (!here) {
+      this.needLift = false;
+      return;
+    }
+    const stopping = (game.applied.brake || planSpeed(p) < OFFER_STAND_SPEED) && !this.needLift;
+    if (stopping && p.mode !== Mode.AIR && planSpeed(p) < OFFER_MAX_SPEED && !rideInReach(sim)) {
       st.offerFill = Math.min(1, st.offerFill + 1 / OFFER_FILL_TICKS);
       if (st.offerFill >= 1 - 1e-9) this.start(game, here);
     } else st.offerFill = 0;

@@ -198,8 +198,11 @@ describe('the hill station platform', () => {
       for (let i = 0; i < 60 * 60 && still < 0; i++) {
         while (k < wps.length - 1 && Math.hypot(wps[k][0] - p.x, wps[k][1] - p.z) < 4) k++;
         const deck = onDeck(game);
-        // Steer for the deck; once on it, pull down: a dragged foot.
-        const brake = deck;
+        // Steer for the deck; once on it, pull down: a dragged foot. Coming in faster than the deck is
+        // long enough to stop on (DECISIONS 114: the steps no longer scrub the speed off), pull down
+        // on the run-in steps too, as a player who means to stop there would.
+        const runIn = p.mode === Mode.GROUND && p.z < PF.z1 + 12 && p.speed * p.speed > 2 * FEEL.FOOT_BRAKE * Math.max(0, p.z - PF.z0 - 2);
+        const brake = deck || runIn;
         game.step({ steer: brake ? 0 : steerFor(game, wps[k][0], wps[k][1]), hold: false, hop: false, brake });
         for (const e of game.sim.events) events.push(e);
         if (p.z < PF.z1 + 15) peak = Math.max(peak, p.speed);

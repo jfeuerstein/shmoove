@@ -1,10 +1,10 @@
 /**
  * A closed-loop scripted skater. It plays a Game the way a player does: every tick it looks at its
  * own state, the world, the timetable and the game's events, and answers with one InputFrame (a
- * steer, a held touch, a swipe up). It never writes to the sim or the game.
+ * steer, a held touch, a swipe up, a pull down to brake). It never writes to the sim or the game.
  *
  * A plan is a list of tasks run in order. Each task is a small controller: roll along waypoints,
- * wait for a named line at a stop (standing on a planted foot) and catch it, ride it until a stop
+ * wait for a named line at a stop (braked to a stand: the finger pulled down) and catch it, ride it until a stop
  * and let go. A task that cannot go on (the ride it was on is gone, a catch was missed
  * past retrying) fails the run with a note saying where and when, rather than trying something else:
  * the plan is a test of the game, and a failure is a finding.
@@ -31,7 +31,6 @@ export interface Task {
 
 const V = makeVehicleState();
 const G = { x: 0, y: 0, z: 0 };
-const NG2 = { line: -1, veh: -1, d: 0, dy: 0 };
 
 export class Skater {
   game: Game;
@@ -93,6 +92,7 @@ export class Skater {
     out.steer = 0;
     out.hold = false;
     out.hop = false;
+    out.brake = false;
     this.clock++;
     while (!this.done) {
       const t = this.tasks[this.ti];
@@ -107,21 +107,32 @@ export class Skater {
       out.steer = 0;
       out.hold = false;
       out.hop = false;
+      out.brake = false;
     }
   }
 
   // ------------------------------------------------------------------------------------------
   // Controls shared by tasks.
 
-  /** Steer for (x, z); tic-tac when crawling and still some way off. */
-  steerTo(out: InputFrame, x: number, z: number, crawl = 2.4): number {
+  /**
+   * Steer for (x, z); tic-tac when crawling and still some way off. Pull down (brake) when the point
+   * is behind and the board is going too fast to carve round to it, and, with `arrive`, when it is
+   * coming up faster than the brake could stop at it.
+   */
+  steerTo(out: InputFrame, x: number, z: number, crawl = 2.4, arrive = false): number {
     const p = this.p;
     const dx = x - p.x;
     const dz = z - p.z;
     const dist = Math.sqrt(dx * dx + dz * dz);
     const want = datan2(dx, dz);
-    out.steer = clamp(-2 * angleDiff(want, p.heading), -1, 1);
+    const off = angleDiff(want, p.heading);
+    out.steer = clamp(-2 * off, -1, 1);
     if (p.mode === Mode.GROUND && p.speed < crawl && dist > 2) out.steer = clamp(out.steer + (Math.floor(this.clock / 12) % 2 === 0 ? 0.9 : -0.9), -1, 1);
+    if (p.mode === Mode.GROUND && dist > 1) {
+      const behind = Math.abs(off) > 1.75 && p.speed > 3;
+      const tooFast = arrive && p.speed > 1.5 && p.speed * p.speed > 2 * FEEL.FOOT_BRAKE * Math.max(0, dist - 1.5) * 0.8;
+      if (behind || tooFast) out.brake = true;
+    }
     // A kerb or a platform edge in the way, too tall to roll up: hop it.
     if (p.mode === Mode.GROUND && p.speed > 0.8 && dist > 0.5) {
       // Far enough ahead that the hop has risen over the edge by the time the board gets there.
@@ -142,16 +153,6 @@ export class Skater {
     const L = this.w.lines[p.hLine];
     vehicleAt(L, p.hVeh, this.tick, V);
     if (V.vx * V.vx + V.vz * V.vz > 16) out.steer = clamp(-(1.5 * angleDiff(p.psi, p.psiRest) + 0.5 * p.omega), -1, 1);
-  }
-
-  /**
-   * May the bot hold a still finger here to stand and wait for `line`? Not when a different line's
-   * grab point is close enough to latch by mistake. (No giver's spot takes in a stop's waiting
-   * area: tests/sim/content.test.ts.)
-   */
-  canPlantFoot(line: number): boolean {
-    this.nearestGrab(FEEL.HITCH_REACH + 3, NG2);
-    return NG2.line < 0 || NG2.line === line;
   }
 
   /**

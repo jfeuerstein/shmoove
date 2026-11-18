@@ -76,7 +76,7 @@ export interface Runner {
 }
 
 export function makeRunner(game: Game, bot: Skater, book: Book = newBook(game)): Runner {
-  const input: InputFrame = { steer: 0, hold: false, hop: false };
+  const input: InputFrame = { steer: 0, hold: false, hop: false, brake: false };
   const stepMax = maxSkaterStep(game.sim.world);
   let px = game.sim.player.x;
   let pz = game.sim.player.z;
@@ -103,6 +103,7 @@ export function makeRunner(game: Game, bot: Skater, book: Book = newBook(game)):
           input.steer = 0;
           input.hold = false;
           input.hop = false;
+          input.brake = false;
         } else r.bot.input(input);
         g.step(input);
         n++;

@@ -148,3 +148,119 @@ describe('review fixes', () => {
     expect(hold).toBe(true);
   });
 });
+
+describe('the brake: pulling the finger down', () => {
+  beforeEach(() => resetFeel());
+
+  /** Sample `n` ticks; whether every one braked, whether any did, and the hops. */
+  const brakes = (g: Gestures, n: number): { all: boolean; any: boolean; hold: boolean; hops: number } => {
+    let all = true;
+    let any = false;
+    let hold = false;
+    let hops = 0;
+    for (let i = 0; i < n; i++) {
+      const f = g.sample();
+      all = all && f.brake === true;
+      any = any || f.brake === true;
+      hold = f.hold;
+      if (f.hop) hops++;
+    }
+    return { all, any, hold, hops };
+  };
+
+  it('pulling down past the threshold brakes for as long as the finger stays down there', () => {
+    const g = new Gestures();
+    g.down(200, 600);
+    brakes(g, 2);
+    // Short of the threshold: nothing.
+    for (let i = 1; i <= 8; i++) {
+      g.move(200, 600 + (FEEL.BRAKE_PULL_PX - 4) * (i / 8));
+      expect(brakes(g, 1).any).toBe(false);
+    }
+    g.move(200, 600 + FEEL.BRAKE_PULL_PX + 6);
+    expect(brakes(g, 1).all).toBe(true);
+    expect(brakes(g, 120).all).toBe(true);
+    // A little wobble back up does not let go.
+    g.move(200, 600 + FEEL.BRAKE_PULL_PX * 0.8);
+    expect(brakes(g, 10).all).toBe(true);
+  });
+
+  it('coming back up releases the brake, without a hop', () => {
+    const g = new Gestures();
+    g.down(200, 600);
+    brakes(g, 2);
+    g.move(200, 600 + FEEL.BRAKE_PULL_PX + 10);
+    expect(brakes(g, 30).all).toBe(true);
+    // Back up toward where it landed, over half a second.
+    let hops = 0;
+    for (let i = 1; i <= 30; i++) {
+      g.move(200, 600 + (FEEL.BRAKE_PULL_PX + 10) * (1 - i / 30));
+      hops += brakes(g, 1).hops;
+    }
+    expect(brakes(g, 5).any).toBe(false);
+    expect(hops).toBe(0);
+    // And lifting the finger always lets go.
+    g.move(200, 600 + FEEL.BRAKE_PULL_PX + 10);
+    expect(brakes(g, 1).all).toBe(true);
+    g.up();
+    expect(brakes(g, 1).any).toBe(false);
+  });
+
+  it('a thumb resting on the glass never brakes, however long it rests', () => {
+    const g = new Gestures();
+    g.down(200, 600);
+    // A resting thumb drifts a few pixels.
+    let any = false;
+    for (let i = 0; i < 600; i++) {
+      g.move(200 + (i % 7) - 3, 600 + (i % 5) - 2);
+      any = brakes(g, 1).any || any;
+    }
+    expect(any).toBe(false);
+  });
+
+  it('a carving thumb never brakes, even swinging wide and a little low', () => {
+    const g = new Gestures();
+    g.down(200, 600);
+    let any = false;
+    for (let i = 0; i < 600; i++) {
+      const k = (i % 120) / 120;
+      const x = 200 + 110 * (k < 0.5 ? 4 * k - 1 : 3 - 4 * k);
+      // The thumb's arc dips as it swings out, well short of a pull.
+      const y = 600 + 0.4 * FEEL.BRAKE_PULL_PX * Math.abs(x - 200) / 110;
+      g.move(x, y);
+      any = brakes(g, 1).any || any;
+    }
+    expect(any).toBe(false);
+  });
+
+  it('a swipe up still hops, and does not brake', () => {
+    const g = new Gestures();
+    g.down(200, 700);
+    brakes(g, 1);
+    g.move(200, 700 - FEEL.SWIPE_UP_PX * 1.3);
+    const r = brakes(g, 1);
+    expect(r.hops).toBe(1);
+    expect(r.any).toBe(false);
+  });
+
+  it('brake and hold together: waiting at a stop with a hand out', () => {
+    const g = new Gestures();
+    g.down(200, 600);
+    g.move(200, 600 + FEEL.BRAKE_PULL_PX + 8);
+    const r = brakes(g, Math.ceil(FEEL.HOLD_ARM_TIME * 60) + 4);
+    expect(r.all).toBe(true);
+    expect(r.hold).toBe(true);
+    expect(g.isArmed).toBe(true);
+  });
+
+  it('keyboard: the down arrow and S brake while pressed', () => {
+    for (const code of ['ArrowDown', 'KeyS']) {
+      const g = new Gestures();
+      expect(g.key(code, true)).toBe(true);
+      expect(brakes(g, 3).all).toBe(true);
+      g.key(code, false);
+      expect(brakes(g, 1).any).toBe(false);
+    }
+  });
+});
+
