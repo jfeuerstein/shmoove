@@ -255,8 +255,11 @@ Painted-bus maximalism, printed on a risograph (`src/render/look.ts`).
   lines share a base + pattern pair (`LIVERIES` in `src/sim/lineup.ts`).
 - **Day and night**: sky and ink ramps move through dawn (pink), day (bleached), dusk (mango) and
   night. Night prints in cobalt: lit faces are tinted to about a third of their red and green, and
-  windows, signs, lamps and cabin lights glow mango. A sun crosses by day and a moon by night;
-  stars come out.
+  windows, signs, lamps and cabin lights glow mango. About half the windows of a building are lit,
+  in a fixed pattern from the solid's index: facade windows (laid down a slope from the ground under
+  each column), glass roof lanterns on flat roofs (what the camera sees of the town below it),
+  warehouse clerestories and stall lanterns. Far silhouettes carry the lit glass of the same
+  windows, so the hill reads as a town. A sun crosses by day and a moon by night; stars come out.
 - **Characters animate on twos**: poses update at 12 Hz while position stays smooth. So do vehicle
   animation frames and every UI flip and slide.
 - **UI** (`src/ui/`): destination boards (split-flap rows, condensed caps, mango on ink) for line,

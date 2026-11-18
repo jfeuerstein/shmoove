@@ -55,7 +55,7 @@ const LANTERN_H = 0.3;
 const LIT_UPPER = 0.5;
 const LIT_GROUND = 0.55;
 const LIT_SLOPE = 0.45;
-const LIT_SKY = 0.4;
+const LIT_SKY = 0.3;
 const LIT_SHOP = 0.75;
 
 export interface FacePlan {
