@@ -34,6 +34,8 @@ interface Section {
   details: HTMLDetailsElement;
   badge: HTMLElement;
   changed: number;
+  /** The count the badge shows now; -1 before the first write. */
+  shown: number;
 }
 
 function cssHex(c: number): string {
@@ -145,7 +147,7 @@ export class DebugPanel {
       badge.hidden = true;
       summary.appendChild(badge);
       details.appendChild(summary);
-      this.sections.set(g, { details, badge, changed: 0 });
+      this.sections.set(g, { details, badge, changed: 0, shown: -1 });
       this.sheet.appendChild(details);
     }
     for (const k of FEEL_KEYS) this.addRow(k);
@@ -239,6 +241,8 @@ export class DebugPanel {
       }
     }
     for (const s of this.sections.values()) {
+      if (s.changed === s.shown) continue;
+      s.shown = s.changed;
       s.badge.hidden = s.changed === 0;
       s.badge.textContent = `${s.changed} changed`;
     }
