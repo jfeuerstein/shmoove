@@ -8,31 +8,31 @@ emulation that plays every scripted route and saves screenshots, the PWA check, 
 and budget check. Only `m1` was tagged; M2–M5 were closed by their merge commits and the status
 here (DECISIONS 20), and `m6` is the lead's to tag.
 
-## Last gate (M6j, this branch)
+## Last gate (the tip of this branch)
 
-Green, with a verifier running tests on the same 4-core machine (load average 7.8 at the perf stage):
+Green, after a fresh `npm ci`, on an idle 4-core machine:
 
 | Stage | Result | Time |
 | --- | --- | --- |
-| typecheck | PASS | 4.5 s |
-| lint | PASS | 5.1 s |
-| test | PASS: 693 tests in 51 files | 25.3 s |
-| build | PASS: bundle 285 kB gzip (budget 400) | 4.9 s |
-| e2e | PASS: 15 routes, no console errors or warnings | 453 s |
-| pwa | PASS | 8.1 s |
-| perf | PASS | 186 s |
+| typecheck | PASS | 7.6 s |
+| lint | PASS | 4.1 s |
+| test | PASS: 701 tests in 52 files | 27.2 s |
+| build | PASS: bundle 287 kB gzip (budget 400) | 4.9 s |
+| e2e | PASS: 15 routes, no console errors or warnings | 285 s |
+| pwa | PASS | 6.0 s |
+| perf | PASS | 105 s |
 
 Perf (`artifacts/perf.json`), headless Chromium at 4x CPU throttle, `perfcity` route, five windows
-pooled: frame work mean 6.2 ms, p95 15.4 ms (budget 10 / 16.6); game step mean 0.14 ms, p95 0.70 ms
-(0.6 / 1.5); one-step frames mean 5.65 ms (6); most draw calls in a timed frame 34, triangles 63k.
-Tour of fixed viewpoints, day and night: at most 71 draw calls and 139.5k triangles (120 / 180k).
-Per window, mean / p95 ms: Mercado 5.9 / 15.0, Terraces 6.4 / 19.1, Antenna 5.6 / 12.6, streaming
-run 7.0 / 17.0, Docks 6.2 / 17.0. Single windows over 16.6 ms p95 under load are the render submit
-waiting on the software rasteriser (DECISIONS 87); the pooled figure is the gated one. The previous
-full gate on this branch measured 5.4 / 14.1 ms pooled.
+pooled: frame work mean 3.2 ms, p95 9.1 ms (budget 10 / 16.6); game step mean 0.08 ms, p95 0.40 ms
+(0.6 / 1.5); one-step frames mean 2.4 ms (6); most draw calls in a timed frame 34, triangles 66k.
+Tour of fixed viewpoints, day and night: at most 71 draw calls and 145.7k triangles (120 / 180k).
+The figures move with machine load: the same build measured 6.2 / 15.4 ms pooled with a verifier
+running beside it, and three runs under heavy load during M6f failed p95 at about 20 ms, all of it
+the render submit waiting on the software rasteriser (DECISIONS 87). Frame time on a real phone is
+the first thing on the playtest list.
 
-A fresh clone of the branch into a temporary directory passed `npm install` (3 s with a warm npm
-cache), `npm run build` (9 s) and `npm test` (693 tests, 25 s).
+A fresh clone of the branch into a temporary directory passed `npm install`, `npm run build` and
+`npm test` during M6j (693 tests then; 701 now).
 
 ## M0 — Foundations `[x]`
 
