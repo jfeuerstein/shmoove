@@ -635,6 +635,18 @@ under **Cut** at the end.
      (-171.3, 532.0), (-171.8, 584.3) and (-168.4, 606.2). The funicular run-out handrail moves from
      x = -33 (the face of its side wall, which a grind ran along) to -32.5. A second drop test runs
      800 starts from seed 777.
+127. **[M7a] Ride data after the density change (lead's go-ahead for lanes, dwells, phases).** With
+     twelve trams on a 360 s lap and six trucks on a 180 s one, a car home from its lap stood on the
+     one leaving at the terminus for the rest of the padding. T2's dwell goes 4 -> 9 s and D3's
+     4 -> 8 s, so that padding is spent at the stops; headways are unchanged (30 s each). D3's phase
+     4327 -> 4627 and M1's 1080 -> 1560 bring back the chain_D2_D3 and chain_M1_M2 meetings (both
+     at least every 240 s). Not solved in the data, and left for the lead: cars of different lines
+     still overlap at grade crossings and on shared streets (T2 with T3 on the terraces streets and
+     at Terrazas, T1's track with T2 at the Antenna gate and with T3, M2 with T2 on the ramps, D3
+     with T2 at the depot): with headways of 20-30 s on both lines no phase clears every crossing,
+     and moving lanes outward only moves the overlaps (the finder's report lists them). The
+     chain_D2_T2 meeting still happens, but tram 5 no longer comes past a forklift the same way
+     there at any phase the finder tried, so the two-link chain test there finds no overtake.
 
 ## Cut
 
