@@ -515,10 +515,11 @@ describe('traffic never parks a skater', () => {
     expect(sim.player.mode).not.toBe(Mode.BAIL);
   });
 
-  it('but T-boning one at full speed is a bail', () => {
+  it('but T-boning one above the bail speed is a bail', () => {
     const sim = newSim();
     seekVehicle(sim, TRAM, 0, 100, 1, 30);
-    teleport(sim, 9, 106, -PI / 2, 17);
+    // From 12 m out: at this speed a skater from 9 m crosses the lane before the tram is there.
+    teleport(sim, 12, 106, -PI / 2, FEEL.WALL_BAIL_SPEED + 3);
     const ev = run(sim, 120);
     expect(ev.some((e) => e.type === 'bail' && e.reason === 'vehicle')).toBe(true);
   });

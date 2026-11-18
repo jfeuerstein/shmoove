@@ -160,13 +160,27 @@ describe('hopping', () => {
 });
 
 describe('the staircase and its handrail', () => {
-  const stairsTime = (): number => {
+  /** Ticks from the top step of the staircase to its bottom, riding `rail` or the stairs. */
+  const flightTicks = (rail: boolean): { ticks: number; exit: number } => {
     const sim = newSim();
-    teleport(sim, 18, 252, DOWNHILL, 7);
-    return runUntil(sim, 3000, (s) => s.player.z < SLICE.stairZ0);
+    teleport(sim, rail ? SLICE.railX : 18, rail ? 262 : 252, DOWNHILL, 7);
+    let hopped = false;
+    let top = -1;
+    let bottom = -1;
+    let exit = 0;
+    run(sim, 3000, (s, i) => {
+      if (top < 0 && s.player.z < SLICE.terraceZ0) top = i;
+      if (bottom < 0 && s.player.z < SLICE.stairZ0) bottom = i;
+      if (s.player.z > SLICE.stairZ0 - 8) exit = hSpeed(s);
+      const hop = rail && !hopped && s.player.z <= 254;
+      if (hop) hopped = true;
+      return { hop };
+    });
+    return { ticks: top >= 0 && bottom >= 0 ? bottom - top : -1, exit };
   };
 
-  it('stairs are rideable but slow', () => {
+  // DECISIONS 114: stairs cost some speed but are a real way down; the rail is the fast line.
+  it('stairs cost some speed but are a real way down', () => {
     const sim = newSim();
     teleport(sim, 18, 252, DOWNHILL, 7);
     let onStairs = 0;
@@ -180,7 +194,8 @@ describe('the staircase and its handrail', () => {
     });
     expect(t).toBeGreaterThan(0);
     expect(onStairs).toBeGreaterThan(200);
-    expect(topSpeedOnStairs).toBeLessThan(8);
+    expect(topSpeedOnStairs).toBeGreaterThan(9);
+    expect(topSpeedOnStairs).toBeLessThan(15);
   });
 
   it('hopping onto the handrail grinds it end to end, much faster than the stairs', () => {
@@ -211,8 +226,15 @@ describe('the staircase and its handrail', () => {
     const endIdx = events.indexOf('grindEnd');
     expect(endIdx).toBeGreaterThan(events.indexOf('grindStart'));
     expect(t).toBeGreaterThan(0);
-    expect(t).toBeLessThan(stairsTime() * 0.75);
-    expect(hSpeed(sim)).toBeGreaterThan(14);
+    // The clearly faster line: at least 15 % quicker from the top step to the bottom, and off
+    // the end above 16 m/s.
+    const stairs = flightTicks(false);
+    const rail = flightTicks(true);
+    expect(stairs.ticks).toBeGreaterThan(0);
+    expect(rail.ticks).toBeGreaterThan(0);
+    expect(rail.ticks).toBeLessThan(stairs.ticks * 0.85);
+    expect(rail.exit).toBeGreaterThan(16);
+    expect(hSpeed(sim)).toBeGreaterThan(16);
   });
 
   it('the rail is ridden at rail height, not at stair height', () => {
@@ -297,11 +319,22 @@ describe('walls, roofs and awnings', () => {
     expect(onRoof).toBe(true);
   });
 
-  it('hitting a wall square on at speed is a bail; slowly, it just turns you along it', () => {
+  // DECISIONS 114: walls bail only above WALL_BAIL_SPEED.
+  it('hitting a wall square on above the bail speed is a bail; below it, a knock; slowly, it just turns you along it', () => {
     const fast = newSim();
-    teleport(fast, 5, 80, PI / 2, 16);
+    teleport(fast, 5, 80, PI / 2, FEEL.WALL_BAIL_SPEED + 3);
     const ev = run(fast, 90);
     expect(ev.some((e) => e.type === 'bail' && e.reason === 'wall')).toBe(true);
+
+    // Just under the bail speed at the moment of contact: knocked back, still on the board.
+    const knock = newSim();
+    teleport(knock, 5, 80, PI / 2, FEEL.WALL_BAIL_SPEED - 2);
+    const evK = run(knock, 90);
+    const hitK = evK.find((e) => e.type === 'wallHit');
+    expect(hitK).toBeDefined();
+    if (hitK && hitK.type === 'wallHit') expect(hitK.speed).toBeLessThan(FEEL.WALL_BAIL_SPEED);
+    expect(evK.some((e) => e.type === 'bail')).toBe(false);
+    expect(knock.player.mode).not.toBe(Mode.BAIL);
 
     const slow = newSim();
     teleport(slow, 9, 80, PI / 2, 2.5);
@@ -366,14 +399,20 @@ describe('bailing', () => {
     expect(sim.player.surface).not.toBe(Surface.WATER);
   });
 
-  it('a bail ignores input until the tumble is over', () => {
+  // DECISIONS 114: the tumble lasts BAIL_TIME, then the skater is up again.
+  it('a bail ignores input until the tumble is over, and the tumble lasts BAIL_TIME', () => {
     const sim = newSim();
-    teleport(sim, 5, 80, PI / 2, 16);
+    teleport(sim, 5, 80, PI / 2, FEEL.WALL_BAIL_SPEED + 4);
     runUntil(sim, 200, (s) => s.player.mode === Mode.BAIL);
     expect(sim.player.mode).toBe(Mode.BAIL);
-    const ev = run(sim, Math.floor(FEEL.BAIL_TIME * 60) - 5, () => ({ hop: true, hold: true, steer: 1 }));
+    const tumble = Math.round(FEEL.BAIL_TIME * 60);
+    const ev = run(sim, tumble - 5, () => ({ hop: true, hold: true, steer: 1 }));
     expect(ev.some((e) => e.type === 'hop' || e.type === 'hitch')).toBe(false);
     expect(sim.player.mode).toBe(Mode.BAIL);
+    const rest = runUntil(sim, 120, (s) => s.player.mode !== Mode.BAIL);
+    expect(rest).toBeGreaterThan(0);
+    // Up within a few ticks of BAIL_TIME after the fall, not the old 1.3 s.
+    expect(tumble - 5 + rest).toBeLessThanOrEqual(tumble + 2);
     runUntil(sim, 120, (s) => s.player.mode === Mode.GROUND);
     expect(sim.player.mode).toBe(Mode.GROUND);
   });
