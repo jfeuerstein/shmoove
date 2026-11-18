@@ -156,32 +156,6 @@ export class Skater {
   }
 
   /**
-   * Is another line's grab point within a held touch's reach (with a margin)? Reach is long
-   * (HITCH_REACH), so a ride passing in the next lane would be caught instead of the one waited for.
-   */
-  otherInReach(line: number): boolean {
-    const p = this.p;
-    const R = FEEL.HITCH_REACH + 1;
-    const Ry = FEEL.HITCH_REACH_Y + 0.5;
-    const handY = p.y + FEEL.HAND_HEIGHT;
-    for (const L of this.w.lines) {
-      if (L.index === line) continue;
-      const m = R + L.anchorBack + 1;
-      if (p.x < L.minX - m || p.x > L.maxX + m || p.z < L.minZ - m || p.z > L.maxZ + m) continue;
-      for (let k = 0; k < L.vehicles; k++) {
-        vehicleAt(L, k, this.tick, V);
-        if (!V.active) continue;
-        grabPoint(L, V, G);
-        const dx = G.x - p.x;
-        const dy = G.y - handY;
-        const dz = G.z - p.z;
-        if ((dx * dx + dz * dz) / (R * R) + (dy * dy) / (Ry * Ry) < 1) return true;
-      }
-    }
-    return false;
-  }
-
-  /**
    * The nearest active grab point of any line (what a held touch would latch first), as
    * { line, veh, d } with d the plan distance; line -1 when nothing is within `range`.
    */

@@ -7,6 +7,7 @@ import { grabPoint, makeVehicleState, vehicleAt, type CompiledLine } from '../..
 import { Mode, type InputFrame } from '../../../src/sim/types';
 import { atStop, lineById, stopIndex, stopPose } from './geo';
 import type { Skater, Task } from './skater';
+import { wouldCatch } from '../helpers';
 
 const V = makeVehicleState();
 const GP = { x: 0, y: 0, z: 0 };
@@ -52,6 +53,14 @@ export function go(label: string, pts: readonly XZ[], opts: GoOpts = {}): Task {
     step(b, out) {
       const p = b.p;
       if (b.taskTicks > max) return b.fail(`stuck on the way to waypoint ${k} (${pts[k][0]}, ${pts[k][1]})`);
+      // Thrown ahead along the way (every release is a slingshot): carry on from the furthest
+      // waypoint already reached.
+      for (let j = pts.length - 1; j > k; j--) {
+        if (Math.hypot(pts[j][0] - p.x, pts[j][1] - p.z) < r) {
+          k = j;
+          break;
+        }
+      }
       while (k < pts.length) {
         const [x, z] = pts[k];
         const d = Math.hypot(x - p.x, z - p.z);
@@ -214,8 +223,8 @@ export function ride(label: string, spec: RideSpec): Task {
           } else b.steerTo(out, wx, wz, 2.4, true);
           // Arm when the fresh vehicle of this line at the stop is the nearest grab point around.
           b.nearestGrab(9, NG);
-          if (NG.line === line.index && (spec.anywhere === true || fresh(line, NG.veh, b.tick, kAt, slackAt))) {
-            out.hold = NG.d < FEEL.HITCH_REACH + 2 && !b.otherInReach(line.index);
+          if (NG.line === line.index && (spec.anywhere === true || fresh(line, NG.veh, b.tick, kAt, slackAt)) && staysInService(line, NG.veh, b.tick)) {
+            out.hold = NG.d < 9 && wouldCatch(b.game.sim) === line.index;
             if (line.overhead && NG.d < 2.5 && NG.dy > FEEL.HITCH_REACH_Y * 0.75 && p.mode === Mode.GROUND) out.hop = true;
             // Close in on the grab point itself.
             vehicleAt(line, NG.veh, b.tick, V);
@@ -250,6 +259,20 @@ export function ride(label: string, spec: RideSpec): Task {
       return 'done';
     },
   };
+}
+
+/**
+ * Does vehicle `vi` of `l` stay in service to the end of the lap it is on, or (standing at the
+ * terminus) the lap it is about to start? A lap still running when service ends is cut short.
+ */
+function staysInService(l: CompiledLine, vi: number, tick: number): boolean {
+  vehicleAt(l, vi, tick, V);
+  const left = Math.max(l.runTicks - V.lapTick, 0) + (V.lapTick >= l.runTicks ? l.runTicks : 0);
+  for (let t = tick; t < tick + left - 30; t += 15) {
+    vehicleAt(l, vi, t, V);
+    if (!V.active) return false;
+  }
+  return true;
 }
 
 /**

@@ -84,7 +84,8 @@ export function secretPlan(): Task[] {
       [40, 566],
       [70, 563],
     ]),
-    ride('S1 lap', { line: 'S1', at: 'Túnel', side: -2.6 }),
+    // The ghost tram runs once, just after midnight: wait for it however long it takes.
+    ride('S1 lap', { line: 'S1', at: 'Túnel', side: -2.6, maxWait: 12 * 60 * 60 }),
     // Day 5: back along the landing to the funicular and up to the Antenna gate.
     go('to the funicular', [
       [40, 566],
