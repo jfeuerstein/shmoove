@@ -122,6 +122,9 @@ export interface PlayerState {
   yankVy: number;
   yankVz: number;
 
+  /** How far walls have stretched the strap past where it should be, m (it slips at STRAP_SLIP). */
+  ropeSlack: number;
+
   // Flow: tricks strung into a line.
   /** Tricks in the current line (0 = none). */
   flow: number;

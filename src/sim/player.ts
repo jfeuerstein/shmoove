@@ -79,6 +79,7 @@ export function createPlayer(): PlayerState {
     yankVx: 0,
     yankVy: 0,
     yankVz: 0,
+    ropeSlack: 0,
     flow: 0,
     flowTime: 0,
     flowKick: 0,

@@ -4,6 +4,8 @@ import { grabPoint, makeVehicleState, vehicleAt } from '../../src/sim/lines';
 import { PI } from '../../src/sim/math';
 import type { Sim } from '../../src/sim/sim';
 import { Mode, type SimEvent } from '../../src/sim/types';
+import { compileLine } from '../../src/sim/lines';
+import { Surface, addSolid, createWorld, fillSurfaces, finalizeWorld } from '../../src/sim/world';
 import { flatWorld, hSpeed, newSim, run, runUntil, seekVehicle, seekWhen, teleport, testLine } from './helpers';
 
 const TRAM = 0;
@@ -538,5 +540,44 @@ describe('flank contact is not an engine', () => {
     });
     expect(top).toBeLessThan(12);
     expect(Number.isFinite(sim.player.x + sim.player.z)).toBe(true);
+  });
+});
+
+describe('a long throw', () => {
+  it('catches a ride from well out of arm reach, reels the skater in, and tows them', () => {
+    const sim = newSim(flatWorld([testLine({ cruise: 9 })]));
+    // The tram on the first straight (x = 30, heading +z); the skater 11 m to the side of its grab bar.
+    seekWhen(sim, 0, 0, (v) => v.hz > 0.9 && v.z > -12 && v.z < -10);
+    teleport(sim, 30 - 11, -16, 0, 6);
+    const t = runUntil(sim, 30, (s) => s.player.mode === Mode.HITCH, () => ({ hold: true }));
+    expect(t).toBeGreaterThanOrEqual(0);
+    // Caught from far beyond the strap's own length.
+    expect(sim.player.rope).toBeGreaterThan(8);
+    // Reeled in to the strap's length within a second and a half, and still on.
+    run(sim, 90, () => ({ hold: true }));
+    expect(sim.player.mode).toBe(Mode.HITCH);
+    expect(sim.player.rope).toBeLessThan(sim.world.lines[0].rope + 0.5);
+    expect(hSpeed(sim)).toBeGreaterThan(6);
+  });
+
+  it('does not catch through a building, and does once the building is passed', () => {
+    const build = (wall: boolean): Sim => {
+      const w = createWorld({ seed: 1, minX: -100, minZ: -100, cell: 4, nx: 50, nz: 50 });
+      fillSurfaces(w, () => Surface.PLAZA);
+      w.lines = [compileLine(testLine({ cruise: 9 }), 0)];
+      w.spawn = { x: 0, z: 0, heading: 0 };
+      // A house between the skater (x = 19) and the lane (x = 30), from z = -30 to z = -5.
+      if (wall) addSolid(w, { cx: 24.5, cz: -17.5, hx: 1.5, hz: 12.5, rot: 0, yBase: 0, yTop: 8 });
+      finalizeWorld(w);
+      const sim = newSim(w);
+      seekWhen(sim, 0, 0, (v) => v.hz > 0.9 && v.z > -12 && v.z < -10);
+      teleport(sim, 19, -16, 0, 0);
+      return sim;
+    };
+    const open = build(false);
+    expect(run(open, 20, () => ({ hold: true })).some((e) => e.type === 'hitch')).toBe(true);
+    const walled = build(true);
+    expect(run(walled, 20, () => ({ hold: true })).some((e) => e.type === 'hitch')).toBe(false);
+    expect(walled.player.mode).not.toBe(Mode.HITCH);
   });
 });

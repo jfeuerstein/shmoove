@@ -23,7 +23,7 @@ import {
   wrapAngle,
 } from './math';
 import { Mode, type SimCtx } from './types';
-import { collideSolids, makeGroundSample, makeWallHit, sampleGround } from './world';
+import { collideSolids, makeGroundSample, makeWallHit, pointBlocked, sampleGround, type World } from './world';
 
 const VS = makeVehicleState();
 const GP = { x: 0, y: 0, z: 0 };
@@ -70,6 +70,8 @@ export function tryHitch(ctx: SimCtx): boolean {
       // A bumper is grabbed as it comes past, not from in front of it.
       if (!L.overhead && dx * VS.hx + dz * VS.hz > F.HITCH_AHEAD) continue;
       if (li === p.lastLine && vi === p.lastVeh && p.relatchCooldown > 0) continue;
+      // A long throw needs a clear line: no catching a tram through a house.
+      if (d * R * R > F.HITCH_SIGHT * F.HITCH_SIGHT && !strapClear(w, p.x, handY, p.z, GP.x, GP.y, GP.z)) continue;
       if (chainNow + 1 < L.minChainN) {
         deniedLine = li;
         continue;
@@ -87,6 +89,20 @@ export function tryHitch(ctx: SimCtx): boolean {
     return false;
   }
   latch(ctx, bestLine, bestVeh);
+  return true;
+}
+
+/** Nothing solid on the straight line from the hand to a grab point (sampled about every metre). */
+function strapClear(w: World, x0: number, y0: number, z0: number, x1: number, y1: number, z1: number): boolean {
+  const dx = x1 - x0;
+  const dy = y1 - y0;
+  const dz = z1 - z0;
+  const n = Math.ceil(Math.sqrt(dx * dx + dy * dy + dz * dz));
+  // Skip both ends: the hand is beside the skater and the grab point is on the vehicle.
+  for (let i = 1; i < n; i++) {
+    const k = i / n;
+    if (pointBlocked(w, x0 + dx * k, y0 + dy * k, z0 + dz * k, 0)) return false;
+  }
   return true;
 }
 
@@ -111,6 +127,7 @@ function latch(ctx: SimCtx, li: number, vi: number): void {
   p.psiRest = datan2(-VS.hx, -VS.hz);
   p.psi = d > 1e-3 ? datan2(dx, dz) : p.psiRest;
   p.rope = Math.max(d, 0.2);
+  p.ropeSlack = 0;
   // Swing rate from the skater's velocity relative to the ride, across the rope.
   const rvx = p.vx - VS.vx;
   const rvz = p.vz - VS.vz;
@@ -201,15 +218,21 @@ export function stepHitch(ctx: SimCtx, hold: boolean): void {
     if (k >= 1) {
       const ox = X - GP.x;
       const oz = Z - GP.z;
+      const was = p.rope;
       p.rope = Math.max(len2(ox, oz), 0.2);
       p.psi = datan2(ox, oz);
       p.omega *= -F.HITCH_WALL_BOUNCE;
-      if (p.rope > L.rope + F.STRAP_SLIP) {
+      // What counts is how far the wall has stretched the strap, not how long it is: a long
+      // throw starts long and is still being reeled in.
+      if (p.rope > was) p.ropeSlack += p.rope - was;
+      if (p.ropeSlack > F.STRAP_SLIP) {
         // Dragged round a corner behind a wall: the strap slips.
         letGo(ctx);
         return;
       }
     }
+  } else if (p.ropeSlack > 0) {
+    p.ropeSlack = Math.max(0, p.ropeSlack - F.REEL_RATE * DT);
   }
 
   sampleGround(w, X, p.y, Z, F.STEP_UP, G);
