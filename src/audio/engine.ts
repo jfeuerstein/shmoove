@@ -492,6 +492,37 @@ export class Engine {
     }
   }
 
+  /**
+   * Finds: 'tile' a bright two-note chime, `step` scale degrees up the trail (each tile taken within
+   * a few seconds of the last is a step higher); 'spot' a rubber-stamp thud; 'unlock' a four-note
+   * fanfare climbing an octave and a half.
+   */
+  find(kind: 'tile' | 'spot' | 'unlock', step: number): void {
+    if (this.ctx.state === 'closed') return;
+    const t = this.ctx.currentTime + NOW_LEAD;
+    const s = this.synth;
+    const d = this.sfxBus;
+    const tr = TRACKS[this.lastTrack];
+    switch (kind) {
+      case 'tile': {
+        const deg = 3 + Math.max(0, Math.min(9, Math.floor(step)));
+        s.chime(t, scaleNote(tr, deg), d, 0.17);
+        s.chime(t + 0.07, scaleNote(tr, deg + 2), d, 0.2);
+        return;
+      }
+      case 'spot':
+        s.thud(t, 1, d);
+        s.punch(t + 0.01, d);
+        return;
+      case 'unlock': {
+        const degrees = [1, 5, 8, 12];
+        degrees.forEach((deg, i) => s.chime(t + i * 0.11, scaleNote(tr, deg) - 12, d, i === 3 ? 0.26 : 0.19));
+        s.chime(t + 3 * 0.11, scaleNote(tr, 10) - 12, d, 0.12);
+        return;
+      }
+    }
+  }
+
   private noiseLayer(m: MixState, now: number, dt: number): void {
     const wheel = m.wheelLevel;
     this.sWheel.set(0.24 * wheel * Math.sqrt(wheel), now, 0.04);

@@ -18,7 +18,7 @@ import { MODE_NAMES, type InputFrame, type SimEvent } from '../sim/types';
 import { districtAt, type World } from '../sim/world';
 import { createUi } from '../ui/index';
 import type { ShellHost } from '../ui/titleShell';
-import { createAudioView } from './audioView';
+import { createAudioView, createFindsSound } from './audioView';
 import { createDebugPanel, type DebugPanel } from './debugPanel';
 import { createHaptics } from './haptics';
 import { NEW_GAME_DAY_FRAC, isFixture } from './newGame';
@@ -145,6 +145,7 @@ function boot(): void {
   const audio = createAudio();
   audio.setMuted(params.mute);
   const audioView = createAudioView();
+  const findsSound = createFindsSound((kind, step) => audio.find(kind, step));
 
   // App shell: settings, PWA, haptics, title / pause / settings screens.
   const query = new URLSearchParams(location.search);
@@ -348,6 +349,7 @@ function boot(): void {
     cur[PART.haptics] = t1 - t0;
     t0 = t1;
     audio.update(audioView(sim, ui.paused), pending, world.lines, dt);
+    findsSound(pendingGame, sim.tick);
     cur[PART.audio] = performance.now() - t0;
     pending.length = 0;
     pendingGame.length = 0;
