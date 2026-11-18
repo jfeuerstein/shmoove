@@ -1,0 +1,137 @@
+import { describe, expect, it } from 'vitest';
+import {
+  collectOverrides,
+  overridesText,
+  parseStored,
+  Settings,
+  STORAGE_KEY,
+  type FeelValues,
+  type StorageLike,
+} from '../../src/app/settings';
+import { FEEL_DEFS, FEEL_KEYS } from '../../src/sim/constants';
+
+function defaults(): FeelValues {
+  const f = {} as FeelValues;
+  for (const k of FEEL_KEYS) f[k] = FEEL_DEFS[k].v;
+  return f;
+}
+
+function memoryStorage(initial?: string): StorageLike & { data: Map<string, string> } {
+  const data = new Map<string, string>();
+  if (initial !== undefined) data.set(STORAGE_KEY, initial);
+  return {
+    data,
+    getItem: (k) => data.get(k) ?? null,
+    setItem: (k, v) => void data.set(k, v),
+  };
+}
+
+const throwing: StorageLike = {
+  getItem() {
+    throw new Error('denied');
+  },
+  setItem() {
+    throw new Error('denied');
+  },
+};
+
+describe('settings', () => {
+  it('round trips the scheme and changed values through storage', () => {
+    const store = memoryStorage();
+    const feel = defaults();
+    const a = new Settings(store, '', 'tuck', feel);
+    feel.runSpeed = 7.5;
+    feel.grip = 20;
+    a.saveFeel();
+    a.chooseScheme('swipe');
+
+    const feel2 = defaults();
+    const b = new Settings(store, '', 'tuck', feel2);
+    b.applySaved();
+    expect(b.scheme).toBe('swipe');
+    expect(feel2.runSpeed).toBe(7.5);
+    expect(feel2.grip).toBe(20);
+    expect(feel2.gravity).toBe(FEEL_DEFS.gravity.v);
+  });
+
+  it('clamps stored values to each constant range', () => {
+    const raw = JSON.stringify({ v: 1, feel: { runSpeed: 9999, grip: -5, gravity: 30 } });
+    const s = parseStored(raw);
+    expect(s.feel.runSpeed).toBe(FEEL_DEFS.runSpeed.max);
+    expect(s.feel.grip).toBe(FEEL_DEFS.grip.min);
+    expect(s.feel.gravity).toBe(30);
+  });
+
+  it('ignores unknown keys, non-numbers and inherited names', () => {
+    const raw = '{"v":1,"scheme":"bogus","feel":{"nope":3,"runSpeed":"fast","grip":null,"toString":5,"gravity":30}}';
+    const s = parseStored(raw);
+    expect(s.scheme).toBeNull();
+    expect(Object.keys(s.feel)).toEqual(['gravity']);
+  });
+
+  it('survives corrupt, wrong-shape and wrong-version storage', () => {
+    for (const raw of ['{oops', '', 'null', '42', '[]', '{"v":2,"feel":{"runSpeed":8}}', '{"feel":{"runSpeed":8}}']) {
+      const s = parseStored(raw);
+      expect(s.scheme).toBeNull();
+      expect(s.feel).toEqual({});
+    }
+    const feel = defaults();
+    const st = new Settings(memoryStorage('{oops'), '', 'lift', feel);
+    st.applySaved();
+    expect(st.scheme).toBe('lift');
+    expect(feel).toEqual(defaults());
+  });
+
+  it('works with storage that throws or is missing', () => {
+    for (const store of [throwing, null]) {
+      const feel = defaults();
+      const st = new Settings(store, '', 'tuck', feel);
+      st.applySaved();
+      feel.runSpeed = 8;
+      expect(() => st.saveFeel()).not.toThrow();
+      expect(() => st.chooseScheme('lift')).not.toThrow();
+      expect(st.scheme).toBe('lift');
+      expect(feel.runSpeed).toBe(8);
+    }
+  });
+
+  it('lets ?scheme= win over the saved scheme, and the fallback lose to it', () => {
+    const store = memoryStorage(JSON.stringify({ v: 1, scheme: 'lift', feel: {} }));
+    expect(new Settings(store, '', 'tuck', defaults()).scheme).toBe('lift');
+    expect(new Settings(store, '?debug&scheme=swipe', 'tuck', defaults()).scheme).toBe('swipe');
+    expect(new Settings(store, '?scheme=bogus', 'tuck', defaults()).scheme).toBe('lift');
+    expect(new Settings(memoryStorage(), '', 'tuck', defaults()).scheme).toBe('tuck');
+  });
+
+  it('keeps the saved scheme when the URL overrides it for one visit', () => {
+    const store = memoryStorage(JSON.stringify({ v: 1, scheme: 'lift', feel: {} }));
+    const feel = defaults();
+    const st = new Settings(store, '?scheme=swipe', 'tuck', feel);
+    feel.grip = 20;
+    st.saveFeel();
+    expect(new Settings(store, '', 'tuck', defaults()).scheme).toBe('lift');
+  });
+
+  it('stores only values that differ from the defaults', () => {
+    const store = memoryStorage();
+    const feel = defaults();
+    const st = new Settings(store, '', 'tuck', feel);
+    feel.runSpeed = 7;
+    st.saveFeel();
+    const saved = JSON.parse(store.data.get(STORAGE_KEY) ?? '{}') as { feel: Record<string, number> };
+    expect(saved.feel).toEqual({ runSpeed: 7 });
+    feel.runSpeed = FEEL_DEFS.runSpeed.v;
+    st.saveFeel();
+    const cleared = JSON.parse(store.data.get(STORAGE_KEY) ?? '{}') as { feel: Record<string, number> };
+    expect(cleared.feel).toEqual({});
+    expect(collectOverrides(defaults())).toEqual({});
+  });
+
+  it('writes the overrides as key = value lines', () => {
+    const feel = defaults();
+    expect(overridesText(feel)).toBe('(no changes from the defaults)');
+    feel.runSpeed = 7.5;
+    feel.grip = 20;
+    expect(overridesText(feel, 'lift')).toBe('scheme = lift\nrunSpeed = 7.5\ngrip = 20');
+  });
+});
