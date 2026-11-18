@@ -39,7 +39,7 @@ import {
   type Face,
   type Palette,
 } from './kit';
-import { farBuildingLights, farShedLights, litGround, litShop, litUpper, nearShedLights, nearSkylights, nearSlopeWindows, planBuilding, type Variant } from './lights';
+import { farBuildingLights, farShedLights, hasShutters, litGround, litShop, litUpper, nearShedLights, nearSkylights, nearSlopeWindows, planBuilding, type Variant } from './lights';
 
 export const ROOF_CLUTTER_MAX = 0.35;
 export const ROOF_EDGE = 0.5;
@@ -275,7 +275,7 @@ function building(b: MeshBuilder, w: World, o: Solid, variant: Variant, lights: 
 
   const plan = planBuilding(w, o, variant);
   const { storey, winH, ww, front } = plan;
-  const shutters = sh(o, 5) < 0.5;
+  const shutters = hasShutters(o);
   for (let i = 0; i < 4; i++) {
     const fp = plan.faces[i];
     const f = fp.f;
@@ -365,7 +365,7 @@ function building(b: MeshBuilder, w: World, o: Solid, variant: Variant, lights: 
   }
   if (lights) {
     // Night lights, added after the day dressing: windows down the slope, skylights on the roof.
-    nearSlopeWindows(b, w, o, plan, shutters, acc, INK.paper);
+    nearSlopeWindows(b, w, o, plan, acc, INK.paper);
     nearSkylights(b, o, variant, roof);
   }
 }

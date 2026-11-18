@@ -38,8 +38,18 @@ import {
 /** Building variants: 0 town building, 1 house, 2 clock tower, 3 church, 4 school. */
 export type Variant = 0 | 1 | 2 | 3 | 4;
 
-/** Far lights stand this far proud of the silhouette box, clear of depth fighting at 330 m. */
-const FAR_OFF = 0.12;
+/**
+ * How far window glass stands off the wall: between shutters, in a painted frame, on the ground
+ * floor and in the shop window. The far level of detail draws its lit glass at exactly the near
+ * glass's place, so its corners are near corners too and a swap moves no light.
+ */
+const GLASS_SHUTTERED = 0.03;
+const GLASS_FRAMED = 0.045;
+const GLASS_GROUND = 0.03;
+const GLASS_SHOP = 0.035;
+
+/** Height of a roof lantern (under ROOF_CLUTTER_MAX, 0.35 m, so it may stand anywhere on a roof). */
+const LANTERN_H = 0.3;
 
 /** Lit shares (thresholds on hash2): facade grid upper floors, ground floor, slope windows, skylights. */
 const LIT_UPPER = 0.5;
@@ -153,6 +163,11 @@ export function planBuilding(w: World, o: Solid, variant: Variant): BuildingPlan
   return { variant, storey, winH, ww, front, muralFace, faces };
 }
 
+/** Does this building's facade have shutters (else painted frames)? */
+export function hasShutters(o: Solid): boolean {
+  return sh(o, 5) < 0.5;
+}
+
 /** Is upper-floor window (r, c) on face i lit? */
 export function litUpper(o: Solid, i: number, r: number, c: number): number {
   return hash2(o.index * 31 + r * 7 + c, i) > LIT_UPPER ? 1 : 0;
@@ -207,8 +222,8 @@ function hasSkylights(o: Solid, variant: Variant | -1): boolean {
 }
 
 /**
- * Skylights along the long axis of a flat roof: (along0, along1, across0, across1) in the
- * solid's local frame, mapped onto x/z by `skylightQuad`.
+ * Skylights (roof lanterns) along the long axis of a flat roof: (along0, along1, across0,
+ * across1) in the solid's local frame.
  */
 function skylights(o: Solid, fn: WindowFn): void {
   const longX = o.hx >= o.hz;
@@ -226,7 +241,7 @@ function skylights(o: Solid, fn: WindowFn): void {
 }
 
 /** An upward-facing quad over the roof at height y, from local (along, across) spans. */
-function skylightQuad(b: MeshBuilder, o: Solid, a0: number, a1: number, c0: number, c1: number, y: number, color: number, glow: number): void {
+function roofQuad(b: MeshBuilder, o: Solid, a0: number, a1: number, c0: number, c1: number, y: number, color: number): void {
   const longX = o.hx >= o.hz;
   const [x0, z0, x1, z1] = longX ? [a0, c0, a1, c1] : [c0, a0, c1, a1];
   b.quad(
@@ -234,32 +249,49 @@ function skylightQuad(b: MeshBuilder, o: Solid, a0: number, a1: number, c0: numb
     lx2x(o, x0, z1), y, lx2z(o, x0, z1),
     lx2x(o, x1, z1), y, lx2z(o, x1, z1),
     lx2x(o, x1, z0), y, lx2z(o, x1, z0),
-    color, glow,
+    color,
   );
 }
 
-/** Near: framed skylights on the roof, lit or dark. */
+/**
+ * A roof lantern: a low glass box standing on the roof (under ROOF_CLUTTER_MAX, so roofs stay
+ * rideable), from local (along, across) spans. Its glass sides catch the eye even when the roof
+ * is seen almost edge-on from up the hill.
+ */
+function lantern(b: MeshBuilder, o: Solid, a0: number, a1: number, c0: number, c1: number, glow: number): void {
+  const longX = o.hx >= o.hz;
+  const am = (a0 + a1) / 2;
+  const cm = (c0 + c1) / 2;
+  const ha = (a1 - a0) / 2;
+  const hc = (c1 - c0) / 2;
+  const [lx, lz, hx, hz] = longX ? [am, cm, ha, hc] : [cm, am, hc, ha];
+  const hy = LANTERN_H / 2;
+  b.box(lx2x(o, lx, lz), o.yTop + hy, lx2z(o, lx, lz), hx, hy, hz, o.cosR, o.sinR, WINDOW_INK, { glow });
+}
+
+/** Near: roof lanterns on a framed curb, lit or dark. */
 export function nearSkylights(b: MeshBuilder, o: Solid, variant: Variant | -1, roof: number): void {
   if (!hasSkylights(o, variant)) return;
   const frame = dark(roof, 0.62);
   skylights(o, (a0, a1, c0, c1, lit) => {
-    skylightQuad(b, o, a0 - 0.12, a1 + 0.12, c0 - 0.12, c1 + 0.12, o.yTop + 0.04, frame, 0);
-    skylightQuad(b, o, a0, a1, c0, c1, o.yTop + 0.07, WINDOW_INK, lit);
+    roofQuad(b, o, a0 - 0.14, a1 + 0.14, c0 - 0.14, c1 + 0.14, o.yTop + 0.04, frame);
+    lantern(b, o, a0, a1, c0, c1, lit);
   });
 }
 
 /** Near: the slope windows of a building, framed like the rest of its facade. */
-export function nearSlopeWindows(b: MeshBuilder, w: World, o: Solid, plan: BuildingPlan, shutters: boolean, acc: number, frame: number): void {
+export function nearSlopeWindows(b: MeshBuilder, w: World, o: Solid, plan: BuildingPlan, acc: number, frame: number): void {
+  const shutters = hasShutters(o);
   for (let i = 0; i < 4; i++) {
     const f = plan.faces[i].f;
     slopeWindows(w, o, plan, i, (u0, u1, y0, y1, lit) => {
       if (shutters) {
-        fquad(b, f, u0, u1, y0, y1, 0.03, WINDOW_INK, lit);
+        fquad(b, f, u0, u1, y0, y1, GLASS_SHUTTERED, WINDOW_INK, lit);
         fquad(b, f, u0 - 0.42, u0 - 0.02, y0, y1, 0.04, acc);
         fquad(b, f, u1 + 0.02, u1 + 0.42, y0, y1, 0.04, acc);
       } else {
         fquad(b, f, u0 - 0.12, u1 + 0.12, y0 - 0.12, y1 + 0.12, 0.03, frame);
-        fquad(b, f, u0, u1, y0, y1, 0.045, WINDOW_INK, lit);
+        fquad(b, f, u0, u1, y0, y1, GLASS_FRAMED, WINDOW_INK, lit);
       }
     });
   }
@@ -271,6 +303,7 @@ export function nearSlopeWindows(b: MeshBuilder, w: World, o: Solid, plan: Build
  */
 export function farBuildingLights(b: MeshBuilder, w: World, o: Solid, variant: Variant): void {
   const plan = planBuilding(w, o, variant);
+  const glass = hasShutters(o) ? GLASS_SHUTTERED : GLASS_FRAMED;
   for (let i = 0; i < 4; i++) {
     const p = plan.faces[i];
     if (!p.open) continue;
@@ -283,7 +316,7 @@ export function farBuildingLights(b: MeshBuilder, w: World, o: Solid, variant: V
         for (let c = 0; c < p.cols; c++) {
           const u = -f.hw + (c + 0.5) * p.pitch;
           if (p.my1 > p.my0 && u + 0.9 > p.mu0 && u - 0.9 < p.mu1 && y1 > p.my0 && y0 < p.my1) continue;
-          if (litUpper(o, i, r, c)) fquad(b, f, u - plan.ww, u + plan.ww, y0, y1, FAR_OFF, WINDOW_INK, 1);
+          if (litUpper(o, i, r, c)) fquad(b, f, u - plan.ww, u + plan.ww, y0, y1, glass, WINDOW_INK, 1);
         }
       }
       if (p.gHi + 2.4 < o.yTop - 0.5) {
@@ -291,18 +324,18 @@ export function farBuildingLights(b: MeshBuilder, w: World, o: Solid, variant: V
           const u = -f.hw + (c + 0.5) * p.pitch;
           if (p.busy1 > p.busy0 && u + 0.5 > p.busy0 && u - 0.5 < p.busy1) continue;
           if (i !== plan.front && (c & 1) === 1) continue;
-          if (litGround(o, i, c)) fquad(b, f, u - 0.45, u + 0.45, p.gHi + 0.95, p.gHi + 2.15, FAR_OFF, WINDOW_INK, 1);
+          if (litGround(o, i, c)) fquad(b, f, u - 0.45, u + 0.45, p.gHi + 0.95, p.gHi + 2.15, GLASS_GROUND, WINDOW_INK, 1);
         }
       }
     }
-    if (p.shop && litShop(o)) fquad(b, f, Math.min(p.s0, p.s1), Math.max(p.s0, p.s1), p.sg + 0.7, p.sg + 2.2, FAR_OFF, WINDOW_INK, 1);
+    if (p.shop && litShop(o)) fquad(b, f, Math.min(p.s0, p.s1), Math.max(p.s0, p.s1), p.sg + 0.7, p.sg + 2.2, GLASS_SHOP, WINDOW_INK, 1);
     slopeWindows(w, o, plan, i, (u0, u1, y0, y1, lit) => {
-      if (lit) fquad(b, f, u0, u1, y0, y1, FAR_OFF, WINDOW_INK, 1);
+      if (lit) fquad(b, f, u0, u1, y0, y1, glass, WINDOW_INK, 1);
     });
   }
   if (hasSkylights(o, variant)) {
     skylights(o, (a0, a1, c0, c1, lit) => {
-      if (lit) skylightQuad(b, o, a0, a1, c0, c1, o.yTop + FAR_OFF, WINDOW_INK, 1);
+      if (lit) lantern(b, o, a0, a1, c0, c1, 1);
     });
   }
 }
@@ -390,7 +423,7 @@ export function nearShedLights(b: MeshBuilder, w: World, o: Solid, shed: boolean
   const frame = dark(wall, 0.55);
   shedWindows(o, faces, shed, (f, u0, u1, y0, y1, lit) => {
     fquad(b, f, u0 - 0.1, u1 + 0.1, y0 - 0.1, y1 + 0.1, 0.03, frame);
-    fquad(b, f, u0, u1, y0, y1, 0.045, WINDOW_INK, lit);
+    fquad(b, f, u0, u1, y0, y1, GLASS_FRAMED, WINDOW_INK, lit);
   });
   if (!shed) nearSkylights(b, o, -1, roof);
 }
@@ -399,11 +432,11 @@ export function nearShedLights(b: MeshBuilder, w: World, o: Solid, shed: boolean
 export function farShedLights(b: MeshBuilder, w: World, o: Solid, shed: boolean): void {
   const faces = planShed(w, o, shed);
   shedWindows(o, faces, shed, (f, u0, u1, y0, y1, lit) => {
-    if (lit) fquad(b, f, u0, u1, y0, y1, FAR_OFF, WINDOW_INK, 1);
+    if (lit) fquad(b, f, u0, u1, y0, y1, GLASS_FRAMED, WINDOW_INK, 1);
   });
   if (!shed && hasSkylights(o, -1)) {
     skylights(o, (a0, a1, c0, c1, lit) => {
-      if (lit) skylightQuad(b, o, a0, a1, c0, c1, o.yTop + FAR_OFF, WINDOW_INK, 1);
+      if (lit) lantern(b, o, a0, a1, c0, c1, 1);
     });
   }
 }
