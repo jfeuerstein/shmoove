@@ -143,8 +143,8 @@ timetable is identical every day and can be learned. A `phase` offset makes desi
 between lines recur on every lap.
 
 Day: 12 minutes = 43 200 ticks. `dayFrac` 0 = midnight. Dawn 0.22–0.30, day 0.30–0.72, dusk
-0.72–0.80, night 0.80–0.22. A new game starts at 0.4036 (09:41; the board's clock steps in five
-minutes and shows 09:40), chosen so the first ride reaches the first stop as a new player does
+0.72–0.80, night 0.80–0.22. A new game starts at 0.4146 (09:57; the board's clock steps in five
+minutes and shows 09:55), chosen so the first ride reaches the first stop as a new player does
 (`src/app/newGame.ts`). Fixtures and scripted routes start at 0.30 unless `t=` says otherwise.
 
 A vehicle is in service for a lap if that lap *started* inside a service window, so vehicles leave the
@@ -153,16 +153,16 @@ from its route's centre line. Data: `src/sim/city/lines.ts` (roster) and `routes
 
 | Id | Name | District (track) | Stem | Kind | Cruise m/s | Laps leave | Lap | Stops |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| D1 | Grúa Uno | Docks (cumbia) | perc | gantry crane ×1, overhead, shuttle | 4 | all day | 180 s | Grúa Oeste, Grúa Centro, Grúa Este |
-| D2 | Montacargas | Docks | bass | forklifts ×3 | 7 | 0.30–0.72 | 240 s | Almacenes Sur, Almacenes Este, Cocheras, Almacenes Oeste, Muelle Oeste, Contenedores, Grúa Este, Muelle Este, Bulevar Este, Almacenes Centro |
-| D3 | Pescado Express | Docks | harmony | fish trucks ×2 | 8 | 0.22–0.50 | 240 s | Lonja, Bulevar, Puerta del Mercado, Muelle |
-| M1 | Las Motos | Mercado (funk) | perc | mopeds ×4 | 11 | 0.30–0.80 | 144 s | Bulevar, Rampa Oeste, Rellano 410, Rampa Este |
-| M2 | Carretillas | Mercado | bass | handcarts ×3 | 3.5 | 0.22–0.65 | 240 s | Rellano 358, Rampa Oeste, Rellano 410, Rampa Este |
-| M3 | La Boda | Mercado | harmony | wedding parade ×1 (float + band) | 2.2 | 0.60 and 0.70 | 72 s | Iglesia, Fuente, Torre |
-| T1 | Funicular | Terraces (highlife) | perc | funicular ×2 | 11 | all day | 120 s | Base, Cima |
-| T2 | Tranvía 5 | Terraces | bass | tram ×3 | 13 | all day | 360 s | Muelle, Mercado, Terrazas, Puerta de la Antena, Escuela, Mercado Este |
-| T3 | Tranvía 9 | Terraces | harmony | tram ×2 | 10 | 0.30–0.80 | 180 s | Terraza Baja, Zigzag Oeste, Terraza Alta, Zigzag Este |
-| T4 | Nocturno | Terraces | lead | night bus ×2 | 18 | 0.80–1.00 | 180 s | Garaje, Rampa Este, Terraza 727, Rampa Oeste |
+| D1 | Grúa Uno | Docks (cumbia) | perc | gantry crane ×1, overhead, shuttle | 6 | all day | 144 s | Grúa Oeste, Grúa Centro, Grúa Este |
+| D2 | Montacargas | Docks | bass | forklifts ×9 | 11 | 0.22–0.80 | 180 s | Almacenes Sur, Almacenes Este, Cocheras, Almacenes Oeste, Muelle Oeste, Contenedores, Grúa Este, Muelle Este, Bulevar Este, Almacenes Centro |
+| D3 | Pescado Express | Docks | harmony | fish trucks ×6 | 13 | 0.22–0.80 | 180 s | Lonja, Bulevar, Puerta del Mercado, Muelle |
+| M1 | Las Motos | Mercado (funk) | perc | mopeds ×6 | 14 | 0.22–0.80 | 120 s | Bulevar, Rampa Oeste, Rellano 410, Rampa Este |
+| M2 | Carretillas | Mercado | bass | handcarts ×6 | 8 | 0.22–0.80 | 120 s | Rellano 358, Rampa Oeste, Rellano 410, Rampa Este |
+| M3 | La Boda | Mercado | harmony | wedding parade ×1 (float + band) | 4 | 0.55–0.72 | 45 s | Iglesia, Fuente, Torre |
+| T1 | Funicular | Terraces (highlife) | perc | funicular ×4 | 14 | all day | 80 s | Base, Cima |
+| T2 | Tranvía 5 | Terraces | bass | tram ×12 | 15 | all day | 360 s | Muelle, Mercado, Terrazas, Puerta de la Antena, Escuela, Mercado Este |
+| T3 | Tranvía 9 | Terraces | harmony | tram ×6 | 14 | all day | 144 s | Terraza Baja, Zigzag Oeste, Terraza Alta, Zigzag Este |
+| T4 | Nocturno | Terraces | lead | night bus ×4 | 20 | 0.80–1.00 | 180 s | Garaje, Rampa Este, Terraza 727, Rampa Oeste |
 | A1 | Teleférico Bajo | Antenna (city pop) | perc | cable cars ×4, overhead | 7 | all day | 45 s | Puerta, Estación del Cerro |
 | A2 | Teleférico Cumbre | Antenna | bass | cable cars ×3, overhead | 7 | 0.30–0.80 | 90 s | Estación del Cerro, Cresta |
 | A3 | Cometas | Antenna | harmony | kites ×5, overhead | 8 | 0.35–0.70 (windy) | 90 s | Campo Sur, Campo Este |
