@@ -1,7 +1,7 @@
 import { Color, type BufferGeometry, type Mesh, type Object3D } from 'three';
 import { describe, expect, it } from 'vitest';
 import { PALETTE } from '../../src/render/look';
-import { GROUND_NAME, PADS_NAME, makeTerrainView } from '../../src/render/terrainView';
+import { CHECKER, GROUND_NAME, LINE_EVERY, PADS_NAME, makeTerrainView } from '../../src/render/terrainView';
 import { flatTerrain, terrainFromHeight, type Terrain } from '../../src/sim/terrain';
 
 const RADIUS = 170;
@@ -93,7 +93,7 @@ describe('makeTerrainView', () => {
     }
   });
 
-  it('colours the checker in the two ground colours, the 32 m lines and the rim', () => {
+  it('colours the checker in the two ground colours, the grid lines and the rim', () => {
     /** sRGB hex of the 2 m cell with its low corner at (x, z). */
     const cellHex = (mesh: Mesh, x: number, z: number): number => {
       const p = mesh.geometry.getAttribute('position');
@@ -110,18 +110,18 @@ describe('makeTerrainView', () => {
       throw new Error(`no cell at ${x},${z}`);
     };
     const flat = byName(makeTerrainView(flatTerrain(RADIUS)), GROUND_NAME);
-    // Two neighbouring 8 m squares differ; squares two apart match.
+    // Two neighbouring checker squares differ; squares two apart match. (10, 10) is clear of a line.
     const a = cellHex(flat, 10, 10);
-    const b = cellHex(flat, 18, 10);
+    const b = cellHex(flat, 10 + CHECKER, 10);
     expect([PALETTE.groundA, PALETTE.groundB]).toContain(a);
     expect([PALETTE.groundA, PALETTE.groundB]).toContain(b);
     expect(a).not.toBe(b);
-    expect(cellHex(flat, 26, 10)).toBe(a);
-    expect(cellHex(flat, 10, 18)).toBe(b);
-    expect(cellHex(flat, -6, -6)).toBe(a);
-    // Cells on a 32 m line, either way, and on the axes.
-    expect(cellHex(flat, 32, 10)).toBe(PALETTE.groundLine);
-    expect(cellHex(flat, 10, -64)).toBe(PALETTE.groundLine);
+    expect(cellHex(flat, 10 + 2 * CHECKER, 10)).toBe(a);
+    expect(cellHex(flat, 10, 10 + CHECKER)).toBe(b);
+    expect(cellHex(flat, 10 - LINE_EVERY, 10 - LINE_EVERY)).toBe(a);
+    // Cells on a grid line, either way, and on the axes.
+    expect(cellHex(flat, LINE_EVERY, 10)).toBe(PALETTE.groundLine);
+    expect(cellHex(flat, 10, -2 * LINE_EVERY)).toBe(PALETTE.groundLine);
     expect(cellHex(flat, 0, 10)).toBe(PALETTE.groundLine);
     // High up the rim of the bowl-like terrain the colour has moved toward the rim colour.
     const rim = new Color(cellHex(ground, 164, 2));

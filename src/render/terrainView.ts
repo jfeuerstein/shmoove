@@ -14,9 +14,9 @@ import { PALETTE, flatMaterial } from './look';
 /** Grid spacing, m. */
 export const TERRAIN_CELL = 2;
 /** Side of a checker square, m. */
-export const CHECKER = 8;
+export const CHECKER = 4;
 /** Every this many metres a grid line is drawn in `PALETTE.groundLine`. */
-export const LINE_EVERY = 32;
+export const LINE_EVERY = 16;
 /**
  * Most ground triangles one view may hold. Up to a radius of about 270 m the grid is 2 m; beyond
  * that the cell doubles until the disc fits, so a huge test terrain still draws.

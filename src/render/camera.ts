@@ -95,7 +95,8 @@ export class ChaseCamera {
 
     const cam = this.camera;
     cam.position.set(cx, cy, cz);
-    cam.lookAt(this.fx + sx * FEEL.camLookAhead, this.fy + 1 - this.kick, this.fz + sz * FEEL.camLookAhead);
+    const ahead = FEEL.camLookAhead + FEEL.camLookAheadPerGear * this.zoom;
+    cam.lookAt(this.fx + sx * ahead, this.fy + 1 - this.kick, this.fz + sz * ahead);
     const fov = FEEL.camFov + FEEL.camFovPerGear * this.zoom;
     if (Math.abs(cam.fov - fov) > 0.01) {
       cam.fov = fov;
