@@ -42,5 +42,7 @@ Things decided without the owner, newest last. Overrule any of them.
    ride. The check is geometric so the map for a seed never depends on a feel constant.
 13. **A two-finger tap in the tuck scheme asks for two hops.** The second is buffered and expires
    in the air, so nothing happens. Left as is.
-14. **M0 is tagged with its gate green but its last step open.** "The owner opens the link on the
-   phone" cannot happen until a repository setting allows this branch to deploy to Pages.
+14. **M0 is built with its gate green but two things open.** "The owner opens the link on the
+   phone" cannot happen until a repository setting allows this branch to deploy to Pages. And the
+   `m0` tag could not be pushed: the build session may only push its own branch. Tag `f769d0d` (or
+   later) as `m0` from a machine that can.

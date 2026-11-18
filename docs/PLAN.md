@@ -23,7 +23,7 @@ a thumb, because tests cannot judge feel.
 
 | | Milestone | Proves | Size | Status |
 | --- | --- | --- | --- | --- |
-| M0 | Ground | The toolchain, the gate, a link that opens on the phone | S | built, gate green, tagged `m0`; the link waits on a repo setting |
+| M0 | Ground | The toolchain, the gate, a link that opens on the phone | S | built, gate green at `f769d0d`; the link waits on a repo setting |
 | M1 | Feel slice | Moving around an empty bowl with one thumb is fun | L | built, gate green; waiting on the owner's playtest |
 | M2 | Horde slice | 400 enemies, readable in portrait, at 60 fps; three minutes are fun | L | |
 | M3 | Build | Level-ups, the arsenal and the drive-through map make runs differ | L | |
