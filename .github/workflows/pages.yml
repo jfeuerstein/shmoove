@@ -1,3 +1,12 @@
+# Deploys the built game to GitHub Pages on every push to the branches below.
+#
+# What the repository needs for the deploy job to run:
+#   - Settings, Pages, Source: "GitHub Actions".
+#   - Settings, Environments, github-pages, Deployment branches: it must include the branch being
+#     pushed. By default only the default branch may deploy, so a push from any other branch listed
+#     here is rejected at the environment until it is added there.
+# A deploy in progress is never cancelled by a newer push (cancel-in-progress is false); the newer
+# one waits its turn.
 name: Pages
 
 on:
@@ -12,7 +21,7 @@ permissions:
 
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   deploy:
