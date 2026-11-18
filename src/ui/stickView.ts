@@ -15,6 +15,11 @@ export class StickView {
   private readonly ring: HTMLElement;
   private readonly dot: HTMLElement;
   private shown = false;
+  private ox = NaN;
+  private oy = NaN;
+  private x = NaN;
+  private y = NaN;
+  private scale = NaN;
 
   constructor(root: HTMLElement, private readonly gestures: Gestures) {
     const el = document.createElement('div');
@@ -39,7 +44,16 @@ export class StickView {
     }
     if (!s.active) return;
     const scale = (FEEL.stickRadiusPx * 2) / RING_BASE_PX;
-    this.ring.style.transform = `translate(${s.ox}px, ${s.oy}px) scale(${scale})`;
-    this.dot.style.transform = `translate(${s.x}px, ${s.y}px)`;
+    if (s.ox !== this.ox || s.oy !== this.oy || scale !== this.scale) {
+      this.ox = s.ox;
+      this.oy = s.oy;
+      this.scale = scale;
+      this.ring.style.transform = `translate(${s.ox}px, ${s.oy}px) scale(${scale})`;
+    }
+    if (s.x !== this.x || s.y !== this.y) {
+      this.x = s.x;
+      this.y = s.y;
+      this.dot.style.transform = `translate(${s.x}px, ${s.y}px)`;
+    }
   }
 }

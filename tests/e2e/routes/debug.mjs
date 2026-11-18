@@ -50,12 +50,44 @@ export default {
     await group.locator('summary').tap();
     check(await page.locator('input[data-key="runSpeed"]').isVisible(), 'opening the run group shows its sliders');
 
-    // Touches on the panel never reach the game: no stick appears.
+    // Touches on the panel never reach the game. The loop is paused, so this is read through the
+    // sim: a tap that reached the canvas would be a hop on the next tick (tuck scheme), and the stick
+    // view would show. First prove the detector: the same tap on the open canvas does hop.
+    await hook.step(30);
+    const grounded = await hook.state();
+    check(grounded.grounded === true, 'the mover is on the ground before the taps', grounded);
+    await page.touchscreen.tap(30, 400);
+    await hook.step(1);
+    const control = await hook.state();
+    check(control.grounded === false, 'a tap on the game (outside the sheet) hops', control);
+    await hook.step(90);
+    check((await hook.state()).grounded === true, 'and the mover lands again');
+
+    const quiet = await page.locator('.dbg-sheet').boundingBox();
+    const before = await hook.state();
+    await page.touchscreen.tap(quiet.x + 3, 300);
+    await hook.step(1);
+    const afterTap = await hook.state();
+    check(afterTap.grounded === true && afterTap.events === before.events, 'a tap on the sheet does not hop', afterTap);
     const stickShown = await page.evaluate(() => getComputedStyle(document.querySelector('.stick-view')).visibility);
-    check(stickShown === 'hidden', 'touching the panel does not start the stick', stickShown);
+    check(stickShown === 'hidden', 'and does not start the stick', stickShown);
+
+    // A real touch drag on the open sheet scrolls it.
+    const cdp = await page.context().newCDPSession(page);
+    const scrollBefore = await page.evaluate(() => document.querySelector('.dbg-sheet').scrollTop);
+    const x = Math.round(quiet.x + 3);
+    const touch = (type, y) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x, y }] });
+    await touch('touchStart', 600);
+    for (let y = 600; y >= 200; y -= 20) await touch('touchMove', y);
+    await touch('touchEnd', 200);
+    await page.waitForTimeout(200);
+    const scrollAfter = await page.evaluate(() => document.querySelector('.dbg-sheet').scrollTop);
+    check(scrollAfter > scrollBefore, 'a touch drag on the sheet scrolls it', { scrollBefore, scrollAfter });
+    await page.evaluate(() => {
+      document.querySelector('.dbg-sheet').scrollTop = 0;
+    });
 
     // Baseline speed, then drag the runSpeed slider to a lower value.
-    await page.evaluate(() => window.__shmoove.pause(true));
     const base = await settle(hook, 240);
     check(Math.abs(base.speed - DEFAULT_RUN_SPEED) < 0.75, 'default run speed is reached', base);
 

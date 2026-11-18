@@ -20,6 +20,14 @@ const prevent = (e: Event): void => {
   if (e.cancelable) e.preventDefault();
 };
 
+/** Like `prevent`, but leaves text fields alone so a copy box can be selected and long-pressed. */
+const preventExceptTextFields = (e: Event): void => {
+  const t = e.target as { tagName?: unknown } | null;
+  const tag = t && typeof t.tagName === 'string' ? t.tagName.toLowerCase() : '';
+  if (tag === 'textarea' || tag === 'input') return;
+  prevent(e);
+};
+
 export function blockBrowserGestures(doc: Document = document): void {
   const root = doc.documentElement;
   root.style.touchAction = 'none';
@@ -41,8 +49,8 @@ export function blockBrowserGestures(doc: Document = document): void {
     opts,
   );
   doc.addEventListener('dblclick', prevent, opts);
-  doc.addEventListener('contextmenu', prevent, opts);
-  doc.addEventListener('selectstart', prevent, opts);
+  doc.addEventListener('contextmenu', preventExceptTextFields, opts);
+  doc.addEventListener('selectstart', preventExceptTextFields, opts);
   // Safari's own pinch events.
   doc.addEventListener('gesturestart', prevent, opts);
   doc.addEventListener('gesturechange', prevent, opts);

@@ -50,6 +50,9 @@ function setThemeColour(colour: number): void {
 }
 
 function boot(): void {
+  // First, before anything that can throw (no WebGL, a bad seed): a broken build must still be able
+  // to receive a fixed one.
+  registerPwa();
   const params = parseParams(window.location.search);
   setThemeColour(PALETTE.sky);
   setupPlatform();
@@ -139,7 +142,6 @@ function boot(): void {
   }
 
   driver.start();
-  registerPwa();
 }
 
 boot();

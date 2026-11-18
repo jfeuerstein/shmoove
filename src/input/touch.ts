@@ -19,6 +19,7 @@ export class TouchInput implements InputSource {
     el.addEventListener('pointermove', this.onMove, { passive: false });
     el.addEventListener('pointerup', this.onUp, { passive: false });
     el.addEventListener('pointercancel', this.onCancel, { passive: false });
+    el.addEventListener('lostpointercapture', this.onLostCapture);
     window.addEventListener('keydown', this.onKeyDown);
     window.addEventListener('keyup', this.onKeyUp);
     window.addEventListener('blur', this.onLoseFocus);
@@ -51,6 +52,7 @@ export class TouchInput implements InputSource {
     el.removeEventListener('pointermove', this.onMove);
     el.removeEventListener('pointerup', this.onUp);
     el.removeEventListener('pointercancel', this.onCancel);
+    el.removeEventListener('lostpointercapture', this.onLostCapture);
     window.removeEventListener('keydown', this.onKeyDown);
     window.removeEventListener('keyup', this.onKeyUp);
     window.removeEventListener('blur', this.onLoseFocus);
@@ -75,6 +77,15 @@ export class TouchInput implements InputSource {
 
   private readonly onUp = (e: PointerEvent): void => {
     e.preventDefault();
+    this.gestures.up(e.pointerId, performance.now());
+  };
+
+  /**
+   * Capture was lost: if the pointerup never came, this is the only sign the touch ended. It is a
+   * release of that id. When the normal pointerup did arrive, the thumb is already gone and
+   * `Gestures.up` ignores the id, so nothing is counted twice (a `lift` release hops once).
+   */
+  private readonly onLostCapture = (e: PointerEvent): void => {
     this.gestures.up(e.pointerId, performance.now());
   };
 

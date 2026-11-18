@@ -165,6 +165,9 @@ async function main() {
     const keysA = await page.evaluate(() => caches.keys());
     check('the precache is the build cache', keysA.length === 1 && keysA[0] === cacheA, keysA.join(','));
     check('no update bar on the first install', (await page.locator(BAR).count()) === 0);
+    // Another app's cache on the same origin, with no prefix of ours: activation must delete it too.
+    await page.evaluate(() => caches.open('someone-elses-cache').then((c) => c.put('/x', new Response('x'))));
+    check('the foreign cache is seeded', (await page.evaluate(() => caches.keys())).includes('someone-elses-cache'));
 
     // 3. Offline: no server at all, and the context offline.
     await server.close();
@@ -188,12 +191,14 @@ async function main() {
     const box = await bar.boundingBox();
     check('the update bar sits at the bottom edge', box !== null && Math.abs(box.y + box.height - 844) < 1 && box.width === 390, JSON.stringify(box));
     const keysWaiting = await page.evaluate(() => caches.keys());
-    check('both caches exist while the new version waits', keysWaiting.includes(cacheA) && keysWaiting.includes(cacheB), keysWaiting.join(','));
+    check('both build caches exist while the new version waits', keysWaiting.includes(cacheA) && keysWaiting.includes(cacheB), keysWaiting.join(','));
     await Promise.all([page.waitForEvent('load', { timeout: 60_000 }), bar.tap()]);
     await waitForHook(page, 60_000);
     await page.waitForFunction(() => navigator.serviceWorker.controller !== null, undefined, { timeout: 30_000, polling: 200 });
     await page.waitForFunction((b) => caches.keys().then((k) => k.length === 1 && k[0] === b), cacheB, { timeout: 30_000, polling: 200 });
     check('tapping the bar loads the new version and deletes the old cache', true);
+    const keysAfter = await page.evaluate(() => caches.keys());
+    check('and every foreign cache, whatever its name', keysAfter.length === 1 && !keysAfter.includes('someone-elses-cache'), keysAfter.join(','));
     const served = await page.evaluate(() => fetch('./index.html').then((r) => r.text()));
     check('the new cache serves the changed file', served.includes(MARKER));
     check('no update bar after the update', (await page.locator(BAR).count()) === 0);
