@@ -11,7 +11,7 @@ was cut or built smaller is listed at the end of `docs/DECISIONS.md`.
 
 1. **Borrowed speed.** Every metre of altitude is earned by catching a ride. The city is a machine of
    moving things and the player reads it like a timetable.
-2. **One thumb.** Drag, hold, release, swipe up. Nothing else in play. Four small corner buttons
+2. **One thumb.** Drag, hold, release, swipe up, pull down. Nothing else in play. Four small corner buttons
    (map, chalk, ledger, pause) open screens; none of them is needed to skate.
 3. **The whip.** Releasing a ride is the best-feeling thing in the game. Timing sets the angle;
    chains set the speed.
@@ -23,24 +23,26 @@ was cut or built smaller is listed at the end of `docs/DECISIONS.md`.
 ## 2. Controls
 
 All input is one touch. The gesture layer (`src/input/gestures.ts`) turns it into an `InputFrame`
-per sim tick: `{ steer: -1..1, hold: boolean, hop: boolean }`. It is clocked by sim ticks, so a
+per sim tick: `{ steer: -1..1, hold: boolean, hop: boolean, brake?: boolean }`. It is clocked by sim ticks, so a
 scripted touch replays identically.
 
 | Gesture | Result |
 | --- | --- |
 | Touch and drag left/right | **Carve.** `steer` = horizontal offset from the anchor / `STEER_RANGE_PX`. The anchor follows a finger dragged past full lock, so reversing responds at once. |
-| Touch and keep the finger still for `HOLD_ARM_TIME` | **Hold** arms. While armed, the skater hitches to the nearest ride in reach the moment one is in reach. Dragging after arming still steers (leans the swing while hitched). |
-| Hold a still finger with no ride near | **Plant a foot.** Below `FOOT_SPEED`, with steer under `FOOT_STEER`, the board brakes at `FOOT_BRAKE` and holds, even on a slope, until the finger lifts or a grab point comes into reach (then it latches). A ride you could grab at standing height, ahead of where you are rolling and within `FOOT_NEAR`, keeps a rolling skater rolling so they coast into it; one already slower than `FOOT_STAND` stays put and lets it come. It only ever removes speed. This is how you stop and wait at a stop. |
+| Touch and keep the finger still for `HOLD_ARM_TIME` | **Hold** arms. While armed, the skater hitches to the nearest ride in reach (`HITCH_REACH`, 6.5 m) the moment one is in reach. Dragging after arming still steers (leans the swing while hitched). A thumb resting on the glass is only ever a hand out for a ride: it never slows the board. |
+| Pull the finger down `BRAKE_PULL_PX` from where it landed (or hold Down/S) | **Brake.** A foot drags: the board slows at `FOOT_BRAKE` from any speed and holds still, even on a slope, until the finger comes most of the way back up or lifts. Brake and hold can be on together: that is waiting at a stop with a hand out. On the ground only. |
 | Drag past `DRAG_DEADZONE_PX` before arming | That touch is a pure carve; it never hitches. Lift and press again to grab. |
 | Lift the finger while hitched | **Release**: slingshot. |
 | Swipe up (`SWIPE_UP_PX` within `SWIPE_UP_TIME`) | **Hop.** On the ground: ollie. On a rail or wall: jump off. While hitched: release with extra height. The touch stays armed if the finger stays down, so *swipe-up-and-hold* hops into an overhead ride. |
-| Hold still in an errand giver's spot | **Accept the offer.** Slow, not hitched, armed and no ride in reach: the offer fills in 0.6 s. |
+| Brake, or stand, in an errand giver's spot | **Accept the offer.** Braking or standing (under 1 m/s), slower than 4 m/s, not hitched and no ride in reach: the offer fills in 0.6 s. Rolling through with a resting thumb never takes it. |
 
-Keyboard (desktop and debugging): Left/A and Right/D steer, Space holds, Up/W hops. M opens the line
+Keyboard (desktop and debugging): Left/A and Right/D steer, Space holds, Up/W hops, Down/S brakes. M opens the line
 map, L the ledger, P pauses, Escape closes a screen.
 
-No push. To avoid a soft lock on the flat, tic-tac carving (alternating steer) adds a trickle of
-speed below `PUMP_SPEED_CAP` (about walking pace). It is never a way to climb.
+No push button. Pumping (carving back and forth) drives the board up to `PUMP_SPEED_CAP` (7 m/s),
+strongly from a standstill and fading toward the cap, on the flat and downhill only: it fades to
+nothing as the ground ahead rises to `PUMP_UPHILL` (6 %). It is never a way to climb; to go up the
+hill you hitch.
 
 ## 3. Movement model
 
@@ -48,8 +50,10 @@ The sim is a point skater with a heading, on a heightfield with boxes, rails and
 
 - **GROUND** — rolls along heading. Gravity along the slope accelerates or brakes. Rolling resistance
   and air drag set terminal speed. Steer turns the heading, tighter at low speed; carving scrubs a
-  little speed. At low speed the board drifts toward the fall line. Stairs are a rough surface: slow
-  and rattly. Crests and ledges launch you when the ground falls away faster than a ballistic arc.
+  little speed. At low speed the board drifts toward the fall line. Stairs have linear drag
+  (`STAIR_DRAG`): they cost speed but are a real way down (top speed on the feel slice's flight
+  9–15 m/s); the handrail beside them is the fast line. Walls bail only above `WALL_BAIL_SPEED`
+  (20 m/s); a bail lasts `BAIL_TIME` (0.9 s). Crests and ledges launch you when the ground falls away faster than a ballistic arc.
 - **AIR** — ballistic, slight air steer. Lands on whatever surface is below (street, roof, awning).
   Landing projects velocity onto the surface, so landing on a downslope keeps speed. Awnings bounce,
   and send a skater who comes straight down off along their heading.
@@ -187,8 +191,10 @@ on the map once first ridden.
 - **First launch** (`src/sim/game/onboarding.ts`): the game teaches by play, one hint at a time on a
   small ticket stub with an animated thumb glyph and a pointer in the world. Nothing blocks; a step
   counts whenever it happens. The lesson is four steps in the order the hill presents them: carve
-  ("DRAG", once rolling at 4 m/s or for 6 s), hitch ("PRESS AND HOLD STILL", leading the player to a
-  waiting spot beside a stop where a ride is due, then to the ride's grab bar), ink ("STAY ON TO THE
+  ("DRAG", once rolling at 4 m/s or for 6 s), hitch (leading the player to a waiting spot beside a stop
+  where a ride is due, the first time with "PULL DOWN TO STOP" and a pull-down glyph until they
+  stand in the ring, then "HOLD FOR THE RIDE", then to the ride's grab bar; braking is shown once
+  and is never needed: a ride caught rolling past teaches the hitch as well), ink ("STAY ON TO THE
   NEXT STOP"), sling ("DRAG... THEN LET GO"). Then two closing tickets: the map, and "NO PUSHING.
   EVERYTHING THAT MOVES IS A LIFT." Four more hints show in their situations until each is done
   once and are not part of completion: hop, grind, chain, and roll ("WIGGLE TO ROLL", after 3 s
@@ -200,7 +206,7 @@ on the map once first ridden.
   spots: Docks 3, Mercado 4, Terraces 3, Antenna Hill 3. Step types: go to a zone, hitch a given
   line, ride a line to a zone, deliver to a zone (optionally slowly), arrive with a chain of N, grind
   N metres, stay in the air N seconds; any step may forbid a bail. Some givers keep hours. Accepted
-  by holding still in the giver's spot; a giver whose offer was left alone stays quiet for 45 s.
+  by braking or standing in the giver's spot ("PULL DOWN TO TAKE"); a giver whose offer was left alone stays quiet for 45 s.
   Finished errands can be replayed for a better time.
 - **Conductor challenges** (`src/sim/game/content/conductors.ts`): one per regular line (13), started
   by hitching that line within 30 m of its conductor's stop. Tasks: chain N starting from this line,
@@ -213,7 +219,7 @@ on the map once first ridden.
   secret line can be finished in one ride and leaves the rider standing. The way down from the Needle
   is its guy wire, a grind from the platform's south edge to the summit lawn. The hill station
   platform has run-in steps from the lawn and the spine, so a skater from the summit (up to 14 m/s)
-  can stop on it with a planted foot.
+  can stop on it by pulling down.
 - **Ledger** (L, or its corner button): errands with best times, conductors' punched tickets, secrets
   found.
 - **Chalk lines** (`src/sim/game/chalk.ts`): start recording anywhere with open sky, stop anywhere

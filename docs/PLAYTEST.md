@@ -35,12 +35,14 @@ The ten things most likely to be wrong, most likely first.
    `CAM_FRAME_MAX`, `CAM_MIN_CLEAR`, `CAM_STAIR_RATTLE`; the sight-line sampling (`CAM_PROBE_STEP`,
    `CAM_CHEST`, `CAM_BOARD`, `CAM_PULL_TRIES`, `CAM_DUCK_HEIGHT`) in `src/render/camera.ts`. Under the
    Mercado's low awnings the camera ducks to the skater's shoulder: is that readable or lurching?
-6. **Waiting at a stop with a planted foot.** Holding a still finger plants a foot and stops you
-   (below `FOOT_SPEED`, braking at `FOOT_BRAKE`, unless a ride you could grab is ahead of you within
-   `FOOT_NEAR` or you are carving past `FOOT_STEER`; once slower than `FOOT_STAND` you stay put as the ride
-   comes). Does stopping feel like a choice or an accident? Does pressing early while chasing a ride
-   from behind ever brake you out of a catch? Standing beside the lane, does the ride pick you up
-   cleanly, and how close is too close (`RIDE_SIDE_BOUNCE`)?
+6. **The brake and the resting thumb.** Pulling the finger down `BRAKE_PULL_PX` drags a foot
+   (`FOOT_BRAKE`, which also sets the steepest ground it holds on); a thumb that rests on the glass
+   never slows you and only reaches for rides. Is the pull-down easy to find from the hint ("PULL
+   DOWN TO STOP", shown once) and never set off by accident while carving? Does coming back up let go
+   when you expect (it releases at 60 % of the pull)? Does a resting thumb ever catch a ride you did
+   not want, now that reach is 6.5 m (`HITCH_REACH`)? Standing beside the lane, does the ride pick
+   you up cleanly, and how close is too close (`RIDE_SIDE_BOUNCE`)? Errands are taken by braking or
+   standing in the giver's ring ("PULL DOWN TO TAKE"): does that read?
 7. **Night readability.** Night prints in cobalt with lit windows and signs carrying the picture
    (`KEYS` in `src/render/look.ts`, the night `tint`). On a phone outdoors, can you still read a
    rail, a stair edge and an approaching ride at speed at night? If not, raise the night tint toward
@@ -63,12 +65,13 @@ The ten things most likely to be wrong, most likely first.
 | Is top speed on a long hill exciting but controllable? | `AIR_DRAG`, `GRAVITY`, `MAX_SPEED`, `ROLL_RESIST` |
 | Do grass and dirt slow you the right amount next to paving? | `ROUGH_DRAG` |
 | Does a slow board find the fall line without fighting you? | `FALLLINE_GAIN`, `FALLLINE_SPEED` |
-| Is tic-tac on the flat a usable last resort without being a push button? | `PUMP_GAIN`, `PUMP_SPEED_CAP` |
+| Does pumping (carving back and forth) get a stalled skater going on the flat, up to 7 m/s, without feeling like a push button or a way up the hill? | `PUMP_GAIN`, `PUMP_SPEED_CAP`, `PUMP_UPHILL` |
+| Is the pull-down brake strong enough to stop at a stop from a run, and gentle enough to scrub speed on a hill? | `FOOT_BRAKE`, `BRAKE_PULL_PX` |
 | Is the hop high enough for rails and awnings, with a forgiving window? | `HOP_V`, `HOP_SPEED_BONUS`, `HOP_BONUS_MAX`, `HOP_BUFFER`, `COYOTE_TIME`, `HOP_COOLDOWN` |
 | Is there enough control in the air without it feeling like flying? | `AIR_STEER` |
 | Is the swipe-up recognised every time, and never by accident while carving? | `SWIPE_UP_PX`, `SWIPE_UP_TIME` |
 | Do crests and ledges launch you when they should and not when they shouldn't? | `GROUND_STICK`, `STEP_UP` |
-| Are stairs unpleasant enough to make the rail the obvious line? | `STAIR_DRAG`, `CAM_SHAKE` |
+| Are stairs a real way down that still makes the rail the obvious fast line? | `STAIR_DRAG`, `CAM_SHAKE` |
 | Does the rail magnet catch honest attempts and ignore near misses? | `RAIL_SNAP`, `RAIL_SNAP_UP`, `RAIL_SNAP_DOWN`, `RAIL_ENTRY_VY`, `GRIND_ALIGN` |
 | Is a grind fast and does it throw you off the end nicely? | `GRIND_MIN_SPEED`, `GRIND_ENTRY_BOOST`, `GRIND_FRICTION`, `GRIND_EXIT_POP`, `GRIND_HOP_SIDE` |
 | Do wallrides trigger when you mean them and last long enough to use? | `WALL_ALIGN`, `WALL_MIN_SPEED`, `WALL_TIME`, `WALL_GRAVITY`, `WALL_ENTRY_UP`, `WALL_KEEP`, `WALL_EXIT_PUSH`, `WALL_JUMP_OUT`, `WALL_JUMP_UP` |
@@ -100,7 +103,8 @@ The ten things most likely to be wrong, most likely first.
 | Question | Constants |
 | --- | --- |
 | Can you see far enough down the hill in portrait? | `CAM_HEIGHT`, `CAM_DIST`, `CAM_LOOK_AHEAD`, `CAM_LOOK_UP`, `CAM_FOV`, `CAM_LOOK_FAR`, `CAM_LOOK_SLOPE`, `CAM_LOOK_TILT_MAX` |
-| Does speed feel fast? | `CAM_FOV_SPEED`, `CAM_SPEED_DIST`, `CAM_TOP_SPEED` |
+| Does speed feel fast? | `CAM_FOV_SPEED`, `CAM_SPEED_DIST`, `CAM_TOP_SPEED`, `CAM_STREAK_SPEED` |
+| Does the camera lean into a carve enough to feel it, without making anyone queasy? | `CAM_BANK`, `CAM_BANK_RATE` |
 | Does the camera turn with you without making you seasick? | `CAM_YAW_RATE`, `CAM_POS_RATE` |
 | Can you read the swing and the aim arrow while hitched? | `CAM_HITCH_DIST`, `CAM_HITCH_HEIGHT` |
 | Can you see where you will land, and the hill while climbing? | `CAM_AIR_HEIGHT`, `CAM_UPHILL_HEIGHT`, `CAM_UPHILL_GAIN`, `CAM_CLIMB_RATE`, `CAM_AIR_FOLLOW`, `CAM_MIN_CLEAR` |
@@ -168,7 +172,7 @@ An ear has to judge the rest. Mute with `?mute`.
   it (roll off the south edge)? Does the landing on the lawn feel right? `NEEDLE_WIRE` in
   `src/sim/city/layout.ts`; `RAIL_SNAP`, `GRIND_FRICTION`.
 - The hill station's run-in steps: coming down from the summit at speed, do the steps slow you
-  enough to stop on the deck with a held finger, and does it read as a way onto the platform?
+  enough to stop on the deck with a pull down, and does it read as a way onto the platform?
   `HILL_STATION_RUNIN` in `src/sim/city/terrain.ts`; `STAIR_DRAG`, `FOOT_BRAKE`.
 - The blimp: on the hill station platform at dusk (0.76) it waits 5 s with its ladder 4.2 m over the
   deck; hop to it. Is that a fair hop? Its lap takes nearly three minutes before it drops you 3 m
