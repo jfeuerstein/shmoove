@@ -488,6 +488,24 @@ under **Cut** at the end.
      about two-thirds haze; the hill station deck cannot be reached standing from the lawn east
      of its run-in steps; stair edges are low in contrast at night. All three are in PLAYTEST.
 
+## M6k — The city is lit at night
+
+111. **Night lights are added geometry, baked into the chunks.** The check found almost nothing lit
+     at night. The cause was not the lit share (about half the facade windows were already lit) but
+     where windows were: a facade's window grid starts from the highest ground along the face, so a
+     terraced building beside a stepped street had none on its street side, the far level of detail
+     had no glow at all, warehouses had no windows, and from up the hill the camera mostly sees
+     roofs. Added, after the unchanged day dressing (`src/render/dress/lights.ts`): windows laid
+     from the ground under each column down a slope, 0.3 m glass roof lanterns on flat roofs (under
+     the roof clutter limit, so roofs stay rideable), warehouse clerestories, shed windows and stall
+     lanterns; the far box carries the lit glass of the same windows at exactly the near glass's
+     place, so a LOD swap moves no light. About 57 % of window panes are lit, chosen by `hash2`.
+     The new windows show by day too (as dark glass). No street lamps were added: the world has no
+     lamp posts and DESIGN names none on the spine; the views that still show no lit window (the
+     Terraces terrace, the Antenna and the container yard) have no building in them.
+     `tests/unit/nightLights.test.ts` holds the shares and checks the day dressing against hashes
+     recorded before the change.
+
 ## Cut
 
 What the original design promised and the game does not have, or has smaller, with why.

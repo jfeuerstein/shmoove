@@ -3,7 +3,7 @@
  * and small printed shapes (seven-segment numbers, discs, prisms). Everything writes into a
  * MeshBuilder; nothing here runs per frame.
  */
-import { District, districtAt, terrainHeight, type Solid, type World } from '../../sim/world';
+import { District, Surface, districtAt, terrainHeight, terrainSurface, topHeight, type Solid, type World } from '../../sim/world';
 import { type MeshBuilder, hash2, shade } from '../geom';
 import { INK } from '../look';
 
@@ -125,6 +125,32 @@ export function fx(f: Face, u: number, off: number): number {
 
 export function fz(f: Face, u: number, off: number): number {
   return f.cz + f.nz * off + f.rz * u;
+}
+
+/** World point at local (lx, lz) of a solid. */
+export function lx2x(o: Solid, lx: number, lz: number): number {
+  return o.cx + lx * o.cosR - lz * o.sinR;
+}
+export function lx2z(o: Solid, lx: number, lz: number): number {
+  return o.cz + lx * o.sinR + lz * o.cosR;
+}
+
+/** Is a face hidden by a neighbour at least as tall (so dressing it is wasted)? */
+export function occluded(w: World, o: Solid, f: Face): boolean {
+  const x = fx(f, 0, 0.9);
+  const z = fz(f, 0, 0.9);
+  return topHeight(w, x, z) > o.yTop - 1.2;
+}
+
+/** Is the ground just outside a face a walkway (where doors and shopfronts go)? */
+export function streetSide(w: World, f: Face): boolean {
+  const s = terrainSurface(w, fx(f, 0, 2), fz(f, 0, 2));
+  return s === Surface.STREET || s === Surface.PLAZA || s === Surface.STAIRS;
+}
+
+/** Faces sorted widest first. */
+export function facesByWidth(o: Solid): Face[] {
+  return solidFaces(o).sort((a, c) => c.hw - a.hw);
 }
 
 /** Flat quad on a face. */
