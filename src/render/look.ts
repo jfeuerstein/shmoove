@@ -124,7 +124,15 @@ const INK_FRAG = /* glsl */ `
       // the board (flat colour gives the eye nothing to judge speed by) and walls have a scale:
       // pavers in a running bond on anything walkable, courses on walls. Both fade out before
       // they get fine enough on screen to shimmer.
-      if (n.y > 0.72) {
+      // Grass and planting are not paved: they get a mottle of tufts instead of joints.
+      bool green = vColor.g > vColor.r * 1.12 && vColor.g > vColor.b * 1.12;
+      if (n.y > 0.72 && green) {
+        vec2 p = vWorld.xz / (uPaver * 0.45);
+        vec2 w = fwidth(p);
+        float fade = 1.0 - smoothstep(0.12, 0.45, max(w.x, w.y));
+        float h = fract(sin(dot(floor(p), vec2(127.1, 311.7))) * 43758.5453);
+        base *= 1.0 + (h - 0.5) * 0.22 * fade;
+      } else if (n.y > 0.72) {
         vec2 p = vWorld.xz / uPaver;
         p.x += 0.5 * step(1.0, mod(floor(p.y), 2.0));
         vec2 f = fract(p);
@@ -507,10 +515,10 @@ export function createRiso(): Riso {
           float seed = hash(vec2(lane, 3.7));
           float along = fract(r * (1.6 + seed) - uTime * (1.4 + 2.2 * seed) - seed * 7.0);
           float dash = smoothstep(0.0, 0.12, along) * (1.0 - smoothstep(0.32, 0.5, along));
-          float thin = 1.0 - smoothstep(0.1, 0.34, abs(fract(a * 46.0) - 0.5));
-          float edge = smoothstep(0.24, 0.62, r);
-          float on = step(1.0 - uSpeed * 0.7, seed);
-          c = mix(c, vec3(1.0, 0.985, 0.95), dash * thin * edge * on * (0.35 + 0.45 * uSpeed));
+          float thin = 1.0 - smoothstep(0.05, 0.2, abs(fract(a * 46.0) - 0.5));
+          float edge = smoothstep(0.4, 0.8, r);
+          float on = step(1.0 - uSpeed * 0.55, seed);
+          c = mix(c, vec3(1.0, 0.985, 0.95), dash * thin * edge * on * (0.22 + 0.33 * uSpeed));
         }
 
         // Paper grain and uneven ink lay-down.
