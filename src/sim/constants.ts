@@ -114,6 +114,13 @@ export const FEEL_DEFS = {
   SLING_VY_CARRY: [6, 0, 15, 'Sling', 'Most upward speed from the tow that carries into a release, m/s'],
   SLING_HOP_POP: [5.5, 0, 12, 'Sling', 'Extra upward pop when releasing with a swipe up, m/s'],
   CHAIN_GROUND_GRACE: [0.6, 0, 3, 'Sling', 'Ground time a chain survives after release, s (0 = strict)'],
+  FLOW_WINDOW: [4, 1, 12, 'Flow', 'Time to land the next trick before a line ends, s'],
+  FLOW_KICK: [1.2, 0, 6, 'Flow', 'Speed a trick adds, m/s: a grind, wallride, bounce or jump that stayed up'],
+  FLOW_KICK_STEP: [0.3, 0, 2, 'Flow', 'Extra speed per trick already in the line, m/s (up to FLOW_CAP tricks)'],
+  FLOW_CAP: [8, 1, 20, 'Flow', 'Tricks after which a line stops getting stronger'],
+  FLOW_HOLD: [0.07, 0, 0.12, 'Flow', 'Share of rolling and air drag each trick in the line takes away (up to FLOW_CAP)'],
+  FLOW_AIR_TIME: [0.7, 0.2, 3, 'Flow', 'Air time that makes a landing count as a trick, s'],
+  FLOW_REPEAT: [1.5, 0, 6, 'Flow', 'The same kind of trick again sooner than this does not count, s (the same rail twice running never does)'],
 
   // --- Bail
   RIDE_BAIL_SPEED: [13, 3, 40, 'Bail', 'Closing speed with a vehicle body that bails you, m/s'],

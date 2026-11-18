@@ -592,6 +592,16 @@ under **Cut** at the end.
      first-launch player bots rest a thumb on the glass whenever they are not steering, as a person
      does (the brief's acceptance).
 
+118. **Flow: skating well is how you go fast.** Nothing rewarded speed or tricks. Now a grind, a
+     wallride, an awning bounce, a jump that stays up (`FLOW_AIR_TIME`), a sling and a catch each
+     add to a line if the last one was within `FLOW_WINDOW`; the four done on the board kick it
+     faster (`FLOW_KICK`, growing by `FLOW_KICK_STEP` per trick up to `FLOW_CAP`), and a line in
+     progress sheds drag (`FLOW_HOLD` per trick), so speed earned is speed kept. The same rail or
+     the same kind of trick twice running does not count (`FLOW_REPEAT`), a bail ends the line,
+     and the clock stops while towed. The ride chain (the original design's, which gates the
+     summit) is untouched and runs alongside. The sim raises `flow` and `flowEnd`; showing and
+     sounding them is the HUD and audio's job (brief `m7d`).
+
 ## Cut
 
 What the original design promised and the game does not have, or has smaller, with why.

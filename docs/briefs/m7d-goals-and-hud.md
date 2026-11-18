@@ -42,6 +42,14 @@ can be tested without a browser.
 - At most one transient thing at a time (toast, inked ticket, hint): a queue with priorities,
   nothing stacked. Inked tickets shrink to a one-line stamp ("TRAM 5 · ESCUELA ✓ 12/41").
 - The chain meter shows from the second link, as now, and nothing for a single ride.
+- **Flow is felt.** The sim now strings tricks into a line (DECISIONS 118: events `flow`
+  {count, trick} and `flowEnd` {count, bailed}; `player.flow`, `player.flowTime`). Each trick
+  pops its name and the count by the skater for half a second on twos ("GRIND ×3"), with a thin
+  ring that drains as the window runs out; a line of three or more that ends without a bail
+  stamps its length ("LINE ×7") and the district's best is kept in the save and shown on the
+  map. Sound (`src/audio/**`, `src/app/audioView.ts`): a tick that rises a step with each trick
+  in the line, and the district track opens a stem at 2, 4 and 6 tricks the way a ride chain
+  does, falling back when the line ends. Haptics: a short tap per trick.
 - Errand and conductor offers are never thrown at a rolling player: a giver waves, with a small
   marker over them; the offer ticket appears only once the skater has braked to a stand in the
   ring (task M7a makes the sim rule; you make the UI match).
@@ -49,7 +57,7 @@ can be tested without a browser.
 
 ## Files you own
 
-`src/sim/game/goal.ts` (new) and its registration in `src/sim/game/game.ts`, `src/ui/**` except
+`src/sim/game/goal.ts` (new) and its registration in `src/sim/game/game.ts`, the flow sounds in `src/audio/**` and `src/app/audioView.ts`, `src/app/haptics.ts`, `src/ui/**` except
 `hint*.ts` internals (extend their pointer API if you need to; say what), the goal pointer in
 `src/render/hintView.ts`, minimal wiring in `src/app/main.ts`, tests under `tests/unit/ui/**` and
 `tests/sim/goal.test.ts`, the e2e routes' UI expectations (`tests/e2e/routes/*.mjs`,
