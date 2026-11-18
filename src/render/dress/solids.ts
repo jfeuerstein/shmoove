@@ -6,7 +6,7 @@
  * Roof rule: anything standing more than ROOF_CLUTTER_MAX above a skateable top sits within
  * ROOF_EDGE of the roof's edge, so roofs stay rideable.
  */
-import { Surface, terrainHeight, terrainSurface, topHeight, type Solid, type World } from '../../sim/world';
+import { Surface, terrainHeight, topHeight, type Solid, type World } from '../../sim/world';
 import { type MeshBuilder, hash2, shade } from '../geom';
 import { INK } from '../look';
 import {
@@ -15,6 +15,7 @@ import {
   dark,
   disc2,
   faceGround,
+  facesByWidth,
   fbox,
   fdisc,
   fnumber,
@@ -24,16 +25,21 @@ import {
   fx,
   fz,
   light,
+  lx2x,
+  lx2z,
   numberWidth,
+  occluded,
   paletteAt,
   prism,
   roofInk,
   sh,
   solidFaces,
+  streetSide,
   wallInk,
   type Face,
   type Palette,
 } from './kit';
+import { farBuildingLights, farShedLights, litGround, litShop, litUpper, nearShedLights, nearSkylights, nearSlopeWindows, planBuilding, type Variant } from './lights';
 
 export const ROOF_CLUTTER_MAX = 0.35;
 export const ROOF_EDGE = 0.5;
@@ -169,32 +175,46 @@ export function topInk(w: World, o: Solid): number {
   }
 }
 
-/** Far: the plain silhouette box (the dish, whose box is only a bound, draws its simple self). */
-export function meshSolidFar(b: MeshBuilder, w: World, o: Solid): void {
+/** Building kinds and their variant in `building`. */
+const BUILDING_VARIANT: Readonly<Record<string, Variant>> = { building: 0, house: 1, tower: 2, church: 3, school: 4 };
+
+/**
+ * Far: the plain silhouette box (the dish, whose box is only a bound, draws its simple self), and
+ * with `lights` (the default) the lit glass of its windows, so the far hill reads as a lit town.
+ */
+export function meshSolidFar(b: MeshBuilder, w: World, o: Solid, lights = true): void {
   if (o.kind === 'dish') return dish(b, w, o);
   const hy = (o.yTop - o.yBase) / 2;
   b.box(o.cx, o.yBase + hy, o.cz, o.hx, hy, o.hz, o.cosR, o.sinR, baseInk(w, o), { top: topInk(w, o), bottom: o.oneWay });
+  if (!lights) return;
+  const variant = BUILDING_VARIANT[o.kind];
+  if (variant !== undefined) farBuildingLights(b, w, o, variant);
+  else if (o.kind === 'warehouse' || o.kind === 'shed') farShedLights(b, w, o, o.kind === 'shed');
 }
 
-/** Near: the same box, dressed by kind. */
-export function meshSolidNear(b: MeshBuilder, w: World, o: Solid): void {
+/**
+ * Near: the same box, dressed by kind. `lights` (the default) adds the night lights (slope
+ * windows, skylights, warehouse and shed windows, stall lanterns) after the day dressing; without
+ * it the dressing is exactly what it was before they existed.
+ */
+export function meshSolidNear(b: MeshBuilder, w: World, o: Solid, lights = true): void {
   switch (o.kind) {
     case 'building':
-      return building(b, w, o, 0);
+      return building(b, w, o, 0, lights);
     case 'house':
-      return building(b, w, o, 1);
+      return building(b, w, o, 1, lights);
     case 'tower':
-      return building(b, w, o, 2);
+      return building(b, w, o, 2, lights);
     case 'church':
-      return building(b, w, o, 3);
+      return building(b, w, o, 3, lights);
     case 'school':
-      return building(b, w, o, 4);
+      return building(b, w, o, 4, lights);
     case 'warehouse':
-      return warehouse(b, w, o, false, false);
+      return warehouse(b, w, o, false, false, lights);
     case 'market':
-      return warehouse(b, w, o, false, true);
+      return warehouse(b, w, o, false, true, false);
     case 'shed':
-      return warehouse(b, w, o, true, false);
+      return warehouse(b, w, o, true, false, lights);
     case 'container':
       return container(b, w, o);
     case 'crate':
@@ -202,7 +222,7 @@ export function meshSolidNear(b: MeshBuilder, w: World, o: Solid): void {
     case 'kiosk':
       return o.style === 1 ? fountain(b, w, o) : kiosk(b, w, o);
     case 'stall':
-      return stall(b, w, o);
+      return stall(b, w, o, lights);
     case 'awning':
       return awning(b, w, o);
     case 'wall':
@@ -221,7 +241,7 @@ export function meshSolidNear(b: MeshBuilder, w: World, o: Solid): void {
     case 'dish':
       return dish(b, w, o);
     default:
-      return meshSolidFar(b, w, o);
+      return meshSolidFar(b, w, o, false);
   }
 }
 
@@ -239,37 +259,11 @@ function cap(b: MeshBuilder, o: Solid, out: number, depth: number, side: number,
   b.box(o.cx, o.yTop - depth / 2, o.cz, o.hx + out, depth / 2, o.hz + out, o.cosR, o.sinR, side, { top: lid, bottom: true });
 }
 
-/** World point at local (lx, lz) of a solid. */
-function lx2x(o: Solid, lx: number, lz: number): number {
-  return o.cx + lx * o.cosR - lz * o.sinR;
-}
-function lx2z(o: Solid, lx: number, lz: number): number {
-  return o.cz + lx * o.sinR + lz * o.cosR;
-}
-
-/** Is a face hidden by a neighbour at least as tall (so dressing it is wasted)? */
-function occluded(w: World, o: Solid, f: Face): boolean {
-  const x = fx(f, 0, 0.9);
-  const z = fz(f, 0, 0.9);
-  return topHeight(w, x, z) > o.yTop - 1.2;
-}
-
-/** Is the ground just outside a face a walkway (where doors and shopfronts go)? */
-function streetSide(w: World, f: Face): boolean {
-  const s = terrainSurface(w, fx(f, 0, 2), fz(f, 0, 2));
-  return s === Surface.STREET || s === Surface.PLAZA || s === Surface.STAIRS;
-}
-
-/** Faces sorted widest first, with their index. */
-function facesByWidth(o: Solid): Face[] {
-  return solidFaces(o).sort((a, c) => c.hw - a.hw);
-}
-
 // ---------------------------------------------------------------------------------------------
 // Buildings, houses, towers
 
 /** variant: 0 town building, 1 house, 2 clock tower, 3 church, 4 school. */
-function building(b: MeshBuilder, w: World, o: Solid, variant: 0 | 1 | 2 | 3 | 4): void {
+function building(b: MeshBuilder, w: World, o: Solid, variant: Variant, lights: boolean): void {
   const p = paletteAt(w, o.cz);
   const wall = baseInk(w, o);
   const roof = topInk(w, o);
@@ -279,52 +273,20 @@ function building(b: MeshBuilder, w: World, o: Solid, variant: 0 | 1 | 2 | 3 | 4
   walls(b, o, wall);
   cap(b, o, 0.14, 0.32, acc === INK.paper ? dark(wall, 0.85) : acc, roof);
 
-  const storey = variant === 1 ? 2.7 : 3.1;
-  const faces = solidFaces(o);
-  // Front: a street-side face that is not hidden; it gets the door, shopfront and signs.
-  let front = -1;
-  for (let i = 0; i < 4; i++) {
-    if (!occluded(w, o, faces[i]) && faces[i].hw >= 1.4 && streetSide(w, faces[i]) && (front < 0 || faces[i].hw > faces[front].hw)) front = i;
-  }
-  // Mural: the widest open face with room for one (the front if it is as wide).
-  let muralFace = -1;
-  if (variant !== 3 && (variant === 4 || sh(o, 3) < 0.75)) {
-    for (let i = 0; i < 4; i++) {
-      if (occluded(w, o, faces[i]) || faces[i].hw < 2.2) continue;
-      if (muralFace < 0 || faces[i].hw > faces[muralFace].hw + 0.01 || (i === front && faces[i].hw >= faces[muralFace].hw - 0.01)) muralFace = i;
-    }
-  }
+  const plan = planBuilding(w, o, variant);
+  const { storey, winH, ww, front } = plan;
   const shutters = sh(o, 5) < 0.5;
-  const winH = variant === 1 ? 1.1 : 1.35;
-  const ww = variant === 1 ? 0.42 : 0.5;
   for (let i = 0; i < 4; i++) {
-    const f = faces[i];
-    if (occluded(w, o, f)) continue;
-    const g = faceGround(w, f);
+    const fp = plan.faces[i];
+    const f = fp.f;
+    if (!fp.open) continue;
     // Base course: a darker plinth up to just above the highest ground along the face.
-    const plinth = Math.min(o.yTop - 0.4, g.hi + 0.55);
+    const plinth = Math.min(o.yTop - 0.4, fp.gHi + 0.55);
     if (plinth > o.yBase) fquad(b, f, -f.hw, f.hw, o.yBase, plinth, 0.02, trim);
-    const groundTop = g.hi;
+    const groundTop = fp.gHi;
     // Mural rectangle on this face, if any: most of the wall above the ground floor.
-    let mu0 = 0;
-    let mu1 = 0;
-    let my0 = 0;
-    let my1 = 0;
-    if (i === muralFace) {
-      my0 = groundTop + storey + 0.25;
-      my1 = Math.min(o.yTop - 0.6, my0 + 4 + 3 * sh(o, 7));
-      if (my1 - my0 >= 2.4) {
-        const width = Math.min(2 * f.hw - 1.0, 4 + 6 * sh(o, 8));
-        const centre = (sh(o, 9) - 0.5) * (2 * f.hw - 1.0 - width);
-        mu0 = centre - width / 2;
-        mu1 = centre + width / 2;
-        mural(b, f, mu0, mu1, my0, my1, Math.floor(sh(o, 10) * 6), acc, acc2, wall, o.index);
-      } else {
-        my1 = my0;
-      }
-    }
-    const cols = Math.floor((2 * f.hw - 0.6) / (variant === 1 ? 2.4 : 2.7));
-    const pitch = cols >= 1 ? (2 * f.hw) / cols : 0;
+    const { mu0, mu1, my0, my1, cols, pitch } = fp;
+    if (my1 > my0) mural(b, f, mu0, mu1, my0, my1, Math.floor(sh(o, 10) * 6), acc, acc2, wall, o.index);
     // Upper-floor windows.
     for (let r = 1; cols >= 1; r++) {
       const y0 = groundTop + r * storey + 0.6;
@@ -333,7 +295,7 @@ function building(b: MeshBuilder, w: World, o: Solid, variant: 0 | 1 | 2 | 3 | 4
       for (let c = 0; c < cols; c++) {
         const u = -f.hw + (c + 0.5) * pitch;
         if (my1 > my0 && u + 0.9 > mu0 && u - 0.9 < mu1 && y1 > my0 && y0 < my1) continue;
-        const lit = hash2(o.index * 31 + r * 7 + c, i) > 0.5 ? 1 : 0;
+        const lit = litUpper(o, i, r, c);
         if (shutters) {
           fquad(b, f, u - ww, u + ww, y0, y1, 0.03, WINDOW_INK, lit);
           fquad(b, f, u - ww - 0.42, u - ww - 0.02, y0, y1, 0.04, acc);
@@ -349,26 +311,16 @@ function building(b: MeshBuilder, w: World, o: Solid, variant: 0 | 1 | 2 | 3 | 4
       }
     }
     // Ground floor: door, shop window and signs on the front; windows elsewhere.
-    let busy0 = 0;
-    let busy1 = 0;
     if (i === front) {
-      const du = (sh(o, 11) - 0.5) * Math.max(0, 2 * f.hw - 3);
-      const dg = terrainHeight(w, fx(f, du, 0.3), fz(f, du, 0.3));
-      if (dg > o.yBase + 0.02 && dg + 2.6 < o.yTop) {
+      const { du, dg, s0, s1, sg } = fp;
+      if (fp.door) {
         fquad(b, f, du - 0.72, du + 0.72, dg, dg + 2.35, 0.03, INK.paper);
         fquad(b, f, du - 0.58, du + 0.58, dg, dg + 2.2, 0.045, dark(acc2, 0.6));
         // Sign over the door.
         if (dg + 3.2 < o.yTop - 0.3) fbox(b, f, du, dg + 2.8, 1.25, 0.28, 0.14, 0.02, acc2, 0.6, acc);
         // Shop window on the wider side of the door.
-        const side = du < 0 ? 1 : -1;
-        const s0 = du + side * 1.1;
-        const s1 = side > 0 ? Math.min(f.hw - 0.4, s0 + 2.6) : Math.max(-f.hw + 0.4, s0 - 2.6);
-        busy0 = Math.min(du - 0.8, s0, s1);
-        busy1 = Math.max(du + 0.8, s0, s1);
-        if (Math.abs(s1 - s0) > 1) {
-          const sg = terrainHeight(w, fx(f, (s0 + s1) / 2, 0.3), fz(f, (s0 + s1) / 2, 0.3));
-          const lit = sh(o, 12) < 0.75 ? 1 : 0;
-          fquad(b, f, Math.min(s0, s1), Math.max(s0, s1), sg + 0.7, sg + 2.2, 0.035, WINDOW_INK, lit);
+        if (fp.shop) {
+          fquad(b, f, Math.min(s0, s1), Math.max(s0, s1), sg + 0.7, sg + 2.2, 0.035, WINDOW_INK, litShop(o));
           fquad(b, f, Math.min(s0, s1) - 0.1, Math.max(s0, s1) + 0.1, sg + 2.2, sg + 2.38, 0.04, acc);
         }
       }
@@ -382,13 +334,13 @@ function building(b: MeshBuilder, w: World, o: Solid, variant: 0 | 1 | 2 | 3 | 4
         fbox(b, f, bu, by, 0.1, (bh - 0.16) * 0.28, 0.5, 0.27, acc2, 0.7, acc2);
       }
     }
+    const { busy0, busy1 } = fp;
     if (cols >= 1 && groundTop + 2.4 < o.yTop - 0.5) {
       for (let c = 0; c < cols; c++) {
         const u = -f.hw + (c + 0.5) * pitch;
         if (busy1 > busy0 && u + 0.5 > busy0 && u - 0.5 < busy1) continue;
         if (i !== front && (c & 1) === 1) continue;
-        const lit = hash2(o.index * 13 + c, i + 9) > 0.55 ? 1 : 0;
-        fquad(b, f, u - 0.45, u + 0.45, groundTop + 0.95, groundTop + 2.15, 0.03, WINDOW_INK, lit);
+        fquad(b, f, u - 0.45, u + 0.45, groundTop + 0.95, groundTop + 2.15, 0.03, WINDOW_INK, litGround(o, i, c));
       }
     }
     if (variant === 3 && i === (front >= 0 ? front : 0)) churchFront(b, w, o, f, groundTop, acc);
@@ -410,6 +362,11 @@ function building(b: MeshBuilder, w: World, o: Solid, variant: 0 | 1 | 2 | 3 | 4
     hdisc(b, o.cx, o.yTop + 0.04, o.cz, r * 0.28, 12, INK.cobalt);
   } else if (o.surface === Surface.ROOF && variant !== 3) {
     roofClutter(b, o, p, acc, acc2);
+  }
+  if (lights) {
+    // Night lights, added after the day dressing: windows down the slope, skylights on the roof.
+    nearSlopeWindows(b, w, o, plan, shutters, acc, INK.paper);
+    nearSkylights(b, o, variant, roof);
   }
 }
 
@@ -595,7 +552,7 @@ function roofClutter(b: MeshBuilder, o: Solid, p: Palette, acc: number, acc2: nu
 // Warehouses and sheds
 
 /** Warehouses, the fish market hall (`fish`) and sheds (radio shack and hut by style). */
-function warehouse(b: MeshBuilder, w: World, o: Solid, shed: boolean, fish: boolean): void {
+function warehouse(b: MeshBuilder, w: World, o: Solid, shed: boolean, fish: boolean, lights: boolean): void {
   const p = paletteAt(w, o.cz);
   const wall = baseInk(w, o);
   const acc = accentFor(p, wall, o.style);
@@ -660,6 +617,7 @@ function warehouse(b: MeshBuilder, w: World, o: Solid, shed: boolean, fish: bool
     b.beam(x, o.yTop, z, x, o.yTop + 2.4, z, 0.03, INK.ink);
     b.box(x, o.yTop + 2.45, z, 0.06, 0.06, 0.06, 1, 0, INK.pink, { glow: 1 });
   }
+  if (lights && !fish) nearShedLights(b, w, o, shed, wall, topInk(w, o));
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -775,7 +733,7 @@ function kiosk(b: MeshBuilder, w: World, o: Solid): void {
   }
 }
 
-function stall(b: MeshBuilder, w: World, o: Solid): void {
+function stall(b: MeshBuilder, w: World, o: Solid, lights: boolean): void {
   const p = paletteAt(w, o.cz);
   const wood = baseInk(w, o);
   const acc = stripeInk(p, o.style);
@@ -819,6 +777,13 @@ function stall(b: MeshBuilder, w: World, o: Solid): void {
     fquad(b, f, u0, u1, o.yTop - 0.2, o.yTop, 0.04, col);
     ftri(b, f, u0, o.yTop - 0.2, (u0 + u1) / 2, o.yTop - 0.38, u1, o.yTop - 0.2, 0.04, col);
     fquad(b, f, (u0 + u1) / 2 - 0.05, (u0 + u1) / 2 + 0.05, o.yTop - 0.5, o.yTop - 0.4, 0.06, 0xffe3a0, 1);
+  }
+  if (lights && f.hw > 0.5) {
+    // Lanterns hung under the valance at both ends and the middle, big enough to read at night.
+    for (let k = -1; k <= 1; k++) {
+      const u = k * (f.hw - 0.3);
+      fquad(b, f, u - 0.14, u + 0.14, o.yTop - 0.82, o.yTop - 0.54, 0.09, 0xffe3a0, 1);
+    }
   }
 }
 
