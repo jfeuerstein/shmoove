@@ -118,9 +118,11 @@ export function bucketWorld(w: World, g: ChunkGrid): ChunkBuckets {
 
 /**
  * The phases of an incremental chunk build, in order. Each piece does one item of one phase. Near
- * chunks first plan their people (no geometry), mesh the people in their first pose, then the
- * world, then the props and lane paint, and last the people again in their second pose: the draw
- * range of the finished mesh picks a pose by skipping one of the two ends (see `ChunkLifeRanges`).
+ * chunks first plan their people (no geometry) and mesh them in their first pose, then the world,
+ * the props and the lane paint, and last the people again in their second pose. People go into a
+ * builder of their own (`ChunkJob.people`): they are drawn with the plain ink, not the world ink
+ * that prints pavers, and the draw range of their mesh picks a pose and a crowd (see
+ * `ChunkLifeRanges`).
  */
 const PH_PREP = 0;
 const PH_PLAN_ROWS = 1;
@@ -144,11 +146,11 @@ const PH_DONE = 16;
 const FIGS_PER_PIECE = 6;
 
 /**
- * Where a near chunk's people sit in its index buffer: the first pose's figures before everything
- * else, the second pose's after. `a[j]` is the index offset where the j-th figure of the first
- * block starts (ordered first-to-leave first, so `a[n]` is where the world starts); `b[j]` where
- * the second block's first j figures end (ordered last-to-leave first, `b[0]` where the world
- * ends). `keep` holds the second block's keep values, ascending.
+ * Where a near chunk's people sit in their mesh's index buffer: the first pose's block, then the
+ * second's. `a[j]` is the index offset where the j-th figure of the first block starts (ordered
+ * first-to-leave first, so `a[n]` is where the block ends); `b[j]` where the second block's first
+ * j figures end (ordered last-to-leave first, so `b[0]` is where that block starts). `keep` holds
+ * the second block's keep values, ascending.
  */
 export interface ChunkLifeRanges {
   a: Int32Array;
@@ -164,9 +166,9 @@ export function lifeDrawRange(r: ChunkLifeRanges, pose: number, k: number, out: 
   const n = r.keep.length;
   if (pose === 0) {
     out.start = r.a[n - k];
-    out.count = r.b[0] - out.start;
+    out.count = r.a[n] - out.start;
   } else {
-    out.start = r.a[n];
+    out.start = r.b[0];
     out.count = r.b[k] - out.start;
   }
 }
@@ -198,6 +200,9 @@ export class ChunkJob {
   /** Near chunks: who lives here (planned in the first pieces), and where the figures went. */
   life: ChunkLife | null = null;
   ranges: ChunkLifeRanges | null = null;
+  /** Near chunks: the people, both poses, and their geometry once built. */
+  readonly people = new MeshBuilder();
+  peopleGeometry: THREE.BufferGeometry | null = null;
   private readonly w: World;
   private readonly bk: ChunkBuckets;
   private readonly ci: number;
@@ -281,7 +286,7 @@ export class ChunkJob {
             this.meshFigures(this.orderA, i, 0, this.ranges.a);
             break;
           }
-          if (this.ranges !== null) this.ranges.a[this.orderA.length] = b.triangleCount * 3;
+          if (this.ranges !== null) this.ranges.a[this.orderA.length] = this.people.triangleCount * 3;
           this.next();
           continue;
         case PH_GROUND:
@@ -349,7 +354,7 @@ export class ChunkJob {
           continue;
         case PH_FIG_B:
           if (near && this.ranges !== null) {
-            if (i === 0) this.ranges.b[0] = b.triangleCount * 3;
+            if (i === 0) this.ranges.b[0] = this.people.triangleCount * 3;
             if (i * FIGS_PER_PIECE < this.orderB.length) {
               this.meshFigures(this.orderB, i, 1, this.ranges.b);
               break;
@@ -361,6 +366,7 @@ export class ChunkJob {
           this.phase = PH_DONE;
           if (this.noBuild) return true;
           this.geometry = b.build();
+          if (this.people.triangleCount > 0) this.peopleGeometry = this.people.build();
           this.pieces++;
           return true;
         default:
@@ -381,7 +387,7 @@ export class ChunkJob {
 
   /** Mesh the `i`-th batch of figures of `order` in `pose`, noting where each starts (pose 0) or ends (pose 1). */
   private meshFigures(order: Figure[], i: number, pose: number, at: Int32Array): void {
-    const b = this.b;
+    const b = this.people;
     const end = Math.min(order.length, (i + 1) * FIGS_PER_PIECE);
     for (let j = i * FIGS_PER_PIECE; j < end; j++) {
       if (pose === 0) at[j] = b.triangleCount * 3;
@@ -683,6 +689,7 @@ const DAY_TICKS = 43200;
 
 /** A shown near chunk's people: what lives there, where its figures are, and the pose and crowd applied. */
 interface Alive {
+  /** The people's mesh (plain ink), shown and hidden with its chunk. */
   mesh: THREE.Mesh;
   live: LiveChunk;
   ranges: ChunkLifeRanges;
@@ -691,6 +698,8 @@ interface Alive {
 }
 
 const _range = { start: 0, count: 0 };
+/** Geometry of a near chunk with nobody in it. */
+const EMPTY = new THREE.BufferGeometry();
 
 /**
  * The streaming, dressed world view for a big world. `camera`, when given, is the camera the world
@@ -701,6 +710,7 @@ export function createCityView(world: World, camera?: () => THREE.Camera): CityV
   const group = new THREE.Group();
   group.name = 'city';
   const mat = inkMaterial({ world: true });
+  const peopleMat = inkMaterial();
   const g = chunkGrid(world);
   const bk = bucketWorld(world, g);
   const jobs: (ChunkJob | null)[] = new Array<ChunkJob | null>(g.ncx * g.ncz * 2).fill(null);
@@ -766,7 +776,14 @@ export function createCityView(world: World, camera?: () => THREE.Camera): CityV
       mesh.visible = false;
       triangles += tris;
       mesh.userData.tris = tris;
-      if (job.life !== null && job.ranges !== null) alive.set(mesh, { mesh, live: liveChunk(job.life), ranges: job.ranges, pose: -1, k: -1 });
+      if (job.life !== null && job.ranges !== null) {
+        const pm = new THREE.Mesh(job.peopleGeometry ?? EMPTY, peopleMat);
+        pm.name = `people_${ci}`;
+        pm.matrixAutoUpdate = false;
+        pm.visible = false;
+        group.add(pm);
+        alive.set(mesh, { mesh: pm, live: liveChunk(job.life), ranges: job.ranges, pose: -1, k: -1 });
+      }
       group.add(mesh);
       return mesh;
     },
@@ -792,6 +809,7 @@ export function createCityView(world: World, camera?: () => THREE.Camera): CityV
       const a = alive.get(m);
       if (a !== undefined) {
         // Pose and crowd are applied on the next update.
+        a.mesh.visible = a.mesh.geometry !== EMPTY;
         a.pose = -1;
         shownAlive.push(a);
       }
@@ -800,11 +818,17 @@ export function createCityView(world: World, camera?: () => THREE.Camera): CityV
       m.visible = false;
       const a = alive.get(m);
       if (a !== undefined) {
+        a.mesh.visible = false;
         const k = shownAlive.indexOf(a);
         if (k >= 0) shownAlive.splice(k, 1);
       }
     },
     dispose(m) {
+      const a = alive.get(m);
+      if (a !== undefined) {
+        group.remove(a.mesh);
+        if (a.mesh.geometry !== EMPTY) a.mesh.geometry.dispose();
+      }
       alive.delete(m);
       group.remove(m);
       triangles -= m.userData.tris as number;
@@ -832,7 +856,7 @@ export function createCityView(world: World, camera?: () => THREE.Camera): CityV
         a.pose = pose;
         a.k = k;
         lifeDrawRange(a.ranges, pose, k, _range);
-        a.mesh.geometry.setDrawRange(_range.start, _range.count);
+        if (a.mesh.geometry !== EMPTY) a.mesh.geometry.setDrawRange(_range.start, _range.count);
       }
       for (let i = 0; i < shownAlive.length; i++) liveList[i] = shownAlive[i].live;
       lifeLayer.update(liveList, shownAlive.length, camX, camZ, skX, skZ, dayFrac);
