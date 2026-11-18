@@ -255,7 +255,7 @@ under **Cut** at the end.
     the skater's head (found in the first-launch screenshots: the skater was under the hint at the
     moment of the first hitch). It now pitches down just enough to keep the skater within
     `CAM_FRAME_MAX` degrees of the centre.
-77. *[M6 onboarding check]* **Holding a still finger plants a foot.** The independent check of
+77. *[M6 onboarding check; superseded by 113]* **Holding a still finger plants a foot.** The independent check of
     onboarding found that a clumsy first-timer never caught a ride: by the time they reacted to the
     hint they had rolled past the stop, and nothing in the game let them stop or go back. Landings
     fall, so nobody could stand and wait at a stop at all, in a game about catching scheduled rides.
@@ -469,7 +469,7 @@ under **Cut** at the end.
      and when every one of those is blocked (a low awning between even the closest and the skater)
      it ducks to shoulder height behind them. It keeps clear only of ground and roofs below it.
      `CAM_FRAME_MAX` keeps the skater off the bottom edge in every case (item 76).
-107. **A ride ahead keeps you rolling from 25 m.** The check found that pressing early while
+107. *(Superseded by 113.)* **A ride ahead keeps you rolling from 25 m.** The check found that pressing early while
      rolling up behind a ride (the natural thing to do) planted the foot 3–20 m short of it: the
      first version of item 77 only spared rides within 10 m. Now a ride whose grab point is within
      standing reach height, in front of where the skater is travelling and within `FOOT_NEAR`
