@@ -20,6 +20,7 @@ import { Hud } from '../ui/hud';
 import { FixedStepper, FrameStats, RafDriver } from './loop';
 import { parseParams, type Params } from './params';
 import { setupPlatform } from './platform';
+import { registerPwa } from './pwa';
 import { HookInput, installTestHook, type TestHook } from './testHook';
 
 /** Radius of the play area until the bowl lands, m (the bowl's own radius). */
@@ -129,6 +130,7 @@ function boot(): void {
   }
 
   driver.start();
+  registerPwa();
 }
 
 boot();
