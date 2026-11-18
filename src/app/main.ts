@@ -11,6 +11,7 @@ import { MoverView } from '../render/moverView';
 import { GameScene } from '../render/scene';
 import { makeTerrainView } from '../render/terrainView';
 import type { InputSource } from '../input/source';
+import { TouchInput } from '../input/touch';
 import { DT } from '../sim/constants';
 import { Sim } from '../sim/sim';
 import { flatTerrain, type Terrain } from '../sim/terrain';
@@ -29,9 +30,15 @@ function makeTerrain(_params: Params): Terrain {
   return flatTerrain(PLAY_RADIUS);
 }
 
-/** The one place the input source is made. */
-function makeInput(_params: Params, hookInput: HookInput): InputSource {
-  return hookInput;
+/** The one place the input source is made: the thumb, with the test hook's script laid over it. */
+function makeInput(params: Params, surface: HTMLElement, hookInput: HookInput): InputSource {
+  const touch = new TouchInput(surface, params.scheme);
+  return {
+    sample(out) {
+      touch.sample(out);
+      hookInput.overlay(out);
+    },
+  };
 }
 
 function setThemeColour(colour: number): void {
@@ -47,12 +54,12 @@ function boot(): void {
   const terrain = makeTerrain(params);
   const sim = new Sim(terrain);
   const hookInput = new HookInput();
-  const input = makeInput(params, hookInput);
   const frameInput = makeInputFrame();
 
   const canvas = document.createElement('canvas');
   canvas.className = 'game';
   document.body.appendChild(canvas);
+  const input = makeInput(params, canvas, hookInput);
   const view = new GameScene(canvas);
   view.scene.add(makeTerrainView(terrain));
   const mover = new MoverView();

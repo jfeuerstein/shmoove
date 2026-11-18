@@ -67,17 +67,21 @@ export class HookInput implements InputSource {
   }
 
   sample(out: InputFrame): void {
+    out.steerX = 0;
+    out.steerY = 0;
+    out.carve = false;
+    out.hop = false;
+    this.overlay(out);
+  }
+
+  /** Lay the script's intent over a frame another source filled: a hold replaces it, a hop adds to it. */
+  overlay(out: InputFrame): void {
     const h = this.held;
     if (h) {
       out.steerX = h.steerX;
       out.steerY = h.steerY;
       out.carve = h.carve;
       out.hop = h.hop;
-    } else {
-      out.steerX = 0;
-      out.steerY = 0;
-      out.carve = false;
-      out.hop = false;
     }
     if (this.hopNext) {
       out.hop = true;

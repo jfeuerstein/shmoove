@@ -11,7 +11,7 @@ import { BoxGeometry, CircleGeometry, Group, Mesh, type Object3D, Quaternion, Ve
 import { DT, FEEL } from '../sim/constants';
 import type { Terrain } from '../sim/terrain';
 import type { SimState, Vec3 } from '../sim/types';
-import { PALETTE, flatMaterial } from './look';
+import { PALETTE, flatMaterial, glowMaterial, setGlowColor } from './look';
 
 /** Height of the figure standing, m. */
 export const MOVER_HEIGHT = 1.7;
@@ -49,7 +49,7 @@ export class MoverView {
   /** Squashed and stretched. */
   private readonly figure = new Group();
   private readonly shadow: Mesh;
-  private readonly material = flatMaterial(PALETTE.mover);
+  private readonly material = glowMaterial(PALETTE.mover);
   private tuckShown = false;
 
   private readonly up = new Vector3(0, 1, 0);
@@ -123,7 +123,7 @@ export class MoverView {
     const tuck = b.tucked;
     if (tuck !== this.tuckShown) {
       this.tuckShown = tuck;
-      this.material.color.setHex(tuck ? PALETTE.moverTuck : PALETTE.mover);
+      setGlowColor(this.material, tuck ? PALETTE.moverTuck : PALETTE.mover);
     }
 
     // The shadow: straight below, on the ground, flat to it, smaller the higher the mover is.

@@ -37,6 +37,23 @@ export function flatMaterial(color: number, vertexColors = false): MeshLambertMa
   return new MeshLambertMaterial({ color, flatShading: true, vertexColors });
 }
 
+/**
+ * For the few things that must read from any side in any light (the mover): the flat surface, plus
+ * enough of its own colour as glow that the unlit side is still that colour.
+ */
+export function glowMaterial(color: number, glow = 0.55): MeshLambertMaterial {
+  const m = flatMaterial(color);
+  m.emissive.setHex(color);
+  m.emissiveIntensity = glow;
+  return m;
+}
+
+/** Recolour a glow material, keeping surface and glow in step. */
+export function setGlowColor(m: MeshLambertMaterial, color: number): void {
+  m.color.setHex(color);
+  m.emissive.setHex(color);
+}
+
 /** CSS colour for a gear, for the DOM overlay. */
 export function gearCss(gear: number): string {
   const i = Math.min(PALETTE.gears.length, Math.max(1, Math.round(gear))) - 1;
