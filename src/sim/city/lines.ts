@@ -63,16 +63,22 @@ export interface CityLineSpec {
 
 const D = District;
 
-/** The roster. Order is the line index in the world. */
+/**
+ * The roster. Order is the line index in the world. Dwells and phases of the ground lines are found
+ * by `SKITCH_FIND_TIMETABLE=1 npx vitest run tests/sim/findTimetable.test.ts --silent=false`: T2's
+ * and D3's dwells are raised (4 to 9 s, 4 to 8 s) so their laps' padding is spent at the stops and a
+ * car home from its lap no longer stands on the one leaving; D3's and M1's phases bring back the
+ * forklift-truck and handcart-moped meetings (DECISIONS 127).
+ */
 export const CITY_LINES: readonly CityLineSpec[] = [
   { id: 'D1', name: 'Grúa Uno', kind: 'crane', district: D.DOCKS, stem: 0, vehicles: 1, cruise: 6, accel: 1.5, dwell: 4, windows: HOURS.allDay, phase: 0, lane: 0 },
   { id: 'D2', name: 'Montacargas', kind: 'forklift', district: D.DOCKS, stem: 1, vehicles: 9, cruise: 11, accel: 3, dwell: 2, windows: HOURS.dawnDusk, phase: 1250, lane: 2 },
-  { id: 'D3', name: 'Pescado Express', kind: 'truck', district: D.DOCKS, stem: 2, vehicles: 6, cruise: 13, accel: 2.5, dwell: 4, windows: HOURS.dawnDusk, phase: 4327, lane: 1.6 },
-  { id: 'M1', name: 'Las Motos', kind: 'moped', district: D.MERCADO, stem: 0, vehicles: 6, cruise: 14, accel: 3.5, dwell: 3, windows: HOURS.dawnDusk, phase: 1080, lane: 4.4 },
+  { id: 'D3', name: 'Pescado Express', kind: 'truck', district: D.DOCKS, stem: 2, vehicles: 6, cruise: 13, accel: 2.5, dwell: 8, windows: HOURS.dawnDusk, phase: 4627, lane: 1.6 },
+  { id: 'M1', name: 'Las Motos', kind: 'moped', district: D.MERCADO, stem: 0, vehicles: 6, cruise: 14, accel: 3.5, dwell: 3, windows: HOURS.dawnDusk, phase: 1560, lane: 4.4 },
   { id: 'M2', name: 'Carretillas', kind: 'handcart', district: D.MERCADO, stem: 1, vehicles: 6, cruise: 8, accel: 1.5, dwell: 2, windows: HOURS.dawnDusk, phase: 2180, lane: 1.6 },
   { id: 'M3', name: 'La Boda', kind: 'parade', district: D.MERCADO, stem: 2, vehicles: 1, cruise: 4, accel: 1.5, dwell: 2, windows: HOURS.boda, phase: 0, lane: 0 },
   { id: 'T1', name: 'Funicular', kind: 'funicular', district: D.TERRACES, stem: 0, vehicles: 4, cruise: 14, accel: 3, dwell: 5, windows: HOURS.allDay, phase: 440, lane: 0 },
-  { id: 'T2', name: 'Tranvía 5', kind: 'tram', district: D.TERRACES, stem: 1, vehicles: 12, cruise: 15, accel: 3, dwell: 4, windows: HOURS.allDay, phase: 6480, lane: 1.6 },
+  { id: 'T2', name: 'Tranvía 5', kind: 'tram', district: D.TERRACES, stem: 1, vehicles: 12, cruise: 15, accel: 3, dwell: 9, windows: HOURS.allDay, phase: 6480, lane: 1.6 },
   { id: 'T3', name: 'Tranvía 9', kind: 'tram', district: D.TERRACES, stem: 2, vehicles: 6, cruise: 14, accel: 3, dwell: 3, windows: HOURS.allDay, phase: 5250, lane: 1.6 },
   { id: 'T4', name: 'Nocturno', kind: 'bus', district: D.TERRACES, stem: 3, vehicles: 4, cruise: 20, accel: 5, dwell: 2, windows: HOURS.nightBus, phase: 2800, lane: 3.5 },
   { id: 'A1', name: 'Teleférico Bajo', kind: 'cablecar', district: D.ANTENNA, stem: 0, vehicles: 4, cruise: 7, accel: 3.5, dwell: 4, windows: HOURS.allDay, phase: 2102, lane: 0, hang: 1.8 },

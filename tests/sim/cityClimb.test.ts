@@ -8,7 +8,7 @@ import { placePlayer } from '../../src/sim/player';
 import { Sim } from '../../src/sim/sim';
 import { Mode } from '../../src/sim/types';
 import { findZone } from '../../src/sim/world';
-import { wouldCatch } from './helpers';
+import { wouldCatch, wouldCatchVehicle } from './helpers';
 
 let city: City;
 beforeAll(() => {
@@ -239,6 +239,32 @@ describe('the climb', () => {
 
 const REGULAR = ['D1', 'D2', 'D3', 'M1', 'M2', 'M3', 'T1', 'T2', 'T3', 'T4', 'A1', 'A2', 'A3'];
 
+/** Put the skater where vehicle 0 of l, standing at its terminus at sim.tick, is caught: under the strap, or behind the bumper. */
+function placeAtTerminus(l: CompiledLine, sim: Sim): void {
+  vehicleAt(l, 0, sim.tick, vs);
+  grabPoint(l, vs, gp);
+  const heading = Math.atan2(vs.hx, vs.hz);
+  if (l.overhead) placePlayer(city.world, sim.player, gp.x, gp.z, heading);
+  else placePlayer(city.world, sim.player, gp.x - vs.hx * 0.6, gp.z - vs.hz * 0.6, heading);
+}
+
+/** Is vehicle 0 of l caught at its terminus on the lap that starts at t0 (a hand out only for it)? */
+function catchableAt(l: CompiledLine, t0: number): boolean {
+  vehicleAt(l, 0, t0 + 30, vs);
+  if (!vs.active) return false;
+  const sim = new Sim(city.world, { seed: 1, startDayFrac: 0 });
+  sim.tick = t0 + 30;
+  placeAtTerminus(l, sim);
+  grabPoint(l, vs, gp);
+  const needHop = gp.y - (sim.player.y + FEEL.HAND_HEIGHT) > FEEL.HITCH_REACH_Y * 0.8;
+  for (let i = 0; i < l.dwell * 60; i++) {
+    const c = wouldCatchVehicle(sim);
+    sim.step({ steer: 0, hold: c !== null && c.line === l.index && c.veh === 0, hop: needHop && i % 40 === 0 });
+    if (sim.player.mode === Mode.HITCH) return sim.player.hLine === l.index && sim.player.hVeh === 0;
+  }
+  return false;
+}
+
 describe('inking the line map', () => {
   it('riding one full lap of each of the 13 regular lines completes it, and all 13 complete the map', () => {
     const game = new Game(city.world, { seed: 1, startDayFrac: 0 });
@@ -246,26 +272,30 @@ describe('inking the line map', () => {
     const events: GameEvent[] = [];
     for (const id of REGULAR) {
       const l = line(id);
-      const t0 = lapStartTick(l);
-      // Arrive at the terminus while vehicle 0 waits there to leave.
+      // Arrive at the terminus while vehicle 0 waits there to leave: on its first lap of the day
+      // that can be caught there (the strap reaches 14 m, DECISIONS 119, so a ride standing near
+      // the terminus, the funicular at the Antenna gate, can be nearer to hand at some laps).
+      const lap0 = lapStartTick(l);
+      let t0 = lap0;
+      for (let k = 0; k < 40 && !catchableAt(l, lap0 + k * l.period); k++) t0 = lap0 + (k + 1) * l.period;
       sim.tick = t0 + 30;
       vehicleAt(l, 0, sim.tick, vs);
       grabPoint(l, vs, gp);
-      const heading = Math.atan2(vs.hx, vs.hz);
-      if (l.overhead) {
-        // Stand under the strap.
-        placePlayer(city.world, sim.player, gp.x, gp.z, heading);
-      } else {
-        // Stand just behind the bumper.
-        placePlayer(city.world, sim.player, gp.x - vs.hx * 0.6, gp.z - vs.hz * 0.6, heading);
-      }
+      placeAtTerminus(l, sim);
       // A strap above standing reach is caught with a hop.
       const needHop = gp.y - (sim.player.y + FEEL.HAND_HEIGHT) > FEEL.HITCH_REACH_Y * 0.8;
       let hitched = -1;
       let lostAt = -1;
       const ticks = l.runTicks + 60;
       for (let i = 0; i < ticks; i++) {
-        game.step({ steer: 0, hold: true, hop: needHop && hitched < 0 && i % 40 === 0 });
+        // Hand out for this line's vehicle 0 only: the strap reaches 14 m (DECISIONS 119), and other
+        // rides stand or pass near some termini.
+        let hold = true;
+        if (sim.player.mode !== Mode.HITCH) {
+          const c = wouldCatchVehicle(sim);
+          hold = c !== null && c.line === l.index && c.veh === 0;
+        }
+        game.step({ steer: 0, hold, hop: needHop && hitched < 0 && i % 40 === 0 });
         for (const e of game.events) events.push(e);
         if (hitched < 0 && sim.player.mode === Mode.HITCH) hitched = i;
         if (hitched >= 0 && lostAt < 0 && sim.player.mode !== Mode.HITCH) lostAt = i;
