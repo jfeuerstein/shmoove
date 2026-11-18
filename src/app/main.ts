@@ -10,16 +10,19 @@ import { PALETTE } from '../render/look';
 import { MoverView } from '../render/moverView';
 import { GameScene } from '../render/scene';
 import { makeTerrainView } from '../render/terrainView';
-import type { InputSource } from '../input/source';
+import type { InputSource, Scheme } from '../input/source';
 import { TouchInput } from '../input/touch';
 import { DT } from '../sim/constants';
 import { Sim } from '../sim/sim';
 import { flatTerrain, type Terrain } from '../sim/terrain';
 import { makeInputFrame } from '../sim/types';
+import { DebugPanel } from '../ui/debugPanel';
 import { Hud } from '../ui/hud';
+import { StickView } from '../ui/stickView';
 import { FixedStepper, FrameStats, RafDriver } from './loop';
 import { parseParams, type Params } from './params';
 import { setupPlatform } from './platform';
+import { browserStorage, Settings } from './settings';
 import { HookInput, installTestHook, type TestHook } from './testHook';
 
 /** Radius of the play area until the bowl lands, m (the bowl's own radius). */
@@ -31,14 +34,15 @@ function makeTerrain(_params: Params): Terrain {
 }
 
 /** The one place the input source is made: the thumb, with the test hook's script laid over it. */
-function makeInput(params: Params, surface: HTMLElement, hookInput: HookInput): InputSource {
-  const touch = new TouchInput(surface, params.scheme);
-  return {
+function makeInput(scheme: Scheme, surface: HTMLElement, hookInput: HookInput): { source: InputSource; touch: TouchInput } {
+  const touch = new TouchInput(surface, scheme);
+  const source: InputSource = {
     sample(out) {
       touch.sample(out);
       hookInput.overlay(out);
     },
   };
+  return { source, touch };
 }
 
 function setThemeColour(colour: number): void {
@@ -51,6 +55,9 @@ function boot(): void {
   setThemeColour(PALETTE.sky);
   setupPlatform();
 
+  const settings = new Settings(browserStorage(), window.location.search, params.scheme);
+  settings.applySaved();
+
   const terrain = makeTerrain(params);
   const sim = new Sim(terrain);
   const hookInput = new HookInput();
@@ -59,7 +66,7 @@ function boot(): void {
   const canvas = document.createElement('canvas');
   canvas.className = 'game';
   document.body.appendChild(canvas);
-  const input = makeInput(params, canvas, hookInput);
+  const { source: input, touch } = makeInput(settings.scheme, canvas, hookInput);
   const view = new GameScene(canvas);
   view.scene.add(makeTerrainView(terrain));
   const mover = new MoverView();
@@ -67,6 +74,8 @@ function boot(): void {
   const chase = new ChaseCamera(view.camera);
   const hudRoot = document.getElementById('hud') ?? document.body;
   const hud = new Hud(hudRoot);
+  const stick = new StickView(hudRoot, touch.gestures);
+  const panel = params.debug ? new DebugPanel(hudRoot, settings, (s) => touch.setScheme(s)) : null;
 
   const stepper = new FixedStepper(DT);
   const stats = new FrameStats();
@@ -87,6 +96,8 @@ function boot(): void {
     mover.update(sim.prev, sim.state, alpha, terrain);
     chase.update(sim.prev, sim.state, alpha, dt, terrain);
     hud.update(sim.state);
+    stick.update();
+    if (panel) panel.update();
     view.render();
   };
 
