@@ -154,15 +154,17 @@ export function clearForFigure(w: World, ctx: RouteCtx, x: number, z: number): b
 
 /**
  * Ground clear of solids around (x, z), within `r`, and clear of the places the game puts the
- * skater or a character: spawns (the camera stands there) and errand givers.
+ * skater or a character: spawns and landmarks (the camera stands there) and errand givers.
  */
 function openGround(w: World, x: number, z: number, r: number): boolean {
   for (const zn of w.zones) {
-    const pad = zn.kind === 'spawn' ? 4 : zn.kind === 'giver' ? 2 : -1;
+    const pad = zn.kind === 'spawn' ? 4 : zn.kind === 'landmark' ? 0 : zn.kind === 'giver' ? 2 : -1;
     if (pad < 0) continue;
     const dx = x - zn.x;
     const dz = z - zn.z;
-    if (dx * dx + dz * dz < (zn.r + pad) * (zn.r + pad)) return false;
+    // A landmark can be a whole plaza: only its centre, where a visitor arrives, stays clear.
+    const rad = zn.kind === 'landmark' ? 5 : zn.r + pad;
+    if (dx * dx + dz * dz < rad * rad) return false;
   }
   const g = terrainHeight(w, x, z);
   if (topHeight(w, x, z) > g + 0.05) return false;
