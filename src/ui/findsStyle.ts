@@ -10,9 +10,11 @@ const CSS = `
 .sk-ticket.sk-ftile::before{left:21px}
 .sk-ftile .sk-op{font-size:14px;color:var(--sk-cobalt);text-shadow:1px 1px 0 rgba(255,46,136,.55);font-variant-numeric:tabular-nums}
 /* A spot: a rubber stamp across the ticket */
-.sk-ticket[data-kind="spot"]{min-height:66px}
-.sk-fstamp{position:absolute;left:40px;right:12px;top:30px;padding:2px 6px;border:3px double var(--sk-pink);border-radius:4px;
-  color:var(--sk-pink);font:700 15px/1.15 'Arial Narrow',Arial,sans-serif;letter-spacing:.08em;text-align:center;
+.sk-ticket[data-kind="spot"],.sk-ticket[data-kind="unlock"],.sk-ticket[data-kind="postcard"]{padding-right:12px}
+.sk-ticket[data-kind="spot"] .sk-op,.sk-ticket[data-kind="unlock"] .sk-op,.sk-ticket[data-kind="postcard"] .sk-op{white-space:nowrap}
+.sk-ticket[data-kind="spot"]{min-height:84px}
+.sk-fstamp{position:absolute;left:38px;right:12px;top:44px;padding:2px 6px;border:3px double var(--sk-pink);border-radius:4px;
+  color:var(--sk-pink);font:700 13px/1.15 'Arial Narrow',Arial,sans-serif;letter-spacing:.04em;text-align:center;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transform:rotate(-4deg);opacity:.9;mix-blend-mode:multiply}
 /* A postcard: a perforated stamp in the corner */
 .sk-fpost{position:absolute;right:10px;top:8px;width:24px;height:28px;background:var(--sk-mango);

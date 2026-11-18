@@ -17,6 +17,7 @@ import { ConductorHud } from './conductorHud';
 import { ClassSlot, el } from './dom';
 import { SECRET_INFO, failText, taskText, ticksClock } from './errandFormat';
 import { ErrandHud } from './errandHud';
+import { isUnlocked, wardrobe } from '../sim/game/finds';
 import { findsTicket, swatchCss } from './findsFormat';
 import { injectFindsStyle } from './findsStyle';
 import { HintStub, type HintPointerScreen } from './hint';
@@ -515,6 +516,24 @@ export function createUi(root: HTMLElement, game: Game, sound: UiSound | null, s
     return out;
   };
 
+  /** Finds: the counter on screen, the tickets up (kinds, newest first), and the album's figures. */
+  const findsTestState = (): Record<string, string | number | boolean> => {
+    const f = game.finds;
+    const c = f.catalog;
+    const counter = toasts.queue.items.find((t) => t.kind === 'tile');
+    let open = 0;
+    for (const it of wardrobe(c)) if (isUnlocked(f, it.id)) open++;
+    return {
+      findsCounter: counter ? counter.data.title : '',
+      findsTickets: toasts.queue.items.map((t) => t.kind).join(','),
+      findsSpots: Object.keys(f.spots).length,
+      albumTiles: `${f.count}/${c.tiles.length}`,
+      albumSpots: `${Object.keys(f.spots).length}/${c.spots.length}`,
+      albumOpen: open,
+      albumWorn: `${f.deck},${f.kit}`,
+    };
+  };
+
   const ledgerTestState = (): Record<string, string | number | boolean> => {
     const er = game.errands;
     const a = er.active;
@@ -604,6 +623,7 @@ export function createUi(root: HTMLElement, game: Game, sound: UiSound | null, s
         onboardingComplete: game.onboarding.complete,
         ...chalkTestState(),
         ...ledgerTestState(),
+        ...findsTestState(),
       };
       shell?.testState(out);
       return out;

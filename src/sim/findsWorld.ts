@@ -23,7 +23,7 @@ export function buildFindsWorld(seed = 1): World {
     addPickup(w, 'tile', x, ground(x, z) + up, z, tier);
   };
   // Tier 0: the trail down from the lookout, and on down the street.
-  for (const z of FINDS_TRAIL_Z) tile(w.spawn.x, z, 0.9, 0);
+  for (const z of FINDS_TRAIL_Z) tile(w.spawn.x, z, 1.1, 0);
   tile(1.5, 250, 0.9, 0);
   tile(-1, 160, 0.9, 0);
   tile(2, 100, 0.9, 0);

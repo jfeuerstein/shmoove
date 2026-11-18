@@ -84,7 +84,7 @@ describe('finds view', () => {
     const { game, scene, cam } = setup();
     const view = createFindsView(scene);
     const tiles = scene.getObjectByName('tiles') as THREE.Mesh;
-    const pos = tiles.geometry.getAttribute('position');
+    const pos = tiles.geometry.getAttribute('position') as THREE.BufferAttribute;
     view.update(game, [], cam, 1 / 60);
     const v0 = pos.version;
     step(game, 1);

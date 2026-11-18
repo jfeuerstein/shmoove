@@ -36,8 +36,8 @@ const MAX_TILES = 96;
 const TWOS = 5;
 /** Yaw per animation frame, rad. */
 const TURN = 0.42;
-const HALF = 0.36;
-const THICK = 0.035;
+const HALF = 0.5;
+const THICK = 0.045;
 const BORDER = [INK.mango, INK.pink, INK.cobalt] as const;
 const PAPERS = [INK.paper, INK.mango, INK.pink, INK.white, INK.teal] as const;
 const PIECES = 12;
