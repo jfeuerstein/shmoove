@@ -107,7 +107,7 @@ export default {
     {
       do: 'expect',
       label: 'a new game: at the lookout at the new-game clock, nothing on screen yet',
-      test: (s) => s.mode === 'GROUND' && s.z > 565 && Math.abs(s.dayFrac - 0.4036) < 0.0005 && s.ui.hint === '' && s.ui.hintsDone === 0 && !s.ui.onboardingComplete,
+      test: (s) => s.mode === 'GROUND' && s.z > 565 && Math.abs(s.dayFrac - 0.4146) < 0.0005 && s.ui.hint === '' && s.ui.hintsDone === 0 && !s.ui.onboardingComplete,
     },
     // Rolling off the lookout, inside the funicular errand giver's zone: no offer until the hitch is learnt.
     ...TOUCHES.slice(0, 2).flatMap(toSteps),
