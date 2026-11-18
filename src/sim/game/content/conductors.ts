@@ -25,11 +25,12 @@ export const CONDUCTORS: readonly ConductorDef[] = [
   // Tram 5 runs 13 m/s and leaves Terrazas downhill. Best measured sling 32.5 m (lazy 1.1 m); 0.75 of it.
   { line: 'T2', stop: 2, task: { kind: 'slingDistance', metres: 24 } },
   // Let go at Terraza Alta and roll down the spine to Terraza Baja. The steering bot in the content
-  // test takes 18.4 s from letting go on the twice-as-fast board (DECISIONS 114, 118); 1.3x.
-  { line: 'T3', stop: 1, task: { kind: 'stopToStop', from: 2, to: 0, seconds: 24 } },
+  // test takes 27.4 s from letting go on the twice-as-fast board (DECISIONS 114, 118-120); 1.3x.
+  // Re-measure with SKITCH_FIND_CONDUCTORS (see tests/sim/content.test.ts).
+  { line: 'T3', stop: 1, task: { kind: 'stopToStop', from: 2, to: 0, seconds: 36 } },
   // Let go at Terraza 727 and roll down the spine to the garage at the docks. The steering bot takes
-  // 37.7 s; 1.3x.
-  { line: 'T4', stop: 1, task: { kind: 'stopToStop', from: 2, to: 0, seconds: 49 } },
+  // 42.3 s; 1.3x.
+  { line: 'T4', stop: 1, task: { kind: 'stopToStop', from: 2, to: 0, seconds: 56 } },
   // Drop off the lower cable car onto the hill-station platform.
   { line: 'A1', stop: 0, task: { kind: 'landOn', zone: 'hill_station' } },
   // The summit car leaves the hill station over open slope. Best measured flight 1.30 s (lazy 0.73 s);

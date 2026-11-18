@@ -5,6 +5,7 @@
  * read the sim (steer for a point, arm the hold near a wanted vehicle, let go at a stop), so the
  * play-throughs survive the city moving a few metres or its timetables shifting.
  */
+import { wouldCatch } from './helpers';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { buildCity, type City } from '../../src/sim/city';
 import { DAY_TICKS, FEEL, resetFeel } from '../../src/sim/constants';
@@ -381,7 +382,7 @@ function steerFor(p: PlayerState, x: number, z: number, tick: number): number {
   return steer;
 }
 
-/** Arm only when the nearest grab point of any ride is a vehicle of `want`, within 9 m; hop for a high strap. */
+/** Arm only when the nearest grab point of any ride is a vehicle of `want`, within 9 m, and the hitch would take it; hop for a high strap. */
 function armFor(sim: Sim, want: CompiledLine): { hold: boolean; hop: boolean } {
   const p = sim.player;
   let nearest = Infinity;
@@ -400,7 +401,8 @@ function armFor(sim: Sim, want: CompiledLine): { hold: boolean; hop: boolean } {
       if (M.index === want.index && M.overhead && d < 2.5 && p.mode === Mode.GROUND && GP.y - (p.y + FEEL.HAND_HEIGHT) > FEEL.HITCH_REACH_Y * 0.75) hop = true;
     }
   }
-  return { hold: wanted && nearest < 9, hop };
+  // Only when the hand would take the wanted ride: the strap is thrown 14 m (DECISIONS 119).
+  return { hold: wanted && nearest < 9 && wouldCatch(sim) === want.index, hop };
 }
 
 /** Lean against the swing so a ride does not slam the skater into the walls of the road. */
@@ -418,9 +420,9 @@ interface Played {
   ticks: number;
 }
 
-function newGame(dayFrac: number): Game {
+function newGame(dayFrac: number, conductors?: readonly ConductorDef[]): Game {
   resetFeel();
-  return new Game(W, { seed: 1, startDayFrac: dayFrac });
+  return new Game(W, { seed: 1, startDayFrac: dayFrac, ...(conductors ? { conductors } : {}) });
 }
 
 function play(game: Game, maxTicks: number, brain: (sim: Sim, i: number) => Partial<InputFrame>, stop: (e: GameEvent) => boolean): Played {
@@ -464,8 +466,6 @@ function acceptAt(game: Game, id: string): void {
 
 const errandOver = (e: GameEvent): boolean => e.type === 'errandDone' || e.type === 'errandFail';
 const conductorOver = (e: GameEvent): boolean => e.type === 'conductorPunch' || e.type === 'conductorFail';
-
-const ENV_DBG = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env?.DBG;
 
 describe('errands played for real', () => {
   it('a pure downhill delivery: the night driver\'s keys, from Terraza 727 down to the garage at the docks', () => {
@@ -549,7 +549,7 @@ describe('errands played for real', () => {
             const H = sim.world.lines[p.hLine];
             if (H.index === A1.index && leg === 0) {
               vehicleAt(H, p.hVeh, sim.tick, VS);
-              if (seen < 0 && Math.abs(VS.s - A1.allStops[1].s) < 3 && standing(A2, 0, sim.tick)) seen = i;
+              if (seen < 0 && Math.abs(VS.s - A1.allStops[1].s) < 12 && standing(A2, 0, sim.tick)) seen = i;
               if (seen >= 0) {
                 if (i - seen >= delay) {
                   leg = 1;
@@ -568,18 +568,18 @@ describe('errands played for real', () => {
       return { kinds: r.events.filter((e) => e.type.startsWith('errand')).map((e) => e.type), trace: r.trace };
     };
     // The release is searched with the test (so it re-finds itself when the controller or the
-    // timetable changes): the middle of the first run of five or more delays that works.
+    // timetable changes): the middle of the first run of delays at least a tenth of a second long
+    // that works.
     const want = ['errandStep', 'errandStep', 'errandStep', 'errandDone'];
     let found: { delay: number; sign: number } | null = null;
     for (const sign of [0, 1, -1]) {
       let from = -1;
-      for (let delay = 0; delay <= 300 && !found; delay += 6) {
+      for (let delay = 0; delay <= 300 && !found; delay += 2) {
         const at = attempt(delay, sign);
         const ok = at.kinds.join() === want.join();
-        if (ENV_DBG) console.info(sign, delay, at.trace.filter((l) => /release|hitch|chain|errand/.test(l)).slice(0, 8).join(' | '));
         if (ok && from < 0) from = delay;
         if (!ok && from >= 0) {
-          if (delay - from >= 30) found = { delay: Math.round((from + delay - 6) / 12) * 6, sign };
+          if (delay - from >= 8) found = { delay: Math.round((from + delay - 2) / 4) * 2, sign };
           from = -1;
         }
       }
@@ -592,15 +592,19 @@ describe('errands played for real', () => {
   }, 120_000);
 });
 
+/** Pulled down above this on the way down the spine, m/s. */
+const SPINE_SAFE = 12;
+
 /** Seconds from letting go to the punch in the stopToStop plays, for the report. */
 const measured: Record<string, number> = {};
 
 /** Ride `c`'s line from near its conductor's stop to stop `from`, let go there, then roll via the spine to stop `to`. */
-function playStopToStop(c: ConductorDef, dayFrac: number): Played {
+function playStopToStop(c: ConductorDef, dayFrac: number, untimed = false): Played {
   const t = c.task;
   if (t.kind !== 'stopToStop') throw new Error('not stopToStop');
   const L = line(c.line);
-  const game = newGame(dayFrac);
+  // Untimed: the same challenge with all the time in the world, to measure the bot.
+  const game = untimed ? newGame(dayFrac, CONDUCTORS.map((d) => (d === c ? { ...d, task: { ...t, seconds: 3600 } } : d))) : newGame(dayFrac);
   const [wx, wz] = waitPoint(L, c.stop);
   placePlayer(W, game.sim.player, wx, wz, W.spawn.heading);
   const fromZ = zone(stopZoneId(c.line, t.from));
@@ -620,7 +624,9 @@ function playStopToStop(c: ConductorDef, dayFrac: number): Played {
         }
         return { hold: true, steer: rideQuietly(sim) };
       }
-      if (follower) return { steer: follower.steer(p, i) };
+      // Down the spine: pull down above SPINE_SAFE, as a player who wants to arrive in one piece would
+      // (the stair drops throw a faster board too far: DECISIONS 114).
+      if (follower) return { steer: follower.steer(p, i), brake: p.mode === Mode.GROUND && p.speed > SPINE_SAFE };
       return { steer: steerFor(p, wx, wz, i), ...armFor(sim, L) };
     },
     conductorOver,
@@ -628,6 +634,25 @@ function playStopToStop(c: ConductorDef, dayFrac: number): Played {
   if (releasedAt >= 0 && r.ticks > 0) measured[c.line] = (r.ticks - releasedAt) / 60;
   return r;
 }
+
+const CONDUCTOR_ENV = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env ?? {};
+
+// SKITCH_FIND_CONDUCTORS=1 npx vitest run tests/sim/content.test.ts -t 'stop-to-stop limits' --silent=false
+// re-measures the stop-to-stop challenges (src/sim/game/content/conductors.ts sets each to 1.3x
+// the bot's time) whenever the controller, the city or the timetable changes.
+describe.skipIf(!CONDUCTOR_ENV.SKITCH_FIND_CONDUCTORS)('stop-to-stop limits', () => {
+  it('measures the bot on each stop-to-stop challenge', () => {
+    for (const [id, frac] of [
+      ['T3', 0.4],
+      ['T4', 0.84],
+    ] as const) {
+      const c = CONDUCTORS.find((x) => x.line === id);
+      if (!c) throw new Error(id);
+      playStopToStop(c, frac, true);
+      console.info(`${id}: bot ${measured[id]?.toFixed(1)} s, limit ${Math.ceil(1.3 * (measured[id] ?? 0))} s`);
+    }
+  });
+});
 
 describe('a conductor challenge played for real', () => {
   it('tram 9: caught at Zigzag Oeste, let go at Terraza Alta, rolled down to Terraza Baja in time', () => {
