@@ -10,8 +10,8 @@ what to return. The verifier gets the same file.
 | `m1-input.md` | M1 | sonnet | merged |
 | `m0-pwa.md` | M0 | sonnet | merged |
 | `m1-debug-panel.md` | M1 | sonnet | merged |
-| `m1-bots.md` | M1 | opus | out |
-| `m1-verifier-fixes.md` | M1 | sonnet | out |
+| `m1-bots.md` | M1 | opus | merged |
+| `m1-verifier-fixes.md` | M1 | sonnet | merged |
 
 Verification: one opus verifier checked the five merged briefs together; its findings became
 `m1-verifier-fixes.md`.

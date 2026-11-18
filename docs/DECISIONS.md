@@ -22,10 +22,11 @@ Things decided without the owner, newest last. Overrule any of them.
 6. **Models by task.** Lead (Fable): contracts, the mover, gears, camera, palette, integration.
    Opus: the app shell, the bowl generator, bots, verification. Sonnet: touch input, the PWA shell
    and deploy, the debug panel.
-7. **Carving downhill still gains speed.** "The stick only reaches gear 2" holds on level ground.
-   On a slope the fall line pulls whether you carve or tuck; carving only bleeds the excess faster.
-   Holding forward from the spawn ramp reaches gear 4 for a moment. Making carve cancel gravity
-   would feel like glue.
+7. **Slopes pay in full only when tucked.** First version: carving downhill gained speed like a
+   tuck and only bled it a little faster. Bots showed that made the stick an engine (run up any
+   slope, carve down at 18 m/s and more, gear 4 without ever letting go). Now, above run speed, a
+   downhill pays only a share (`carveSlopeGain`, 0.2) while the thumb is down. Holding the stick
+   stays in gears 1 to 3; letting go is how you get paid.
 8. **Camera sits closer and steeper than a third-person game's.** The mover is about two thirds
    down the screen (above the thumb), the horizon is just under the HUD, and the ground fills the
    rest. A flatter chase camera spent 40% of a portrait screen on sky.
@@ -33,3 +34,13 @@ Things decided without the owner, newest last. Overrule any of them.
    carries over to plain play on the same phone. "Reset all" in the panel clears them.
 10. **A `?flat` world exists for tests** that need level ground (run speed, the debug panel's
    slider check). The game itself always uses the bowl.
+11. **A clean hop skips the landing scrub and adds a bonus; it does not give back what touchdown
+   took.** The first version restored the pre-landing speed, which created speed on banked
+   landings and let hop chains round the rim pass the speed limit.
+12. **The spawn has to lead somewhere.** The generator rejects a layout whose fall line from the
+   spawn drops less than 5 m before levelling out, so a player who lets go at the start gets a
+   ride. The check is geometric so the map for a seed never depends on a feel constant.
+13. **A two-finger tap in the tuck scheme asks for two hops.** The second is buffered and expires
+   in the air, so nothing happens. Left as is.
+14. **M0 is tagged with its gate green but its last step open.** "The owner opens the link on the
+   phone" cannot happen until a repository setting allows this branch to deploy to Pages.

@@ -3,7 +3,16 @@
 How the game in `PITCH.md` gets built. Status lives here and is updated in the same commit that
 changes it.
 
-**Now:** nothing is built. The repo holds the pitch, this plan and the working rules. M0 is next.
+**Now:** M0 is built and its gate is green. M1 is built and waiting on the owner: play the three
+control schemes on the phone (`docs/PLAYTEST.md`) and pick one. That is the go / no-go. M2 does not
+start before it.
+
+Two things only the owner can do:
+
+1. Let the deploy run. GitHub rejects it until the `github-pages` environment allows this branch:
+   Settings, Environments, `github-pages`, Deployment branches, add `claude/festive-babbage-zk6cxn`
+   (and Settings, Pages, source "GitHub Actions"). Then re-run the Pages workflow.
+2. Play it and send back the scheme and any tuning (the panel's Copy changes button).
 
 ## The order, and why
 
@@ -14,8 +23,8 @@ a thumb, because tests cannot judge feel.
 
 | | Milestone | Proves | Size | Status |
 | --- | --- | --- | --- | --- |
-| M0 | Ground | The toolchain, the gate, a link that opens on the phone | S | next |
-| M1 | Feel slice | Moving around an empty bowl with one thumb is fun | L | |
+| M0 | Ground | The toolchain, the gate, a link that opens on the phone | S | built, gate green, tagged `m0`; the link waits on a repo setting |
+| M1 | Feel slice | Moving around an empty bowl with one thumb is fun | L | built, gate green; waiting on the owner's playtest |
 | M2 | Horde slice | 400 enemies, readable in portrait, at 60 fps; three minutes are fun | L | |
 | M3 | Build | Level-ups, the arsenal and the drive-through map make runs differ | L | |
 | M4 | Run | A whole ten-minute run with bosses, an ending and resume | M | |
@@ -62,6 +71,19 @@ Goal: answer the only question that matters yet. Greybox, no enemies.
 
 Done when: gate green, and the owner has played each scheme on the phone for five minutes and picked
 one (or sent it back with notes). **Go / no-go.**
+
+What the bots say about the slice as built (seeds 1 to 5, two minutes each; `npx vitest run
+tests/sim/bowl-bots.test.ts --silent=false` prints the table):
+
+| Player | Average speed | Time in gear 3 or higher | Top gear |
+| --- | --- | --- | --- |
+| Never touches the screen | 2 to 4 m/s | 6 to 14% | 4, briefly |
+| Holds the stick, never tucks or hops | 10 m/s | 0 to 3% | 3 |
+| Steers a good line but hops at random | 12 to 13 m/s | 58 to 65% | 4, rarely 5 |
+| Plays a line: tucks downhill, clean hops | 16 to 19 m/s | 86 to 97% | 5 |
+
+So skill shows, the stick alone does not make speed, and gear 5 is reachable but not held. Whether
+any of it is fun is the owner's call.
 
 ## M2. Horde slice
 

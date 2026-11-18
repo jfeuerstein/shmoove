@@ -81,7 +81,8 @@ the clean-hop bonus, the speed limit) are not on this list.
 | `turnMax` | 5.5 rad/s | slow, wide turns when slow | twitchy spins at walking pace |
 | `grip` | 34 m/s² | at speed you cannot turn, you slide wide | at speed you turn on a coin with no commitment |
 | `carveScrub` | 0.1 | hard turns at speed cost nothing | every correction at speed feels like braking |
-| `carveDrag` | 0.35 /s | carving downhill builds speed like a tuck | carving at speed bleeds it too fast to bother |
+| `carveDrag` | 0.4 /s | you can hold the stick at speed for free, so there is no reason to tuck | touching the stick at speed feels like braking |
+| `carveSlopeGain` | 0.2 | downhills do nothing unless you let go | carving downhill builds speed like a tuck, so there is no reason to tuck |
 | `slideAngle` | 1.9 rad | pulling the stick a little back throws a U-turn | you have to pull straight back to get the U-turn |
 | `slideTurn` | 2.2 | the U-turn swings wide | the U-turn snaps round |
 | `slideBrake` | 14 m/s² | U-turns keep all your speed | U-turns stop you dead |
