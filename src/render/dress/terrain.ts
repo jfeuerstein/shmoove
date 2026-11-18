@@ -6,6 +6,7 @@
 import { Surface, terrainHeight, vertexHeight, type World } from '../../sim/world';
 import { type MeshBuilder, hash2, shade } from '../geom';
 import { INK } from '../look';
+import { flightInks, meshLifePaint, plazaInk } from './life';
 
 const SURFACE_COLOR: Record<number, number> = {
   [Surface.STREET]: INK.asphalt,
@@ -34,14 +35,13 @@ function surfaceAt(w: World, ix: number, iz: number): number {
 }
 
 /** Ink of one cell: the surface colour with a little per-patch variation (near only). */
-function cellColor(ix: number, iz: number, surface: number, varied: boolean): number {
+function cellColor(w: World, ix: number, iz: number, surface: number, varied: boolean): number {
+  // Plazas are tiled by district (brief M7b); far, the tiles' mix, so far rows still merge.
+  if (surface === Surface.PLAZA) return plazaInk(w, ix, iz, varied);
   const base = surfaceColor(surface);
   if (surface === Surface.STAIRS) return shade(base, (iz & 1) === 0 ? 1.03 : 0.9);
   if (surface === Surface.WATER || !varied) return base;
   switch (surface) {
-    case Surface.PLAZA:
-      // Big paving patches, a checker of two tones.
-      return shade(base, ((ix >> 1) + (iz >> 1)) & 1 ? 0.975 : 1.015 + 0.02 * hash2(ix >> 2, iz >> 2));
     case Surface.STREET:
       return shade(base, 0.97 + 0.05 * hash2(ix >> 2, iz >> 1));
     case Surface.GRASS:
@@ -87,7 +87,7 @@ export function meshGround(b: MeshBuilder, w: World, ix0: number, iz0: number, i
     let ix = ix0;
     while (ix < ix1) {
       const s = w.surfaces[iz * w.nx + ix];
-      const color = cellColor(ix, iz, s, !far);
+      const color = cellColor(w, ix, iz, s, !far);
       if (!far || !planar(w, ix, iz)) {
         emitCell(b, w, ix, iz, color);
         ix++;
@@ -98,7 +98,7 @@ export function meshGround(b: MeshBuilder, w: World, ix0: number, iz0: number, i
       const gz = vertexHeight(w, ix, iz + 1) - h00;
       let end = ix + 1;
       while (end < ix1) {
-        if (cellColor(end, iz, w.surfaces[iz * w.nx + end], false) !== color) break;
+        if (cellColor(w, end, iz, w.surfaces[iz * w.nx + end], false) !== color) break;
         const k = end + 1 - ix;
         if (Math.abs(vertexHeight(w, end + 1, iz) - (h00 + gx * k)) > 1e-5) break;
         if (Math.abs(vertexHeight(w, end + 1, iz + 1) - (h00 + gx * k + gz)) > 1e-5) break;
@@ -200,7 +200,6 @@ const TIE_INK = 0x4d4757;
 const TUFT = 0x2f8f5a;
 const TREAD_A = 0xddd5c4;
 const TREAD_B = 0xb3aa98;
-const RISER = 0xa39b8c;
 
 /** Decoration for cells [ix0, ix1) x [iz0, iz1). It never changes the ground by more than 3 cm (12 cm for treads). */
 export function meshGroundDecor(b: MeshBuilder, w: World, ix0: number, iz0: number, ix1: number, iz1: number): void {
@@ -267,6 +266,8 @@ export function meshGroundPaint(b: MeshBuilder, w: World, ix0: number, iz0: numb
         if (surfaceAt(w, ix + 1, iz) === Surface.WATER) stripe(x0 + c, z0, 0, 1, -1, 0);
       }
     }
+    // Printed life (tile motifs, crossings, covers, bays) for the same row.
+    meshLifePaint(b, w, ix0, iz, ix1, iz + 1);
   }
 }
 
@@ -366,8 +367,20 @@ export function meshStairTreads(b: MeshBuilder, w: World, ix0: number, iz0: numb
       const gMax = fallZ
         ? Math.max(Math.abs(h01 - h00), Math.abs(h11 - h10)) / c
         : Math.max(Math.abs(h10 - h00), Math.abs(h11 - h01)) / c;
-      if (fallZ) steps(b, w, w.minX + ix * c + 0.01, w.minX + end * c - 0.01, w.minZ + iz * c, w.minZ + (iz + 1) * c, gz, gMax, true);
-      else steps(b, w, w.minZ + iz * c + 0.01, w.minZ + (iz + 1) * c - 0.01, w.minX + ix * c, w.minX + (ix + 1) * c, gx, gMax, false);
+      // The flight's two-colour rhythm: keyed by the run across it and where it starts along it.
+      if (fallZ) {
+        let f0 = iz;
+        while (f0 > 0 && w.surfaces[(f0 - 1) * w.nx + ix] === Surface.STAIRS) f0--;
+        flightInks(w, ix, end, f0, iz, _inks);
+        steps(b, w, w.minX + ix * c + 0.01, w.minX + end * c - 0.01, w.minZ + iz * c, w.minZ + (iz + 1) * c, gz, gMax, true, iz);
+      } else {
+        let a0 = iz;
+        while (a0 > 0 && w.surfaces[(a0 - 1) * w.nx + ix] === Surface.STAIRS) a0--;
+        let f0 = ix;
+        while (f0 > 0 && w.surfaces[iz * w.nx + f0 - 1] === Surface.STAIRS) f0--;
+        flightInks(w, a0, a0, f0, iz, _inks);
+        steps(b, w, w.minZ + iz * c + 0.01, w.minZ + (iz + 1) * c - 0.01, w.minX + ix * c, w.minX + (ix + 1) * c, gx, gMax, false, ix);
+      }
       ix = end;
     }
   }
@@ -377,7 +390,9 @@ export function meshStairTreads(b: MeshBuilder, w: World, ix0: number, iz0: numb
  * Steps across [a0, a1] (the run axis) over the fall-axis span [f0, f1]; `g` is the mean grade
  * along the fall axis (its sign says which way is down), `gMax` the steepest.
  */
-function steps(b: MeshBuilder, w: World, a0: number, a1: number, f0: number, f1: number, g: number, gMax: number, fallZ: boolean): void {
+const _inks: [number, number] = [TREAD_A, TREAD_B];
+
+function steps(b: MeshBuilder, w: World, a0: number, a1: number, f0: number, f1: number, g: number, gMax: number, fallZ: boolean, cellIndex: number): void {
   // A tread sits `lift` over the ramp at its middle, so its nose stands lift + gMax * run / 2
   // proud; its back edge dips under the ramp, which hides it. Few, deep steps keep stairs cheap.
   const lift = 0.04;
@@ -397,15 +412,15 @@ function steps(b: MeshBuilder, w: World, a0: number, a1: number, f0: number, f1:
     const fb = down < 0 ? hi : lo; // back edge (uphill side)
     const ta = H(a0, mid) + lift;
     const tb = H(a1, mid) + lift;
-    // Two tones, alternating, so each step's edge reads from above.
-    const ink = (k & 1) === 0 ? TREAD_A : TREAD_B;
+    // The flight's two inks, alternating, so each step's edge reads from above.
+    const ink = ((k + cellIndex * n) & 1) === 0 ? _inks[0] : _inks[1];
     facing(b, X(a0, fb), ta, Z(a0, fb), X(a1, fb), tb, Z(a1, fb), X(a1, fn), tb, Z(a1, fn), X(a0, fn), ta, Z(a0, fn), 0, 1, 0, ink);
     // Riser at the nose, from just under the ramp to the tread, facing downhill.
     const ra = H(a0, fn) - 0.03;
     const rb = H(a1, fn) - 0.03;
     const dwx = fallZ ? 0 : down;
     const dwz = fallZ ? down : 0;
-    facing(b, X(a0, fn), ra, Z(a0, fn), X(a1, fn), rb, Z(a1, fn), X(a1, fn), tb, Z(a1, fn), X(a0, fn), ta, Z(a0, fn), dwx, 0, dwz, RISER);
+    facing(b, X(a0, fn), ra, Z(a0, fn), X(a1, fn), rb, Z(a1, fn), X(a1, fn), tb, Z(a1, fn), X(a0, fn), ta, Z(a0, fn), dwx, 0, dwz, shade(ink, 0.8));
   }
 }
 

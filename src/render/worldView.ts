@@ -12,8 +12,8 @@ import { meshRail, meshSolid, meshTerrain, meshZoneProps } from './worldMesh';
 
 export interface WorldView {
   group: THREE.Group;
-  /** Called once per frame with the camera position and day fraction. */
-  update(camX: number, camZ: number, dayFrac: number): void;
+  /** Called once per frame with the camera position, the day fraction and the skater's position. */
+  update(camX: number, camZ: number, dayFrac: number, skaterX?: number, skaterZ?: number): void;
   dispose(): void;
 }
 

@@ -135,7 +135,7 @@ export function createView(canvas: HTMLCanvasElement, world: World, opts: ViewOp
       let t1 = performance.now();
       partMs[0] = t1 - t0;
       t0 = t1;
-      worldView.update(chase.camera.position.x, chase.camera.position.z, sim.dayFrac);
+      worldView.update(chase.camera.position.x, chase.camera.position.z, sim.dayFrac, x, z);
       t1 = performance.now();
       partMs[1] = t1 - t0;
       t0 = t1;

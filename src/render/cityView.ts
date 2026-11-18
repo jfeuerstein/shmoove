@@ -11,12 +11,31 @@
  * and builds through hooks, so it is tested without WebGL.
  */
 import * as THREE from 'three';
-import { terrainHeight, type World } from '../sim/world';
+import { districtAt, terrainHeight, type World } from '../sim/world';
 import { Lod } from './dress/kit';
+import { meshLanePaint } from './dress/life';
+import { meshBuntingRow, meshSolidProps } from './dress/props';
 import { createSea } from './dress/sea';
 import { MeshBuilder } from './geom';
 import { inkMaterial } from './look';
-import { meshRail, meshSolid, meshTerrain, meshTerrainGround, meshTerrainPaint, meshTerrainTreads, meshZoneProps } from './worldMesh';
+import {
+  emptyLife,
+  meshFigure,
+  planBirds,
+  planRow,
+  planSolid,
+  planStop,
+  planWalkers,
+  routeCtx,
+  createLifeLayer,
+  liveChunk,
+  outShare,
+  type ChunkLife,
+  type LiveChunk,
+  type Figure,
+  type RouteCtx,
+} from './people';
+import { meshRail, meshSolid, meshTerrainGround, meshTerrainPaint, meshTerrainTreads, meshZoneProps } from './worldMesh';
 import type { WorldView } from './worldView';
 
 export const STREAM = {
@@ -97,23 +116,76 @@ export function bucketWorld(w: World, g: ChunkGrid): ChunkBuckets {
   return out;
 }
 
-/** The phases of an incremental chunk build, in order. Each piece does one item of one phase. */
-const PH_GROUND = 0;
-const PH_PAINT = 1;
-const PH_TREADS = 2;
-const PH_SOLIDS = 3;
-const PH_RAILS = 4;
-const PH_ZONES = 5;
-const PH_BUILD = 6;
+/**
+ * The phases of an incremental chunk build, in order. Each piece does one item of one phase. Near
+ * chunks first plan their people (no geometry), mesh the people in their first pose, then the
+ * world, then the props and lane paint, and last the people again in their second pose: the draw
+ * range of the finished mesh picks a pose by skipping one of the two ends (see `ChunkLifeRanges`).
+ */
+const PH_PREP = 0;
+const PH_PLAN_ROWS = 1;
+const PH_PLAN_SOLIDS = 2;
+const PH_PLAN_MISC = 3;
+const PH_FIG_A = 4;
+const PH_GROUND = 5;
+const PH_PAINT = 6;
+const PH_TREADS = 7;
+const PH_SOLIDS = 8;
+const PH_RAILS = 9;
+const PH_ZONES = 10;
+const PH_LANES = 11;
+const PH_PROPS = 12;
+const PH_BUNTING = 13;
+const PH_FIG_B = 14;
+const PH_BUILD = 15;
+const PH_DONE = 16;
+
+/** Figures meshed per piece. */
+const FIGS_PER_PIECE = 6;
+
+/**
+ * Where a near chunk's people sit in its index buffer: the first pose's figures before everything
+ * else, the second pose's after. `a[j]` is the index offset where the j-th figure of the first
+ * block starts (ordered first-to-leave first, so `a[n]` is where the world starts); `b[j]` where
+ * the second block's first j figures end (ordered last-to-leave first, `b[0]` where the world
+ * ends). `keep` holds the second block's keep values, ascending.
+ */
+export interface ChunkLifeRanges {
+  a: Int32Array;
+  b: Int32Array;
+  keep: Float32Array;
+}
+
+/**
+ * Draw range of a near chunk for a pose (0 or 1) with the `k` figures out that stay longest:
+ * [start, start + count) in index units.
+ */
+export function lifeDrawRange(r: ChunkLifeRanges, pose: number, k: number, out: { start: number; count: number }): void {
+  const n = r.keep.length;
+  if (pose === 0) {
+    out.start = r.a[n - k];
+    out.count = r.b[0] - out.start;
+  } else {
+    out.start = r.a[n];
+    out.count = r.b[k] - out.start;
+  }
+}
+
+/** How many of a chunk's figures are out when the share is `share`: those with keep below it. */
+export function figuresOut(r: ChunkLifeRanges, share: number): number {
+  let k = 0;
+  while (k < r.keep.length && r.keep[k] < share) k++;
+  return k;
+}
 
 /**
  * One chunk being built at one level of detail, in small pieces so the work can stop at a deadline
  * and resume on a later frame: one terrain row of ground, of paint or of stair treads, one solid,
- * one rail, one zone, and last the typed arrays of the geometry. The pieces run in the order
- * `meshChunk` meshes, so the finished geometry is identical to an uninterrupted build.
+ * one rail, one zone, a few figures, and last the typed arrays of the geometry. The pieces run in
+ * the order `meshChunk` meshes, so the finished geometry is identical to an uninterrupted build.
  */
 export class ChunkJob {
-  readonly b = new MeshBuilder();
+  readonly b: MeshBuilder;
   /** The finished geometry, once the last piece has run. */
   geometry: THREE.BufferGeometry | null = null;
   /** Time spent on this chunk so far, and its longest piece, ms (measured by run()). */
@@ -123,6 +195,9 @@ export class ChunkJob {
   lastRunWorstMs = 0;
   /** Pieces done so far. */
   pieces = 0;
+  /** Near chunks: who lives here (planned in the first pieces), and where the figures went. */
+  life: ChunkLife | null = null;
+  ranges: ChunkLifeRanges | null = null;
   private readonly w: World;
   private readonly bk: ChunkBuckets;
   private readonly ci: number;
@@ -131,14 +206,21 @@ export class ChunkJob {
   private readonly ix1: number;
   private readonly iz0: number;
   private readonly iz1: number;
-  private phase = PH_GROUND;
+  private readonly noBuild: boolean;
+  private ctx: RouteCtx | null = null;
+  private orderA: Figure[] = [];
+  private orderB: Figure[] = [];
+  private phase = PH_PREP;
   private i = 0;
 
-  constructor(w: World, g: ChunkGrid, bk: ChunkBuckets, ci: number, lod: Lod) {
+  /** With `into`, mesh into that builder and stop before building geometry (for `meshChunk`). */
+  constructor(w: World, g: ChunkGrid, bk: ChunkBuckets, ci: number, lod: Lod, into?: MeshBuilder) {
     this.w = w;
     this.bk = bk;
     this.ci = ci;
     this.lod = lod;
+    this.b = into ?? new MeshBuilder();
+    this.noBuild = into !== undefined;
     this.ix0 = (ci % g.ncx) * g.cells;
     this.iz0 = Math.floor(ci / g.ncx) * g.cells;
     this.ix1 = Math.min(w.nx, this.ix0 + g.cells);
@@ -152,10 +234,56 @@ export class ChunkJob {
     const ci = this.ci;
     const near = this.lod === Lod.NEAR;
     const rows = this.iz1 - this.iz0;
+    const c = w.cell;
     for (;;) {
       const i = this.i;
       const z0 = this.iz0 + i;
       switch (this.phase) {
+        case PH_PREP:
+          if (near && i === 0) {
+            this.ctx = routeCtx(w, w.minX + this.ix0 * c, w.minZ + this.iz0 * c, w.minX + this.ix1 * c, w.minZ + this.iz1 * c);
+            this.life = emptyLife(districtAt(w, w.minZ + ((this.iz0 + this.iz1) / 2) * c));
+            break;
+          }
+          this.next();
+          continue;
+        case PH_PLAN_ROWS:
+          if (near && i < rows && this.ctx !== null && this.life !== null) {
+            planRow(w, this.ctx, this.life, this.ix0, this.ix1, z0);
+            break;
+          }
+          this.next();
+          continue;
+        case PH_PLAN_SOLIDS:
+          if (near && i < this.bk.solids[ci].length && this.ctx !== null && this.life !== null) {
+            planSolid(w, this.ctx, this.life, w.solids[this.bk.solids[ci][i]]);
+            break;
+          }
+          this.next();
+          continue;
+        case PH_PLAN_MISC:
+          if (near && i === 0 && this.ctx !== null && this.life !== null) {
+            const life = this.life;
+            for (const zi of this.bk.zones[ci]) planStop(w, this.ctx, life, zi);
+            for (const ri of this.bk.rails[ci]) planBirds(w, life, w.rails[ri]);
+            planWalkers(w, this.ctx, life, this.ix0, this.iz0, this.ix1, this.iz1);
+            // First block: first to leave first. Second block: last to leave first.
+            this.orderA = life.figures.slice().sort((p, q) => q.keep - p.keep);
+            this.orderB = life.figures.slice().sort((p, q) => p.keep - q.keep);
+            const n = life.figures.length;
+            this.ranges = { a: new Int32Array(n + 1), b: new Int32Array(n + 1), keep: Float32Array.from(this.orderB.map((f) => f.keep)) };
+            break;
+          }
+          this.next();
+          continue;
+        case PH_FIG_A:
+          if (near && this.ranges !== null && i * FIGS_PER_PIECE < this.orderA.length) {
+            this.meshFigures(this.orderA, i, 0, this.ranges.a);
+            break;
+          }
+          if (this.ranges !== null) this.ranges.a[this.orderA.length] = b.triangleCount * 3;
+          this.next();
+          continue;
         case PH_GROUND:
           if (i < rows) {
             meshTerrainGround(b, w, this.ix0, z0, this.ix1, z0 + 1, this.lod);
@@ -198,9 +326,41 @@ export class ChunkJob {
           }
           this.next();
           continue;
+        case PH_LANES:
+          if (near && i < w.lines.length) {
+            meshLanePaint(b, w, i, w.minX + this.ix0 * c, w.minZ + this.iz0 * c, w.minX + this.ix1 * c, w.minZ + this.iz1 * c);
+            break;
+          }
+          this.next();
+          continue;
+        case PH_PROPS:
+          if (near && this.ctx !== null && i < this.bk.solids[ci].length) {
+            meshSolidProps(b, w, this.ctx, w.solids[this.bk.solids[ci][i]]);
+            break;
+          }
+          this.next();
+          continue;
+        case PH_BUNTING:
+          if (near && i < rows) {
+            meshBuntingRow(b, w, this.ix0, this.ix1, z0);
+            break;
+          }
+          this.next();
+          continue;
+        case PH_FIG_B:
+          if (near && this.ranges !== null) {
+            if (i === 0) this.ranges.b[0] = b.triangleCount * 3;
+            if (i * FIGS_PER_PIECE < this.orderB.length) {
+              this.meshFigures(this.orderB, i, 1, this.ranges.b);
+              break;
+            }
+          }
+          this.next();
+          continue;
         case PH_BUILD:
+          this.phase = PH_DONE;
+          if (this.noBuild) return true;
           this.geometry = b.build();
-          this.phase++;
           this.pieces++;
           return true;
         default:
@@ -209,6 +369,24 @@ export class ChunkJob {
       this.i++;
       this.pieces++;
       return false;
+    }
+  }
+
+  /** Run every piece, no clock. */
+  finish(): void {
+    while (!this.step()) {
+      // next piece
+    }
+  }
+
+  /** Mesh the `i`-th batch of figures of `order` in `pose`, noting where each starts (pose 0) or ends (pose 1). */
+  private meshFigures(order: Figure[], i: number, pose: number, at: Int32Array): void {
+    const b = this.b;
+    const end = Math.min(order.length, (i + 1) * FIGS_PER_PIECE);
+    for (let j = i * FIGS_PER_PIECE; j < end; j++) {
+      if (pose === 0) at[j] = b.triangleCount * 3;
+      meshFigure(b, order[j], pose);
+      if (pose === 1) at[j + 1] = b.triangleCount * 3;
     }
   }
 
@@ -240,14 +418,7 @@ export class ChunkJob {
 
 /** Everything in one chunk at one level of detail, into one builder, in one go. */
 export function meshChunk(b: MeshBuilder, w: World, g: ChunkGrid, bk: ChunkBuckets, ci: number, lod: Lod): void {
-  const cx = ci % g.ncx;
-  const cz = Math.floor(ci / g.ncx);
-  const ix0 = cx * g.cells;
-  const iz0 = cz * g.cells;
-  meshTerrain(b, w, ix0, iz0, Math.min(w.nx, ix0 + g.cells), Math.min(w.nz, iz0 + g.cells), lod);
-  for (const s of bk.solids[ci]) meshSolid(b, w, w.solids[s], lod);
-  for (const r of bk.rails[ci]) meshRail(b, w, w.rails[r], lod);
-  for (const z of bk.zones[ci]) meshZoneProps(b, w, w.zones[z], lod);
+  new ChunkJob(w, g, bk, ci, lod, b).finish();
 }
 
 /** The level of detail a chunk at distance `d` should have, given what it shows now. */
@@ -506,6 +677,21 @@ const DRESS_HEADROOM = 30;
 
 const now = (): number => performance.now();
 
+/** Sim ticks per animation frame (12 Hz, on twos) and ticks in a day (src/sim/lines.ts). */
+const TWOS = 5;
+const DAY_TICKS = 43200;
+
+/** A shown near chunk's people: what lives there, where its figures are, and the pose and crowd applied. */
+interface Alive {
+  mesh: THREE.Mesh;
+  live: LiveChunk;
+  ranges: ChunkLifeRanges;
+  pose: number;
+  k: number;
+}
+
+const _range = { start: 0, count: 0 };
+
 /**
  * The streaming, dressed world view for a big world. `camera`, when given, is the camera the world
  * is drawn with: after a teleport, every chunk within the near radius that it can see is built at
@@ -523,6 +709,9 @@ export function createCityView(world: World, camera?: () => THREE.Camera): CityV
   let worstChunkMs = 0;
   let worstPieceMs = 0;
   let framePiece = 0;
+  const alive = new Map<THREE.Mesh, Alive>();
+  const shownAlive: Alive[] = [];
+  const liveList: LiveChunk[] = [];
 
   // Visibility after a teleport: each chunk's box (ground to the top of its tallest solid plus
   // headroom, found once) against the camera's frustum.
@@ -577,6 +766,7 @@ export function createCityView(world: World, camera?: () => THREE.Camera): CityV
       mesh.visible = false;
       triangles += tris;
       mesh.userData.tris = tris;
+      if (job.life !== null && job.ranges !== null) alive.set(mesh, { mesh, live: liveChunk(job.life), ranges: job.ranges, pose: -1, k: -1 });
       group.add(mesh);
       return mesh;
     },
@@ -599,11 +789,23 @@ export function createCityView(world: World, camera?: () => THREE.Camera): CityV
       : undefined,
     show(m) {
       m.visible = true;
+      const a = alive.get(m);
+      if (a !== undefined) {
+        // Pose and crowd are applied on the next update.
+        a.pose = -1;
+        shownAlive.push(a);
+      }
     },
     hide(m) {
       m.visible = false;
+      const a = alive.get(m);
+      if (a !== undefined) {
+        const k = shownAlive.indexOf(a);
+        if (k >= 0) shownAlive.splice(k, 1);
+      }
     },
     dispose(m) {
+      alive.delete(m);
       group.remove(m);
       triangles -= m.userData.tris as number;
       m.geometry.dispose();
@@ -611,14 +813,29 @@ export function createCityView(world: World, camera?: () => THREE.Camera): CityV
   });
   const sea = createSea(world);
   if (sea) group.add(sea.mesh);
+  const lifeLayer = createLifeLayer(world, () => new MeshBuilder());
+  group.add(lifeLayer.mesh);
 
   return {
     group,
-    update(camX, camZ, dayFrac) {
+    update(camX, camZ, dayFrac, skX = camX, skZ = camZ) {
       frame++;
       framePiece = 0;
       streamer.update(camX, camZ, now(), now);
       sea?.setTime(dayFrac * 720);
+      // People: every shown near chunk's pose (on twos) and how many are out at this hour.
+      const pose = Math.floor((dayFrac * DAY_TICKS) / TWOS) & 1;
+      for (let i = 0; i < shownAlive.length; i++) {
+        const a = shownAlive[i];
+        const k = figuresOut(a.ranges, outShare(a.live.life.district, dayFrac));
+        if (a.pose === pose && a.k === k) continue;
+        a.pose = pose;
+        a.k = k;
+        lifeDrawRange(a.ranges, pose, k, _range);
+        a.mesh.geometry.setDrawRange(_range.start, _range.count);
+      }
+      for (let i = 0; i < shownAlive.length; i++) liveList[i] = shownAlive[i].live;
+      lifeLayer.update(liveList, shownAlive.length, camX, camZ, skX, skZ, dayFrac);
     },
     stats() {
       return {
@@ -640,6 +857,7 @@ export function createCityView(world: World, camera?: () => THREE.Camera): CityV
     dispose() {
       streamer.clear();
       sea?.dispose();
+      lifeLayer.dispose();
     },
   };
 }
