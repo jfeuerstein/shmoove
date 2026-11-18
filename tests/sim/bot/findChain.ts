@@ -73,39 +73,69 @@ export interface LinkFound {
 }
 
 /**
- * Find the release onto `line` as link `chain`, at a release tick in [r0, r1], after the keys of
- * `base` (which must end holding a ride). Whips of WHIP_TICKS with steer -1, 0 or 1, with or
- * without a hop. Returns null when nothing in the range works.
+ * Every run of release ticks in [r0, r1] that throws the skater onto `line` as link `chain`, after
+ * the keys of `base` (which must end holding a ride), widest first. Whips of WHIP_TICKS with steer
+ * -1, 0 or 1, with or without a hop; each run's keys release in its middle.
  */
-export function findLink(c: ChainStart, base: readonly Key[], line: string, chain: number, r0: number, r1: number, horizon = 240): LinkFound | null {
+export function findLinks(c: ChainStart, base: readonly Key[], line: string, chain: number, r0: number, r1: number, horizon = 240): LinkFound[] {
   const WHIP_TICKS = 40;
   const snaps: PlayerState[] = [];
   replayChain(c, base, r1 + 1, snaps);
   const want = `${line}:${chain}`;
-  let best: LinkFound | null = null;
+  const keysFor = (R: number, s: number, hop: number): Key[] => [...base.filter((k) => k[0] < R - WHIP_TICKS), [R - WHIP_TICKS, s, 1, 0], [R, 0, 0, hop], [R + 5, 0, 1, 0]];
+  const runs: LinkFound[] = [];
   for (const s of [0, -1, 1]) {
     for (const hop of [1, 0]) {
       let runFrom = -1;
       for (let R = r0; R <= r1 + 1; R++) {
         let good = false;
         if (R <= r1) {
-          const keys: Key[] = [...base.filter((k) => k[0] < R - WHIP_TICKS), [R - WHIP_TICKS, s, 1, 0], [R, 0, 0, hop], [R + 5, 0, 1, 0]];
           const w0 = R - WHIP_TICKS;
-          const r = replayChain(c, keys, R + horizon, undefined, { i: w0, p: snaps[w0] });
+          const r = replayChain(c, keysFor(R, s, hop), R + horizon, undefined, { i: w0, p: snaps[w0] });
           const h = r.hitches.find((x) => x.link === want && x.at > R);
-          good = h !== undefined && !r.chainEnds.some((t) => t > R && t < h.at) && !r.hitches.some((x) => x.at > R && h !== undefined && x.at < h.at);
+          good = h !== undefined && !r.chainEnds.some((t) => t > R && t < h.at) && !r.hitches.some((x) => x.at > R && x.at < h.at);
         }
         if (good && runFrom < 0) runFrom = R;
         if (!good && runFrom >= 0) {
-          const to = R - 1;
-          if (!best || to - runFrom > best.to - best.from) {
-            const mid = Math.round((runFrom + to) / 2);
-            best = { keys: [...base.filter((k) => k[0] < mid - WHIP_TICKS), [mid - WHIP_TICKS, s, 1, 0], [mid, 0, 0, hop], [mid + 5, 0, 1, 0]], from: runFrom, to };
-          }
+          runs.push({ keys: keysFor(Math.round((runFrom + R - 1) / 2), s, hop), from: runFrom, to: R - 1 });
           runFrom = -1;
         }
       }
     }
   }
-  return best;
+  return runs.sort((a, b) => b.to - b.from - (a.to - a.from));
+}
+
+/** When the script `keys` catches `line` as link `chain`, or -1. */
+export function caughtAt(c: ChainStart, keys: readonly Key[], line: string, chain: number, ticks: number): number {
+  const h = replayChain(c, keys, ticks).hitches.find((x) => x.link === `${line}:${chain}`);
+  return h ? h.at : -1;
+}
+
+/**
+ * Find a whole chain of links after `base`: for each link try the `beam` widest runs and keep the
+ * combination whose narrowest run is widest (a thumb has the most slack at its hardest release).
+ * Returns the keys and each link's run, or null.
+ */
+export function findChain(c: ChainStart, base: readonly Key[], links: readonly (readonly [string, number])[], span = 2400, beam = 3): { keys: Key[]; runs: LinkFound[] } | null {
+  const last = base[base.length - 1][0];
+  const from = (keys: readonly Key[], k: number): number => (k === 0 ? Math.max(last, replayChain(c, keys, 400).hitches[0]?.at ?? last) : caughtAt(c, keys, links[k - 1][0], links[k - 1][1], keys[keys.length - 1][0] + 240));
+  let best: { keys: Key[]; runs: LinkFound[]; score: number } | null = null;
+  const go = (keys: readonly Key[], k: number, runs: LinkFound[]): void => {
+    if (k === links.length) {
+      const score = Math.min(...runs.map((r) => r.to - r.from));
+      if (!best || score > best.score) best = { keys: [...keys], runs: [...runs], score };
+      return;
+    }
+    const at = from(keys, k);
+    if (at < 0) return;
+    const found = findLinks(c, keys, links[k][0], links[k][1], at + 60, at + span);
+    for (const f of found.slice(0, k === links.length - 1 ? 1 : beam)) {
+      if (best && f.to - f.from <= best.score) break;
+      go(f.keys, k + 1, [...runs, f]);
+    }
+  };
+  go(base, 0, []);
+  const b = best as { keys: Key[]; runs: LinkFound[]; score: number } | null;
+  return b ? { keys: b.keys, runs: b.runs } : null;
 }

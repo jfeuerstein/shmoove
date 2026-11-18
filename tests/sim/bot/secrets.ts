@@ -12,7 +12,7 @@ import type { Task } from './skater';
 type Key = readonly [number, number, number, number];
 
 /**
- * The summit route as tests/sim/citySummit.test.ts found it, keyed to the window it opens: under the
+ * The summit route as tests/sim/findRoutes.test.ts finds it (SKITCH_FIND_SUMMIT=1), keyed to the window it opens: under the
  * lower cable car's strap at the Antenna gate as a car stands there, ride it to the hill station,
  * hop off as a summit car waits beside it, ride that until a kite comes past, whip onto the kite,
  * ride it until the king kite swoops past, whip onto that, and hold on.
@@ -25,15 +25,15 @@ export const SUMMIT = {
   starts: [22140, 27540],
   keys: [
     [0, 0, 1, 1],
-    [1187, 1, 1, 0],
-    [1227, 0, 0, 1],
-    [1232, 0, 1, 0],
-    [1329, -1, 1, 0],
-    [1369, 0, 0, 1],
-    [1374, 0, 1, 0],
-    [3171, -1, 1, 0],
-    [3211, 0, 0, 1],
-    [3216, 0, 1, 0],
+    [1204, 1, 1, 0],
+    [1244, 0, 0, 0],
+    [1249, 0, 1, 0],
+    [1477, -1, 1, 0],
+    [1517, 0, 0, 1],
+    [1522, 0, 1, 0],
+    [3220, 0, 1, 0],
+    [3260, 0, 0, 1],
+    [3265, 0, 1, 0],
   ] as readonly Key[],
 } as const;
 
