@@ -648,7 +648,7 @@ under **Cut** at the end.
      chain_D2_T2 meeting still happens, but tram 5 no longer comes past a forklift the same way
      there at any phase the finder tried, so the two-link chain test there finds no overtake.
 
-121. **City life is decoration, batched, and falls off with distance** (brief M7b; the owner: "city
+128. **City life is decoration, batched, and falls off with distance** (brief M7b; the owner: "city
      empty and bland"). Printed pattern on the ground (tiles as the cells' own colours, two-colour
      stair flights, crossings, covers, lane arrows, stop boxes, dock bays), props and bunting are
      baked into the near chunk meshes as the tail of the index buffer, drawn only within 105 m of
@@ -661,6 +661,12 @@ under **Cut** at the end.
      no collision, so the skater can ride through a figure that stands off the routes. Not done
      for budget: wall murals beside the spine (the existing building murals stay), shop names as
      shapes, vendors inside stalls, more than two poses, people beyond 60 m.
+
+129. **A stalled board turns down the slope it is on.** The 800-drop trap test found a skater
+     standing for ever on a 4 % slope: on a crease between two faces of the ground, the stall
+     kickturn reversed the board, the reversed heading was uphill on the other face, and it
+     flipped end to end 287 times in ten seconds without moving. The kickturn now points the
+     board down the fall line of the ground underfoot. Regression test at the place it was found.
 
 ## Cut
 

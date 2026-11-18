@@ -3,6 +3,8 @@ import { FEEL } from '../../src/sim/constants';
 import { PI } from '../../src/sim/math';
 import { AWNING_TOP, SLICE } from '../../src/sim/slice';
 import { Mode } from '../../src/sim/types';
+import { buildCity } from '../../src/sim/city';
+import { placePlayer } from '../../src/sim/player';
 import { Surface, terrainHeight } from '../../src/sim/world';
 import { hSpeed, newSim, run, runUntil, teleport } from './helpers';
 
@@ -466,5 +468,18 @@ describe('awnings and traffic never trap', () => {
     expect(bounces).toBeLessThan(6);
     expect(sim.player.mode).toBe(Mode.GROUND);
     expect(sim.player.z).toBeLessThan(165);
+  });
+});
+
+describe('a stalled board on a crease', () => {
+  it('rolls away instead of flipping end to end for ever', () => {
+    // A place in the city where two faces of ground meet along a cell diagonal: pointing along
+    // the crease is uphill on one face and downhill on the other. Found by the 800-drop trap test.
+    const w = buildCity(1).world;
+    const sim = newSim(w);
+    placePlayer(w, sim.player, -106.5, 505.5, 2.427);
+    const ev = run(sim, 600);
+    expect(ev.filter((e) => e.type === 'kickturn').length).toBeLessThan(4);
+    expect(hSpeed(sim)).toBeGreaterThan(1);
   });
 });

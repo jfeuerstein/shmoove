@@ -372,14 +372,16 @@ function stepGround(ctx: SimCtx, steerDelta: number, foot: boolean): void {
   if (v <= 0) {
     v = 0;
     if (-gravAlong > resist) {
-      // Stalled facing uphill: kickturn and let gravity take over.
-      heading = wrapAngle(heading + PI);
-      fx = -fx;
-      fz = -fz;
+      // Stalled facing uphill: kickturn onto the fall line of the ground underfoot and let
+      // gravity take over. (Simply reversing is not enough: on a crease between two faces of
+      // the ground the reversed heading can be uphill on the other face, and the board would
+      // flip end to end for ever.)
+      heading = grad > 1e-4 ? datan2(-G.gx, -G.gz) : wrapAngle(heading + PI);
+      fx = dsin(heading);
+      fz = dcos(heading);
       ctx.events.push({ type: 'kickturn' });
     }
   }
-  // Tic-tac: carving back and forth trickles in speed at walking pace.
   // Pumping: carving back and forth drives the board, strongly from a standstill and fading out
   // toward PUMP_SPEED_CAP. It works on the flat and downhill, not up a hill: `m` is the rise per
   // metre along the heading, and past PUMP_UPHILL there is nothing to gain.
