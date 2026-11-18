@@ -179,7 +179,7 @@ export function attachGestures(el: HTMLElement, g: Gestures): () => void {
   const onBlur = (): void => {
     active = -1;
     g.up();
-    for (const c of ['ArrowLeft', 'ArrowRight', 'Space']) g.key(c, false);
+    for (const c of ['ArrowLeft', 'ArrowRight', 'ArrowDown', 'KeyA', 'KeyD', 'KeyS', 'Space']) g.key(c, false);
   };
   const opts: AddEventListenerOptions = { passive: false };
   el.addEventListener('pointerdown', onDown, opts);

@@ -80,7 +80,7 @@ export const FEEL_DEFS = {
   HITCH_SIGHT: [5, 0, 30, 'Hitch', 'Catches from further than this need a clear line to the grab point, m'],
   HITCH_AHEAD: [0.8, -2, 6, 'Hitch', 'How far ahead of a bumper you can be and still grab it, m'],
   HAND_HEIGHT: [1.0, 0.3, 2, 'Hitch', 'Height of the grabbing hand above the board, m'],
-  RELATCH_COOLDOWN: [0.7, 0, 3, 'Hitch', 'Time before the same vehicle can be re-caught, s'],
+  RELATCH_COOLDOWN: [2.5, 0, 8, 'Hitch', 'Time before the same vehicle can be re-caught, s'],
   FOOT_BRAKE: [6, 0, 12, 'Hitch', 'Pull down: how hard the dragged foot brakes, m/s^2 (also the steepest ground it holds on)'],
   HITCH_COOLDOWN: [0.12, 0, 1, 'Hitch', 'Time after a release before anything can be caught, s'],
   HITCH_MIN_TIME: [0.18, 0, 1, 'Hitch', 'Shortest hitch before a release registers, s (never shorter than YANK_TIME)'],
