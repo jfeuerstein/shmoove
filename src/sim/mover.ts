@@ -143,12 +143,12 @@ function wantedYaw(m: MoverState, s: SimState, input: InputFrame): number {
 
 function hop(m: MoverState, s: SimState): void {
   if (m.landPending) {
-    // Clean: the landing costs nothing and the hop adds a little, less the faster you already go.
+    // Clean: the landing scrub never happens, and the hop adds a little along the direction of
+    // travel, less the faster you already go. It adds to the speed the mover has now: what the
+    // touchdown took (the part of the fall that pointed into the ground) stays taken.
     const h = len2(m.vx, m.vz);
-    const base = Math.max(h, m.landSpeed);
-    const target = base + FEEL.cleanHopBonus * clamp(1 - base / FEEL.cleanHopFade, 0, 1);
     if (h > 1e-6) {
-      const k = target / h;
+      const k = (h + FEEL.cleanHopBonus * clamp(1 - h / FEEL.cleanHopFade, 0, 1)) / h;
       m.vx *= k;
       m.vz *= k;
     }
@@ -174,12 +174,19 @@ function stepGround(m: MoverState, s: SimState, input: InputFrame, terrain: Terr
   m.sliding = false;
 
   // Gravity along the slope. This is where all the speed above run speed comes from.
+  const before = len3(m.vx, m.vy, m.vz);
   const g = FEEL.gravity * DT;
   m.vx += g * m.ny * m.nx;
   m.vy -= g * (1 - m.ny * m.ny);
   m.vz += g * m.ny * m.nz;
 
   let speed = len3(m.vx, m.vy, m.vz);
+  // Slopes pay in full only when tucked. With the thumb down the edges are dug in: above run speed
+  // a downhill adds only a share of what it would. (Uphill always costs in full.)
+  if (input.carve && speed > before && speed > FEEL.runSpeed) {
+    const from = Math.max(before, FEEL.runSpeed);
+    speed = from + (speed - from) * FEEL.carveSlopeGain;
+  }
   const hs = len2(m.vx, m.vz);
   let yaw = hs > 1e-4 ? datan2(m.vx, m.vz) : m.heading;
 
@@ -279,7 +286,13 @@ function stepAir(m: MoverState, s: SimState, input: InputFrame, terrain: Terrain
   m.vx *= drag;
   m.vz *= drag;
 
-  const hs = len2(m.vx, m.vz);
+  let hs = len2(m.vx, m.vz);
+  if (hs > FEEL.maxSpeed) {
+    const k = FEEL.maxSpeed / hs;
+    m.vx *= k;
+    m.vz *= k;
+    hs = FEEL.maxSpeed;
+  }
   if (input.carve && hs > STILL && len2(input.steerX, input.steerY) > 1e-3) {
     const want = wantedYaw(m, s, input);
     const yaw = datan2(m.vx, m.vz);

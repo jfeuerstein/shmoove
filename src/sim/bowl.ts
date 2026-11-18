@@ -803,10 +803,35 @@ function terrainDiscSlope(t: Terrain, x: number, z: number, radius: number): num
   return worst;
 }
 
+/** How far the fall line from the spawn has to drop before it bottoms out, m. */
+const SPAWN_RUN_DROP = 5;
+const RUN_N: Vec3 = { x: 0, y: 1, z: 0 };
+
+/**
+ * Height lost following the fall line from the spawn until the ground levels out. A spawn whose
+ * fall line ends in a shallow hollow strands a player who lets go; a long drop hands them speed.
+ * Pure geometry, so the map for a seed does not depend on any feel constant.
+ */
+export function spawnRunDrop(t: Terrain): number {
+  let x = t.spawnX;
+  let z = t.spawnZ;
+  // Step off the level spawn pad the way the mover faces.
+  x += dsin(t.spawnYaw) * 8;
+  z += dcos(t.spawnYaw) * 8;
+  for (let i = 0; i < 400; i++) {
+    t.normalAt(x, z, RUN_N);
+    const h = Math.sqrt(RUN_N.x * RUN_N.x + RUN_N.z * RUN_N.z);
+    if (h < 0.02) break;
+    x += RUN_N.x / h;
+    z += RUN_N.z / h;
+  }
+  return t.heightAt(t.spawnX, t.spawnZ) - t.heightAt(x, z);
+}
+
 /**
  * Build the bowl for a seed. Same seed, bit-identical terrain.
  *
- * Layouts are drawn from the seed until one passes the floor-slope, spawn and pad checks on the
+ * Layouts are drawn from the seed until one passes the floor-slope, spawn, spawn-run and pad checks on the
  * finished, interpolated surface; later attempts soften the hills. Over seeds 1 to 300 every seed
  * passes, nearly always on the first or second attempt; running out of attempts throws rather than
  * hand back a bowl that broke its own rules.
@@ -822,7 +847,7 @@ export function makeBowl(seed: number): Bowl {
     if (terrainDiscSlope(bowl, bowl.spawnX, bowl.spawnZ, 6) >= 0.05) continue;
     let padsOk = true;
     for (const p of bowl.pads) if (terrainDiscSlope(bowl, p.x, p.z, p.radius) >= 0.15) padsOk = false;
-    if (padsOk) return bowl;
+    if (padsOk && spawnRunDrop(bowl) >= SPAWN_RUN_DROP) return bowl;
   }
   throw new Error(`makeBowl(${seed}): no layout passed its checks`);
 }
