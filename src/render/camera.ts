@@ -22,6 +22,8 @@ export interface CamTarget {
   surface: number;
   /** While hitched: yaw of the ride's travel. Otherwise null. */
   rideYaw: number | null;
+  /** The carve, -1 (left) .. 1 (right): the camera rolls into it. */
+  steer?: number;
 }
 
 const _look = new THREE.Vector3();
@@ -63,6 +65,7 @@ export class ChaseCamera {
   private pull = 1;
   /** 0 the usual height, 1 ducked to shoulder height behind the skater (under low cover). */
   private duck = 0;
+  private roll = 0;
   private fov = FEEL.CAM_FOV;
   private shake = 0;
   private time = 0;
@@ -90,6 +93,7 @@ export class ChaseCamera {
     this.extraHeight = 0;
     this.pull = 1;
     this.duck = 0;
+    this.roll = 0;
     this.started = true;
   }
 
@@ -219,6 +223,11 @@ export class ChaseCamera {
     const lowest = toSkater + F.CAM_FRAME_MAX * DEG;
     if (Math.atan2(_look.y - cy, lookRun) > lowest) _look.y = cy + Math.tan(lowest) * lookRun;
     this.camera.lookAt(_look);
+    // Lean into the carve: the horizon tips the way the board turns, more the faster it goes.
+    const lean = t.mode === Mode.GROUND || t.mode === Mode.HITCH ? (t.steer ?? 0) : 0;
+    const wantRoll = -lean * F.CAM_BANK * DEG * (0.35 + 0.65 * speedK);
+    this.roll += (wantRoll - this.roll) * ease(dt, F.CAM_BANK_RATE);
+    if (Math.abs(this.roll) > 1e-4) this.camera.rotateZ(this.roll);
 
     const wantFov = F.CAM_FOV + F.CAM_FOV_SPEED * speedK;
     this.fov += (wantFov - this.fov) * ease(dt, F.CAM_FOV_RATE);

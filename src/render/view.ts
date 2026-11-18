@@ -92,7 +92,8 @@ export function createView(canvas: HTMLCanvasElement, world: World, opts: ViewOp
   let lastY = 0;
   let lastZ = 0;
   const frame: SkaterFrame = { x: 0, y: 0, z: 0, yaw: 0, mode: 0, steer: 0, speed: 0, vy: 0, hanging: false, groundY: 0, tick: 0 };
-  const target: CamTarget = { x: 0, y: 0, z: 0, vx: 0, vz: 0, heading: 0, mode: 0, speed: 0, surface: 0, rideYaw: null };
+  const target: CamTarget = { x: 0, y: 0, z: 0, vx: 0, vz: 0, heading: 0, mode: 0, speed: 0, surface: 0, rideYaw: null, steer: 0 };
+  let clock = 0;
 
   const resize = (): void => {
     const w = Math.max(1, canvas.clientWidth);
@@ -197,6 +198,7 @@ export function createView(canvas: HTMLCanvasElement, world: World, opts: ViewOp
       target.speed = p.speed;
       target.surface = p.surface;
       target.rideYaw = rideYaw;
+      target.steer = p.steer;
       // A teleport (race start, respawn far away) cuts the camera rather than flying it across town.
       if (Math.hypot(x - lastX, y - lastY, z - lastZ) > TELEPORT_DIST) snapped = false;
       lastX = x;
@@ -211,6 +213,8 @@ export function createView(canvas: HTMLCanvasElement, world: World, opts: ViewOp
       partMs[3] = t1 - t0;
       t0 = t1;
 
+      clock += dt;
+      riso.setSpeed((p.speed - FEEL.CAM_STREAK_SPEED) / Math.max(1, FEEL.CAM_TOP_SPEED - FEEL.CAM_STREAK_SPEED), clock);
       renderer.info.reset();
       riso.render(renderer, scene, chase.camera);
       last.drawCalls = renderer.info.render.calls;

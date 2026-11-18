@@ -22,7 +22,7 @@ const TERRAIN_CHUNK = 32;
 export function createStaticWorldView(world: World): WorldView {
   const group = new THREE.Group();
   group.name = 'world';
-  const mat = inkMaterial();
+  const mat = inkMaterial({ world: true });
   const geos: THREE.BufferGeometry[] = [];
   const add = (b: MeshBuilder, name: string): void => {
     if (b.triangleCount === 0) return;
