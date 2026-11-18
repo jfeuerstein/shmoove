@@ -71,6 +71,7 @@ export class HintStub {
   private lastStop = '';
   private lastCatch = false;
   private lastHop = false;
+  private lastBrake = false;
   private readonly edgeOn: ClassSlot;
   /** Where the arrow is now ('' hidden), as last written, to touch the DOM only on change. */
   private edgeX = -1;
@@ -150,7 +151,7 @@ export class HintStub {
     } else if (this.phase !== 'out' && want !== this.shownId) {
       if (this.shownId !== '') this.leave();
       else if (want !== '') this.enter(want);
-    } else if (this.phase === 'in' && (ob.slingRetry !== this.lastRetry || ob.stopName !== this.lastStop || ob.inkCatch !== this.lastCatch || ob.target.hop !== this.lastHop)) {
+    } else if (this.phase === 'in' && (ob.slingRetry !== this.lastRetry || ob.stopName !== this.lastStop || ob.inkCatch !== this.lastCatch || ob.target.hop !== this.lastHop || ob.brakeAsk !== this.lastBrake)) {
       this.fill(this.shownId);
     }
     this.animate(dt);
@@ -246,6 +247,7 @@ export class HintStub {
     this.lastStop = ob.stopName;
     this.lastCatch = ob.inkCatch;
     this.lastHop = ob.target.hop;
+    this.lastBrake = ob.brakeAsk;
     const c = hintCopy(id, ob);
     this.title.set(c.title);
     this.long.set(c.title.length > LONG_TITLE);
