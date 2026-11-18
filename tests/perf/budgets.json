@@ -1,0 +1,7 @@
+{
+  "frameMs": 8,
+  "stepMs": 1,
+  "drawCalls": 30,
+  "triangles": 120000,
+  "jsGzipKb": 400
+}
