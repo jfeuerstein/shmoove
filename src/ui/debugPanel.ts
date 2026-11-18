@@ -13,9 +13,9 @@ import './debugPanel.css';
 
 const SCHEME_LABELS: Record<Scheme, string> = { tuck: 'Tuck', lift: 'Lift', swipe: 'Swipe' };
 const SCHEME_HINTS: Record<Scheme, string> = {
-  tuck: 'Touch down tucks and rolls',
-  lift: 'Touch down runs, lift off tucks',
-  swipe: 'Flick up to hop',
+  tuck: 'Drag to carve, lift to tuck, tap to hop',
+  lift: 'Drag to carve, every lift hops',
+  swipe: 'Drag to carve, flick up to hop',
 };
 
 type Group = FeelDef['group'];
@@ -88,6 +88,8 @@ export class DebugPanel {
     // Nothing typed or touched here is the game's: keys do not reach the window-level steering.
     this.sheet.addEventListener('keydown', (e) => e.stopPropagation());
     this.sheet.addEventListener('keyup', (e) => e.stopPropagation());
+    // The page blocks every touchmove (src/app/platform.ts) so nothing scrolls; the sheet must.
+    this.sheet.addEventListener('touchmove', (e) => e.stopPropagation(), { passive: true });
 
     const head = el('div', 'dbg-head');
     const resetAll = el('button', 'dbg-btn', 'Reset all');
