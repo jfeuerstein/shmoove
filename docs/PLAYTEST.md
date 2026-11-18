@@ -16,8 +16,9 @@ The ten things most likely to be wrong, most likely first.
    then the pixel-ratio cap of 2 in `src/render/view.ts`.
 2. **The first minute.** New game, hints on, hand it to someone who has never played. From the
    lookout they should carve down the Mercado steps and catch a handcart or a moped at Rellano 410
-   within about a minute. Bots that see only the hint finish the lesson (medians 95–100 s), but
-   their first ride comes at 35–55 s, not the 24 s the clock was chosen for. Does anyone get lost,
+   within about a minute. Bots that see only the hint, resting a thumb on the glass between
+   actions, finish the lesson (medians 93–199 s by profile); the clock is chosen for a hint-follower
+   who reaches the stop 16 s in. Does anyone get lost,
    frustrated or thrown off? `NEW_GAME_DAY_FRAC` in `src/app/newGame.ts`; the hint timings in
    `src/sim/game/onboarding.ts` (`CARVE_SPEED`, `LEAD_NEAR`, `LEAD_SLOW` and the rest).
 3. **Catching a ride.** Press and hold beside a passing tram. Does the grab happen when you expect?
@@ -54,8 +55,8 @@ The ten things most likely to be wrong, most likely first.
    `TURN_RATE_MAX` (slow speed), `LAT_ACCEL_MAX` (high speed), `CARVE_SCRUB`. Is the lower half of
    the screen enough room to drag full lock both ways?
 10. **The summit chain.** Lower cable car → summit cable car → kite → king kite → the Needle. A
-    verifier measured 0.3–1.2 s of slack on each of three releases, with two windows a day (0.5125
-    and 0.6375). Is it a satisfying secret or impossible by hand? Phases and heights in
+    search (DECISIONS 126) finds 2.7–8.7 s of slack on each of the three releases with the 14 m
+    strap, and three windows a day (0.3875, 0.5125 and 0.6375). Is it a satisfying secret or impossible by hand? Phases and heights in
     `src/sim/city/lines.ts` and `routes.ts`; `CHAIN_GROUND_GRACE`, `HITCH_REACH`, `HITCH_REACH_Y`.
 
 ## Movement

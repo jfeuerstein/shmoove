@@ -229,17 +229,19 @@ describe('the roster', () => {
     expect(problems.slice(0, 20)).toEqual([]);
   });
 
-  it('never lets two vehicles of different ground lines overlap, all day', () => {
+  it('never lets two vehicles overlap, of the same ground line or different ones, all day', () => {
     const ground = city.world.lines.filter((l) => !l.overhead);
     const states = ground.map((l) => Array.from({ length: l.vehicles }, () => makeVehicleState()));
     const hits: string[] = [];
     for (let t = 0; t < DAY_TICKS; t += 10) {
       for (let a = 0; a < ground.length; a++) for (let i = 0; i < ground[a].vehicles; i++) vehicleAt(ground[a], i, t, states[a][i]);
       for (let a = 0; a < ground.length; a++) {
-        for (let b = a + 1; b < ground.length; b++) {
-          for (const A of states[a]) {
+        // The same line too: a car home from its lap must not stand on the one leaving.
+        for (let b = a; b < ground.length; b++) {
+          for (const [i, A] of states[a].entries()) {
             if (!A.active) continue;
-            for (const B of states[b]) {
+            for (const [j, B] of states[b].entries()) {
+              if (a === b && j <= i) continue;
               if (!B.active || Math.abs(A.y - B.y) > 4) continue;
               if (bodiesOverlap(ground[a], A, ground[b], B)) hits.push(`${ground[a].id}/${ground[b].id} at ${t} (${A.x.toFixed(0)},${A.z.toFixed(0)})`);
             }
