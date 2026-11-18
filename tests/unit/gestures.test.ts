@@ -410,8 +410,10 @@ describe('setScheme mid-touch', () => {
   });
 });
 
-describe('no allocation on the hot path', () => {
-  it('move and sample reuse their buffers and keep working over a long drag', () => {
+describe('a long drag', () => {
+  it('keeps the same stick object and produces finite output throughout', () => {
+    // This cannot observe allocation (nothing here can); it checks the reused stick view survives
+    // thousands of events and the output stays finite.
     for (const scheme of SCHEMES) {
       const g = new Gestures(scheme);
       const stick = g.stick;
@@ -424,5 +426,54 @@ describe('no allocation on the hot path', () => {
       expect(Number.isFinite(out.steerX)).toBe(true);
       expect(Number.isFinite(out.steerY)).toBe(true);
     }
+  });
+});
+
+describe.each(SCHEMES)('%s: touches that end in odd ways', (scheme: Scheme) => {
+  const IDLE = { steerX: 0, steerY: 0, carve: false, hop: false };
+
+  it('the thumb lifting while a second finger is down gives an idle frame, and that finger is then ignored', () => {
+    const g = new Gestures(scheme);
+    g.down(1, 200, 500, 0);
+    g.move(1, 260, 500, 10);
+    g.down(2, 50, 100, 20);
+    g.up(1, 30);
+    const f = sample(g, 40);
+    // Only the second finger's own down was a hop; the thumb's lift must not add steering or carve.
+    expect(f.steerX).toBe(0);
+    expect(f.steerY).toBe(0);
+    expect(f.carve).toBe(false);
+    expect(g.stick.active).toBe(false);
+    // Drain any hop (the second finger's down, and a lift or tap release in some schemes).
+    sample(g, 50);
+    g.move(2, 300, 300, 60);
+    g.up(2, 70);
+    expect(sample(g, 80)).toEqual(IDLE);
+    expect(g.stick.active).toBe(false);
+  });
+
+  it('cancelAll while a touch is undecided, then a late up, does not hop', () => {
+    const g = new Gestures(scheme);
+    g.down(1, 200, 500, 0);
+    g.cancelAll();
+    g.up(1, 50);
+    expect(sample(g, 60)).toEqual(IDLE);
+  });
+
+  it('a pointer id reused after its touch ended starts a fresh touch', () => {
+    const g = new Gestures(scheme);
+    g.down(1, 200, 500, 0);
+    g.move(1, 260, 500, 10);
+    g.up(1, 20);
+    sample(g, 30);
+    g.down(1, 100, 300, 1000);
+    expect(g.stick.active).toBe(true);
+    expect(g.stick.ox).toBe(100);
+    expect(g.stick.oy).toBe(300);
+    const f = sample(g, 1010);
+    expect(f.hop).toBe(false);
+    expect(f.steerX).toBe(0);
+    g.move(1, 100 + FEEL.stickRadiusPx / 2, 300, 1020);
+    expect(sample(g, 1030).steerX).toBeCloseTo(0.5, 6);
   });
 });
