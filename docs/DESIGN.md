@@ -131,6 +131,25 @@ holds the whole city's collision data in a spatial hash. Rendering streams 60 m 
 around the camera: fully dressed within 170 m, as silhouettes to 330 m, built from the same data in
 one-row pieces within 2 ms a frame, so what you see is what you collide with.
 
+**City life** (brief M7b) is decoration only, driven from world data (surfaces, solid and rail
+kinds, zones, the lines' paths), so any world gets it. On the ground (`src/render/dress/life.ts`):
+plaza cells tiled by district (the cells' own colours, no extra triangles), a diamond motif at
+every other tile corner, every stair flight its own two-colour tread rhythm, zebra crossings
+where a stair street crosses a road, manhole covers and kerb grates, chalk hopscotch and arrows,
+lane arrows and stop boxes along each ground ride's path, and at the docks painted bays with
+numbers, flat colour patches and hazard stripes. Props (`src/render/dress/props.ts`): pots by
+doors, bikes against walls, balcony planters, cats on roofs, antennas and dishes up the hill,
+crates by the stalls, buoys and net piles at the docks, bunting with lit bulbs across stair
+streets. People (`src/render/people.ts`): standing at stops and stalls, chatting in pairs,
+carrying loads, sitting on steps and crates, leaning in doorways, walking short beats on plazas;
+birds perch on wires and ledges and scatter when the skater comes within 6 m. Nobody stands on a
+street, within 2 m of a ride's lane, on a rail or its 6 m run-in, or in the middle third of a
+stair street or the landings that continue it. Busy in the Mercado, working at the docks, quiet
+on the terraces, sparse on the summit; at night 15–40 % stay out by district. Decoration is the
+tail of each near chunk's index buffer and is drawn only within 105 m of the camera; people,
+walkers and birds are one dynamic mesh for the whole city (one draw call), drawn within 60 m
+(birds 50 m) and rewritten on twos.
+
 ## 5. Rides, lines and time
 
 A **line** is a path with stops, vehicles and service hours. Vehicles are a pure function of the
@@ -261,7 +280,9 @@ Painted-bus maximalism, printed on a risograph (`src/render/look.ts`).
   warehouse clerestories and stall lanterns. Far silhouettes carry the lit glass of the same
   windows, so the hill reads as a town. A sun crosses by day and a moon by night; stars come out.
 - **Characters animate on twos**: poses update at 12 Hz while position stays smooth. So do vehicle
-  animation frames and every UI flip and slide.
+  animation frames and every UI flip and slide. The city's people (section 4) are the skater's
+  chunky boxes in district shirts, two poses each, staggered so a crowd never moves in step; they
+  and the birds are drawn with the plain ink (no printed pavers), and walkers step on twos.
 - **UI** (`src/ui/`): destination boards (split-flap rows, condensed caps, mango on ink) for line,
   speed, chain, clock and each stop's timetable; ticket stubs (perforated, punched) for errands,
   challenges, hints and toasts; a transit-map screen; title, pause, settings and map-complete screens;

@@ -11,12 +11,28 @@
  * and builds through hooks, so it is tested without WebGL.
  */
 import * as THREE from 'three';
-import { terrainHeight, type World } from '../sim/world';
+import { districtAt, terrainHeight, type World } from '../sim/world';
 import { Lod } from './dress/kit';
+import { meshLanePaint, meshLifePaint } from './dress/life';
+import { meshBuntingRow, meshSolidProps } from './dress/props';
 import { createSea } from './dress/sea';
 import { MeshBuilder } from './geom';
 import { inkMaterial } from './look';
-import { meshRail, meshSolid, meshTerrain, meshTerrainGround, meshTerrainPaint, meshTerrainTreads, meshZoneProps } from './worldMesh';
+import {
+  emptyLife,
+  planBirds,
+  planRow,
+  planSolid,
+  planStop,
+  planWalkers,
+  routeCtx,
+  createLifeLayer,
+  liveChunk,
+  type ChunkLife,
+  type LiveChunk,
+  type RouteCtx,
+} from './people';
+import { meshRail, meshSolid, meshTerrainGround, meshTerrainPaint, meshTerrainTreads, meshZoneProps } from './worldMesh';
 import type { WorldView } from './worldView';
 
 export const STREAM = {
@@ -97,23 +113,38 @@ export function bucketWorld(w: World, g: ChunkGrid): ChunkBuckets {
   return out;
 }
 
-/** The phases of an incremental chunk build, in order. Each piece does one item of one phase. */
-const PH_GROUND = 0;
-const PH_PAINT = 1;
-const PH_TREADS = 2;
-const PH_SOLIDS = 3;
-const PH_RAILS = 4;
-const PH_ZONES = 5;
-const PH_BUILD = 6;
+/**
+ * The phases of an incremental chunk build, in order. Each piece does one item of one phase. Near
+ * chunks first plan who lives there (no geometry: people, walkers and birds are drawn by the
+ * city's one `LifeLayer`), then mesh the world, then the printed life on the ground, the lane
+ * paint, the props and the bunting into the same builder, so decoration costs no draw call.
+ */
+const PH_PREP = 0;
+const PH_PLAN_ROWS = 1;
+const PH_PLAN_SOLIDS = 2;
+const PH_PLAN_MISC = 3;
+const PH_GROUND = 4;
+const PH_PAINT = 5;
+const PH_TREADS = 6;
+const PH_SOLIDS = 7;
+const PH_RAILS = 8;
+const PH_ZONES = 9;
+const PH_LIFE_PAINT = 10;
+const PH_LANES = 11;
+const PH_PROPS = 12;
+const PH_BUNTING = 13;
+const PH_BUILD = 14;
+const PH_DONE = 15;
 
 /**
  * One chunk being built at one level of detail, in small pieces so the work can stop at a deadline
  * and resume on a later frame: one terrain row of ground, of paint or of stair treads, one solid,
- * one rail, one zone, and last the typed arrays of the geometry. The pieces run in the order
- * `meshChunk` meshes, so the finished geometry is identical to an uninterrupted build.
+ * one rail, one zone, one row of planning, and last the typed arrays of the geometry. The pieces
+ * run in the order `meshChunk` meshes, so the finished geometry is identical to an uninterrupted
+ * build.
  */
 export class ChunkJob {
-  readonly b = new MeshBuilder();
+  readonly b: MeshBuilder;
   /** The finished geometry, once the last piece has run. */
   geometry: THREE.BufferGeometry | null = null;
   /** Time spent on this chunk so far, and its longest piece, ms (measured by run()). */
@@ -123,6 +154,10 @@ export class ChunkJob {
   lastRunWorstMs = 0;
   /** Pieces done so far. */
   pieces = 0;
+  /** Near chunks: who lives here, planned in the first pieces. */
+  life: ChunkLife | null = null;
+  /** Index offset where the decoration starts (everything after it is decoration). */
+  decorStart = 0;
   private readonly w: World;
   private readonly bk: ChunkBuckets;
   private readonly ci: number;
@@ -131,14 +166,19 @@ export class ChunkJob {
   private readonly ix1: number;
   private readonly iz0: number;
   private readonly iz1: number;
-  private phase = PH_GROUND;
+  private readonly noBuild: boolean;
+  private ctx: RouteCtx | null = null;
+  private phase = PH_PREP;
   private i = 0;
 
-  constructor(w: World, g: ChunkGrid, bk: ChunkBuckets, ci: number, lod: Lod) {
+  /** With `into`, mesh into that builder and stop before building geometry (for `meshChunk`). */
+  constructor(w: World, g: ChunkGrid, bk: ChunkBuckets, ci: number, lod: Lod, into?: MeshBuilder) {
     this.w = w;
     this.bk = bk;
     this.ci = ci;
     this.lod = lod;
+    this.b = into ?? new MeshBuilder();
+    this.noBuild = into !== undefined;
     this.ix0 = (ci % g.ncx) * g.cells;
     this.iz0 = Math.floor(ci / g.ncx) * g.cells;
     this.ix1 = Math.min(w.nx, this.ix0 + g.cells);
@@ -152,10 +192,42 @@ export class ChunkJob {
     const ci = this.ci;
     const near = this.lod === Lod.NEAR;
     const rows = this.iz1 - this.iz0;
+    const c = w.cell;
     for (;;) {
       const i = this.i;
       const z0 = this.iz0 + i;
       switch (this.phase) {
+        case PH_PREP:
+          if (near && i === 0) {
+            this.ctx = routeCtx(w, w.minX + this.ix0 * c, w.minZ + this.iz0 * c, w.minX + this.ix1 * c, w.minZ + this.iz1 * c);
+            this.life = emptyLife(districtAt(w, w.minZ + ((this.iz0 + this.iz1) / 2) * c));
+            break;
+          }
+          this.next();
+          continue;
+        case PH_PLAN_ROWS:
+          if (near && i < rows && this.ctx !== null && this.life !== null) {
+            planRow(w, this.ctx, this.life, this.ix0, this.ix1, z0);
+            break;
+          }
+          this.next();
+          continue;
+        case PH_PLAN_SOLIDS:
+          if (near && i < this.bk.solids[ci].length && this.ctx !== null && this.life !== null) {
+            planSolid(w, this.ctx, this.life, w.solids[this.bk.solids[ci][i]]);
+            break;
+          }
+          this.next();
+          continue;
+        case PH_PLAN_MISC:
+          if (near && i === 0 && this.ctx !== null && this.life !== null) {
+            for (const zi of this.bk.zones[ci]) planStop(w, this.ctx, this.life, zi);
+            for (const ri of this.bk.rails[ci]) planBirds(w, this.life, w.rails[ri]);
+            planWalkers(w, this.ctx, this.life, this.ix0, this.iz0, this.ix1, this.iz1);
+            break;
+          }
+          this.next();
+          continue;
         case PH_GROUND:
           if (i < rows) {
             meshTerrainGround(b, w, this.ix0, z0, this.ix1, z0 + 1, this.lod);
@@ -198,9 +270,39 @@ export class ChunkJob {
           }
           this.next();
           continue;
+        case PH_LIFE_PAINT:
+          if (i === 0) this.decorStart = b.triangleCount * 3;
+          if (near && i < rows) {
+            meshLifePaint(b, w, this.ix0, z0, this.ix1, z0 + 1);
+            break;
+          }
+          this.next();
+          continue;
+        case PH_LANES:
+          if (near && i < w.lines.length) {
+            meshLanePaint(b, w, i, w.minX + this.ix0 * c, w.minZ + this.iz0 * c, w.minX + this.ix1 * c, w.minZ + this.iz1 * c);
+            break;
+          }
+          this.next();
+          continue;
+        case PH_PROPS:
+          if (near && this.ctx !== null && i < this.bk.solids[ci].length) {
+            meshSolidProps(b, w, this.ctx, w.solids[this.bk.solids[ci][i]]);
+            break;
+          }
+          this.next();
+          continue;
+        case PH_BUNTING:
+          if (near && i < rows) {
+            meshBuntingRow(b, w, this.ix0, this.ix1, z0);
+            break;
+          }
+          this.next();
+          continue;
         case PH_BUILD:
+          this.phase = PH_DONE;
+          if (this.noBuild) return true;
           this.geometry = b.build();
-          this.phase++;
           this.pieces++;
           return true;
         default:
@@ -209,6 +311,13 @@ export class ChunkJob {
       this.i++;
       this.pieces++;
       return false;
+    }
+  }
+
+  /** Run every piece, no clock. */
+  finish(): void {
+    while (!this.step()) {
+      // next piece
     }
   }
 
@@ -240,14 +349,7 @@ export class ChunkJob {
 
 /** Everything in one chunk at one level of detail, into one builder, in one go. */
 export function meshChunk(b: MeshBuilder, w: World, g: ChunkGrid, bk: ChunkBuckets, ci: number, lod: Lod): void {
-  const cx = ci % g.ncx;
-  const cz = Math.floor(ci / g.ncx);
-  const ix0 = cx * g.cells;
-  const iz0 = cz * g.cells;
-  meshTerrain(b, w, ix0, iz0, Math.min(w.nx, ix0 + g.cells), Math.min(w.nz, iz0 + g.cells), lod);
-  for (const s of bk.solids[ci]) meshSolid(b, w, w.solids[s], lod);
-  for (const r of bk.rails[ci]) meshRail(b, w, w.rails[r], lod);
-  for (const z of bk.zones[ci]) meshZoneProps(b, w, w.zones[z], lod);
+  new ChunkJob(w, g, bk, ci, lod, b).finish();
 }
 
 /** The level of detail a chunk at distance `d` should have, given what it shows now. */
@@ -507,6 +609,22 @@ const DRESS_HEADROOM = 30;
 const now = (): number => performance.now();
 
 /**
+ * A near chunk draws its decoration (printed life, lane paint, props, bunting: the tail of its
+ * index buffer) while its centre is within DECOR_R of the camera, m, and keeps it DECOR_HYST
+ * further; beyond, it is a few pixels and the triangle budget is better spent nearer.
+ */
+export const DECOR_R = 105;
+const DECOR_HYST = 10;
+
+/** A built near chunk: its mesh, who lives there, where its decoration starts, and whether it is drawn. */
+interface Alive {
+  mesh: THREE.Mesh;
+  live: LiveChunk;
+  decorStart: number;
+  full: boolean;
+}
+
+/**
  * The streaming, dressed world view for a big world. `camera`, when given, is the camera the world
  * is drawn with: after a teleport, every chunk within the near radius that it can see is built at
  * once (otherwise only the 3x3 under it, and the rest would stream in over several frames).
@@ -523,6 +641,11 @@ export function createCityView(world: World, camera?: () => THREE.Camera): CityV
   let worstChunkMs = 0;
   let worstPieceMs = 0;
   let framePiece = 0;
+  // Who lives in each built near chunk, and the list of those shown, for the life layer.
+  const alive = new Map<THREE.Mesh, Alive>();
+  const shownAlive: Alive[] = [];
+  const liveList: LiveChunk[] = [];
+  let aliveVersion = 0;
 
   // Visibility after a teleport: each chunk's box (ground to the top of its tallest solid plus
   // headroom, found once) against the camera's frustum.
@@ -577,6 +700,10 @@ export function createCityView(world: World, camera?: () => THREE.Camera): CityV
       mesh.visible = false;
       triangles += tris;
       mesh.userData.tris = tris;
+      if (job.life !== null) {
+        const live = liveChunk(job.life, g.minX + ((ci % g.ncx) + 0.5) * g.size, g.minZ + (Math.floor(ci / g.ncx) + 0.5) * g.size);
+        alive.set(mesh, { mesh, live, decorStart: job.decorStart, full: true });
+      }
       group.add(mesh);
       return mesh;
     },
@@ -599,11 +726,23 @@ export function createCityView(world: World, camera?: () => THREE.Camera): CityV
       : undefined,
     show(m) {
       m.visible = true;
+      const a = alive.get(m);
+      if (a !== undefined) {
+        shownAlive.push(a);
+        aliveVersion++;
+      }
     },
     hide(m) {
       m.visible = false;
+      const a = alive.get(m);
+      if (a !== undefined) {
+        const k = shownAlive.indexOf(a);
+        if (k >= 0) shownAlive.splice(k, 1);
+        aliveVersion++;
+      }
     },
     dispose(m) {
+      alive.delete(m);
       group.remove(m);
       triangles -= m.userData.tris as number;
       m.geometry.dispose();
@@ -611,14 +750,31 @@ export function createCityView(world: World, camera?: () => THREE.Camera): CityV
   });
   const sea = createSea(world);
   if (sea) group.add(sea.mesh);
+  const lifeLayer = createLifeLayer(world, () => new MeshBuilder());
+  group.add(lifeLayer.mesh);
 
   return {
     group,
-    update(camX, camZ, dayFrac) {
+    update(camX, camZ, dayFrac, skX = camX, skZ = camZ) {
       frame++;
       framePiece = 0;
       streamer.update(camX, camZ, now(), now);
       sea?.setTime(dayFrac * 720);
+      // People, walkers and birds of the shown near chunks, in one mesh for the whole city.
+      for (let i = 0; i < shownAlive.length; i++) {
+        const a = shownAlive[i];
+        liveList[i] = a.live;
+        // Decoration (the tail of the index buffer) only on chunks near the camera.
+        const dx = a.live.cx - camX;
+        const dz = a.live.cz - camZ;
+        const r = a.full ? DECOR_R + DECOR_HYST : DECOR_R;
+        const full = dx * dx + dz * dz < r * r;
+        if (full !== a.full) {
+          a.full = full;
+          a.mesh.geometry.setDrawRange(0, full ? Infinity : a.decorStart);
+        }
+      }
+      lifeLayer.update(liveList, shownAlive.length, aliveVersion, camX, camZ, skX, skZ, dayFrac);
     },
     stats() {
       return {
@@ -640,6 +796,7 @@ export function createCityView(world: World, camera?: () => THREE.Camera): CityV
     dispose() {
       streamer.clear();
       sea?.dispose();
+      lifeLayer.dispose();
     },
   };
 }

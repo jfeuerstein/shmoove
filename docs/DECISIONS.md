@@ -579,6 +579,20 @@ under **Cut** at the end.
      limits, the new-game clock and the scripted runs are found again by task M7a. Worst view:
      96 draw calls (was 71), 155k triangles.
 
+121. **City life is decoration, batched, and falls off with distance** (brief M7b; the owner: "city
+     empty and bland"). Printed pattern on the ground (tiles as the cells' own colours, two-colour
+     stair flights, crossings, covers, lane arrows, stop boxes, dock bays), props and bunting are
+     baked into the near chunk meshes as the tail of the index buffer, drawn only within 105 m of
+     the camera: no draw calls, and the far half of the near ring spends nothing on them. People,
+     walkers and birds are planned when a chunk is built and drawn by one dynamic mesh for the
+     whole city within 60 m (birds 50 m), rewritten on twos from pose templates: one draw call.
+     Per-chunk people meshes (an earlier pass) cost a draw call per chunk and were dropped when
+     the 70-vehicle baseline left 20 draw calls of room. Figures avoid streets, lanes (2 m),
+     rails and run-ins, stair-street middles, spawns, landmark centres and givers; they still have
+     no collision, so the skater can ride through a figure that stands off the routes. Not done
+     for budget: wall murals beside the spine (the existing building murals stay), shop names as
+     shapes, vendors inside stalls, more than two poses, people beyond 60 m.
+
 ## Cut
 
 What the original design promised and the game does not have, or has smaller, with why.
