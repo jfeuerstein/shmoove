@@ -8,7 +8,7 @@ import { DT, FEEL } from './constants';
 import { endChain, stepHitch, tryHitch } from './hitch';
 import { makeVehicleState, vehicleAt } from './lines';
 import { angleDiff, approachT, clamp, datan2, dcos, dsin, len2, len3, wrapAngle, PI } from './math';
-import { Mode, type BailReason, type InputFrame, type PlayerState, type SimCtx } from './types';
+import { FLOW_TRICKS, Mode, type BailReason, type InputFrame, type PlayerState, type SimCtx } from './types';
 import {
   Surface,
   collideSolids,
@@ -79,6 +79,12 @@ export function createPlayer(): PlayerState {
     yankVx: 0,
     yankVy: 0,
     yankVz: 0,
+    ropeSlack: 0,
+    flow: 0,
+    flowTime: 0,
+    flowKick: 0,
+    flowKind: -1,
+    flowRail: -1,
     chain: 0,
     chainAlive: 0,
     chainGround: 0,
@@ -130,6 +136,8 @@ export function stepPlayer(ctx: SimCtx, input: InputFrame): void {
   p.grindCooldown = tickDown(p.grindCooldown);
   p.wallCooldown = tickDown(p.wallCooldown);
   p.wallHold = tickDown(p.wallHold);
+
+  applyFlowKick(p);
 
   if (input.hop) p.hopBuffer = F.HOP_BUFFER;
   const steerBefore = p.steer;
@@ -190,7 +198,88 @@ export function stepPlayer(ctx: SimCtx, input: InputFrame): void {
       }
     }
   }
+  stepFlow(ctx);
   p.prevHold = input.hold ? 1 : 0;
+}
+
+/**
+ * Flow: tricks strung into a line. A grind, a wallride, an awning bounce, a jump that stayed up, a
+ * sling and a catch each add to the line if the last one was within FLOW_WINDOW; the four you do
+ * on the board also kick it faster, more the longer the line, and a line in progress sheds drag.
+ * Skating well is how you go fast.
+ */
+function stepFlow(ctx: SimCtx): void {
+  const p = ctx.player;
+  const F = FEEL;
+  const ev = ctx.events;
+  for (let i = 0; i < ev.length; i++) {
+    const e = ev[i];
+    let kind = -1;
+    let rail = -1;
+    if (e.type === 'grindStart') {
+      kind = 0;
+      rail = e.rail;
+    } else if (e.type === 'wallStart') kind = 1;
+    else if (e.type === 'bounce') kind = 2;
+    else if (e.type === 'land' && (e.air ?? 0) >= F.FLOW_AIR_TIME) kind = 3;
+    else if (e.type === 'release') kind = 4;
+    else if (e.type === 'hitch' && e.newLink) kind = 5;
+    else if (e.type === 'bail') {
+      if (p.flow > 0) ev.push({ type: 'flowEnd', count: p.flow, bailed: true });
+      endFlow(p);
+      p.flowKick = 0;
+      return;
+    }
+    if (kind < 0) continue;
+    // The same thing twice running is not a line: hopping on and off one rail, or bouncing on
+    // one awning, earns nothing the second time.
+    if (p.flow > 0 && kind === p.flowKind) {
+      if (kind === 0 && rail === p.flowRail) continue;
+      if (F.FLOW_WINDOW - p.flowTime < F.FLOW_REPEAT) continue;
+    }
+    // Tricks done on the board kick it; a sling and a catch carry their own speed.
+    if (kind < 4) p.flowKick += F.FLOW_KICK + F.FLOW_KICK_STEP * Math.min(p.flow, F.FLOW_CAP);
+    p.flow++;
+    p.flowTime = F.FLOW_WINDOW;
+    p.flowKind = kind;
+    p.flowRail = rail;
+    ev.push({ type: 'flow', count: p.flow, trick: FLOW_TRICKS[kind] });
+  }
+  if (p.flow > 0 && p.mode !== Mode.HITCH) {
+    // The clock stops on a ride: being towed neither builds a line nor loses one.
+    p.flowTime -= DT;
+    if (p.flowTime <= 0) {
+      ev.push({ type: 'flowEnd', count: p.flow, bailed: false });
+      endFlow(p);
+    }
+  }
+}
+
+function endFlow(p: PlayerState): void {
+  p.flow = 0;
+  p.flowTime = 0;
+  p.flowKind = -1;
+  p.flowRail = -1;
+}
+
+/** Add a trick's kick to the board's speed, along the way it is already going. */
+function applyFlowKick(p: PlayerState): void {
+  const k = p.flowKick;
+  if (k <= 0) return;
+  if (p.mode === Mode.GROUND) {
+    p.speed = Math.min(FEEL.MAX_SPEED, p.speed + k);
+  } else if (p.mode === Mode.GRIND) {
+    p.railV += p.railV < 0 ? -k : k;
+  } else if (p.mode === Mode.AIR) {
+    const h = len2(p.vx, p.vz);
+    if (h < 0.5) return;
+    const f = Math.min(FEEL.MAX_SPEED, h + k) / h;
+    p.vx *= f;
+    p.vz *= f;
+  } else if (p.mode === Mode.WALL) {
+    return;
+  }
+  p.flowKick = 0;
 }
 
 function surfaceDrag(surface: number): number {
@@ -274,9 +363,11 @@ function stepGround(ctx: SimCtx, steerDelta: number, foot: boolean): void {
   const inv = 1 / Math.sqrt(1 + m * m);
   const gravAlong = -F.GRAVITY * m * inv;
 
-  v += (gravAlong - F.AIR_DRAG * v * v - surfaceDrag(G.surface) * v - F.CARVE_SCRUB * Math.abs(p.steer) * v) * DT;
+  // A line in progress carries its speed: each trick in it takes a share of the drag away.
+  const carry = 1 - Math.min(p.flow, F.FLOW_CAP) * F.FLOW_HOLD;
+  v += (gravAlong - F.AIR_DRAG * carry * v * v - surfaceDrag(G.surface) * v - F.CARVE_SCRUB * Math.abs(p.steer) * v) * DT;
   // Rolling resistance brakes but never reverses.
-  const resist = F.ROLL_RESIST + (planted ? F.FOOT_BRAKE : 0);
+  const resist = F.ROLL_RESIST * carry + (planted ? F.FOOT_BRAKE : 0);
   v -= resist * DT;
   if (v <= 0) {
     v = 0;
@@ -563,8 +654,9 @@ function land(ctx: SimCtx, g: GroundSample): void {
   p.surface = g.surface;
   p.onSolid = g.solid;
   p.coyote = F.COYOTE_TIME;
+  const air = p.mode === Mode.AIR ? p.modeTime : 0;
   setMode(p, Mode.GROUND);
-  ctx.events.push({ type: 'land', impact, surface: g.surface });
+  ctx.events.push({ type: 'land', impact, surface: g.surface, air });
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -686,7 +778,7 @@ function stepWall(ctx: SimCtx): void {
     p.onSolid = o.index;
     p.wallCooldown = F.WALL_COOLDOWN;
     ctx.events.push({ type: 'wallEnd', jumped: false, topped: true });
-    ctx.events.push({ type: 'land', impact: 0, surface: o.surface });
+    ctx.events.push({ type: 'land', impact: 0, surface: o.surface, air: 0 });
     setMode(p, Mode.GROUND);
     return;
   }
