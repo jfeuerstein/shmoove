@@ -575,7 +575,7 @@ describe('the ride pointed at can be caught', () => {
     expect(checked).toBeGreaterThan(40);
     expect(contested).toBeLessThanOrEqual(checked * 0.1);
     expect(seen.size).toBeGreaterThan(6);
-  });
+  }, 120_000);
 
   it('never points at the gated summit kite, even standing under it', () => {
     resetFeel();

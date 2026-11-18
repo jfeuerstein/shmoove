@@ -170,10 +170,9 @@ describe('the summit route', () => {
     let r = replay(SUMMIT, SUMMIT_TICKS, 0, at);
     for (let by = -60; by <= 60 && !r.events.some(([, e]) => e.type === 'denied'); by += 2) r = replay(shifted(by), SUMMIT_TICKS, 0, at);
     const h = hitches(r);
-    // Turned away at the king kite: the hand that reached for it may catch the kite again (reach is
-    // 6.5 m since DECISIONS 114), never the king kite.
+    // Turned away at the king kite: the hand that reached for it may catch another ride after (the
+    // strap reaches 14 m since DECISIONS 119), never the king kite (checked below).
     expect(h.slice(0, 3).map((e) => city.world.lines[e.line].id)).toEqual(['A1', 'A2', 'A3']);
-    expect(h.slice(3).every((e) => city.world.lines[e.line].id === 'A3')).toBe(true);
     const denied = r.events.find(([, e]) => e.type === 'denied');
     expect(denied?.[1]).toMatchObject({ type: 'denied', line: line('S3').index, need: 4 });
     expect(r.events.some(([, e]) => e.type === 'hitch' && e.line === line('S3').index)).toBe(false);
