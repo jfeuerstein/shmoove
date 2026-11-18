@@ -89,16 +89,18 @@ export function summitRun(label: string): Task {
         out.hold = key[2] === 1;
         out.hop = key[0] === i && key[3] === 1;
         // Check each link took: just after each catch the skater must be on the next ride.
+        // (A second and a half after each release, from the keys: the route is re-found by search.)
+        const rel = SUMMIT.keys.filter((x) => x[2] === 0).map((x) => x[0] + 90);
         const want: [number, string][] = [
           [60, 'A1'],
-          [1300, 'A2'],
-          [1450, 'A3'],
-          [3260, 'S3'],
+          [rel[0], 'A2'],
+          [rel[1], 'A3'],
+          [rel[2], 'S3'],
         ];
         for (const [at, id] of want) {
           if (i === at && (p.mode !== Mode.HITCH || w.lines[p.hLine].id !== id)) return b.fail(`the summit chain broke before ${id} (links ${links.join(' ')})`);
         }
-        if (i >= 3260) phase = 'king';
+        if (i >= rel[2]) phase = 'king';
         return 'run';
       }
       // On the king kite: hold on over the needle and all the way back round its circuit, until it
