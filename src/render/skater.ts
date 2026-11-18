@@ -43,10 +43,59 @@ const POSES: Record<string, Pose> = {
 };
 
 const SKIN = 0xc98a5e;
+
+/**
+ * What the skater wears: the deck (sides and bottom in `deckBase`, the grip on top printed with
+ * `deckAccent` in `deckPattern`: 0 plain, 1 a stripe along, 2 check, 3 nose and tail dipped, 4 bands
+ * across; the nose block is always the accent), the hoodie and its arms, its pocket and hem, and
+ * the cap. Unlocked by finds (src/sim/game/finds.ts) and put on in the album's wardrobe.
+ */
+export interface SkaterPalette {
+  deckBase: number;
+  deckAccent: number;
+  deckPattern: number;
+  shirt: number;
+  trim: number;
+  cap: number;
+}
+
+/** The look the skater always had. */
+export const STREET_PALETTE: Readonly<SkaterPalette> = Object.freeze({
+  deckBase: INK.teal,
+  deckAccent: INK.mango,
+  deckPattern: 0,
+  shirt: INK.mango,
+  trim: INK.pink,
+  cap: INK.pink,
+});
+
+const paletteKey = (p: SkaterPalette): string => `${p.deckBase},${p.deckAccent},${p.deckPattern},${p.shirt},${p.trim},${p.cap}`;
+
+/** The print on the grip, on top of the deck (the deck's top is at y 0.132, it spans z -0.42..0.42). */
+function deckPrint(b: MeshBuilder, pal: SkaterPalette): void {
+  const y = 0.136;
+  const c = pal.deckAccent;
+  switch (pal.deckPattern) {
+    case 1:
+      b.box(0, y, 0, 0.03, 0.004, 0.36, 1, 0, c, {});
+      break;
+    case 2:
+      for (let i = 0; i < 8; i++) for (let j = 0; j < 2; j++) if ((i + j) % 2 === 0) b.box(j === 0 ? -0.055 : 0.055, y, -0.35 + i * 0.1, 0.055, 0.004, 0.05, 1, 0, c, {});
+      break;
+    case 3:
+      for (const z of [-0.36, 0.36]) b.box(0, 0.11, z, 0.114, 0.026, 0.065, 1, 0, c, { bottom: true });
+      break;
+    case 4:
+      for (const z of [-0.24, 0, 0.24]) b.box(0, y, z, 0.11, 0.004, 0.035, 1, 0, c, {});
+      break;
+    default:
+      break;
+  }
+}
 const _m = new THREE.Matrix4();
 const _m2 = new THREE.Matrix4();
 
-function buildPose(pose: Pose, boil: number): THREE.BufferGeometry {
+function buildPose(pose: Pose, boil: number, pal: SkaterPalette): THREE.BufferGeometry {
   const out = new MeshBuilder();
   const piece = (m: THREE.Matrix4, fn: (b: MeshBuilder) => void): void => {
     const b = new MeshBuilder();
@@ -59,8 +108,9 @@ function buildPose(pose: Pose, boil: number): THREE.BufferGeometry {
   const board = new THREE.Matrix4();
   if (pose.boardOff) board.makeRotationZ(0.9).setPosition(0.75, 0.2, -0.3);
   piece(board, (b) => {
-    b.box(0, 0.11, 0, 0.11, 0.022, 0.42, 1, 0, INK.teal, { top: INK.ink, bottom: true });
-    b.box(0, 0.125, 0.4, 0.1, 0.02, 0.06, 1, 0, INK.mango, {});
+    b.box(0, 0.11, 0, 0.11, 0.022, 0.42, 1, 0, pal.deckBase, { top: INK.ink, bottom: true });
+    b.box(0, 0.125, 0.4, 0.1, 0.02, 0.06, 1, 0, pal.deckAccent, {});
+    deckPrint(b, pal);
     for (const x of [-0.085, 0.085]) for (const z of [-0.27, 0.27]) b.box(x, 0.045, z, 0.028, 0.045, 0.045, 1, 0, INK.white, { bottom: true });
   });
 
@@ -92,13 +142,13 @@ function buildPose(pose: Pose, boil: number): THREE.BufferGeometry {
   torso.multiply(_m.makeRotationX(pose.pitch));
   torso.multiply(_m.makeRotationY(1.0));
   piece(torso, (b) => {
-    b.box(0, 0.27, 0, 0.17, 0.27, 0.11, 1, 0, INK.mango, {});
+    b.box(0, 0.27, 0, 0.17, 0.27, 0.11, 1, 0, pal.shirt, {});
     // Hoodie pocket and hem in a second ink.
-    b.box(0, 0.1, 0.115, 0.1, 0.06, 0.012, 1, 0, INK.pink, {});
+    b.box(0, 0.1, 0.115, 0.1, 0.06, 0.012, 1, 0, pal.trim, {});
     // Head, cap, brim.
     b.box(0, 0.66, 0.01, 0.105, 0.11, 0.105, 1, 0, SKIN, {});
-    b.box(0, 0.775, 0.01, 0.115, 0.035, 0.115, 1, 0, INK.pink, {});
-    b.box(0, 0.76, 0.16, 0.09, 0.012, 0.07, 1, 0, INK.pink, {});
+    b.box(0, 0.775, 0.01, 0.115, 0.035, 0.115, 1, 0, pal.cap, {});
+    b.box(0, 0.76, 0.16, 0.09, 0.012, 0.07, 1, 0, pal.cap, {});
   });
   // Arms are posed in body space (not the turned torso), so "forward" means toward the nose.
   const arms = body.clone();
@@ -113,7 +163,7 @@ function buildPose(pose: Pose, boil: number): THREE.BufferGeometry {
       const hx = sxp + (dir[0] / l) * 0.5;
       const hy = sy + (dir[1] / l) * 0.5 + w;
       const hz = sz + (dir[2] / l) * 0.5;
-      b.beam(sxp, sy, sz, hx, hy, hz, 0.055, INK.mango);
+      b.beam(sxp, sy, sz, hx, hy, hz, 0.055, pal.shirt);
       b.box(hx, hy, hz, 0.06, 0.06, 0.06, 1, 0, SKIN, { bottom: true });
     };
     arm(1, pose.armL, wob);
@@ -142,6 +192,8 @@ export interface SkaterFrame {
 export interface SkaterView {
   group: THREE.Group;
   update(f: SkaterFrame): void;
+  /** Dress the skater (poses are rebuilt lazily in the new colours; the same palette again is free). */
+  setPalette(p: SkaterPalette): void;
   dispose(): void;
 }
 
@@ -172,11 +224,15 @@ function poseFor(f: SkaterFrame, frame: number): string {
 /** `ghost: true` draws the figure as a dotted cobalt silhouette with no shadow (chalk-line ghosts). */
 export function createSkaterView(opts: { ghost?: boolean } = {}): SkaterView {
   const cache = new Map<string, THREE.BufferGeometry>();
+  let pal: SkaterPalette = { ...STREET_PALETTE };
+  let palKey = paletteKey(pal);
+  /** Geometries of an earlier palette, freed once the figure no longer shows one. */
+  const old: THREE.BufferGeometry[] = [];
   const geo = (name: string, boil: number): THREE.BufferGeometry => {
     const key = `${name}:${boil}`;
     let g = cache.get(key);
     if (!g) {
-      g = buildPose(POSES[name], boil);
+      g = buildPose(POSES[name], boil, pal);
       cache.set(key, g);
     }
     return g;
@@ -205,6 +261,8 @@ export function createSkaterView(opts: { ghost?: boolean } = {}): SkaterView {
       if (frame !== lastFrame) {
         lastFrame = frame;
         body.geometry = geo(poseFor(f, frame), frame % 2);
+        for (const g of old) g.dispose();
+        old.length = 0;
       }
       // The shadow shrinks and fades with height.
       const h = Math.max(0, f.y - f.groundY);
@@ -213,7 +271,18 @@ export function createSkaterView(opts: { ghost?: boolean } = {}): SkaterView {
       shadow.scale.set(s, 1, s);
       shadowMat.uniforms.uStrength.value = 1 / (1 + h * 0.25);
     },
+    setPalette(p) {
+      const k = paletteKey(p);
+      if (k === palKey) return;
+      palKey = k;
+      pal = { ...p };
+      for (const g of cache.values()) old.push(g);
+      cache.clear();
+      // The next update builds the pose in the new colours.
+      lastFrame = -1;
+    },
     dispose() {
+      for (const g of old) g.dispose();
       for (const g of cache.values()) g.dispose();
       shadowGeo.dispose();
       shadowMat.dispose();

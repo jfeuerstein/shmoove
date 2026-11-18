@@ -7,6 +7,7 @@ import { createAudio } from '../audio/index';
 import { Gestures, attachGestures } from '../input/gestures';
 import { createChalkView } from '../render/chalkView';
 import { chunkGrid, chunkOf, createCityView, type CityView } from '../render/cityView';
+import { createFindsView } from '../render/findsView';
 import { createHintView } from '../render/hintView';
 import { createMarkersView } from '../render/markersView';
 import { VIEW_PARTS, createView } from '../render/view';
@@ -137,6 +138,7 @@ function boot(): void {
   const chalkView = createChalkView(view.scene, world);
   const markersView = createMarkersView(view.scene, world, game);
   const hintView = createHintView(view.scene, world, view.chase.camera);
+  const findsView = createFindsView(view.scene, view.skater);
   const route = getRoute(params.route);
   const panel: DebugPanel | null = params.debug ? createDebugPanel(uiRoot) : null;
   // After the panel, so the UI can keep its controls clear of it.
@@ -329,6 +331,7 @@ function boot(): void {
     t0 = t1;
     markersView.update(game, alpha, dt);
     hintView.update(game, alpha, dt);
+    findsView.update(game, pendingGame, view.chase.camera, dt);
     t1 = performance.now();
     cur[PART.markers] = t1 - t0;
     view.render(sim, prev, alpha, dt, pending);
@@ -449,6 +452,7 @@ function boot(): void {
         lines: lines(),
         ui: ui.testState(),
         audio: audioState(),
+        finds: { drawn: findsView.drawn, bursts: findsView.bursts, count: game.finds.count, deck: game.finds.deck, kit: game.finds.kit },
       };
     },
     stats() {
