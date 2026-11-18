@@ -127,8 +127,14 @@ four defects found and fixed (DECISIONS 19).
 - [x] Final docs and audit (M6j): documents brought in line with the code, the chain meter's false
       "lost", livery assertions, e2e failing on console warnings, dead code removed, fresh clone
       checked
-- [~] Independent check of M6g, M6h, the planted foot and the camera (brief `m6i-verify-final`):
-      running alongside M6j; its findings go to the lead
+- [x] Independent check of M6g, M6h, the planted foot and the camera (brief `m6i-verify-final`):
+      gate green, no test loosened, 119 of 120 late, clumsy and hint-ignoring players finish the
+      lesson, the secrets finishable. It failed the camera under low awnings and an early press
+      behind a ride; both fixed with tests, and waiting spots moved clear of stall roofs
+      (DECISIONS 106–110)
+- [x] The city is lit at night (M6k): slope windows, roof lanterns, warehouse clerestories, lit
+      glass in the far level of detail (DECISIONS 111). Not independently checked beyond its own
+      test and screenshots
 
 Acceptance:
 - Fresh clone: `npm install`, `npm run build`, `npm test` pass. Met.
@@ -141,3 +147,20 @@ Acceptance:
 
 Still open, and only a human can close them: everything in `docs/PLAYTEST.md`, starting with frame
 time on a real phone.
+
+## Milestone commits
+
+The remote accepts only branch pushes from the build session, so the milestone tags could not be
+pushed (DECISIONS 20). Work on the milestones overlapped, so each line is the commit where that
+milestone's last piece merged; the full gate was run at `m1` and at the end, not at every one of
+these. To tag them:
+
+```
+git tag m1 b658fcd   # feel slice
+git tag m2 9116e60   # city: generator, streamed view, fixes, retune
+git tag m3 eef38a7   # rides and time: 16 lines, meetings, vehicles, map
+git tag m4 8eafb6e   # sound, with the verifier's follow-ups
+git tag m5 8eafb6e   # things to do: errands, conductors, secrets, chalk, saves (same merge)
+git tag m6 <the tip of this branch>   # ship: the last green gate
+git push origin --tags
+```
