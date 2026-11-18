@@ -20,6 +20,8 @@ import { buildCity } from '../../src/sim/city/index';
 import type { Solid, World } from '../../src/sim/world';
 import golden from './fixtures/night-day-golden.json';
 
+const PRINT_GOLDEN = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env?.SKITCH_PRINT_NIGHT_GOLDEN !== undefined;
+
 const city: World = buildCity(1).world;
 const grid = chunkGrid(city);
 const buckets = bucketWorld(city, grid);
@@ -104,6 +106,7 @@ describe('night lights in the city', () => {
 
   it('only adds geometry: the day dressing of every chunk is what it was, and comes first', () => {
     const want = golden as Record<string, string>;
+    const got: Record<string, string> = {};
     let checked = 0;
     for (const lod of [Lod.NEAR, Lod.FAR] as const) {
       for (let ci = 0; ci < CHUNKS; ci++) {
@@ -137,11 +140,15 @@ describe('night lights in the city', () => {
           for (let i = 0; i < di.length; i++) if (di[i] !== li[i]) expect.fail(`${o.kind} ${o.index}: index ${i} changed`);
         }
         const key = `${lod === Lod.NEAR ? 'near' : 'far'}:${ci}`;
-        expect(h.toString(16).padStart(8, '0'), key).toBe(want[key]);
+        got[key] = h.toString(16).padStart(8, '0');
+        if (!PRINT_GOLDEN) expect(got[key], key).toBe(want[key]);
         checked++;
       }
     }
-    expect(checked).toBe(Object.keys(want).length);
+    // SKITCH_PRINT_NIGHT_GOLDEN=1 prints the day hashes, for when the city's solids change on purpose
+    // (paste into tests/unit/fixtures/night-day-golden.json).
+    if (PRINT_GOLDEN) console.info(JSON.stringify(got));
+    else expect(checked).toBe(Object.keys(want).length);
   });
 
   it('lights the same windows every time a chunk is built', () => {

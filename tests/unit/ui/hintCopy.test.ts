@@ -3,7 +3,7 @@ import { ONBOARDING_STEPS, type HintId } from '../../../src/sim/game/onboarding'
 import { GLYPH_FRAMES, GLYPH_LOOPS, GLYPH_STATIC, glyphFrame, hintCopy, type GlyphKind } from '../../../src/ui/hintCopy';
 import { glyphSvg } from '../../../src/ui/hintGlyphs';
 
-const ctx = { slingRetry: false, stopName: '', inkCatch: false, target: { hop: false } };
+const ctx = { slingRetry: false, stopName: '', inkCatch: false, brakeAsk: false, target: { hop: false } };
 const ALL: HintId[] = [...ONBOARDING_STEPS, 'map', 'lift'];
 
 describe('hint copy', () => {
@@ -11,7 +11,7 @@ describe('hint copy', () => {
     expect(hintCopy('carve', ctx)).toMatchObject({ glyph: 'slide', title: 'DRAG' });
     expect(hintCopy('hop', ctx)).toMatchObject({ glyph: 'flick', title: 'FLICK UP' });
     expect(hintCopy('grind', ctx)).toMatchObject({ glyph: 'flick', title: 'LAND ON THE RAIL' });
-    expect(hintCopy('hitch', ctx)).toMatchObject({ glyph: 'press', title: 'PRESS AND HOLD STILL' });
+    expect(hintCopy('hitch', ctx)).toMatchObject({ glyph: 'press', title: 'HOLD FOR THE RIDE' });
     expect(hintCopy('sling', ctx)).toMatchObject({ glyph: 'drag', title: 'DRAG... THEN LET GO' });
     expect(hintCopy('map', ctx).title).toBe('YOUR MAP');
     expect(hintCopy('lift', ctx)).toMatchObject({ title: 'NO PUSHING.', sub: 'EVERYTHING THAT MOVES IS A LIFT.' });
@@ -25,7 +25,16 @@ describe('hint copy', () => {
   });
 
   it('the ink hint asks to catch a ride first when the skater is not on one', () => {
-    expect(hintCopy('ink', { ...ctx, inkCatch: true })).toEqual({ glyph: 'press', title: 'PRESS AND HOLD STILL', sub: 'RIDE IT TO THE NEXT STOP' });
+    expect(hintCopy('ink', { ...ctx, inkCatch: true })).toEqual({ glyph: 'press', title: 'HOLD FOR THE RIDE', sub: 'RIDE IT TO THE NEXT STOP' });
+  });
+
+  it('led to a waiting spot the first time, the hint teaches the brake: pull down to stop', () => {
+    expect(hintCopy('hitch', { ...ctx, brakeAsk: true })).toEqual({ glyph: 'pull', title: 'PULL DOWN TO STOP', sub: '' });
+    expect(hintCopy('ink', { ...ctx, inkCatch: true, brakeAsk: true })).toEqual({ glyph: 'pull', title: 'PULL DOWN TO STOP', sub: 'RIDE IT TO THE NEXT STOP' });
+    // A ride that needs a hop asks for the flick whatever the brake.
+    expect(hintCopy('hitch', { ...ctx, brakeAsk: true, target: { hop: true } }).glyph).toBe('flick');
+    // Nothing teaches the brake once the skater is on the ride.
+    expect(hintCopy('ink', { ...ctx, brakeAsk: true }).title).toBe('STAY ON TO THE NEXT STOP');
   });
 
   it('a plain release turns the sling hint into a nudge to carve first', () => {
@@ -39,10 +48,12 @@ describe('hint copy', () => {
 
   it('every hint is a few capitalised words that fit one line of the stub', () => {
     for (const id of ALL) {
-      const c = hintCopy(id, { ...ctx, stopName: 'Puerta de la Antena' });
-      expect(c.title, id).toBe(c.title.toUpperCase());
-      expect(c.title.split(' ').length, id).toBeLessThanOrEqual(6);
-      expect(c.title.length, id).toBeLessThanOrEqual(30);
+      for (const brakeAsk of [false, true]) {
+        const c = hintCopy(id, { ...ctx, brakeAsk, inkCatch: brakeAsk, stopName: 'Puerta de la Antena' });
+        expect(c.title, id).toBe(c.title.toUpperCase());
+        expect(c.title.split(' ').length, id).toBeLessThanOrEqual(6);
+        expect(c.title.length, id).toBeLessThanOrEqual(30);
+      }
     }
   });
 });
@@ -65,6 +76,7 @@ describe('glyphs on twos', () => {
     for (const k of kinds) for (const [, n] of GLYPH_LOOPS[k]) expect(n, k).toBeGreaterThanOrEqual(1);
     expect(GLYPH_LOOPS.slide.every(([, n]) => n >= 2)).toBe(true);
     expect(GLYPH_LOOPS.press.every(([, n]) => n >= 2)).toBe(true);
+    expect(GLYPH_LOOPS.pull.every(([, n]) => n >= 2)).toBe(true);
   });
 
   it('each SVG holds its frames, one marked as the reduced-motion still', () => {

@@ -212,18 +212,19 @@ export interface PerfLeg {
 
 /**
  * The legs of `perfcity`, in order (the order matters: the rides run to a timetable, so what a leg
- * meets depends on the tick it starts at). Chosen by riding candidate starts in the sim; what they
+ * meets depends on the tick it starts at). Chosen by riding candidate starts in the sim
+ * (`SKITCH_FIND_PERF=1 npx vitest run tests/unit/perfRoute.test.ts --silent=false` re-finds them); what they
  * deliver is asserted tick for tick by tests/unit/perfRoute.test.ts and again in the browser by the
  * harness: every timed window travels well over 40 m, the windows see all four districts, the
  * mercado and docks legs hitch and sling, and `streaming` is the fast run down the terraces spine
  * that crosses chunk rows.
  */
 export const PERF_LEGS: readonly PerfLeg[] = [
-  { name: 'mercado', z: 375 },
-  { name: 'terraces', z: 875 },
-  { name: 'antenna', z: 1030 },
-  { name: 'streaming', z: 935 },
-  { name: 'docks', z: 260 },
+  { name: 'mercado', z: 590 },
+  { name: 'terraces', z: 720 },
+  { name: 'antenna', z: 950 },
+  { name: 'streaming', z: 920 },
+  { name: 'docks', z: 265 },
 ];
 
 /** Where a leg starts: on the lane where it crosses the leg's z, facing down the lane. */

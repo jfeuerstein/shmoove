@@ -307,9 +307,13 @@ describe('chains', () => {
       const events: SimEvent[] = [];
       let hitched = -1;
       let released = -1;
-      for (let i = 0; i < 700; i++) {
+      for (let i = 0; i < 900; i++) {
         // Let go for a moment, then keep the touch armed.
         const gap = hitched >= 0 && i >= hitched + gapAt && i < hitched + gapAt + 6;
+        // RELATCH_COOLDOWN is 2.5 s, longer than a chain lives on the ground after a plain release
+        // (CHAIN_GROUND_GRACE), so the script keeps the chain's ground clock at zero, as if the
+        // skater were bouncing on the tram's roof: only the re-catch rule is under test.
+        if (released >= 0 && sim.player.chainAlive === 1) sim.player.chainGround = 0;
         sim.step({ steer: 0, hold: !gap, hop: false });
         for (const e of sim.events) {
           events.push(e);
@@ -517,10 +521,11 @@ describe('traffic never parks a skater', () => {
     expect(sim.player.mode).not.toBe(Mode.BAIL);
   });
 
-  it('but T-boning one at full speed is a bail', () => {
+  it('but T-boning one above the bail speed is a bail', () => {
     const sim = newSim();
     seekVehicle(sim, TRAM, 0, 100, 1, 30);
-    teleport(sim, 9, 106, -PI / 2, 17);
+    // From 12 m out: at this speed a skater from 9 m crosses the lane before the tram is there.
+    teleport(sim, 12, 106, -PI / 2, FEEL.WALL_BAIL_SPEED + 3);
     const ev = run(sim, 120);
     expect(ev.some((e) => e.type === 'bail' && e.reason === 'vehicle')).toBe(true);
   });

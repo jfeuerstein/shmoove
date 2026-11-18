@@ -5,6 +5,7 @@
  * read the sim (steer for a point, arm the hold near a wanted vehicle, let go at a stop), so the
  * play-throughs survive the city moving a few metres or its timetables shifting.
  */
+import { wouldCatch } from './helpers';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { buildCity, type City } from '../../src/sim/city';
 import { DAY_TICKS, FEEL, resetFeel } from '../../src/sim/constants';
@@ -381,7 +382,7 @@ function steerFor(p: PlayerState, x: number, z: number, tick: number): number {
   return steer;
 }
 
-/** Arm only when the nearest grab point of any ride is a vehicle of `want`, within 9 m; hop for a high strap. */
+/** Arm only when the nearest grab point of any ride is a vehicle of `want`, within 9 m, and the hitch would take it; hop for a high strap. */
 function armFor(sim: Sim, want: CompiledLine): { hold: boolean; hop: boolean } {
   const p = sim.player;
   let nearest = Infinity;
@@ -400,7 +401,8 @@ function armFor(sim: Sim, want: CompiledLine): { hold: boolean; hop: boolean } {
       if (M.index === want.index && M.overhead && d < 2.5 && p.mode === Mode.GROUND && GP.y - (p.y + FEEL.HAND_HEIGHT) > FEEL.HITCH_REACH_Y * 0.75) hop = true;
     }
   }
-  return { hold: wanted && nearest < 9, hop };
+  // Only when the hand would take the wanted ride: the strap is thrown 14 m (DECISIONS 119).
+  return { hold: wanted && nearest < 9 && wouldCatch(sim) === want.index, hop };
 }
 
 /** Lean against the swing so a ride does not slam the skater into the walls of the road. */
@@ -418,9 +420,9 @@ interface Played {
   ticks: number;
 }
 
-function newGame(dayFrac: number): Game {
+function newGame(dayFrac: number, conductors?: readonly ConductorDef[]): Game {
   resetFeel();
-  return new Game(W, { seed: 1, startDayFrac: dayFrac });
+  return new Game(W, { seed: 1, startDayFrac: dayFrac, ...(conductors ? { conductors } : {}) });
 }
 
 function play(game: Game, maxTicks: number, brain: (sim: Sim, i: number) => Partial<InputFrame>, stop: (e: GameEvent) => boolean): Played {
@@ -428,7 +430,7 @@ function play(game: Game, maxTicks: number, brain: (sim: Sim, i: number) => Part
   const p = game.sim.player;
   for (let i = 0; i < maxTicks; i++) {
     const inp = brain(game.sim, i);
-    game.step({ steer: inp.steer ?? 0, hold: inp.hold ?? false, hop: inp.hop ?? false });
+    game.step({ steer: inp.steer ?? 0, hold: inp.hold ?? false, hop: inp.hop ?? false, brake: inp.brake ?? false });
     let end = false;
     for (const e of game.events) {
       out.events.push(e);
@@ -445,7 +447,7 @@ function play(game: Game, maxTicks: number, brain: (sim: Sim, i: number) => Part
   return out;
 }
 
-/** Stand in the giver's zone and hold still until the errand starts. */
+/** Stand in the giver's zone, pulling down (the brake), until the errand starts. */
 function acceptAt(game: Game, id: string): void {
   const def = ERRANDS.find((e) => e.id === id);
   if (!def) throw new Error(id);
@@ -454,7 +456,7 @@ function acceptAt(game: Game, id: string): void {
   for (let tries = 0; tries < 20 && !game.errands.active; tries++) {
     placePlayer(W, sim.player, g.x, g.z, W.spawn.heading);
     for (let i = 0; i < 120 && !game.errands.active; i++) {
-      game.step({ steer: 0, hold: sim.player.mode !== Mode.HITCH, hop: false });
+      game.step({ steer: 0, hold: false, hop: false, brake: true });
     }
     // A ride standing in the zone: wait for it to go and try again.
     if (!game.errands.active) for (let i = 0; i < 300; i++) game.step({ steer: 0, hold: false, hop: false });
@@ -511,9 +513,6 @@ describe('errands played for real', () => {
   });
 
   it('two cable cars as one chain: a kite spool from the funicular top to the ridge', () => {
-    // Started when the car the skater catches reaches the hill station as a summit car waits.
-    const game = newGame(0.43);
-    acceptAt(game, 'kite_spool');
     const A1 = line('A1');
     const A2 = line('A2');
     /** Under the strap of a car standing at stop k. */
@@ -530,43 +529,82 @@ describe('errands played for real', () => {
       }
       return false;
     };
-    let leg = 0;
-    const r = play(
-      game,
-      4 * 3600,
-      (sim, i) => {
-        const p = sim.player;
-        if (p.mode === Mode.HITCH) {
-          const H = sim.world.lines[p.hLine];
-          if (H.index === A1.index) {
-            vehicleAt(H, p.hVeh, sim.tick, VS);
-            // At the hill station, let go as a summit car waits beside it.
-            if (Math.abs(VS.s - A1.allStops[1].s) < 3 && standing(A2, 0, sim.tick)) {
-              leg = 1;
-              return { hold: false };
+    /**
+     * Started when the car the skater catches reaches the hill station as a summit car waits. On
+     * arrival there the skater swings (`sign`) and lets go `delay` ticks after the summit car is
+     * first seen waiting: every release is a slingshot now (DECISIONS 114), and the throw has to
+     * land them under the summit car's strap.
+     */
+    const attempt = (delay: number, sign: number): { kinds: string[]; trace: string[] } => {
+      const game = newGame(0.43);
+      acceptAt(game, 'kite_spool');
+      let leg = 0;
+      let seen = -1;
+      const r = play(
+        game,
+        4 * 3600,
+        (sim, i) => {
+          const p = sim.player;
+          if (p.mode === Mode.HITCH) {
+            const H = sim.world.lines[p.hLine];
+            if (H.index === A1.index && leg === 0) {
+              vehicleAt(H, p.hVeh, sim.tick, VS);
+              if (seen < 0 && Math.abs(VS.s - A1.allStops[1].s) < 12 && standing(A2, 0, sim.tick)) seen = i;
+              if (seen >= 0) {
+                if (i - seen >= delay) {
+                  leg = 1;
+                  return { hold: false };
+                }
+                return { hold: true, steer: i - seen >= delay - 40 ? sign : 0 };
+              }
             }
+            return { hold: true };
           }
-          return { hold: true };
+          const [tx, tz] = leg === 0 ? a1 : a2;
+          return { steer: steerFor(p, tx, tz, i), ...armFor(sim, leg === 0 ? A1 : A2) };
+        },
+        errandOver,
+      );
+      return { kinds: r.events.filter((e) => e.type.startsWith('errand')).map((e) => e.type), trace: r.trace };
+    };
+    // The release is searched with the test (so it re-finds itself when the controller or the
+    // timetable changes): the middle of the first run of delays at least a tenth of a second long
+    // that works.
+    const want = ['errandStep', 'errandStep', 'errandStep', 'errandDone'];
+    let found: { delay: number; sign: number } | null = null;
+    for (const sign of [0, 1, -1]) {
+      let from = -1;
+      for (let delay = 0; delay <= 300 && !found; delay += 2) {
+        const at = attempt(delay, sign);
+        const ok = at.kinds.join() === want.join();
+        if (ok && from < 0) from = delay;
+        if (!ok && from >= 0) {
+          if (delay - from >= 8) found = { delay: Math.round((from + delay - 2) / 4) * 2, sign };
+          from = -1;
         }
-        const [tx, tz] = leg === 0 ? a1 : a2;
-        return { steer: steerFor(p, tx, tz, i), ...armFor(sim, leg === 0 ? A1 : A2) };
-      },
-      errandOver,
-    );
-    const kinds = r.events.filter((e) => e.type.startsWith('errand')).map((e) => e.type);
-    expect(kinds, r.trace.join('\n')).toEqual(['errandStep', 'errandStep', 'errandStep', 'errandDone']);
-  });
+      }
+      if (found) break;
+    }
+    expect(found, 'a release from the lower cable car that lands under the summit car').not.toBeNull();
+    if (!found) return;
+    const r = attempt(found.delay, found.sign);
+    expect(r.kinds, r.trace.join('\n')).toEqual(want);
+  }, 120_000);
 });
+
+/** Pulled down above this on the way down the spine, m/s. */
+const SPINE_SAFE = 12;
 
 /** Seconds from letting go to the punch in the stopToStop plays, for the report. */
 const measured: Record<string, number> = {};
 
 /** Ride `c`'s line from near its conductor's stop to stop `from`, let go there, then roll via the spine to stop `to`. */
-function playStopToStop(c: ConductorDef, dayFrac: number): Played {
+function playStopToStop(c: ConductorDef, dayFrac: number, untimed = false): Played {
   const t = c.task;
   if (t.kind !== 'stopToStop') throw new Error('not stopToStop');
   const L = line(c.line);
-  const game = newGame(dayFrac);
+  // Untimed: the same challenge with all the time in the world, to measure the bot.
+  const game = untimed ? newGame(dayFrac, CONDUCTORS.map((d) => (d === c ? { ...d, task: { ...t, seconds: 3600 } } : d))) : newGame(dayFrac);
   const [wx, wz] = waitPoint(L, c.stop);
   placePlayer(W, game.sim.player, wx, wz, W.spawn.heading);
   const fromZ = zone(stopZoneId(c.line, t.from));
@@ -586,7 +624,9 @@ function playStopToStop(c: ConductorDef, dayFrac: number): Played {
         }
         return { hold: true, steer: rideQuietly(sim) };
       }
-      if (follower) return { steer: follower.steer(p, i) };
+      // Down the spine: pull down above SPINE_SAFE, as a player who wants to arrive in one piece would
+      // (the stair drops throw a faster board too far: DECISIONS 114).
+      if (follower) return { steer: follower.steer(p, i), brake: p.mode === Mode.GROUND && p.speed > SPINE_SAFE };
       return { steer: steerFor(p, wx, wz, i), ...armFor(sim, L) };
     },
     conductorOver,
@@ -594,6 +634,25 @@ function playStopToStop(c: ConductorDef, dayFrac: number): Played {
   if (releasedAt >= 0 && r.ticks > 0) measured[c.line] = (r.ticks - releasedAt) / 60;
   return r;
 }
+
+const CONDUCTOR_ENV = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env ?? {};
+
+// SKITCH_FIND_CONDUCTORS=1 npx vitest run tests/sim/content.test.ts -t 'stop-to-stop limits' --silent=false
+// re-measures the stop-to-stop challenges (src/sim/game/content/conductors.ts sets each to 1.3x
+// the bot's time) whenever the controller, the city or the timetable changes.
+describe.skipIf(!CONDUCTOR_ENV.SKITCH_FIND_CONDUCTORS)('stop-to-stop limits', () => {
+  it('measures the bot on each stop-to-stop challenge', () => {
+    for (const [id, frac] of [
+      ['T3', 0.4],
+      ['T4', 0.84],
+    ] as const) {
+      const c = CONDUCTORS.find((x) => x.line === id);
+      if (!c) throw new Error(id);
+      playStopToStop(c, frac, true);
+      console.info(`${id}: bot ${measured[id]?.toFixed(1)} s, limit ${Math.ceil(1.3 * (measured[id] ?? 0))} s`);
+    }
+  });
+});
 
 describe('a conductor challenge played for real', () => {
   it('tram 9: caught at Zigzag Oeste, let go at Terraza Alta, rolled down to Terraza Baja in time', () => {

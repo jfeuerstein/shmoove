@@ -26,6 +26,9 @@ import {
   type Level,
 } from './layout';
 import { PARAPET, ROAD_HALF, SPINE_X, STAIR_HALF } from './layout';
+
+/** The tallest step a board rolls up onto, m (FEEL.STEP_UP's default: the city is built once, before any tuning). */
+const FEEL_STEP_UP = 0.4;
 import { HILL_STATION_DECK, HILL_STATION_PLATFORM, type Ground } from './terrain';
 
 interface Range {
@@ -617,7 +620,9 @@ function dressHandrails(w: World, g: Ground): void {
   for (const st of g.stairs) {
     // A rail either side of each stair street; the funicular run-out has one on its west side, on a
     // row of height samples, clear of the car standing at the base.
-    const xs = st.x === FUNI_X ? [st.x - 5] : [st.x - 2, st.x + 2];
+    // (Half a metre in from the run-out's side wall, so a grind does not run along its face:
+    // DECISIONS 126.)
+    const xs = st.x === FUNI_X ? [st.x - 4.5] : [st.x - 2, st.x + 2];
     for (const x of xs) for (const f of st.stepper.flights) handrail(w, x, f.zLo, f.zHi);
   }
   for (const f of g.spine.flights) {
@@ -686,20 +691,35 @@ function dressParapets(w: World, g: Ground): void {
         let road = -Infinity;
         let bank = Infinity;
         let rise = Infinity;
+        /** Outside ground at the face, and how far the bank beyond rises above it, at each sample. */
+        const foot: number[] = [];
+        const drain: number[] = [];
         for (const t of [t0, (t0 + tm) / 2, tm, (tm + t1) / 2, t1]) {
           const c = dcos(t);
           const sn = dsin(t);
           const yi = terrainHeight(w, a.cx + (R - 1) * c, a.cz + (R - 1) * sn);
           const yo = terrainHeight(w, a.cx + (R + PARAPET.half + 0.35) * c, a.cz + (R + PARAPET.half + 0.35) * sn);
+          const yb = terrainHeight(w, a.cx + (R + PARAPET.half + PARAPET.drainAt) * c, a.cz + (R + PARAPET.half + PARAPET.drainAt) * sn);
           lo = Math.min(lo, yi, yo);
           road = Math.max(road, yi);
           bank = Math.min(bank, yo);
           rise = Math.min(rise, terrainHeight(w, a.cx + (R + PARAPET.open) * c, a.cz + (R + PARAPET.open) * sn));
+          foot.push(yo);
+          drain.push(yb - yo);
         }
         const top = Math.max(road + PARAPET.height, bank + PARAPET.flush);
         // Where the bank climbs steeply just beyond, the road is cut into the hill: the bank turns a
         // skater by itself, and a wall at its foot would only leave a gutter to be pinned in.
         if (rise > top + PARAPET.openRise) continue;
+        // A hollow against the face: the outside ground is lowest along the segment somewhere in its
+        // middle, the bank beyond runs down into it, and the wall stands taller than a board rolls
+        // up. A skater coming down the bank is pinned there (found by the 400-drop test once the
+        // board was twice as fast: DECISIONS 126): leave that segment open, and the hollow drains
+        // onto the road.
+        let m = 0;
+        for (let i = 1; i < foot.length; i++) if (foot[i] < foot[m]) m = i;
+        const hollow = m > 0 && m < foot.length - 1 && foot[0] - foot[m] > PARAPET.gutter && foot[foot.length - 1] - foot[m] > PARAPET.gutter;
+        if (hollow && drain[m] > PARAPET.drainRise && top - foot[m] > FEEL_STEP_UP) continue;
         addSolid(w, {
           cx,
           cz,

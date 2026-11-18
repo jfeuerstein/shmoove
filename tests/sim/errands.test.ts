@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { DAY_TICKS, resetFeel } from '../../src/sim/constants';
 import { ERRANDS } from '../../src/sim/game/content/errands';
 import type { ErrandDef, StepDef } from '../../src/sim/game/errands';
-import { OFFER_FILL_TICKS, OFFER_SNOOZE_TICKS } from '../../src/sim/game/errands';
+import { OFFER_FILL_TICKS, OFFER_MAX_SPEED, OFFER_SNOOZE_TICKS, OFFER_STAND_SPEED } from '../../src/sim/game/errands';
 import { Game, type GameEvent } from '../../src/sim/game/game';
 import { grabPoint, makeVehicleState, vehicleAt } from '../../src/sim/lines';
 import { placePlayer } from '../../src/sim/player';
@@ -48,18 +48,18 @@ interface Log {
 
 function step(game: Game, log: Log, input: Partial<InputFrame> = {}, n = 1): void {
   for (let i = 0; i < n; i++) {
-    game.step({ steer: input.steer ?? 0, hold: input.hold ?? false, hop: input.hop ?? false });
+    game.step({ steer: input.steer ?? 0, hold: input.hold ?? false, hop: input.hop ?? false, brake: input.brake ?? false });
     for (const e of game.events) log.events.push(e);
   }
 }
 
 const types = (log: Log): string[] => log.events.filter((e) => e.type.startsWith('errand')).map((e) => e.type);
 
-/** Hold still in the giver's zone until the errand starts. */
+/** Pull down (brake) in the giver's zone until the errand starts. */
 function accept(game: Game, log: Log): void {
   const p = game.sim.player;
   placePlayer(game.sim.world, p, 0, 0, 0);
-  step(game, log, { hold: true }, OFFER_FILL_TICKS + 2);
+  step(game, log, { brake: true }, OFFER_FILL_TICKS + 2);
   expect(game.errands.active, 'errand accepted').not.toBeNull();
   step(game, log, {}, 1);
 }
@@ -97,37 +97,66 @@ function catchTram(game: Game, log: Log, veh = 0, chain: { links: number; line: 
   expect(sim.player.mode).toBe(Mode.HITCH);
 }
 
-describe('hold to accept', () => {
-  it('an offer appears in the giver zone and fills over 0.6 s of holding still, then starts', () => {
+describe('stop to accept', () => {
+  it('an offer appears in the giver zone and fills over 0.6 s of braking, then starts', () => {
     const game = newGame(world(), [errand([{ kind: 'reach', zone: 'east' }])]);
     const log: Log = { events: [] };
-    teleport(game, 0, 0);
+    // Rolling into the zone at 3 m/s and pulling down: the brake fills it while it slows.
+    teleport(game, 0, -3, 3);
     step(game, log);
     expect(game.errands.offered).toBe('e1');
     expect(game.errands.offerFill).toBe(0);
-    step(game, log, { hold: true }, OFFER_FILL_TICKS / 2);
+    step(game, log, { brake: true }, OFFER_FILL_TICKS / 2);
     expect(game.errands.offerFill).toBeGreaterThan(0.4);
     expect(game.errands.offerFill).toBeLessThan(0.6);
     expect(game.errands.active).toBeNull();
-    step(game, log, { hold: true }, OFFER_FILL_TICKS / 2);
+    step(game, log, { brake: true }, OFFER_FILL_TICKS / 2);
     expect(game.errands.active?.id).toBe('e1');
     expect(types(log)).toEqual(['errandOffer', 'errandStart']);
   });
 
-  it('releasing the touch empties the fill; rolling out of the zone withdraws the offer', () => {
+  it('standing in the zone takes it too, thumb on the glass or not', () => {
+    for (const hold of [false, true]) {
+      const game = newGame(world(), [errand([{ kind: 'reach', zone: 'east' }])]);
+      const log: Log = { events: [] };
+      teleport(game, 0, 0);
+      step(game, log, { hold }, OFFER_FILL_TICKS + 1);
+      expect(game.errands.active?.id, `hold ${hold}`).toBe('e1');
+    }
+  });
+
+  it('a resting thumb rolling through the zone never takes it (DECISIONS 113)', () => {
     const game = newGame(world(), [errand([{ kind: 'reach', zone: 'east' }])]);
     const log: Log = { events: [] };
-    teleport(game, 0, 0);
-    step(game, log, { hold: true }, 20);
+    // Across the zone at a walking-to-jogging pace, thumb down the whole way.
+    teleport(game, -4.5, 0, 2.5, Math.PI / 2);
+    let offered = false;
+    for (let i = 0; i < 240 && game.sim.player.x < 6; i++) {
+      step(game, log, { hold: true });
+      if (game.errands.offered === 'e1') offered = true;
+      expect(game.errands.offerFill).toBe(0);
+      expect(game.sim.player.speed).toBeGreaterThan(OFFER_STAND_SPEED);
+    }
+    expect(offered).toBe(true);
+    expect(game.errands.active).toBeNull();
+  });
+
+  it('rolling on again empties the fill; rolling out of the zone withdraws the offer', () => {
+    const game = newGame(world(), [errand([{ kind: 'reach', zone: 'east' }])]);
+    const log: Log = { events: [] };
+    teleport(game, 0, -2, 3.5);
+    step(game, log, { brake: true }, 20);
     expect(game.errands.offerFill).toBeGreaterThan(0.5);
-    step(game, log, { hold: false });
+    expect(game.sim.player.speed).toBeGreaterThan(OFFER_STAND_SPEED);
+    // Let go of the brake while still rolling: the fill is gone.
+    step(game, log, {});
     expect(game.errands.offerFill).toBe(0);
-    step(game, log, { hold: true }, 20);
+    step(game, log, { brake: true }, 20);
     teleport(game, 8, 0);
-    step(game, log, { hold: true });
+    step(game, log, { brake: true });
     expect(game.errands.offered).toBeNull();
     expect(game.errands.offerFill).toBe(0);
-    step(game, log, { hold: true }, 60);
+    step(game, log, { brake: true }, 60);
     expect(game.errands.active).toBeNull();
     expect(types(log)).toEqual(['errandOffer']);
   });
@@ -141,14 +170,14 @@ describe('hold to accept', () => {
     // Roll out without taking it: ignored.
     teleport(game, 12, 0);
     step(game, log, {}, 60);
-    // Back a few seconds later, circling and then holding still in the zone: nothing.
+    // Back a few seconds later, circling and then braking in the zone: nothing.
     const back = game.sim.tick;
     for (let k = 0; k < 6; k++) {
       teleport(game, k % 2 === 0 ? 0 : 12, 0);
       step(game, log, {}, 60);
     }
     teleport(game, 0, 0);
-    step(game, log, { hold: true }, OFFER_FILL_TICKS * 3);
+    step(game, log, { brake: true }, OFFER_FILL_TICKS * 3);
     expect(game.errands.offered).toBeNull();
     expect(game.errands.active).toBeNull();
     // Another giver is not snoozed.
@@ -163,19 +192,20 @@ describe('hold to accept', () => {
     teleport(game, 0, 0);
     step(game, log, {}, 2);
     expect(game.errands.offered).toBeNull();
-    step(game, log, {}, 240);
+    for (let i = 0; i < 240 && game.errands.offered === null; i++) step(game, log);
     expect(game.errands.offered).toBe('e1');
-    step(game, log, { hold: true }, OFFER_FILL_TICKS + 1);
+    step(game, log, { brake: true }, OFFER_FILL_TICKS + 1);
     expect(game.errands.active?.id).toBe('e1');
     expect(types(log)).toEqual(['errandOffer', 'errandOffer', 'errandOffer', 'errandStart']);
   });
 
   it('does not fill while rolling fast, while hitched, or with a ride in reach', () => {
-    // Fast: rolling through the zone at 7 m/s.
+    // Fast: braking through the zone from 7 m/s, still faster than an offer takes.
     const fast = newGame(world(), [errand([{ kind: 'reach', zone: 'east' }])]);
     const log: Log = { events: [] };
     teleport(fast, 0, -4, 7);
-    step(fast, log, { hold: true }, 8);
+    step(fast, log, { brake: true }, 8);
+    expect(fast.sim.player.speed).toBeGreaterThan(OFFER_MAX_SPEED);
     expect(fast.errands.offered).toBe('e1');
     expect(fast.errands.offerFill).toBe(0);
 
@@ -186,12 +216,12 @@ describe('hold to accept', () => {
     const hl: Log = { events: [] };
     catchTram(hitched, hl);
     for (let i = 0; i < 300; i++) {
-      step(hitched, hl, { hold: true });
+      step(hitched, hl, { hold: true, brake: i % 2 === 0 });
       expect(hitched.errands.offered).toBeNull();
     }
     expect(hitched.errands.active).toBeNull();
 
-    // A ride in reach: standing at the tram's stop as it waits there, the hold is for the tram.
+    // A ride in reach: standing at the tram's stop as it waits there, the stop is for the tram.
     const w2 = world();
     addZone(w2, { id: 'atStop', name: 'atStop', kind: 'landmark', x: 30, y: 0, z: -30, r: 8 });
     const reach = newGame(w2, [errand([{ kind: 'reach', zone: 'east' }], { giver: 'atStop' })]);
@@ -209,7 +239,7 @@ describe('hold to accept', () => {
     grabPoint(L, VS, GP);
     // Beside and ahead of the bumper: in reach, but not grabbable from in front of it.
     teleport(reach, GP.x - 2.2, GP.z + 2.5);
-    step(reach, rl, { hold: true }, 2);
+    step(reach, rl, { brake: true }, 2);
     expect(reach.errands.offered).toBe('e1');
     expect(reach.errands.offerFill).toBe(0);
   });
@@ -224,7 +254,7 @@ describe('hold to accept', () => {
     const log: Log = { events: [] };
     accept(game, log);
     teleport(game, -20, -20);
-    step(game, log, { hold: true }, 60);
+    step(game, log, { brake: true }, 60);
     expect(game.errands.offered).toBeNull();
     expect(game.errands.active?.id).toBe('e1');
 
@@ -232,23 +262,28 @@ describe('hold to accept', () => {
     const timed = newGame(world(), [defs[2]]);
     const tl: Log = { events: [] };
     teleport(timed, -20, -20);
-    step(timed, tl, { hold: true }, 60);
+    step(timed, tl, { brake: true }, 60);
     expect(timed.errands.offered).toBeNull();
     expect(timed.errands.active).toBeNull();
     timed.sim.setDayFrac(0.55);
-    step(timed, tl, { hold: true }, OFFER_FILL_TICKS + 2);
+    step(timed, tl, { brake: true }, OFFER_FILL_TICKS + 2);
     expect(timed.errands.active?.id).toBe('late');
   });
 
-  it('after an errand starts the touch must lift before anything else can fill', () => {
+  it('after an errand starts the skater must roll on before anything else can fill', () => {
     const game = newGame(world(), [errand([{ kind: 'reach', zone: 'giver' }])]);
     const log: Log = { events: [] };
     teleport(game, 0, 0);
-    // Accept, finish at once (the target is the giver zone), keep holding: no second start.
-    step(game, log, { hold: true }, OFFER_FILL_TICKS + 120);
+    // Accept, finish at once (the target is the giver zone), keep standing on the brake: no second start.
+    step(game, log, { brake: true }, OFFER_FILL_TICKS + 120);
     expect(types(log)).toEqual(['errandOffer', 'errandStart', 'errandStep', 'errandDone', 'errandOffer']);
-    step(game, log, { hold: false });
-    step(game, log, { hold: true }, OFFER_FILL_TICKS + 1);
+    // Standing without the brake is still standing: nothing.
+    step(game, log, {}, OFFER_FILL_TICKS + 1);
+    expect(types(log).filter((t) => t === 'errandStart').length).toBe(1);
+    // Rolling on (not braking, faster than a stand), then stopping again takes it.
+    teleport(game, 0, -2, 2);
+    step(game, log, {});
+    step(game, log, { brake: true }, OFFER_FILL_TICKS + 1);
     expect(types(log).filter((t) => t === 'errandStart').length).toBe(2);
   });
 });
@@ -565,7 +600,8 @@ describe('records and saves', () => {
     const log: Log = { events: [] };
     accept(game, log);
     teleport(game, 20, 0);
-    step(game, log);
+    // Done on arrival; a moment out of the giver zones before going back for another.
+    step(game, log, {}, 2);
     const saved = JSON.parse(JSON.stringify(game.errandsReducer.exportState()));
     accept(game, log);
     expect(game.errands.active).not.toBeNull();

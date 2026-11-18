@@ -18,7 +18,6 @@ beforeAll(() => {
 const D = District;
 const DAWN = 0.22;
 const DAY = 0.3;
-const DUSK = 0.72;
 const NIGHT = 0.8;
 
 /** DESIGN section 5, written out independently of the ride data. */
@@ -35,16 +34,16 @@ const ROSTER: {
   parkHidden?: boolean;
 }[] = [
   { id: 'D1', kind: 'crane', district: D.DOCKS, stem: 0, vehicles: 1, hours: [[0, 1]] },
-  { id: 'D2', kind: 'forklift', district: D.DOCKS, stem: 1, vehicles: 3, hours: [[DAY, DUSK]] },
-  { id: 'D3', kind: 'truck', district: D.DOCKS, stem: 2, vehicles: 2, hours: [[DAWN, 0.5]] },
-  { id: 'M1', kind: 'moped', district: D.MERCADO, stem: 0, vehicles: 4, hours: [[DAY, NIGHT]] },
-  { id: 'M2', kind: 'handcart', district: D.MERCADO, stem: 1, vehicles: 3, hours: [[DAWN, 0.65]] },
+  { id: 'D2', kind: 'forklift', district: D.DOCKS, stem: 1, vehicles: 9, hours: [[DAWN, NIGHT]] },
+  { id: 'D3', kind: 'truck', district: D.DOCKS, stem: 2, vehicles: 6, hours: [[DAWN, NIGHT]] },
+  { id: 'M1', kind: 'moped', district: D.MERCADO, stem: 0, vehicles: 6, hours: [[DAWN, NIGHT]] },
+  { id: 'M2', kind: 'handcart', district: D.MERCADO, stem: 1, vehicles: 6, hours: [[DAWN, NIGHT]] },
   { id: 'M3', kind: 'parade', district: D.MERCADO, stem: 2, vehicles: 1, hours: [[0.55, 0.72]] },
-  { id: 'T1', kind: 'funicular', district: D.TERRACES, stem: 0, vehicles: 2, hours: [[0, 1]] },
-  { id: 'T2', kind: 'tram', district: D.TERRACES, stem: 1, vehicles: 3, hours: [[0, 1]] },
-  { id: 'T3', kind: 'tram', district: D.TERRACES, stem: 2, vehicles: 2, hours: [[DAY, NIGHT]] },
+  { id: 'T1', kind: 'funicular', district: D.TERRACES, stem: 0, vehicles: 4, hours: [[0, 1]] },
+  { id: 'T2', kind: 'tram', district: D.TERRACES, stem: 1, vehicles: 12, hours: [[0, 1]] },
+  { id: 'T3', kind: 'tram', district: D.TERRACES, stem: 2, vehicles: 6, hours: [[0, 1]] },
   // Night only: its laps leave from nightfall to midnight, so the last is home before dawn.
-  { id: 'T4', kind: 'bus', district: D.TERRACES, stem: 3, vehicles: 2, hours: [[NIGHT, 1]] },
+  { id: 'T4', kind: 'bus', district: D.TERRACES, stem: 3, vehicles: 4, hours: [[NIGHT, 1]] },
   { id: 'A1', kind: 'cablecar', district: D.ANTENNA, stem: 0, vehicles: 4, hours: [[0, 1]] },
   { id: 'A2', kind: 'cablecar', district: D.ANTENNA, stem: 1, vehicles: 3, hours: [[DAY, NIGHT]] },
   { id: 'A3', kind: 'kite', district: D.ANTENNA, stem: 2, vehicles: 5, hours: [[0.35, 0.7]] },
@@ -230,17 +229,19 @@ describe('the roster', () => {
     expect(problems.slice(0, 20)).toEqual([]);
   });
 
-  it('never lets two vehicles of different ground lines overlap, all day', () => {
+  it('never lets two vehicles overlap, of the same ground line or different ones, all day', () => {
     const ground = city.world.lines.filter((l) => !l.overhead);
     const states = ground.map((l) => Array.from({ length: l.vehicles }, () => makeVehicleState()));
     const hits: string[] = [];
     for (let t = 0; t < DAY_TICKS; t += 10) {
       for (let a = 0; a < ground.length; a++) for (let i = 0; i < ground[a].vehicles; i++) vehicleAt(ground[a], i, t, states[a][i]);
       for (let a = 0; a < ground.length; a++) {
-        for (let b = a + 1; b < ground.length; b++) {
-          for (const A of states[a]) {
+        // The same line too: a car home from its lap must not stand on the one leaving.
+        for (let b = a; b < ground.length; b++) {
+          for (const [i, A] of states[a].entries()) {
             if (!A.active) continue;
-            for (const B of states[b]) {
+            for (const [j, B] of states[b].entries()) {
+              if (a === b && j <= i) continue;
               if (!B.active || Math.abs(A.y - B.y) > 4) continue;
               if (bodiesOverlap(ground[a], A, ground[b], B)) hits.push(`${ground[a].id}/${ground[b].id} at ${t} (${A.x.toFixed(0)},${A.z.toFixed(0)})`);
             }
@@ -423,7 +424,7 @@ interface ChainRun {
  * (`sign` picks the side), let go `release` ticks after the overtake moment, re-arm, and ride
  * whatever is caught for a second.
  */
-function chainRun(aId: string, bId: string, o: Overtake, lead: number, release: number, whip: number, sign: number): ChainRun {
+function chainRun(aId: string, bId: string, o: Overtake, lead: number, release: number, whip: number, sign: number, far = false): ChainRun {
   const a = line(aId);
   const b = line(bId);
   const sim = new Sim(city.world, { seed: 1, startDayFrac: 0 });
@@ -433,7 +434,8 @@ function chainRun(aId: string, bId: string, o: Overtake, lead: number, release: 
   const B = makeVehicleState();
   vehicleAt(a, o.va, sim.tick + 90, A);
   vehicleAt(b, o.vb, o.tick, B);
-  const side = (B.x - A.x) * -A.hz + (B.z - A.z) * A.hx >= 0 ? 1 : -1;
+  // On b's side of a's lane, or (`far`) the other side, out of b's reach while waiting for a.
+  const side = ((B.x - A.x) * -A.hz + (B.z - A.z) * A.hx >= 0 ? 1 : -1) * (far ? -1 : 1);
   const off = a.bodyHalfWid + 0.9;
   placePlayer(city.world, sim.player, A.x - A.hz * side * off, A.z + A.hx * side * off, Math.atan2(A.hx, A.hz));
   sim.player.speed = Math.min(3, a.cruise * 0.5);
@@ -473,7 +475,11 @@ function chainRun(aId: string, bId: string, o: Overtake, lead: number, release: 
   return { links, events };
 }
 
-/** Search release time and whip length for a script that chains a into b. */
+/**
+ * Search release time, whip length and which side of a's lane to wait on for a script that chains
+ * a into b. The search runs with the test, so it re-finds itself whenever the controller or the
+ * timetable changes.
+ */
 function findCityChain(aId: string, bId: string, zone: string): { params: number[]; run: ChainRun } {
   resetFeel();
   const o = findOvertake(aId, bId, zone);
@@ -481,8 +487,10 @@ function findCityChain(aId: string, bId: string, zone: string): { params: number
     for (let release = -150; release <= 150; release += 6) {
       for (const whip of [0, 16, 28]) {
         for (const sign of [1, -1]) {
-          const run = chainRun(aId, bId, o, lead, release, whip, sign);
-          if (run.links === 2) return { params: [lead, release, whip, sign], run };
+          for (const far of [false, true]) {
+            const run = chainRun(aId, bId, o, lead, release, whip, sign, far);
+            if (run.links === 2) return { params: [lead, release, whip, sign, far ? 1 : 0], run };
+          }
         }
       }
     }

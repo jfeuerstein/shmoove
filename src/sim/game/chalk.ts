@@ -8,20 +8,24 @@
  * the clock forward to the recording's time of day (minus a countdown) and steps a second skater,
  * the ghost, in the same world with the recorded frames while the player skates against it.
  *
- * In memory a line keeps its frames decoded, one byte per tick: the steer level + 31 (0..62) in
- * bits 0-5, hold in bit 6, hop in bit 7. Only the share code (and so the save) is packed densely.
+ * In memory a line keeps its frames decoded, one 16-bit word per tick: the steer level + 31 (0..62)
+ * in bits 0-5, hold in bit 6, hop in bit 7, brake in bit 8. Only the share code (and so the save) is
+ * packed densely.
  *
  * Share code: `SK2-` + base64url (no padding) of version u8 (2), name (u8 length + UTF-8),
- * startDayTick u16, x/z/heading/speed f64, endX/endY/endZ f32, ticks u16, input byte count
- * (LEB128, minimal), input bytes, CRC-32 of everything before it. All little-endian. base64url and
- * UTF-8 are written here by hand: the sim has no DOM helpers.
+ * startDayTick u16, x/z/heading/speed f64, endX/endY/endZ f32, ticks u16 (bit 15 set when the line
+ * brakes; a line is never longer than 2^15 ticks), input byte count (LEB128, minimal), input bytes,
+ * CRC-32 of everything before it. All little-endian. base64url and UTF-8 are written here by hand:
+ * the sim has no DOM helpers.
  *
  * Input bytes are one stream from an adaptive binary arithmetic coder (32-bit integer interval,
  * carry-less, 12-bit probabilities that adapt per context). Three sections follow each other in it:
  * every tick's steer as a delta from the previous tick's level, modelled on the previous delta (or,
  * after a zero delta, on how long steer has been still); then the gaps between hold toggles; then the
- * gaps between hops, each gap Elias-gamma binarised. Decoding is bounded by `ticks` and re-encodes
- * what it decoded to check the stream byte for byte, so every line has exactly one code.
+ * gaps between hops, each gap Elias-gamma binarised; then, only for a line that brakes (the flag in
+ * `ticks`), the gaps between brake toggles. A line without braking codes exactly as it did before the
+ * brake existed. Decoding is bounded by `ticks` and re-encodes what it decoded to check the stream
+ * byte for byte, so every line has exactly one code (the brake flag is set if and only if it brakes).
  */
 import { DAY_TICKS } from '../constants';
 import { createPlayer, placePlayer, stepPlayer } from '../player';
@@ -42,8 +46,8 @@ export interface ChalkLine {
   z: number;
   heading: number;
   speed: number;
-  /** Decoded frames, one byte per tick (see `packFrame`); `ticks` long. */
-  inputs: Uint8Array;
+  /** Decoded frames, one word per tick (see `packFrame`); `ticks` long. */
+  inputs: Uint16Array;
   /** Length of the recording, ticks. */
   ticks: number;
   /** Where the recording stopped: the centre of the finish zone (float32 values). */
@@ -70,6 +74,13 @@ const CHALK_V1_PREFIX = 'SK1-';
 export const CHALK_PATH_STRIDE = 6;
 
 export const CHALK_VERSION = 2;
+
+/** Frame bits above the steer level. */
+const HOLD_BIT = 64;
+const HOP_BIT = 128;
+const BRAKE_BIT = 256;
+/** In the packed `ticks` field: the line brakes, and its stream has a brake section. */
+const TICKS_BRAKE_FLAG = 0x8000;
 
 /**
  * Steer levels each side of centre. `Game.step` quantises steer to these (the sim only ever sees a
@@ -281,9 +292,15 @@ function getF32(b: Uint8Array, at: number): number {
 // ---------------------------------------------------------------------------------------------
 // Frames
 
-/** One recorded tick as a byte: steer level + 31 in bits 0-5, hold bit 6, hop bit 7. */
-export function packFrame(steerQ: number, hold: boolean, hop: boolean): number {
-  return (steerQ + STEER_LEVELS) | (hold ? 64 : 0) | (hop ? 128 : 0);
+/** One recorded tick as a word: steer level + 31 in bits 0-5, hold bit 6, hop bit 7, brake bit 8. */
+export function packFrame(steerQ: number, hold: boolean, hop: boolean, brake = false): number {
+  return (steerQ + STEER_LEVELS) | (hold ? HOLD_BIT : 0) | (hop ? HOP_BIT : 0) | (brake ? BRAKE_BIT : 0);
+}
+
+/** Whether any frame brakes. */
+function framesBrake(frames: Uint16Array, ticks: number): boolean {
+  for (let t = 0; t < ticks; t++) if ((frames[t] & BRAKE_BIT) !== 0) return true;
+  return false;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -309,11 +326,13 @@ const ESC_BITS = 6;
 const GAP_UNARY = 15;
 const GAP_MODEL = GAP_UNARY + GAP_UNARY * GAP_UNARY;
 const CTX_GAP = CTX_ESC + (1 << ESC_BITS);
-/** Gap models: hold off -> on, hold on -> off, hops. */
+/** Gap models: hold off -> on, hold on -> off, hops, brake off -> on, brake on -> off. */
 const GAP_HOLD_ON = CTX_GAP;
 const GAP_HOLD_OFF = CTX_GAP + GAP_MODEL;
 const GAP_HOP = CTX_GAP + 2 * GAP_MODEL;
-const CTX_COUNT = CTX_GAP + 3 * GAP_MODEL;
+const GAP_BRAKE_ON = CTX_GAP + 3 * GAP_MODEL;
+const GAP_BRAKE_OFF = CTX_GAP + 4 * GAP_MODEL;
+const CTX_COUNT = CTX_GAP + 5 * GAP_MODEL;
 /** Adaptation shift by how often a context has been used: fast at first, then steady. */
 const RATE = Uint8Array.from([1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 4, 4, 5]);
 const RATE_LAST = RATE.length - 1;
@@ -445,7 +464,7 @@ function steerCtx(prevDelta: number, still: number): number {
  * Code every tick's steer level as a delta from the previous tick (the first from 0). Decoding writes
  * the level into bits 0-5 of `frames`. Returns false if a decoded level leaves -31..31.
  */
-function codeSteer(c: Coder, frames: Uint8Array, ticks: number): boolean {
+function codeSteer(c: Coder, frames: Uint16Array, ticks: number): boolean {
   const dec = c.decoding;
   let prev = 0;
   let prevDelta = 0;
@@ -489,13 +508,16 @@ function codeGap(c: Coder, base: number, gap: number): number {
 }
 
 /**
- * Code the ticks where `mask` (hold 64, hop 128) changes, as gaps from the previous event (the first
- * from tick -1), ending with the gap to tick `ticks`. Hold is coded as toggles from off, hop as the
- * ticks it is set. Decoding ORs the bit into `frames`. Returns false on a gap past the end.
+ * Code the ticks where `mask` (hold, hop or brake) changes, as gaps from the previous event (the
+ * first from tick -1), ending with the gap to tick `ticks`. Hold and brake are coded as toggles from
+ * off, hop as the ticks it is set. Decoding ORs the bit into `frames`. Returns false on a gap past
+ * the end.
  */
-function codeEvents(c: Coder, frames: Uint8Array, ticks: number, mask: number): boolean {
+function codeEvents(c: Coder, frames: Uint16Array, ticks: number, mask: number): boolean {
   const dec = c.decoding;
-  const toggle = mask === 64;
+  const toggle = mask !== HOP_BIT;
+  const onModel = mask === BRAKE_BIT ? GAP_BRAKE_ON : GAP_HOLD_ON;
+  const offModel = mask === BRAKE_BIT ? GAP_BRAKE_OFF : GAP_HOLD_OFF;
   let last = -1;
   let on = false;
   for (;;) {
@@ -509,10 +531,10 @@ function codeEvents(c: Coder, frames: Uint8Array, ticks: number, mask: number): 
         }
       }
     }
-    const base = !toggle ? GAP_HOP : on ? GAP_HOLD_OFF : GAP_HOLD_ON;
+    const base = !toggle ? GAP_HOP : on ? offModel : onModel;
     const at = last + codeGap(c, base, next - last);
     if (at > ticks) return false;
-    // A hold that went on at `last` lasts until this toggle (or the end).
+    // A hold (or brake) that went on at `last` lasts until this toggle (or the end).
     if (dec && on) for (let t = last; t < at; t++) frames[t] |= mask;
     if (at === ticks) return true;
     if (toggle) on = !on;
@@ -521,29 +543,36 @@ function codeEvents(c: Coder, frames: Uint8Array, ticks: number, mask: number): 
   }
 }
 
-/** Run the three sections through the coder. */
-function codeFrames(c: Coder, frames: Uint8Array, ticks: number): boolean {
-  return codeSteer(c, frames, ticks) && codeEvents(c, frames, ticks, 64) && codeEvents(c, frames, ticks, 128);
+/** Run the sections through the coder: steer, hold, hop and, for a line that brakes, brake. */
+function codeFrames(c: Coder, frames: Uint16Array, ticks: number, braking: boolean): boolean {
+  return (
+    codeSteer(c, frames, ticks) &&
+    codeEvents(c, frames, ticks, HOLD_BIT) &&
+    codeEvents(c, frames, ticks, HOP_BIT) &&
+    (!braking || codeEvents(c, frames, ticks, BRAKE_BIT))
+  );
 }
 
 /** The packed input stream of a line's frames (a view into scratch: copy before keeping). */
-function encodeFrames(frames: Uint8Array, ticks: number): Uint8Array {
+function encodeFrames(frames: Uint16Array, ticks: number): Uint8Array {
   coder.startEncode();
-  codeFrames(coder, frames, ticks);
+  codeFrames(coder, frames, ticks, framesBrake(frames, ticks));
   coder.finish();
   return coder.out.subarray(0, coder.n);
 }
 
 /**
- * Decode `ticks` frames from `src[at, end)`; null unless the bytes are exactly the canonical stream
- * of those frames. Bounded by `ticks` (at most CHALK_MAX_TICKS) and never throws.
+ * Decode `ticks` frames from `src[at, end)`, with a brake section if `braking`; null unless the
+ * bytes are exactly the canonical stream of those frames (a brake section that never brakes is not).
+ * Bounded by `ticks` (at most CHALK_MAX_TICKS) and never throws.
  */
-export function decodeFrames(src: Uint8Array, at: number, end: number, ticks: number): Uint8Array | null {
-  const frames = new Uint8Array(ticks);
+export function decodeFrames(src: Uint8Array, at: number, end: number, ticks: number, braking = false): Uint16Array | null {
+  const frames = new Uint16Array(ticks);
   coder.startRead(src, at, end, false);
-  if (!codeFrames(coder, frames, ticks)) return null;
+  if (!codeFrames(coder, frames, ticks, braking)) return null;
+  if (braking !== framesBrake(frames, ticks)) return null;
   coder.startRead(src, at, end, true);
-  codeFrames(coder, frames, ticks);
+  codeFrames(coder, frames, ticks, braking);
   coder.finish();
   return coder.verified() ? frames : null;
 }
@@ -569,7 +598,7 @@ function packRoute(line: ChalkLine, out: number[]): void {
   putF32(out, line.endX);
   putF32(out, line.endY);
   putF32(out, line.endZ);
-  putU16(out, line.ticks);
+  putU16(out, line.ticks | (framesBrake(line.inputs, line.ticks) ? TICKS_BRAKE_FLAG : 0));
   const stream = encodeFrames(line.inputs, line.ticks);
   putVarint(out, stream.length);
   for (let i = 0; i < stream.length; i++) out.push(stream[i]);
@@ -646,7 +675,9 @@ export function decodeChalk(code: string): ChalkLine | { error: string } {
   const endY = getF32(b, at + 4);
   const endZ = getF32(b, at + 8);
   at += 12;
-  const ticks = b[at] | (b[at + 1] << 8);
+  const ticksField = b[at] | (b[at + 1] << 8);
+  const braking = (ticksField & TICKS_BRAKE_FLAG) !== 0;
+  const ticks = ticksField & ~TICKS_BRAKE_FLAG;
   at += 2;
   // Minimal LEB128, at most three bytes (the stream is far below 2^21 bytes).
   let count = 0;
@@ -675,7 +706,7 @@ export function decodeChalk(code: string): ChalkLine | { error: string } {
     if (!Number.isFinite(v)) return { error: 'bad number' };
   }
   if (speed < 0) return { error: 'bad number' };
-  const inputs = decodeFrames(b, streamAt, streamAt + count, ticks);
+  const inputs = decodeFrames(b, streamAt, streamAt + count, ticks, braking);
   if (inputs === null) return { error: 'bad input stream' };
   const line: ChalkLine = {
     v: 1,
@@ -704,10 +735,10 @@ export function isChalkError(r: ChalkLine | { error: string }): r is { error: st
 /** Reads a line's frames one tick at a time. */
 export class FrameReader {
   private at = 0;
-  private frames: Uint8Array = new Uint8Array(0);
-  readonly frame: InputFrame = { steer: 0, hold: false, hop: false };
+  private frames: Uint16Array = new Uint16Array(0);
+  readonly frame: InputFrame = { steer: 0, hold: false, hop: false, brake: false };
 
-  reset(frames: Uint8Array): void {
+  reset(frames: Uint16Array): void {
     this.frames = frames;
     this.at = 0;
   }
@@ -718,8 +749,9 @@ export class FrameReader {
     const b = this.frames[this.at++];
     const f = this.frame;
     f.steer = ((b & 63) - STEER_LEVELS) / STEER_LEVELS;
-    f.hold = (b & 64) !== 0;
-    f.hop = (b & 128) !== 0;
+    f.hold = (b & HOLD_BIT) !== 0;
+    f.hop = (b & HOP_BIT) !== 0;
+    f.brake = (b & BRAKE_BIT) !== 0;
     return f;
   }
 }
@@ -803,7 +835,7 @@ export class ChalkReducer implements GameReducer {
     activeId: null,
   };
   // Recording.
-  private readonly frames = new Uint8Array(CHALK_MAX_TICKS);
+  private readonly frames = new Uint16Array(CHALK_MAX_TICKS);
   private recX = 0;
   private recZ = 0;
   private recHeading = 0;
@@ -976,7 +1008,7 @@ export class ChalkReducer implements GameReducer {
 
   private stepRecording(game: Game): void {
     const a = game.applied;
-    this.frames[this.state.elapsedTicks] = packFrame(a.steerQ, a.hold, a.hop);
+    this.frames[this.state.elapsedTicks] = packFrame(a.steerQ, a.hold, a.hop, a.brake);
     this.state.elapsedTicks++;
     const p = game.sim.player;
     if (p.mode === Mode.BAIL && p.bailWater === 1) {

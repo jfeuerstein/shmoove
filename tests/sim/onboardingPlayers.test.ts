@@ -4,8 +4,9 @@
  * Each bot sees only what is on screen: the hint up now (as the onboarding state exposes it, with
  * its copy), where the world pointer is, and its own position, heading, speed and whether it is on a
  * ride. No vehicle scans, no timetable, no coordinates written in. It reacts to each hint after a
- * delay, does what the hint says, and otherwise rolls where the hill takes it. 30 fixed seeds each,
- * a new game as the app makes one, five simulated minutes.
+ * delay, does what the hint says, and otherwise rolls where the hill takes it, with a thumb resting
+ * on the glass whenever it is not steering (as a person does: DECISIONS 113 is about exactly that
+ * thumb). 30 fixed seeds each, a new game as the app makes one, five simulated minutes.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
 import { NEW_GAME_DAY_FRAC } from '../../src/app/newGame';
@@ -109,6 +110,10 @@ class Player {
   private dragFrom = -1;
   private letGoAt = -1;
   private holding = false;
+  /** Has been shown the brake ("PULL DOWN TO STOP") and uses it to stand at a spot from then on. */
+  private knowsBrake = false;
+  /** The thumb stays off the glass until this tick after letting go of a ride. */
+  private liftUntil = -1;
   constructor(
     readonly profile: Profile,
     seed: number,
@@ -138,7 +143,15 @@ class Player {
     out.steer = 0;
     out.hold = false;
     out.hop = false;
+    out.brake = false;
     if (this.profile.idle) return;
+    this.decide(s, t, out);
+    // Between actions the thumb rests on the glass: a hand out, never a brake. It comes off for
+    // half a second after letting go of a ride.
+    if (!out.hold && Math.abs(out.steer) < 0.05 && !out.hop && t >= this.liftUntil) out.hold = true;
+  }
+
+  private decide(s: Screen, t: number, out: InputFrame): void {
     if (s.hint !== this.seen) {
       this.seen = s.hint;
       this.actAt = t + Math.round(this.pick(this.profile.react) * 60);
@@ -157,7 +170,10 @@ class Player {
         if (dragged < 60) out.steer = 0.8 * (1 + this.noise);
         else {
           if (this.letGoAt < 0) this.letGoAt = t + Math.round(this.profile.lateLetGo * 60);
-          if (t >= this.letGoAt) out.hold = false;
+          if (t >= this.letGoAt) {
+            out.hold = false;
+            this.liftUntil = t + 30;
+          }
         }
       } else this.letGoAt = -1;
       return;
@@ -200,18 +216,24 @@ class Player {
     }
   }
 
-  /** PRESS AND HOLD STILL: go to the pointer, then hold a still finger there. */
+  /**
+   * PULL DOWN TO STOP / HOLD FOR THE RIDE: go to the pointer, then stand there with a hand out
+   * (pulling down to stop, once the hint has shown how).
+   */
   private catchRide(s: Screen, t: number, out: InputFrame): void {
     const k = s.pointer.kind;
+    if (s.title.startsWith('PULL')) this.knowsBrake = true;
     if (k !== 'spot' && k !== 'vehicle') {
-      if (s.title.startsWith('PRESS')) out.hold = true;
+      if (s.title.startsWith('HOLD')) out.hold = true;
       return;
     }
+    const stand = this.knowsBrake && k === 'spot';
     // How far the pointer looks: a spot on the ground below a wall is not where you are standing.
     const d = Math.hypot(s.pointer.x - s.x, s.pointer.y - (k === 'vehicle' ? s.y + 1 : s.y), s.pointer.z - s.z);
     // Holding already and the ride coming (or still near the spot): keep still and let it come.
     if (this.holding && (k === 'vehicle' || d < this.holdAt + 3)) {
       out.hold = true;
+      out.brake = stand;
       if (s.title.startsWith('FLICK') && t - this.flickAt > 40) {
         out.hop = true;
         this.flickAt = t;
@@ -221,6 +243,7 @@ class Player {
     if (d <= this.holdAt || (k === 'vehicle' && d < 6)) {
       this.holding = true;
       out.hold = true;
+      out.brake = stand;
       return;
     }
     this.holding = false;
@@ -244,6 +267,8 @@ interface Outcome {
   log: string[];
   /** The roll hint showed at some point after the skater came to rest (for the idle player). */
   rollAfterRest: boolean;
+  /** Hops the player made while the grind hint pointed at a rail (going for the rail). */
+  railHops: number;
 }
 
 function play(profile: Profile, seed: number): Outcome {
@@ -251,11 +276,12 @@ function play(profile: Profile, seed: number): Outcome {
   const game = new Game(city.world, { seed: 1, startDayFrac: NEW_GAME_DAY_FRAC, hints: true });
   const bot = new Player(profile, seed);
   const s: Screen = { hint: '', title: '', pointer: { kind: 'none', x: 0, y: 0, z: 0 }, x: 0, y: 0, z: 0, heading: 0, speed: 0, riding: false, onGround: false };
-  const inp: InputFrame = { steer: 0, hold: false, hop: false };
+  const inp: InputFrame = { steer: 0, hold: false, hop: false, brake: false };
   const log: string[] = [];
   let bails = 0;
   let restAt = -1;
   let rollAfterRest = false;
+  let railHops = 0;
   let t = 0;
   for (; t < MAX_TICKS && !game.onboarding.complete; t++) {
     look(game, s);
@@ -266,10 +292,11 @@ function play(profile: Profile, seed: number): Outcome {
     if (restAt >= 0 && game.onboarding.shown === 'roll') rollAfterRest = true;
     if (TRACE === `${profile.name}:${seed}` && t % 30 === 0) {
       const tg = game.onboarding.target;
-      log.push(`${(t / 60).toFixed(1)} @(${p.x.toFixed(1)},${p.y.toFixed(1)},${p.z.toFixed(1)}) v${p.speed.toFixed(1)} m${p.mode} h=${game.onboarding.shown} tg=${tg.kind}(${tg.x.toFixed(1)},${tg.y.toFixed(1)},${tg.z.toFixed(1)}) in=${inp.steer.toFixed(2)}/${inp.hold ? 'H' : '-'}`);
+      log.push(`${(t / 60).toFixed(1)} @(${p.x.toFixed(1)},${p.y.toFixed(1)},${p.z.toFixed(1)}) v${p.speed.toFixed(1)} m${p.mode} h=${game.onboarding.shown} tg=${tg.kind}(${tg.x.toFixed(1)},${tg.y.toFixed(1)},${tg.z.toFixed(1)}) in=${inp.steer.toFixed(2)}/${inp.hold ? 'H' : '-'}${inp.brake ? 'B' : '-'}`);
     }
     for (const e of game.sim.events) {
       if (e.type === 'bail') bails++;
+      if (e.type === 'hop' && s.hint === 'grind') railHops++;
       if (e.type === 'hitch' || e.type === 'release') log.push(`${(t / 60).toFixed(1)} ${e.type} ${game.sim.world.lines[e.line].id}`);
     }
     for (const e of game.events) {
@@ -293,6 +320,7 @@ function play(profile: Profile, seed: number): Outcome {
     bails,
     log,
     rollAfterRest,
+    railHops,
   };
 }
 
@@ -336,7 +364,9 @@ describe('players get through the first-launch lesson', () => {
   it('fast players who never hop onto a rail: at least 27 of 30 complete', () => {
     const r = tally(FAST);
     expect(r.completed, r.report).toBeGreaterThanOrEqual(27);
-    for (const o of r.outcomes) expect(o.done.includes('grind')).toBe(false);
+    // They never go for a rail. (A sling or a hop for the hop hint can still drop them onto one:
+    // every release is a slingshot now, DECISIONS 114, so the grind may be learnt by accident.)
+    for (const o of r.outcomes) expect(o.railHops).toBe(0);
   }, 300_000);
 
   it('a player who does nothing is told to wiggle once they have come to rest', () => {

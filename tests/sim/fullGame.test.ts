@@ -68,7 +68,7 @@ function play(save?: SavePoint): Played {
   let fromEvent = 0;
   const mapDone = (): boolean => game.progress.mapComplete;
   // A save resumes the skater at rest at their last safe spot, which the game refreshes every half
-  // second on the ground: take it once they stand still on a planted foot and that spot is where
+  // second on the ground: take it once they stand braked to a stop and that spot is where
   // they stand, so the loaded game starts from the same place.
   const settled = (): boolean => {
     const p = game.sim.player;

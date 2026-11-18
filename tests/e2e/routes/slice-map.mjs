@@ -30,13 +30,21 @@ export default {
       test: (s) => s.mode === 'HITCH' && s.ui.inkedSegments >= 1 && s.ui.lastToast === 'inked' && s.ui.toasts >= 1,
     },
     { do: 'shot', name: 'toast-inked' },
-    // Ride into Muelle and let go there: the stop's timetable board comes up.
-    { do: 'wait', ticks: 240 },
+    // Let go on the way into Muelle (every release is a slingshot, so a little early), wait a third
+    // of a second for the tram to draw away (a touch held still arms a catch, and the strap reaches
+    // 14 m), then pull down and stop beside the stop: its timetable board comes up. Found by search
+    // in the deterministic sim (tests/sim/sliceRoutes.test.ts replays it; SKITCH_FIND_SLICE re-finds it).
+    { do: 'wait', ticks: 30 },
     { do: 'up' },
-    { do: 'wait', ticks: 60 },
+    { do: 'wait', ticks: 20 },
     { do: 'expect', label: 'letting go returns the board to free mode', test: (s) => s.mode !== 'HITCH' && s.ui.hudMode === 'free' },
+    { do: 'down', x: 195, y: 560 },
+    { do: 'move', x: 195, y: 660 },
+    { do: 'wait', ticks: 150 },
+    { do: 'expect', label: 'pulling down stops the skater', test: (s) => s.mode === 'GROUND' && s.speed < 0.3 },
     { do: 'expect', label: 'standing at a stop shows its timetable board', test: (s) => s.ui.stopBoard === 'Muelle' },
     { do: 'shot', name: 'stop-board' },
+    { do: 'up' },
     { do: 'down', x: MAP_BTN.x, y: MAP_BTN.y },
     { do: 'up' },
     { do: 'expect', label: 'tapping the map button opens the map', test: (s) => s.ui.mapOpen === true && s.armed === false },

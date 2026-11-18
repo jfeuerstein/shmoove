@@ -20,6 +20,7 @@ import {
   ROLL_STAND_TICKS,
   SCAN_EVERY,
   SPOT_CLEAR,
+  SPOT_NEAR,
   findCatchable,
   rideToStop,
   stopSites,
@@ -27,6 +28,7 @@ import {
   type OnboardingStep,
 } from '../../src/sim/game/onboarding';
 import { compileLine, grabPoint, makeVehicleState, vehicleAt, type CompiledLine, type LineDef } from '../../src/sim/lines';
+import { angleDiff } from '../../src/sim/math';
 import { placePlayer } from '../../src/sim/player';
 import { Mode, type InputFrame, type SimEvent } from '../../src/sim/types';
 import { hintCopy } from '../../src/ui/hintCopy';
@@ -104,6 +106,15 @@ function steps(game: Game, n: number, inp: (i: number) => Partial<InputFrame> = 
   return log;
 }
 
+/** Steer toward (x, z), wiggling to pump when slow, as a player following the pointer would. */
+function steerToward(game: Game, x: number, z: number): number {
+  const p = game.sim.player;
+  const want = Math.atan2(x - p.x, z - p.z);
+  let steer = Math.max(-1, Math.min(1, -2 * angleDiff(want, p.heading)));
+  if (p.speed < 2 && Math.hypot(x - p.x, z - p.z) > SPOT_NEAR) steer = Math.max(-1, Math.min(1, steer + (Math.floor(game.sim.tick / 12) % 2 === 0 ? 0.9 : -0.9)));
+  return steer;
+}
+
 const doneOrder = (events: GameEvent[]): string[] => events.flatMap((e) => (e.type === 'hintDone' ? [e.step] : []));
 
 /** Set the clock so the tram is `secs` seconds from standing at the stop (30, 0, 0). */
@@ -162,7 +173,9 @@ describe('the hitch hint leads to a waiting spot at the stop', () => {
     const t = game.onboarding.target;
     expect(game.onboarding.shown).toBe('hitch');
     expect(t.kind).toBe('spot');
-    expect(hintCopy('hitch', game.onboarding).title).toBe('PRESS AND HOLD STILL');
+    // The first lead teaches the brake (DECISIONS 113): pull down to stop in the ring.
+    expect(game.onboarding.brakeAsk).toBe(true);
+    expect(hintCopy('hitch', game.onboarding)).toMatchObject({ glyph: 'pull', title: 'PULL DOWN TO STOP' });
     // Beside the stop's grab point (4 m behind the stop on a +z lane), on the skater's side.
     const L = w.lines[0];
     const off = L.bodyHalfWid + SPOT_CLEAR;
@@ -170,6 +183,58 @@ describe('the hitch hint leads to a waiting spot at the stop', () => {
     expect(t.z).toBeCloseTo(-L.anchorBack, 5);
     expect(Math.abs(t.x - 30)).toBeLessThan(FEEL.HITCH_REACH);
     expect(Math.abs(t.x - 30) - L.bodyHalfWid).toBeGreaterThan(FEEL.PLAYER_RADIUS + 0.5);
+  });
+
+  it('pulling down to a stop in the ring turns the hint into "hold for the ride", and the brake is not asked for again', () => {
+    const w = plaza();
+    const game = newGame(w);
+    teach(game, ['carve']);
+    tramDue(game, 15);
+    placePlayer(w, game.sim.player, 20, -35, 0);
+    game.sim.player.speed = 4;
+    steps(game, SCAN_EVERY + 1);
+    expect(game.onboarding.brakeAsk).toBe(true);
+    // Steer for the spot and pull down once there, as a player following the pointer would.
+    tramDue(game, 30);
+    let stood = -1;
+    for (let i = 0; i < 60 * 12 && stood < 0; i++) {
+      const t = game.onboarding.target;
+      const p = game.sim.player;
+      const d = Math.hypot(t.x - p.x, t.z - p.z);
+      const brake = t.kind === 'spot' && d < SPOT_NEAR - 0.5;
+      game.step({ steer: brake ? 0 : steerToward(game, t.x, t.z), hold: false, hop: false, brake });
+      if (brake && game.sim.player.speed < 0.05) stood = i;
+    }
+    // Standing in the ring, still led to it (the ride is not yet within HITCH_NEAR).
+    expect(stood).toBeGreaterThanOrEqual(0);
+    expect(game.onboarding.shown).toBe('hitch');
+    expect(game.onboarding.target.kind).toBe('spot');
+    expect(game.onboarding.brakeAsk).toBe(false);
+    expect(hintCopy('hitch', game.onboarding)).toMatchObject({ glyph: 'press', title: 'HOLD FOR THE RIDE' });
+    // Rolling away and being led back: no second brake lesson.
+    placePlayer(w, game.sim.player, 20, -35, 0);
+    game.sim.player.speed = 4;
+    steps(game, SCAN_EVERY + 1);
+    expect(game.onboarding.target.kind).toBe('spot');
+    expect(game.onboarding.brakeAsk).toBe(false);
+  });
+
+  it('a player who never brakes still catches the ride rolling past and learns the hitch', () => {
+    const w = plaza();
+    const game = newGame(w);
+    teach(game, ['carve']);
+    tramDue(game, 15);
+    placePlayer(w, game.sim.player, 20, -35, 0);
+    game.sim.player.speed = 4;
+    let hitched = false;
+    // Thumb on the glass the whole way, carving for the pointer, never pulling down.
+    for (let i = 0; i < 60 * 40 && !hitched; i++) {
+      const t = game.onboarding.target;
+      const steer = t.kind === 'none' ? 0 : steerToward(game, t.x, t.z);
+      game.step({ steer, hold: true, hop: false, brake: false });
+      if (game.onboarding.done.hitch) hitched = true;
+    }
+    expect(hitched).toBe(true);
   });
 
   it('stays on the spot until the ride is within 30 m, then points at its grab bar; holding still there catches it', () => {
