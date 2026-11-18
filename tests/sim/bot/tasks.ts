@@ -21,6 +21,8 @@ export interface GoOpts {
   max?: number;
   /** Hop when within this distance of these points (onto a rail, over a ledge). */
   hopAt?: readonly XZ[];
+  /** Pull down (brake) whenever rolling faster than this on the ground, m/s: a careful line. */
+  slow?: number;
 }
 
 /** Roll along waypoints. A waypoint counts as reached within `r`, or once it is behind the skater on the way to the next. */
@@ -75,6 +77,7 @@ export function go(label: string, pts: readonly XZ[], opts: GoOpts = {}): Task {
         return 'run';
       }
       b.steerTo(out, pts[k][0], pts[k][1]);
+      if (opts.slow !== undefined && p.mode === Mode.GROUND && p.speed > opts.slow) out.brake = true;
       if (opts.hopAt) {
         for (let i = 0; i < opts.hopAt.length; i++) {
           const h = opts.hopAt[i];
@@ -204,15 +207,15 @@ export function ride(label: string, spec: RideSpec): Task {
           }
         } else {
           const dw = Math.hypot(wx - p.x, wz - p.z);
-          if (p.mode === Mode.GROUND && (dw < 1.5 || (dw < 4 && p.speed < 0.6)) && b.canPlantFoot(line.index)) {
-            // At the spot: hold a still finger and stand (a planted foot), beside the lane.
+          if (p.mode === Mode.GROUND && (dw < 1.5 || (dw < 4 && p.speed < 0.6))) {
+            // At the spot: pull down and stand there, beside the lane (DECISIONS 113).
             out.steer = 0;
-            out.hold = true;
-          } else b.steerTo(out, wx, wz);
+            out.brake = true;
+          } else b.steerTo(out, wx, wz, 2.4, true);
           // Arm when the fresh vehicle of this line at the stop is the nearest grab point around.
           b.nearestGrab(9, NG);
           if (NG.line === line.index && (spec.anywhere === true || fresh(line, NG.veh, b.tick, kAt, slackAt))) {
-            out.hold = NG.d < FEEL.HITCH_REACH + 2;
+            out.hold = NG.d < FEEL.HITCH_REACH + 2 && !b.otherInReach(line.index);
             if (line.overhead && NG.d < 2.5 && NG.dy > FEEL.HITCH_REACH_Y * 0.75 && p.mode === Mode.GROUND) out.hop = true;
             // Close in on the grab point itself.
             vehicleAt(line, NG.veh, b.tick, V);

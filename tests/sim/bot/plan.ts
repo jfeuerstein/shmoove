@@ -21,20 +21,18 @@ export function mapPlan(): Task[] {
     ride('A2 lap', { line: 'A2', at: 'Estación del Cerro' }),
     ride('A1 down', { line: 'A1', at: 'Estación del Cerro', to: 'Puerta' }),
     ride('T2 lap', { line: 'T2', at: 'Puerta de la Antena', side: -2.6 }),
-    // Day 1, from the top: the funicular down, the stair spine to the plaza (grinding the second
-    // flight's handrail on the way), the wedding parade, then the mopeds down to the docks and the
-    // night bus.
+    // Day 1, from the top: the funicular down, the stairs to the plaza, the wedding parade, then the
+    // mopeds down to the docks and the night bus. Letting go at Base slings the skater onto the
+    // handrail of the flight below the lookout (DECISIONS 114: every release is a slingshot) and off
+    // its foot too fast to stop on the landing, so the way down is the west flight below it and
+    // along the plaza's landing to the church.
     ride('T1 down', { line: 'T1', at: 'Cima', to: 'Base' }),
-    go('to the spine', [
-      [-20, 566],
-      [3, 562],
-      [3, 530],
-    ]),
-    go('down the spine', [
-      [3, 512],
-      [3, 478],
+    go('down the west flight', [
+      [-28, 490],
+      [-28, 464],
+      [0, 462],
       [18, 462],
-    ], { hopAt: [[3, 510.5]] }),
+    ], { slow: 9 }),
     ride('M3 lap', { line: 'M3', at: 'Iglesia' }),
     go('to Rellano 410', [
       [22, 462],
@@ -45,7 +43,7 @@ export function mapPlan(): Task[] {
     ride('M1 down', { line: 'M1', at: 'Rellano 410', to: 'Bulevar' }),
     ride('T4 lap', { line: 'T4', at: 'Garaje' }),
     // Day 2: the mopeds up from the docks to Rellano 410, then a handcart's full lap from there.
-    ride('M1 up', { line: 'M1', at: 'Bulevar', to: 'Rellano 410' }),
+    ride('M1 up', { line: 'M1', at: 'Bulevar', to: 'Rellano 410', anywhere: true }),
     ride('M2 lap', { line: 'M2', at: 'Rellano 410', side: -2.6 }),
     // Night 2: down the spine to the docks and along the quay to the crane, which starts its run
     // from the west end just after midnight.
