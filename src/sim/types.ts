@@ -34,7 +34,7 @@ export type SimEvent =
   | { type: 'denied'; line: number; need: number }
   | { type: 'chainEnd'; chain: number; reason: 'land' | 'bail' }
   | { type: 'hop' }
-  | { type: 'land'; impact: number; surface: number }
+  | { type: 'land'; impact: number; surface: number; /** Seconds in the air before it (absent: none). */ air?: number }
   | { type: 'bounce'; speed: number }
   | { type: 'grindStart'; rail: number }
   | { type: 'grindEnd'; rail: number }
@@ -43,7 +43,15 @@ export type SimEvent =
   | { type: 'wallHit'; speed: number }
   | { type: 'kickturn' }
   | { type: 'bail'; reason: BailReason }
-  | { type: 'recover' };
+  | { type: 'recover' }
+  /** A trick strung onto the line: `count` tricks so far, each one kicking the board faster. */
+  | { type: 'flow'; count: number; trick: FlowTrick }
+  /** The line ran out (no trick within FLOW_WINDOW) or ended in a bail. */
+  | { type: 'flowEnd'; count: number; bailed: boolean };
+
+/** What counts toward a line: a grind, a wallride, an awning bounce, a jump that stayed up, a sling, a catch. */
+export const FLOW_TRICKS = ['grind', 'wall', 'bounce', 'air', 'sling', 'catch'] as const;
+export type FlowTrick = (typeof FLOW_TRICKS)[number];
 
 /**
  * The skater. Flat and numeric so it can be copied with Object.assign and hashed field by field.
@@ -113,6 +121,17 @@ export interface PlayerState {
   yankVx: number;
   yankVy: number;
   yankVz: number;
+
+  // Flow: tricks strung into a line.
+  /** Tricks in the current line (0 = none). */
+  flow: number;
+  /** Seconds left to add the next trick before the line ends. */
+  flowTime: number;
+  /** Speed still to be added for the last trick, m/s (applied on the next tick that can take it). */
+  flowKick: number;
+  /** The last trick counted (index into FLOW_TRICKS, -1 none) and, for a grind, its rail: the same thing twice running is not a line. */
+  flowKind: number;
+  flowRail: number;
 
   // Chain.
   /** Links in the current chain (0 = none). */
