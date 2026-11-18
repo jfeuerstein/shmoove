@@ -428,7 +428,7 @@ function play(game: Game, maxTicks: number, brain: (sim: Sim, i: number) => Part
   const p = game.sim.player;
   for (let i = 0; i < maxTicks; i++) {
     const inp = brain(game.sim, i);
-    game.step({ steer: inp.steer ?? 0, hold: inp.hold ?? false, hop: inp.hop ?? false });
+    game.step({ steer: inp.steer ?? 0, hold: inp.hold ?? false, hop: inp.hop ?? false, brake: inp.brake ?? false });
     let end = false;
     for (const e of game.events) {
       out.events.push(e);
@@ -445,7 +445,7 @@ function play(game: Game, maxTicks: number, brain: (sim: Sim, i: number) => Part
   return out;
 }
 
-/** Stand in the giver's zone and hold still until the errand starts. */
+/** Stand in the giver's zone, pulling down (the brake), until the errand starts. */
 function acceptAt(game: Game, id: string): void {
   const def = ERRANDS.find((e) => e.id === id);
   if (!def) throw new Error(id);
@@ -454,7 +454,7 @@ function acceptAt(game: Game, id: string): void {
   for (let tries = 0; tries < 20 && !game.errands.active; tries++) {
     placePlayer(W, sim.player, g.x, g.z, W.spawn.heading);
     for (let i = 0; i < 120 && !game.errands.active; i++) {
-      game.step({ steer: 0, hold: sim.player.mode !== Mode.HITCH, hop: false });
+      game.step({ steer: 0, hold: false, hop: false, brake: true });
     }
     // A ride standing in the zone: wait for it to go and try again.
     if (!game.errands.active) for (let i = 0; i < 300; i++) game.step({ steer: 0, hold: false, hop: false });
@@ -464,6 +464,8 @@ function acceptAt(game: Game, id: string): void {
 
 const errandOver = (e: GameEvent): boolean => e.type === 'errandDone' || e.type === 'errandFail';
 const conductorOver = (e: GameEvent): boolean => e.type === 'conductorPunch' || e.type === 'conductorFail';
+
+const ENV_DBG = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env?.DBG;
 
 describe('errands played for real', () => {
   it('a pure downhill delivery: the night driver\'s keys, from Terraza 727 down to the garage at the docks', () => {
@@ -511,9 +513,6 @@ describe('errands played for real', () => {
   });
 
   it('two cable cars as one chain: a kite spool from the funicular top to the ridge', () => {
-    // Started when the car the skater catches reaches the hill station as a summit car waits.
-    const game = newGame(0.43);
-    acceptAt(game, 'kite_spool');
     const A1 = line('A1');
     const A2 = line('A2');
     /** Under the strap of a car standing at stop k. */
@@ -530,32 +529,67 @@ describe('errands played for real', () => {
       }
       return false;
     };
-    let leg = 0;
-    const r = play(
-      game,
-      4 * 3600,
-      (sim, i) => {
-        const p = sim.player;
-        if (p.mode === Mode.HITCH) {
-          const H = sim.world.lines[p.hLine];
-          if (H.index === A1.index) {
-            vehicleAt(H, p.hVeh, sim.tick, VS);
-            // At the hill station, let go as a summit car waits beside it.
-            if (Math.abs(VS.s - A1.allStops[1].s) < 3 && standing(A2, 0, sim.tick)) {
-              leg = 1;
-              return { hold: false };
+    /**
+     * Started when the car the skater catches reaches the hill station as a summit car waits. On
+     * arrival there the skater swings (`sign`) and lets go `delay` ticks after the summit car is
+     * first seen waiting: every release is a slingshot now (DECISIONS 114), and the throw has to
+     * land them under the summit car's strap.
+     */
+    const attempt = (delay: number, sign: number): { kinds: string[]; trace: string[] } => {
+      const game = newGame(0.43);
+      acceptAt(game, 'kite_spool');
+      let leg = 0;
+      let seen = -1;
+      const r = play(
+        game,
+        4 * 3600,
+        (sim, i) => {
+          const p = sim.player;
+          if (p.mode === Mode.HITCH) {
+            const H = sim.world.lines[p.hLine];
+            if (H.index === A1.index && leg === 0) {
+              vehicleAt(H, p.hVeh, sim.tick, VS);
+              if (seen < 0 && Math.abs(VS.s - A1.allStops[1].s) < 3 && standing(A2, 0, sim.tick)) seen = i;
+              if (seen >= 0) {
+                if (i - seen >= delay) {
+                  leg = 1;
+                  return { hold: false };
+                }
+                return { hold: true, steer: i - seen >= delay - 40 ? sign : 0 };
+              }
             }
+            return { hold: true };
           }
-          return { hold: true };
+          const [tx, tz] = leg === 0 ? a1 : a2;
+          return { steer: steerFor(p, tx, tz, i), ...armFor(sim, leg === 0 ? A1 : A2) };
+        },
+        errandOver,
+      );
+      return { kinds: r.events.filter((e) => e.type.startsWith('errand')).map((e) => e.type), trace: r.trace };
+    };
+    // The release is searched with the test (so it re-finds itself when the controller or the
+    // timetable changes): the middle of the first run of five or more delays that works.
+    const want = ['errandStep', 'errandStep', 'errandStep', 'errandDone'];
+    let found: { delay: number; sign: number } | null = null;
+    for (const sign of [0, 1, -1]) {
+      let from = -1;
+      for (let delay = 0; delay <= 300 && !found; delay += 6) {
+        const at = attempt(delay, sign);
+        const ok = at.kinds.join() === want.join();
+        if (ENV_DBG) console.info(sign, delay, at.trace.filter((l) => /release|hitch|chain|errand/.test(l)).slice(0, 8).join(' | '));
+        if (ok && from < 0) from = delay;
+        if (!ok && from >= 0) {
+          if (delay - from >= 30) found = { delay: Math.round((from + delay - 6) / 12) * 6, sign };
+          from = -1;
         }
-        const [tx, tz] = leg === 0 ? a1 : a2;
-        return { steer: steerFor(p, tx, tz, i), ...armFor(sim, leg === 0 ? A1 : A2) };
-      },
-      errandOver,
-    );
-    const kinds = r.events.filter((e) => e.type.startsWith('errand')).map((e) => e.type);
-    expect(kinds, r.trace.join('\n')).toEqual(['errandStep', 'errandStep', 'errandStep', 'errandDone']);
-  });
+      }
+      if (found) break;
+    }
+    expect(found, 'a release from the lower cable car that lands under the summit car').not.toBeNull();
+    if (!found) return;
+    const r = attempt(found.delay, found.sign);
+    expect(r.kinds, r.trace.join('\n')).toEqual(want);
+  }, 120_000);
 });
 
 /** Seconds from letting go to the punch in the stopToStop plays, for the report. */
