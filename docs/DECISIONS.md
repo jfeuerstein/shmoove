@@ -615,6 +615,26 @@ under **Cut** at the end.
      deliberate, not resting: a resting thumb on the full plan catches every ride it passes. The
      first-launch player bots rest a thumb on the glass whenever they are not steering, as a person
      does (the brief's acceptance).
+126. **[M7a] Scripted runs are re-found by commands that stay in the tree, and what they found.**
+     Every open-loop script the city tests replay was found again by a search left in the
+     repository (the table at the end of `docs/briefs/README.md`). On this controller and
+     timetable: the summit chain releases at 1420, 1725 and 3254 ticks into the window (each works
+     over 160-520 ticks) and now opens three windows a day, not two; the new-game clock is 0.4146
+     (09:57), the hint-following bot reaching Rellano 410 about 16 s in, and the clock works from
+     0.4125 to 0.4167; the perfcity legs start at z 590, 720, 950, 920 and 265; the stop-to-stop
+     limits are T3 36 s and T4 56 s (1.3x the bot, which pulls down above 12 m/s on the spine). With
+     the 14 m strap every bot holds only when the hitch itself, asked on a copy of the skater
+     (`wouldCatch` in `tests/sim/helpers.ts`), would take the ride it wants. City changes for the
+     drop tests (the board reaches more of the hill): 24 of the hairpin parapet segments are left
+     out where the bank outside runs down into a hollow against the face, lower than both ends of
+     the segment, and the wall stands taller than a board rolls up; their centres are (171.3, 324.0),
+     (171.8, 338.8), (168.1, 345.4), (168.1, 397.4), (171.3, 480.0), (171.8, 494.8), (168.1, 501.4:
+     the 400-drop pin), (168.1, 553.4), (168.4, 606.2), (171.1, 656.8), (171.1, 710.8),
+     (171.1, 764.8), (171.1, 818.8), (171.1, 872.8), (171.1, 926.8), (-169.6, 320.7),
+     (-168.1, 345.4), (-171.3, 376.0), (-171.3, 428.0), (-169.6, 476.7), (-168.1, 501.4),
+     (-171.3, 532.0), (-171.8, 584.3) and (-168.4, 606.2). The funicular run-out handrail moves from
+     x = -33 (the face of its side wall, which a grind ran along) to -32.5. A second drop test runs
+     800 starts from seed 777.
 
 ## Cut
 

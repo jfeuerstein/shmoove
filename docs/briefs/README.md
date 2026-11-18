@@ -32,3 +32,26 @@ repairing. Numbers in the outcomes refer to `docs/DECISIONS.md`.
 | [m6h-secrets-finishable](m6h-secrets-finishable.md) | implementer | Secrets a player can finish, rides that set you down, saves that keep the day | Merged; decisions 94–99 |
 | [m6i-verify-final](m6i-verify-final.md) | verifier | Check the onboarding fixes, finishable secrets, the planted foot and the camera | Running alongside M6j; its report goes to the lead and is not in this tree |
 | [m6j-final-docs-audit](m6j-final-docs-audit.md) | implementer | Documents that match the code, two small defects, the ship audit | This task; decisions 102–105 |
+
+## Re-finding the scripted runs
+
+Everything the city tests replay open-loop (release ticks, touch scripts, clocks, starts) was found
+by search in the deterministic sim, and each search stays in the repository. When the controller,
+the city or the timetable changes and one of those tests fails, run its command, paste what it
+prints where it says, and run the test again (M7a, DECISIONS 126). Searches that run with their
+test every time need no command: the meeting chains (`tests/sim/cityLines.test.ts`) and the kite
+spool's release (`tests/sim/content.test.ts`).
+
+| What | Command | Paste into |
+| --- | --- | --- |
+| The ground lines' lanes, dwells and phases: no two bodies overlap, every meeting holds | `SKITCH_FIND_TIMETABLE=1 npx vitest run tests/sim/findTimetable.test.ts --silent=false` (`=report` lists the overlaps) | `CITY_LINES` in `src/sim/city/lines.ts` |
+| The summit chain (lower cable car, summit car, kite, king kite) | `SKITCH_FIND_SUMMIT=1 npx vitest run tests/sim/findRoutes.test.ts --silent=false` | `SUMMIT.keys` in `tests/sim/citySummit.test.ts` and `tests/sim/bot/secrets.ts` |
+| The new-game clock | `SKITCH_FIND_CLOCK=1 npx vitest run tests/sim/onboarding.test.ts -t 'new-game clock' --silent=false` | `NEW_GAME_DAY_FRAC` in `src/app/newGame.ts`, and the clock check in `tests/e2e/routes/city-first-launch.mjs` |
+| The first-launch touch script | `SKITCH_PRINT_ROUTE=1 npx vitest run tests/sim/onboarding.test.ts -t 'real gesture' --silent=false` (`SKITCH_LAUNCH_TRACE=1` adds positions to the bots' logs) | `TOUCHES` in `tests/e2e/routes/city-first-launch.mjs` |
+| The perfcity legs | `SKITCH_FIND_PERF=1 npx vitest run tests/unit/perfRoute.test.ts --silent=false` | `PERF_LEGS` in `src/app/routes.ts` |
+| The stop-to-stop conductor limits (1.3x the bot) | `SKITCH_FIND_CONDUCTORS=1 npx vitest run tests/sim/content.test.ts -t 'stop-to-stop limits' --silent=false` | `src/sim/game/content/conductors.ts` |
+| The feel slice's grind and map routes | `SKITCH_FIND_SLICE=1 npx vitest run tests/sim/sliceRoutes.test.ts --silent=false` | `GRIND`/`MAP` in that test and `tests/e2e/routes/slice-grind.mjs`, `slice-map.mjs` |
+| First-launch player bots (report, trace one) | `SKITCH_PLAYERS_REPORT=1` or `SKITCH_PLAYERS_TRACE=profile:seed` with `npx vitest run tests/sim/onboardingPlayers.test.ts --silent=false` | (diagnostic) |
+
+The full-game bot's plan (`tests/sim/bot/plan.ts`) is a closed-loop itinerary, not a search: when
+it fails, its failure names the task, tick and place, and the plan is edited by hand.
