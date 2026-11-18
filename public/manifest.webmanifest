@@ -1,0 +1,17 @@
+{
+  "name": "SHMOOVE",
+  "short_name": "SHMOOVE",
+  "description": "A one-thumb 3D survivor for a phone held upright.",
+  "start_url": "./",
+  "scope": "./",
+  "id": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#1b1630",
+  "background_color": "#1b1630",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

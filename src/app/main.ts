@@ -22,6 +22,7 @@ import { StickView } from '../ui/stickView';
 import { FixedStepper, FrameStats, RafDriver } from './loop';
 import { parseParams, type Params } from './params';
 import { setupPlatform } from './platform';
+import { registerPwa } from './pwa';
 import { browserStorage, Settings } from './settings';
 import { HookInput, installTestHook, type TestHook } from './testHook';
 
@@ -140,6 +141,7 @@ function boot(): void {
   }
 
   driver.start();
+  registerPwa();
 }
 
 boot();
