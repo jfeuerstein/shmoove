@@ -18,14 +18,15 @@ export class Hud {
   private speed = -1;
   private chain = -1;
 
-  constructor(root: HTMLElement) {
-    const el = document.createElement('div');
+  /** `doc` is a seam so tests can build the HUD over a fake element tree. */
+  constructor(root: HTMLElement, doc: Document = document) {
+    const el = doc.createElement('div');
     el.className = 'hud';
     el.setAttribute('aria-live', 'off');
-    this.gearEl = part(el, 'hud-gear');
-    this.nameEl = part(el, 'hud-name');
-    this.speedEl = part(el, 'hud-speed');
-    this.chainEl = part(el, 'hud-chain');
+    this.gearEl = part(doc, el, 'hud-gear');
+    this.nameEl = part(doc, el, 'hud-name');
+    this.speedEl = part(doc, el, 'hud-speed');
+    this.chainEl = part(doc, el, 'hud-chain');
     this.chainEl.hidden = true;
     this.chainEl.style.color = cssHex(PALETTE.accent);
     root.appendChild(el);
@@ -55,8 +56,8 @@ export class Hud {
   }
 }
 
-function part(parent: HTMLElement, cls: string): HTMLElement {
-  const e = document.createElement('div');
+function part(doc: Document, parent: HTMLElement, cls: string): HTMLElement {
+  const e = doc.createElement('div');
   e.className = cls;
   parent.appendChild(e);
   return e;
