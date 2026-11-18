@@ -65,8 +65,8 @@ function antenna(b: MeshBuilder, x: number, y: number, z: number, seed: number):
   const a = hash2(seed, 2) * 3.14;
   const cs = Math.cos(a);
   const sn = Math.sin(a);
-  for (let k = 0; k < 3; k++) {
-    const yy = y + h - 0.15 - k * 0.25;
+  for (let k = 0; k < 2; k++) {
+    const yy = y + h - 0.15 - k * 0.3;
     const l = 0.5 - k * 0.1;
     b.beam(x - cs * l, yy, z - sn * l, x + cs * l, yy, z + sn * l, 0.02, 0x4d4757);
   }
@@ -105,8 +105,8 @@ function crates(b: MeshBuilder, x: number, y: number, z: number, nx: number, nz:
 
 /** A balcony planter on a face at height y. */
 function planter(b: MeshBuilder, f: Face, u: number, y: number, seed: number): void {
-  fbox(b, f, u, y, 0.45, 0.12, 0.3, 0, POTS[Math.floor(hash2(seed, 1) * POTS.length)]);
-  fbox(b, f, u, y + 0.22, 0.42, 0.12, 0.28, 0.01, LEAF[Math.floor(hash2(seed, 2) * LEAF.length)], 0, INK.pink);
+  // A box of flowers: the pot's ink on its sides, leaves and a pink bloom on top.
+  fbox(b, f, u, y, 0.45, 0.16, 0.3, 0, POTS[Math.floor(hash2(seed, 1) * POTS.length)], 0, hash2(seed, 2) < 0.5 ? INK.pink : LEAF[0]);
 }
 
 /** Props belonging to one solid. */
@@ -117,6 +117,7 @@ export function meshSolidProps(b: MeshBuilder, w: World, ctx: RouteCtx, o: Solid
     case 'building':
     case 'house': {
       const faces = solidFaces(o);
+      let planted = false;
       for (let fi = 0; fi < 4; fi++) {
         const f = faces[fi];
         if (f.hw < 2 || !streetSide(w, f)) continue;
@@ -138,12 +139,10 @@ export function meshSolidProps(b: MeshBuilder, w: World, ctx: RouteCtx, o: Solid
         }
         // Balcony planters up the facade.
         const top = o.yTop - g.hi;
-        if (top > 5 && hash2(seed, fi + 12) < 0.7) {
-          const n = Math.min(3, Math.floor(f.hw / 2));
-          for (let k = 0; k < n; k++) {
-            const u = -f.hw + 1.2 + (k * (f.hw * 2 - 2.4)) / Math.max(1, n - 1);
-            planter(b, f, n === 1 ? 0 : u, g.hi + 3.3 + (k & 1) * 0, seed + k * 5 + fi);
-          }
+        if (top > 5 && !planted && hash2(seed, fi + 12) < 0.7) {
+          planted = true;
+          const n = Math.min(2, Math.floor(f.hw / 2));
+          for (let k = 0; k < n; k++) planter(b, f, n === 1 ? 0 : (k - 0.5) * (f.hw - 1.2), g.hi + 3.3, seed + k * 5 + fi);
         }
       }
       // Up on the roof: a cat (Mercado, Terraces), antennas and dishes up the hill. All within the

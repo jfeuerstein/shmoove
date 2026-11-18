@@ -561,10 +561,10 @@ export const SCATTER_R = 6;
 const FLY_S = 2.4;
 const AWAY_S = 14;
 /** Most walkers and birds drawn at once, and how far from the camera they are drawn, m. */
-const MAX_WALKERS = 28;
-const MAX_BIRDS = 160;
-const WALKER_R = 110;
-const BIRD_R = 80;
+const MAX_WALKERS = 18;
+const MAX_BIRDS = 100;
+const WALKER_R = 80;
+const BIRD_R = 60;
 
 /** A chunk's life as the layer reads it each frame. */
 export interface LiveChunk {
@@ -579,8 +579,12 @@ export function liveChunk(life: ChunkLife): LiveChunk {
 
 export interface LifeLayer {
   mesh: THREE.Mesh;
-  /** Draw the walkers and birds of `chunks` for the camera at (camX, camZ) and the skater at (skX, skZ). */
-  update(chunks: readonly LiveChunk[], nChunks: number, camX: number, camZ: number, skX: number, skZ: number, dayFrac: number): void;
+  /**
+   * Draw the walkers and birds of `chunks` for the camera at (camX, camZ) and the skater at
+   * (skX, skZ). Everything moves on twos, so the buffers are rewritten only when the 12 Hz frame
+   * or `version` (bumped by the caller whenever the chunk list changes) is new.
+   */
+  update(chunks: readonly LiveChunk[], nChunks: number, version: number, camX: number, camZ: number, skX: number, skZ: number, dayFrac: number): void;
   dispose(): void;
 }
 
@@ -659,6 +663,8 @@ export function createLifeLayer(w: World, makeBuilder: () => MeshBuilder): LifeL
 
   let nv = 0;
   let ni = 0;
+  let lastFrame = -1;
+  let lastVersion = -1;
   const put = (tp: Float32Array, tidx: Uint32Array, tnv: number, x: number, y: number, z: number, cs: number, sn: number, colour: (i: number, k: number) => void): void => {
     const base = nv;
     for (let i = 0; i < tnv; i++) {
@@ -701,12 +707,16 @@ export function createLifeLayer(w: World, makeBuilder: () => MeshBuilder): LifeL
 
   return {
     mesh,
-    update(chunks, nChunks, camX, camZ, skX, skZ, dayFrac) {
+    update(chunks, nChunks, version, camX, camZ, skX, skZ, dayFrac) {
+      const ticks = dayFrac * DAY_TICKS;
+      const frame = Math.floor(ticks / TWOS);
+      if (frame === lastFrame && version === lastVersion) return;
+      lastFrame = frame;
+      lastVersion = version;
       nv = 0;
       ni = 0;
-      const ticks = dayFrac * DAY_TICKS;
-      const t = ticks / 60;
-      const frame = Math.floor(ticks / TWOS);
+      // Positions step on twos too: the clock of the frame, not of the moment.
+      const t = (frame * TWOS) / 60;
       let walkers = 0;
       let birds = 0;
       for (let c = 0; c < nChunks; c++) {

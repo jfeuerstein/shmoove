@@ -6,7 +6,7 @@
 import { Surface, terrainHeight, vertexHeight, type World } from '../../sim/world';
 import { type MeshBuilder, hash2, shade } from '../geom';
 import { INK } from '../look';
-import { flightInks, meshLifePaint, plazaInk } from './life';
+import { flightInks, plazaInk } from './life';
 
 const SURFACE_COLOR: Record<number, number> = {
   [Surface.STREET]: INK.asphalt,
@@ -266,8 +266,6 @@ export function meshGroundPaint(b: MeshBuilder, w: World, ix0: number, iz0: numb
         if (surfaceAt(w, ix + 1, iz) === Surface.WATER) stripe(x0 + c, z0, 0, 1, -1, 0);
       }
     }
-    // Printed life (tile motifs, crossings, covers, bays) for the same row.
-    meshLifePaint(b, w, ix0, iz, ix1, iz + 1);
   }
 }
 

@@ -268,10 +268,10 @@ function plazaCell(b: MeshBuilder, w: World, ix: number, iz: number, x0: number,
   switch (district) {
     case District.MERCADO:
     case District.TERRACES: {
-      // A diamond at every corner shared by four tiles, in two inks.
-      if (paved) {
+      // A diamond at every other corner shared by four tiles, in two inks.
+      if (paved && ((ix + iz) & 1) === 0) {
         const r = 0.42;
-        const ink = (ix + iz) % 3 === 0 ? t.motif2 : t.motif;
+        const ink = ((ix >> 1) + iz) % 3 === 0 ? t.motif2 : t.motif;
         quadUV(b, w, x0 + c, z0 + c, r * 0.7, r * 0.7, -r * 0.7, r * 0.7, LIFT_LO, ink);
       }
       if (hh > 0.985 && paved) hopscotch(b, w, x0 + c * 0.5, z0 + c * 0.5, ix + iz);
