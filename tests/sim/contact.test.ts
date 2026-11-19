@@ -140,7 +140,7 @@ describe('the build and being hit', () => {
     place(sim, KIND_SHUFFLER, 0, 8);
     launch(sim, 10);
     for (let t = 0; t < 300 && sim.world.player.hp === 100; t++) sim.step(TUCK);
-    expect(sim.world.player.hp).toBe(100 - (KINDS[KIND_SHUFFLER].damage - 3));
+    expect(sim.world.player.hp).toBe(100 - (KINDS[KIND_SHUFFLER].damage - 1.5));
   });
 
   it('the Bumper hurts everything the hit throws back', () => {
@@ -172,7 +172,7 @@ describe('the build and being hit', () => {
     };
     expect(after(0, 0)).toBe(50);
     expect(after(0, 30)).toBe(50);
-    expect(after(5, 0)).toBeCloseTo(50 + 1.6 * 10, 0);
+    expect(after(5, 0)).toBeCloseTo(50 + 0.5 * 10, 0);
     expect(after(5, 30)).toBeCloseTo(after(5, 0), 3);
   });
 });

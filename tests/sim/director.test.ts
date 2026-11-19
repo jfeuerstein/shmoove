@@ -20,6 +20,7 @@ import {
   KIND_SHUFFLER,
   KIND_SLUDGE,
   KIND_STANDSTILL,
+  KINDS,
   makeWorld,
   reapHorde,
   removeEnemy,
@@ -160,7 +161,7 @@ function wholeRun(seed: number): Tally {
       tally.first[h.kind[i]] = Math.min(tally.first[h.kind[i]], sc.seconds);
       if (h.elite[i] !== 0) {
         tally.elites.push(sc.seconds);
-        const ok = (h.kind[i] === KIND_SHUFFLER || h.kind[i] === KIND_CUTTER) && h.hp[i] === 6 * (h.kind[i] === KIND_SHUFFLER ? 10 : 26);
+        const ok = (h.kind[i] === KIND_SHUFFLER || h.kind[i] === KIND_CUTTER) && h.hp[i] === DIRECTOR.eliteHp * KINDS[h.kind[i]].hp;
         if (!ok) tally.badElites++;
       }
       const d = Math.hypot(h.x[i] - m.x, h.z[i] - m.z);

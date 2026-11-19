@@ -12,7 +12,7 @@ import { KINDS, queryEnemies, SPAWN_TICKS, WEIGHT_LIGHT, type World } from '../w
 /** The Slipstream's numbers. Arrays are by weapon level 1..5. */
 export const SLIPSTREAM = {
   /** Length of the draft behind the mover, m, times area. */
-  length: [8, 10, 12, 14, 16],
+  length: [8, 11, 14, 18, 22],
   /** How fast light enemies in it are dragged toward the line behind the mover, m/s. */
   draw: [2, 2.5, 3, 3.5, 4],
   /** Half the cone's opening, degrees. */

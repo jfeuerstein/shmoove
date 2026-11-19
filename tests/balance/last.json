@@ -1,0 +1,362 @@
+{
+  "tablesHash": "3911e054af1ea6dd",
+  "allMet": false,
+  "bands": [
+    {
+      "id": 1,
+      "name": "idler dead by 1:00 on every seed",
+      "ok": true,
+      "detail": "dead 0:32, dead 0:34, dead 0:41, dead 0:35, dead 0:26"
+    },
+    {
+      "id": 2,
+      "name": "wanderer alive at 0:20 and dead by 3:00 on every seed",
+      "ok": true,
+      "detail": "dead 0:46, dead 0:37, dead 0:25, dead 0:44, dead 0:40"
+    },
+    {
+      "id": 3,
+      "name": "kiter: alive at 3:00 on 5/5, fells the Bruiser on 4+, alive at 9:00 on 3+, clears 1 to 4",
+      "ok": true,
+      "detail": "alive at 3:00 5/5, Bruiser felled 5/5, alive at 9:00 5/5, cleared 4/5"
+    },
+    {
+      "id": 4,
+      "name": "rider: clears 2+, at least as well as the kiter on 3+",
+      "ok": true,
+      "detail": "cleared 5/5, at least as well as the kiter on 4/5"
+    },
+    {
+      "id": 5,
+      "name": "every cleared run: level 20+, horde peaked at 250+",
+      "ok": true,
+      "detail": "L48/peak 400, L48/peak 400, L71/peak 350, L76/peak 296, L56/peak 347, L75/peak 339, L49/peak 400, L54/peak 338, L60/peak 401"
+    },
+    {
+      "id": 6,
+      "name": "nobody goes from full health to dead in under 6 s",
+      "ok": true,
+      "detail": "fastest full-to-dead 17.1 s"
+    },
+    {
+      "id": 7,
+      "name": "a player who cannot kill faces 380+ alive by 9:00",
+      "ok": true,
+      "detail": "400 alive at 9:00"
+    },
+    {
+      "id": 8,
+      "name": "bosses are fights, not walls (median time to fell in band, no run timed out on a boss)",
+      "ok": false,
+      "detail": "Bruiser: met 10, felled 10, median 29 s (band 20-60; 2 of 10 outside: 60/44/37/29/27/42/20/28/28/29), 0 walls, 9 hits, 0/1 deaths; Mortar: met 10, felled 10, median 59 s (band 25-75; 6 of 10 outside: 91/88/53/82/15/65/20/36/48/84), 0 walls, 30 hits, 0/1 deaths; Standstill: met 10, felled 9, median 46 s (band 40-120; 4 of 9 outside: 130/23/46/25/32/41/47/62/103), 0 walls, 26 hits, 1/1 deaths"
+    },
+    {
+      "id": 9,
+      "name": "parity: each weapon 0.6 to 1.6 of the median kills by 6:00, alive at 6:00 once",
+      "ok": true,
+      "detail": "median 8750; Wake 1.00, Bumper 0.82, Slam 0.92, Orbit 1.00, Static 0.96, Skipper 1.01, Slipstream 0.71, Crumbs 1.01, Lance 1.00"
+    },
+    {
+      "id": 10,
+      "name": "every enemy bites, none decides",
+      "ok": true,
+      "detail": "cutter 156, lob ring 62, sludge 3, bollard 2; most is cutter with 156/433"
+    },
+    {
+      "id": 11,
+      "name": "the map pays: rider opens 10+ crates, 5+ hoops or gates, 5+ grinds",
+      "ok": true,
+      "detail": "37 crates, 7 hoops and gates, 10 grinds"
+    },
+    {
+      "id": 12,
+      "name": "deterministic: each bot's shortest run replayed tick by tick",
+      "ok": true,
+      "detail": "idler seed 5 same, wanderer seed 3 same, kiter seed 3 same, rider seed 1 same"
+    }
+  ],
+  "runs": {
+    "idler": [
+      {
+        "seed": 1,
+        "end": "dead",
+        "seconds": 32.77,
+        "hp": 0,
+        "kills": 31,
+        "level": 3,
+        "build": "SK1 SP1 ST1",
+        "bossesFelled": 0
+      },
+      {
+        "seed": 2,
+        "end": "dead",
+        "seconds": 34.22,
+        "hp": 0,
+        "kills": 49,
+        "level": 3,
+        "build": "SK1 WK2",
+        "bossesFelled": 0
+      },
+      {
+        "seed": 3,
+        "end": "dead",
+        "seconds": 41,
+        "hp": 0,
+        "kills": 103,
+        "level": 7,
+        "build": "SK2 OR1 SL2 WK2 | MT1",
+        "bossesFelled": 0
+      },
+      {
+        "seed": 4,
+        "end": "dead",
+        "seconds": 35.38,
+        "hp": 0,
+        "kills": 53,
+        "level": 5,
+        "build": "SK1 SP1 OR1 WK2 | MT1",
+        "bossesFelled": 0
+      },
+      {
+        "seed": 5,
+        "end": "dead",
+        "seconds": 26.02,
+        "hp": 0,
+        "kills": 7,
+        "level": 1,
+        "build": "SK1",
+        "bossesFelled": 0
+      }
+    ],
+    "wanderer": [
+      {
+        "seed": 1,
+        "end": "dead",
+        "seconds": 46.28,
+        "hp": 0,
+        "kills": 91,
+        "level": 6,
+        "build": "SK2 ST1 LA1 OR2 | HT1",
+        "bossesFelled": 0
+      },
+      {
+        "seed": 2,
+        "end": "dead",
+        "seconds": 37.33,
+        "hp": 0,
+        "kills": 57,
+        "level": 3,
+        "build": "SK1 WK2 | HD1",
+        "bossesFelled": 0
+      },
+      {
+        "seed": 3,
+        "end": "dead",
+        "seconds": 25.3,
+        "hp": 0,
+        "kills": 7,
+        "level": 1,
+        "build": "SK1",
+        "bossesFelled": 0
+      },
+      {
+        "seed": 4,
+        "end": "dead",
+        "seconds": 44.75,
+        "hp": 0,
+        "kills": 27,
+        "level": 3,
+        "build": "SK1 LA1 | WL1",
+        "bossesFelled": 0
+      },
+      {
+        "seed": 5,
+        "end": "dead",
+        "seconds": 40.65,
+        "hp": 0,
+        "kills": 24,
+        "level": 2,
+        "build": "SK1 ST1",
+        "bossesFelled": 0
+      }
+    ],
+    "kiter": [
+      {
+        "seed": 1,
+        "end": "won",
+        "seconds": 669.8,
+        "hp": 150,
+        "kills": 6455,
+        "level": 48,
+        "build": "SK5 OR5 SL5 LA5 | HT5 HS5 MT5 RG5",
+        "bossesFelled": 3
+      },
+      {
+        "seed": 2,
+        "end": "dead",
+        "seconds": 574.03,
+        "hp": 0,
+        "kills": 7886,
+        "level": 62,
+        "build": "SK5 WK5 LA5 CR5 | RG5 MT5 WL5 HS5",
+        "bossesFelled": 2
+      },
+      {
+        "seed": 3,
+        "end": "won",
+        "seconds": 563.5,
+        "hp": 28,
+        "kills": 7754,
+        "level": 48,
+        "build": "SK5 SL5 CR5 SP5 | HS5 HD5 MT5 HT5",
+        "bossesFelled": 3
+      },
+      {
+        "seed": 4,
+        "end": "won",
+        "seconds": 585.68,
+        "hp": 58,
+        "kills": 8178,
+        "level": 71,
+        "build": "SK5 WK5 SL5 CR5 | MG5 HD5 MT5 RG5",
+        "bossesFelled": 3
+      },
+      {
+        "seed": 5,
+        "end": "won",
+        "seconds": 565.08,
+        "hp": 89,
+        "kills": 8646,
+        "level": 76,
+        "build": "SK5 SL5 SP5 WK5 | MG5 MT5 HS5 HD5",
+        "bossesFelled": 3
+      }
+    ],
+    "rider": [
+      {
+        "seed": 1,
+        "end": "won",
+        "seconds": 571.78,
+        "hp": 25,
+        "kills": 8113,
+        "level": 56,
+        "build": "SK5 CR5 ST5 LA5 | RG5 HS5 MT5 WL5",
+        "bossesFelled": 3
+      },
+      {
+        "seed": 2,
+        "end": "won",
+        "seconds": 581.5,
+        "hp": 150,
+        "kills": 9096,
+        "level": 75,
+        "build": "SK5 LA5 WK5 SP5 | WL5 HT5 HS5 MG5",
+        "bossesFelled": 3
+      },
+      {
+        "seed": 3,
+        "end": "won",
+        "seconds": 586.85,
+        "hp": 150,
+        "kills": 8711,
+        "level": 49,
+        "build": "SK5 SL5 CR5 LA5 | HT5 RG5 MT5 HS5",
+        "bossesFelled": 3
+      },
+      {
+        "seed": 4,
+        "end": "won",
+        "seconds": 602.33,
+        "hp": 91,
+        "kills": 8934,
+        "level": 54,
+        "build": "SK5 CR5 OR5 SP5 | WL5 HD5 HT5 RG5",
+        "bossesFelled": 3
+      },
+      {
+        "seed": 5,
+        "end": "won",
+        "seconds": 643.45,
+        "hp": 150,
+        "kills": 7371,
+        "level": 60,
+        "build": "SK5 ST5 OR5 LA5 | HS5 HT5 RG5 MT5",
+        "bossesFelled": 3
+      }
+    ]
+  },
+  "parity": [
+    {
+      "weapon": "Wake",
+      "kills6": [
+        2109,
+        3463,
+        3188
+      ]
+    },
+    {
+      "weapon": "Bumper",
+      "kills6": [
+        518,
+        3463,
+        3188
+      ]
+    },
+    {
+      "weapon": "Slam",
+      "kills6": [
+        1384,
+        3463,
+        3192
+      ]
+    },
+    {
+      "weapon": "Orbit",
+      "kills6": [
+        2099,
+        3463,
+        3188
+      ]
+    },
+    {
+      "weapon": "Static",
+      "kills6": [
+        1764,
+        3463,
+        3188
+      ]
+    },
+    {
+      "weapon": "Skipper",
+      "kills6": [
+        2109,
+        3463,
+        3264
+      ]
+    },
+    {
+      "weapon": "Slipstream",
+      "kills6": [
+        1666,
+        1083,
+        3442
+      ]
+    },
+    {
+      "weapon": "Crumbs",
+      "kills6": [
+        2109,
+        3475,
+        3213
+      ]
+    },
+    {
+      "weapon": "Lance",
+      "kills6": [
+        2109,
+        3463,
+        3188
+      ]
+    }
+  ]
+}

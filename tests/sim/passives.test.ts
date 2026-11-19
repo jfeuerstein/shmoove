@@ -75,18 +75,18 @@ describe('the rest', () => {
     const sim = wide();
     sim.world.player.hp = 60;
     setPassiveLevel(sim.world, P_HEART, 2);
-    expect(sim.world.player.maxHp).toBe(140);
-    expect(sim.world.player.hp).toBe(100);
+    expect(sim.world.player.maxHp).toBe(120);
+    expect(sim.world.player.hp).toBe(80);
   });
 
   it('Hide: every hit hurts a little less, never nothing', () => {
     const sim = wide();
     setPassiveLevel(sim.world, P_HIDE, 3);
     hurtPlayer(sim.world, sim.state, 8);
-    expect(sim.world.player.hp).toBe(100 - 5);
+    expect(sim.world.player.hp).toBe(100 - 6.5);
     sim.world.player.invuln = 0;
     hurtPlayer(sim.world, sim.state, 2);
-    expect(sim.world.player.hp).toBe(100 - 5 - 1);
+    expect(sim.world.player.hp).toBe(100 - 6.5 - 1);
   });
 
   it('Regen: health comes back all the time', () => {
@@ -94,14 +94,14 @@ describe('the rest', () => {
     setPassiveLevel(sim.world, P_REGEN, 5);
     sim.world.player.hp = 40;
     run(sim, TUCK, 300);
-    expect(sim.world.player.hp).toBeCloseTo(40 + 1.6 * 5, 0);
+    expect(sim.world.player.hp).toBeCloseTo(40 + 0.5 * 5, 0);
   });
 
   it('Haste: the stat every weapon waits by goes down', () => {
     const sim = wide();
     expect(sim.world.player.stats.haste).toBe(1);
     setPassiveLevel(sim.world, P_HASTE, 5);
-    expect(sim.world.player.stats.haste).toBeCloseTo(0.68, 6);
+    expect(sim.world.player.stats.haste).toBeCloseTo(0.74, 6);
   });
 
   it('Magnet: sparks come from further away', () => {
@@ -127,8 +127,8 @@ describe('the rest', () => {
     expect(powerOf(st, 1)).toBe(1);
     expect(powerOf(st, 5)).toBe(1);
     setPassiveLevel(sim.world, P_MIGHT, 5);
-    expect(powerOf(st, 1)).toBeCloseTo(1.5, 6);
-    expect(powerOf(st, 5)).toBeCloseTo(1.5, 6);
+    expect(powerOf(st, 1)).toBeCloseTo(1.3, 6);
+    expect(powerOf(st, 5)).toBeCloseTo(1.3, 6);
   });
 
   it('Wide Load: the trail burns wider', () => {

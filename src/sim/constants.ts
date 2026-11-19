@@ -93,7 +93,7 @@ const DEFS = {
   camGroundClear: { v: 1.2, min: 0.2, max: 5, step: 0.1, group: 'camera', note: 'Closest the camera gets to the ground, m' },
   // combat (how being hit feels; damage and health numbers live in balance.ts)
   invulnTicks: { v: 48, min: 0, max: 120, step: 2, group: 'combat', note: 'How long nothing can hurt you after a hit, ticks' },
-  hitShoveRadius: { v: 7, min: 0, max: 12, step: 0.5, group: 'combat', note: 'How far around you a hit throws the horde back, m' },
+  hitShoveRadius: { v: 5.5, min: 0, max: 12, step: 0.5, group: 'combat', note: 'How far around you a hit throws the horde back, m' },
   hitShoveSpeed: { v: 12, min: 0, max: 25, step: 0.5, group: 'combat', note: 'How hard a hit throws the horde back, m/s' },
   hitStunTicks: { v: 44, min: 0, max: 120, step: 2, group: 'combat', note: 'How long a thrown enemy stays harmless, ticks' },
   // wake (the trail behind you and the loop that pops)

@@ -101,7 +101,7 @@ export const PASSIVE_INFO: readonly PassiveInfo[] = [
     code: 'HS',
     name: 'Haste',
     blurb: 'Everything you carry fires faster.',
-    effects: [{ stat: 'haste', mode: 'mul', byLevel: [0.92, 0.85, 0.79, 0.73, 0.68] }],
+    effects: [{ stat: 'haste', mode: 'mul', byLevel: [0.95, 0.9, 0.85, 0.8, 0.74] }],
   },
   {
     code: 'SG',
@@ -131,25 +131,25 @@ export const PASSIVE_INFO: readonly PassiveInfo[] = [
     code: 'HT',
     name: 'Heart',
     blurb: 'More health.',
-    effects: [{ stat: 'maxHp', mode: 'add', byLevel: [20, 40, 60, 80, 100] }],
+    effects: [{ stat: 'maxHp', mode: 'add', byLevel: [10, 20, 30, 40, 50] }],
   },
   {
     code: 'RG',
     name: 'Regen',
     blurb: 'Health comes back slowly, all the time.',
-    effects: [{ stat: 'regen', mode: 'add', byLevel: [0.3, 0.6, 0.9, 1.2, 1.6] }],
+    effects: [{ stat: 'regen', mode: 'add', byLevel: [0.1, 0.2, 0.3, 0.4, 0.5] }],
   },
   {
     code: 'MT',
     name: 'Might',
     blurb: 'Everything you carry hits harder.',
-    effects: [{ stat: 'might', mode: 'mul', byLevel: [1.1, 1.2, 1.3, 1.4, 1.5] }],
+    effects: [{ stat: 'might', mode: 'mul', byLevel: [1.06, 1.12, 1.18, 1.24, 1.3] }],
   },
   {
     code: 'HD',
     name: 'Hide',
     blurb: 'Every hit hurts a little less.',
-    effects: [{ stat: 'armour', mode: 'add', byLevel: [1, 2, 3, 4, 5] }],
+    effects: [{ stat: 'armour', mode: 'add', byLevel: [0.5, 1, 1.5, 2, 2.5] }],
   },
   {
     code: 'LK',
@@ -161,7 +161,7 @@ export const PASSIVE_INFO: readonly PassiveInfo[] = [
     code: 'WL',
     name: 'Wide Load',
     blurb: 'Everything you do covers more ground.',
-    effects: [{ stat: 'area', mode: 'mul', byLevel: [1.1, 1.2, 1.3, 1.4, 1.5] }],
+    effects: [{ stat: 'area', mode: 'mul', byLevel: [1.08, 1.16, 1.24, 1.33, 1.42] }],
   },
 ];
 
