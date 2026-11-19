@@ -17,10 +17,11 @@
  * - hoop: a ring in the air facing its `yaw`, held up by two poles with a balloon on each, and a
  *   chevron on the run-in of the kicker that reaches it, pointing the way to ride. Faint, the
  *   balloons shrunk, while it is waiting to come back.
- * - totem: a carved stack of three blocks round a spine, a pair of eyes on each and a beak on the
- *   top, all facing the bowl's middle, a diamond turning above. When it is rammed (spent, the elite called) it shakes with its eyes
- *   lit for `CALL_TIME` and sinks into the ground, leaving a grey stump.
- * - every live thing has a beacon: a tall thin column of its colour, crossed planes fading upward,
+ * - totem: a carved stack of three blocks round a spine, a pair of eyes on each, all facing the
+ *   bowl's middle, a diamond turning above. When it is rammed (spent, the elite called) it shakes
+ *   with its eyes lit for `CALL_TIME` and sinks into the ground, leaving a grey stump.
+ * - every live thing has a beacon: a tall thin column of its colour, crossed planes, faint at the
+ *   foot, brightest a third of the way up, gone at the top,
  *   drawn without fog so it is seen over hills and from across the bowl. A slalom has one, over the
  *   gate that is next. Gone when the thing is spent (a hoop's while it is gone).
  *
@@ -107,7 +108,7 @@ export const TOTEM_HIGH = 3.2;
 const TOTEM_STUMP = 0.9;
 const HOOP_TUBE = 0.22;
 /** Dashes on the ground between two gates of a slalom. */
-export const DASHES_PER_LEG = 4;
+export const DASHES_PER_LEG = 3;
 const DASH_WIDE = 0.35;
 const DASH_LIFT = 0.06;
 /** The chevron on a hoop's run-in: this far back from the kicker's top, m, and its arms. */
@@ -180,18 +181,29 @@ function clamp01(v: number): number {
   return v < 0 ? 0 : v > 1 ? 1 : v;
 }
 
-/** Two crossed vertical quads from y 0 to 1, 1 wide, coloured white at the foot fading to black at the top. */
+/** Where up a beacon its light is strongest, as a share of its height. */
+const BEACON_PEAK = 0.35;
+
+/**
+ * Two crossed vertical planes from y 0 to 1, 1 wide, each two quads high: dark at the foot (so up
+ * close, where only the foot is in view, it does not wash over the thing), brightest at
+ * `BEACON_PEAK`, fading to nothing at the top.
+ */
 function beaconGeometry(): BufferGeometry {
   const h = 0.5;
-  // prettier-ignore
-  const pos = [
-    -h, 0, 0, h, 0, 0, h, 1, 0, -h, 0, 0, h, 1, 0, -h, 1, 0,
-    0, 0, -h, 0, 0, h, 0, 1, h, 0, 0, -h, 0, 1, h, 0, 1, -h,
-  ];
+  const rows = [0, BEACON_PEAK, 1];
+  const shade = [0.15, 1, 0];
+  const pos: number[] = [];
   const col: number[] = [];
-  for (let v = 0; v < pos.length / 3; v++) {
-    const k = pos[v * 3 + 1] > 0.5 ? 0 : 1;
-    col.push(k, k, k);
+  for (const [ax, az, bx, bz] of [[-h, 0, h, 0], [0, -h, 0, h]]) {
+    for (let r = 0; r < 2; r++) {
+      const y0 = rows[r];
+      const y1 = rows[r + 1];
+      const c0 = shade[r];
+      const c1 = shade[r + 1];
+      pos.push(ax, y0, az, bx, y0, bz, bx, y1, bz, ax, y0, az, bx, y1, bz, ax, y1, az);
+      for (const c of [c0, c0, c1, c0, c1, c1]) col.push(c, c, c);
+    }
   }
   const g = new BufferGeometry();
   g.setAttribute('position', new Float32BufferAttribute(pos, 3));
@@ -243,7 +255,7 @@ export class ThingsView {
     this.solids = makeInstanced(box, tintMaterial(), MAX_SOLIDS, 'things-solids');
     this.solidRgb = addInstanceColor(this.solids, MAX_SOLIDS);
 
-    const torus = new TorusGeometry(HOOP_RADIUS, HOOP_TUBE, 3, 12);
+    const torus = new TorusGeometry(HOOP_RADIUS, HOOP_TUBE, 3, 10);
     this.hoopFade = addInstanceFloat(torus, 'aFade', MAX_THINGS);
     this.hoops = makeInstanced(torus, fadeMaterial(0xffffff), MAX_THINGS, 'things-hoops');
     this.hoopRgb = addInstanceColor(this.hoops, MAX_THINGS);
@@ -738,7 +750,7 @@ export class ThingsView {
       eyes = slot(C_EYES, T_BASE);
       eyeGlow = GLOW_EYES;
     }
-    // Three carved blocks round the spine, a pair of eyes on the front of each, a beak on the top.
+    // Three carved blocks round the spine, a pair of eyes on the front of each.
     const blockHigh = 0.88;
     for (let k = 0; k < 3; k++) {
       const wide = 0.95 - k * 0.07;
@@ -749,7 +761,6 @@ export class ThingsView {
       for (let e = -1; e <= 1; e += 2) {
         this.part(x, y, z, yaw, jx + e * wide * 0.24, cy + 0.12, jz + wide / 2 + 0.03, 0, 0, 0.22, 0.16, 0.08, eyes, 1, eyeGlow);
       }
-      if (k === 2) this.part(x, y, z, yaw, jx, cy - 0.16, jz + wide / 2 + 0.14, 0, 0, 0.28, 0.2, 0.3, slot(THING_TOTEM, T_LIGHT), 1, GLOW_TOTEM * 0.6);
     }
   }
 }

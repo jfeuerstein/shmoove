@@ -319,6 +319,19 @@ describe('ThingsView', () => {
     expect(beam(gold).fade).toBeGreaterThan(beam(crate).fade);
     // Seen through the fog.
     expect((view.beacons.material as MeshLambertMaterial).fog).toBe(false);
+    // Faint at its foot (up close only the foot is in view), brightest higher up, gone at the top.
+    const g = view.beacons.geometry;
+    const pos = g.getAttribute('position');
+    const col = g.getAttribute('color');
+    const shadeAt = (y: number): number[] => {
+      const out = [];
+      for (let v = 0; v < pos.count; v++) if (Math.abs(pos.getY(v) - y) < 1e-6) out.push(col.getX(v));
+      return out;
+    };
+    const ys = [...new Set(Array.from({ length: pos.count }, (_, v) => pos.getY(v)))].sort((a, b) => a - b);
+    expect(Math.max(...shadeAt(ys[0]))).toBeLessThan(0.3);
+    expect(Math.max(...shadeAt(ys[ys.length - 1]))).toBeCloseTo(0);
+    expect(Math.max(...ys.map((y) => Math.max(...shadeAt(y))))).toBeCloseTo(1);
     // Double-sided but drawn in one pass: one draw call.
     expect((view.beacons.material as MeshLambertMaterial).forceSinglePass).toBe(true);
     // The slalom: one beacon, over the next gate.
