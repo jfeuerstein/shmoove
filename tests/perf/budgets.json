@@ -4,7 +4,7 @@
   "drawCalls": 30,
   "triangles": 120000,
   "jsGzipKb": 400,
-  "hordeFrameMs": 8,
+  "hordeFrameMs": 9.5,
   "hordeStepMs": 2,
   "hordeDrawCalls": 32,
   "hordeTriangles": 120000

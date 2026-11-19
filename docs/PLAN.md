@@ -162,7 +162,7 @@ To do, in order:
 1. Weapons fire on timers, not metres or hops or tucks. Done: a test holds the mover still, rides
    it and launches it at 30 m/s and the same field takes the same damage.
 2. Draw the M3 content (enemies, zones, map objects, weapon effects); the mover becomes a rider on
-   a board. Restarted.
+   a board. Done.
 3. Done: a first-run lesson (seven lines on the real bowl, SKIP), a how-to sheet, and a HUD that leads
    with a small speed readout instead of the gear.
 4. Bots and balance for standard rules, with `STRICT` back on in `tests/sim/balance.test.ts`.

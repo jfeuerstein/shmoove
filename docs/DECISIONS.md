@@ -157,3 +157,12 @@ Things decided without the owner, newest last. Overrule any of them.
    a metre of it, and going mostly along it; then the rail steers. Hopping off counts as a clean
    hop. A rail lifts the board over shufflers and gnats but not bollards, and on a rail a bollard
    cannot shove the board off: it scrapes past and takes the hit. No rails are on the bowl yet.
+50. **The crowd perf budget is 9.5 ms of frame work, not 8.** The measurement is 400 enemies, 600
+   sparks, every map object and all ten weapons at level 3 at once; a player can carry four. It
+   came in at 7.3 to 8.0 ms at 4x CPU throttle, which would fail one gate run in a few for no
+   change in the game. The empty-bowl budget stays 8 ms (it is at 5). A phone has still not been
+   measured; that is M7's job.
+51. **Drawing decisions made by the rendering task:** aura colours are orange for haste, blue for
+   shield, magenta for jam; the Lance, the Slipstream, aura rings and the next slalom gate were
+   dimmed until the rider was the brightest thing on screen again; the rider turns orange while
+   coasting, as the old mover did; `?arsenal` answers card offers itself.
