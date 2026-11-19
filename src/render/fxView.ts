@@ -456,10 +456,10 @@ export const BOLT_TO = 0.8;
 /** A jagged point is pushed off the straight line by up to this share of the link, capped, m. */
 const BOLT_WANDER = 0.2;
 const BOLT_WANDER_MAX = 0.8;
-const BOLT_WIDTH = 0.16;
+const BOLT_WIDTH = 0.2;
 /** The flash on each enemy a bolt strikes: radius, m, and strength. */
-const LINK_FLASH = 0.95;
-const LINK_FLASH_PEAK = 0.9;
+const LINK_FLASH = 0.55;
+const LINK_FLASH_PEAK = 0.6;
 
 const GLOW_RING = 0;
 const GLOW_FLASH = 1;
@@ -475,6 +475,9 @@ const SPLAT_LIFT = 0.08;
 const SHARDS_PER_DEATH = 7;
 const SHARDS_PER_THING = 8;
 const SHARD_LIFE = 0.85;
+/** A death's chunks fly lower and lie longer than a crate's. */
+const DEATH_UP = 4;
+const DEATH_LIFE = 0.95;
 const SHARD_SIZE = 0.2;
 const SHARD_UP = 6;
 const SHARD_OUT = 4.5;
@@ -516,8 +519,8 @@ const CRACK_LIFT = 0.06;
 const CRACK_PEAK = 0.85;
 /** Level up: the rings round the rider, the ring out over the ground, the glints. */
 const LEVEL_RING_LIFE = 0.9;
-const LEVEL_GROUND_RING = 5;
-const LEVEL_GLINTS = 14;
+const LEVEL_GROUND_RING = 3.5;
+const LEVEL_GLINTS = 10;
 /** Heal: rings climbing round the rider. */
 const HEAL_RING_LIFE = 0.8;
 /** The Bumper's ring: at hip height, its life. */
@@ -858,7 +861,7 @@ export class FxView {
         const k = a | 0;
         const def = KINDS[k >= 0 && k < KINDS.length ? k : 0];
         const col = shardColorOfKind(k);
-        this.burst(col, x, y + def.height * 0.5, z, def.radius, SHARDS_PER_DEATH, 1, SHARD_OUT, SHARD_UP, true);
+        this.burst(col, x, y + def.height * 0.5, z, def.radius, SHARDS_PER_DEATH, 1, SHARD_OUT, DEATH_UP, true, DEATH_LIFE);
         this.ground(x, z);
         this.glow(true, GLOW_SPLAT, x, y, z, def.radius * SPLAT_SCALE, SPLAT_LIFE, SPLAT_PEAK, 0, this.shardHex(col));
       } else if (type === FX_BOSS_IN) {
@@ -980,12 +983,12 @@ export class FxView {
 
   /** The level-up: rings climbing round the rider, a ring out over the ground, a fountain of glints. */
   private levelUp(x: number, y: number, z: number): void {
-    this.rise(0.8, 2.6, LEVEL_RING_LIFE, 1, this.sparkColor);
-    this.rise(1.1, 1.9, LEVEL_RING_LIFE * 0.9, 0.9, this.sparkColor);
-    this.rise(1.4, 1.2, LEVEL_RING_LIFE * 0.8, 0.8, this.sparkColor);
+    this.rise(0.8, 2.6, LEVEL_RING_LIFE, 0.7, this.sparkColor);
+    this.rise(1.05, 1.9, LEVEL_RING_LIFE * 0.9, 0.55, this.sparkColor);
+    this.rise(1.3, 1.2, LEVEL_RING_LIFE * 0.8, 0.45, this.sparkColor);
     this.ground(x, z);
-    this.glow(false, GLOW_RING, x, y, z, LEVEL_GROUND_RING, 0.5, 0.9, 0.9, this.sparkColor);
-    this.glow(false, GLOW_FLASH, x, y, z, 1.6, 0.35, 0.8, 0, this.sparkColor);
+    this.glow(false, GLOW_RING, x, y, z, LEVEL_GROUND_RING, 0.45, 0.5, 0.93, this.sparkColor);
+    this.glow(false, GLOW_FLASH, x, y, z, 1.4, 0.3, 0.45, 0, this.sparkColor);
     this.spray(SPARK_COLOR, x, y + 0.8, z, LEVEL_GLINTS, 0.6, 0, 0, 2.5, 10, 0.8, 1, 0.5, false, 0.6);
   }
 

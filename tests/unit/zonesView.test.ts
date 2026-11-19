@@ -1,7 +1,22 @@
 import type { InstancedBufferAttribute, InstancedMesh } from 'three';
 import { describe, expect, it } from 'vitest';
 import { Color } from 'three';
-import { LOB_INNER, lobFill, MINE_BLINK_TICKS, MINE_IDLE, MINE_OFF, MINE_ON, MINE_SIZE, mineStrength, RING_BAND, ZonesView } from '../../src/render/zonesView';
+import {
+  LOB_DROP,
+  LOB_INNER,
+  lobFill,
+  lobHeight,
+  MINE_ARMING_BLINK_TICKS,
+  MINE_BLINK_TICKS,
+  MINE_IDLE,
+  MINE_OFF,
+  MINE_ON,
+  MINE_SIZE,
+  mineLight,
+  mineStrength,
+  RING_BAND,
+  ZonesView,
+} from '../../src/render/zonesView';
 import { PALETTE } from '../../src/render/look';
 import { BOSS } from '../../src/sim/bosses';
 import { DT } from '../../src/sim/constants';
@@ -195,5 +210,85 @@ describe("the Standstill's ring", () => {
     view.update(w);
     expect(view.rings.count).toBe(0);
     expect(view.rings.mesh.visible).toBe(false);
+  });
+});
+
+describe('ZonesView: the things on the zones', () => {
+  const shape = (view: ZonesView, i: number): number => (view.props.geometry.getAttribute('aShape') as InstancedBufferAttribute).getX(i);
+  const glow = (view: ZonesView, i: number): number => (view.props.geometry.getAttribute('aGlow') as InstancedBufferAttribute).getX(i);
+
+  it('sits a spiked mine on its disc, its light blinking fast while it arms and slowly once armed', () => {
+    const w = makeWorld(1);
+    addZone(w, ZONE_MINE, 2, 0.5, -1, CRUMBS.radius[0], 600, 30);
+    const view = new ZonesView();
+    view.update(w);
+    expect(view.props.count).toBe(1);
+    expect(shape(view, 0)).toBe(0);
+    const m = matrix(view.props, 0);
+    expect([m[12], m[14]]).toEqual([2, -1]);
+    expect(m[13]).toBeGreaterThan(0.5);
+    // While it arms the light changes every few ticks; once armed, it keeps the slow beat.
+    let changes = 0;
+    let last = mineLight(0);
+    for (let age = 1; age < CRUMBS.armTicks; age++) {
+      if (mineLight(age) !== last) changes++;
+      last = mineLight(age);
+    }
+    expect(changes).toBeGreaterThanOrEqual(Math.floor(CRUMBS.armTicks / MINE_ARMING_BLINK_TICKS) - 1);
+    for (let age = CRUMBS.armTicks; age < CRUMBS.armTicks + 3 * MINE_BLINK_TICKS; age++) {
+      expect(mineLight(age) > 0.5).toBe(mineStrength(age) === MINE_ON);
+    }
+    w.zones.age[0] = CRUMBS.armTicks;
+    view.update(w);
+    expect(glow(view, 0)).toBeCloseTo(mineLight(CRUMBS.armTicks), 6);
+    // A bigger blast, a bigger mine.
+    addZone(w, ZONE_MINE, 8, 0, 0, CRUMBS.radius[4] * 1.3, 600, 30);
+    view.update(w);
+    expect(matrix(view.props, 1)[5]).toBeGreaterThan(m[5] * 1.1);
+  });
+
+  it('drops the lobbed shot out of the sky onto its ring, its shadow growing under it', () => {
+    const w = makeWorld(1);
+    addZone(w, ZONE_LOB, 3, 1, 4, 1.2, 66, 12);
+    const view = new ZonesView();
+    const at = (age: number): { shell: number[]; shadow: number[] } => {
+      w.zones.age[0] = age;
+      w.zones.life[0] = 66 - age;
+      view.update(w);
+      // The shadow first, then the shell.
+      expect(shape(view, 0)).toBe(2);
+      expect(shape(view, 1)).toBe(1);
+      return { shadow: matrix(view.props, 0), shell: matrix(view.props, 1) };
+    };
+    const early = at(10);
+    const mid = at(40);
+    const late = at(65);
+    expect(early.shell[13]).toBeGreaterThan(mid.shell[13]);
+    expect(mid.shell[13]).toBeGreaterThan(late.shell[13]);
+    expect(early.shell[13] - 1).toBeLessThanOrEqual(LOB_DROP + 1);
+    expect([late.shell[12], late.shell[14]]).toEqual([3, 4]);
+    // Falling as things fall: faster near the end.
+    expect(lobHeight(0.9) - lobHeight(1)).toBeGreaterThan(lobHeight(0) - lobHeight(0.1));
+    expect(lobHeight(1)).toBe(0);
+    expect(late.shadow[0]).toBeGreaterThan(early.shadow[0]);
+    expect(late.shadow[0]).toBeLessThan(1.2);
+  });
+
+  it('bubbles the tar inside its patch', () => {
+    const w = makeWorld(1);
+    addZone(w, ZONE_TAR, -4, 0, 6, 1.1, 600, 1.2);
+    const view = new ZonesView();
+    let seen = 0;
+    for (let age = 20; age < 200; age += 7) {
+      w.zones.age[0] = age;
+      view.update(w);
+      for (let i = 0; i < view.props.count; i++) {
+        expect(shape(view, i)).toBe(3);
+        const m = matrix(view.props, i);
+        expect(Math.hypot(m[12] + 4, m[14] - 6)).toBeLessThan(1.1);
+        seen++;
+      }
+    }
+    expect(seen).toBeGreaterThan(10);
   });
 });

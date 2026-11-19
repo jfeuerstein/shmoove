@@ -13,7 +13,7 @@
  *
  * The flames are its child, one instanced mesh of low-poly tongues, one on each trail point that
  * burns (not the newest two under the board, which the sim does not burn), each flickering in
- * height and leaning on its own beat, taller toward the mover.
+ * height and leaning on its own beat, tallest most of the way along (`flameShape`).
  *
  * The pop: when a loop closes, the sim cuts the trail back to the newest point. The view sees the
  * trail collapse, finds the loop in the trail it drew last frame (the stretch from the point the
@@ -42,9 +42,9 @@ export const HEAD_EDGE_ALPHA = 0.15;
 /** The newest trail points do not burn (the sim's head skip): no flames there. */
 export const UNBURNT_HEAD = 2;
 /** A flame: its height at the mover and its width as a share of the burn's half-width. */
-export const FLAME_HEIGHT = 1.05;
-const FLAME_WIDE = 1.25;
-const FLAME_FADE = 0.6;
+export const FLAME_HEIGHT = 0.7;
+const FLAME_WIDE = 0.95;
+const FLAME_FADE = 0.36;
 /** Flicker: how far a flame's height swings, and its beats, rad/s. */
 const FLICKER = 0.3;
 const FLICKER_A = 11;
@@ -143,6 +143,15 @@ export function writeWakeRibbon(
 }
 
 /**
+ * How big a flame is along the trail, 0 at the tail to 1 at the board: growing from the tail to its
+ * fullest most of the way along, then lower again under the board, where the camera looks through it.
+ */
+export function flameShape(t: number): number {
+  const u = t < 0 ? 0 : t > 1 ? 1 : t;
+  return u < 0.7 ? 0.3 + 0.7 * (u / 0.7) : 1 - 0.55 * ((u - 0.7) / 0.3);
+}
+
+/**
  * A low-poly tongue of flame standing on the origin, 1 m tall and 1 m across at its foot: a six-sided
  * foot, a narrower twisted waist, a tip off to one side. Vertex colours are brightness only (dim at
  * the foot, hot at the tip); the instance colour gives the hue.
@@ -158,7 +167,7 @@ export function flameGeometry(): BufferGeometry {
     waist.push(Math.sin(w) * 0.3, 0.45, Math.cos(w) * 0.3);
   }
   const glow = (_x: number, y: number, _z: number, out: Float32Array): void => {
-    const v = 0.5 + y * 1.1;
+    const v = 0.45 + y * 0.7;
     out[0] = v;
     out[1] = v;
     out[2] = v;
@@ -244,7 +253,10 @@ export class WakeView {
 
     const flame = flameGeometry();
     this.flameFade = addInstanceFloat(flame, 'aFade', MAX_FLAMES);
-    this.flames = makeInstanced(flame, fadeMaterial(0xffffff, true), MAX_FLAMES, 'wake-flames');
+    const flameMat = fadeMaterial(0xffffff, true);
+    // Light only of their own: lit as well, overlapping tongues wash out to white.
+    flameMat.color.setHex(0);
+    this.flames = makeInstanced(flame, flameMat, MAX_FLAMES, 'wake-flames');
     this.flameRgb = addInstanceColor(this.flames, MAX_FLAMES);
     this.flames.renderOrder = 3;
     rgbInto(this.wakeRgb, 0, PALETTE.wake);
@@ -285,11 +297,11 @@ export class WakeView {
       const x = k.x[j];
       const z = k.z[j];
       const flick = 1 - FLICKER * (0.5 + 0.25 * Math.sin(time * FLICKER_A + j * 2.3) + 0.25 * Math.sin(time * FLICKER_B + j * 1.1));
-      const h = FLAME_HEIGHT * (0.3 + 0.7 * t) * flick;
+      const h = FLAME_HEIGHT * flameShape(t) * flick;
       const wd = half * FLAME_WIDE * (0.45 + 0.55 * t);
       this.flame(fm, f, x, heightAt(x, z), z, wd, h, j * 1.7 + time * 0.8, time * 6 + j);
       this.flameColor(f, this.wakeRgb);
-      fade[f++] = FLAME_FADE * Math.sqrt(t);
+      fade[f++] = FLAME_FADE * flameShape(t);
     }
     this.trailFlames = f;
 

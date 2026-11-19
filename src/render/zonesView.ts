@@ -84,8 +84,8 @@ const LOB_BEAT_TO = 0.6;
 /** The falling shot: how high it starts, m, its radius, and its shadow's size at first and at the end, share of the ring. */
 export const LOB_DROP = 16;
 const LOB_SHELL = 0.34;
-const SHADOW_FROM = 0.2;
-const SHADOW_TO = 0.75;
+const SHADOW_FROM = 0.15;
+const SHADOW_TO = 0.6;
 /** Tar spreads over this many ticks when laid and shrinks over the last `TAR_SHRINK` of its life. */
 const TAR_GROW = 12;
 const TAR_SHRINK = 30;
@@ -297,7 +297,7 @@ export class ZonesView {
     this.propRgb = addInstanceColor(this.props, MAX_PROPS);
     rgbInto(this.mineRgb, 0, mine);
     rgbInto(this.shellRgb, 0, shell);
-    rgbInto(this.shadowRgb, 0, tone(PALETTE.groundA, -0.65));
+    rgbInto(this.shadowRgb, 0, tone(PALETTE.groundA, -0.4));
     rgbInto(this.tarRgb, 0, tarColor);
 
     this.rings = new GroundRings(MAX_RINGS, RING_SEGMENTS, 'zones-rings', terrain, RING_LIFT);

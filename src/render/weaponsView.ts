@@ -83,12 +83,12 @@ const MAX_SOLIDS = MAX_DISCS + 1;
 export const LANCE_HEIGHT = 0.9;
 const LANCE_CORE = 0.12;
 /** The core's strength between burns and at a burn, its swell at a burn, and per level. */
-const LANCE_CORE_FADE = 0.3;
-const LANCE_CORE_BURST = 0.35;
+const LANCE_CORE_FADE = 0.45;
+const LANCE_CORE_BURST = 0.4;
 const LANCE_CORE_SWELL = 0.8;
 const LANCE_CORE_PER_LEVEL = 0.15;
 /** The sheath: its strength, and its height as a share of its width. */
-const LANCE_BAND_FADE = 0.08;
+const LANCE_BAND_FADE = 0.11;
 const LANCE_BAND_TALL = 0.3;
 /** The charge at the muzzle: how far ahead it starts, its length and size, m. */
 const MUZZLE_FROM = 0.25;
@@ -105,8 +105,8 @@ export const STREAK_SEGS = 3;
 export const STREAKS = STREAK_LINES * STREAK_SEGS;
 const STREAK_SHARE = 0.25;
 const STREAK_RATE = 0.9;
-const STREAK_FADE = 0.16;
-const STREAK_WIDTH = 0.09;
+const STREAK_FADE = 0.27;
+const STREAK_WIDTH = 0.3;
 const STREAK_HEIGHT = 0.5;
 /** Share of the cone's half-angle a line starts at (far end) and how far in it curves (near end). */
 const STREAK_SPREAD = 0.85;
@@ -262,7 +262,10 @@ export class WeaponsView {
 
     const box = new BoxGeometry(1, 1, 1);
     this.beamFade = addInstanceFloat(box, 'aFade', MAX_BEAMS);
-    this.beams = makeInstanced(box, fadeMaterial(0xffffff), MAX_BEAMS, 'weapons-beams');
+    const beamMat = fadeMaterial(0xffffff);
+    // Light only of their own, so each keeps its hue (lit as well, they all wash out to white).
+    beamMat.color.setHex(0);
+    this.beams = makeInstanced(box, beamMat, MAX_BEAMS, 'weapons-beams');
     this.beamRgb = addInstanceColor(this.beams, MAX_BEAMS);
     this.beams.renderOrder = 3;
     this.object.add(this.discs, this.beams);
@@ -348,7 +351,7 @@ export class WeaponsView {
           const qx = mx + Math.sin(ang) * d;
           const qz = mz + Math.cos(ang) * d;
           if (j > 0) {
-            segmentMatrix(bm, beams, px, y, pz, qx, y, qz, width * (1.2 - 0.4 * u), width);
+            segmentMatrix(bm, beams, px, y, pz, qx, y, qz, width * (1.2 - 0.5 * u), 0.05);
             this.beamColor(beams, this.draftRgb);
             fade[beams++] = strength * (1 - 0.35 * u);
             this.streakBeams++;

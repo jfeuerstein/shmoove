@@ -1,6 +1,8 @@
 import { Color, type InstancedBufferAttribute } from 'three';
 import { describe, expect, it } from 'vitest';
-import { BOLT_FROM, BOLT_JAG, BOLT_LIFE, BOLT_POINTS, BOLT_TO, BOSS_BURST, BOSS_IN_LIFE, BOSS_IN_REACH, FxView, GRIND_BURST, GRIND_STREAM } from '../../src/render/fxView';
+import { BOLT_FROM, BOLT_JAG, BOLT_LIFE, BOLT_POINTS, BOLT_REROLL, BOLT_TO, BOSS_BURST, BOSS_IN_LIFE, BOSS_IN_REACH, FxView, GRIND_BURST, GRIND_STREAM } from '../../src/render/fxView';
+import { W_BUMPER } from '../../src/sim/arsenal';
+import { FEEL } from '../../src/sim/constants';
 import { PALETTE } from '../../src/render/look';
 import { makeSimState } from '../../src/sim/sim';
 import { flatTerrain } from '../../src/sim/terrain';
@@ -14,8 +16,11 @@ import {
   FX_ENEMY_DIE,
   FX_ENEMY_HIT,
   FX_HEAL,
+  FX_LEVEL_UP,
+  FX_PLAYER_HIT,
   FX_POP,
   FX_SLAM,
+  FX_SPARK,
   FX_THING,
   FX_TOKEN,
   KIND_BRUISER,
@@ -322,5 +327,150 @@ describe('FxView bosses', () => {
     const got = shardRgb(b, 0);
     const want = linear(PALETTE.bosses[0]);
     for (let j = 0; j < 3; j++) expect(got[j]).toBeCloseTo(want[j], 5);
+  });
+});
+
+describe('FxView: hits, deaths and the weapons that show on the ground', () => {
+  it('throws a hit\'s chips out of the far side of the enemy, away from the rider', () => {
+    const w = makeWorld(1);
+    emitFx(w, FX_ENEMY_HIT, 10, 0, 0, 8);
+    const fx = new FxView(flatTerrain(100));
+    fx.ingest(w, 0, 0, 0);
+    expect(fx.liveShards).toBeGreaterThanOrEqual(3);
+    for (let k = 0; k < 3; k++) fx.update(0.03);
+    const m = fx.shards.instanceMatrix.array;
+    for (let i = 0; i < fx.liveShards; i++) expect(m[i * 16 + 12]).toBeGreaterThan(10);
+    // White-hot: they glow.
+    expect(fx.shards.geometry.getAttribute('aGlow').getX(0)).toBeGreaterThan(0.4);
+  });
+
+  it('leaves a splat of the enemy\'s colour where it died, and chunks that land and lie, gone within a second', () => {
+    const w = makeWorld(1);
+    emitFx(w, FX_ENEMY_DIE, 3, 0, 4, KIND_SHUFFLER);
+    const fx = new FxView(flatTerrain(100));
+    fx.ingest(w);
+    expect(fx.liveGlows).toBe(1);
+    expect(fx.liveBigGlows).toBe(0);
+    fx.update(0.01);
+    const c = fx.glows.instanceColor;
+    if (!c) throw new Error('no colours');
+    expect(c.getX(0)).toBeCloseTo(new Color(PALETTE.enemies[KIND_SHUFFLER]).r, 5);
+    const g = fx.glows.instanceMatrix.array;
+    expect([g[12], g[14]]).toEqual([3, 4]);
+    expect(g[13]).toBeLessThan(0.2);
+    // Some chunks in a darker tone of the colour.
+    const s = fx.shards.instanceColor;
+    if (!s) throw new Error('no colours');
+    const tones = new Set<number>();
+    for (let i = 0; i < fx.liveShards; i++) tones.add(Math.round(s.getX(i) * 1000));
+    expect(tones.size).toBe(2);
+    // After well over half a second they are lying on the ground.
+    for (let k = 0; k < 8; k++) fx.update(0.09);
+    expect(fx.liveShards).toBeGreaterThan(0);
+    const m = fx.shards.instanceMatrix.array;
+    let lying = 0;
+    for (let i = 0; i < fx.liveShards; i++) if (m[i * 16 + 13] < 0.2) lying++;
+    expect(lying).toBe(fx.liveShards);
+    for (let k = 0; k < 3; k++) fx.update(0.1);
+    expect(fx.liveShards).toBe(0);
+    expect(fx.liveGlows).toBe(0);
+  });
+
+  it('cracks the ground behind the slam\'s edge as it travels out, then lets the cracks fade', () => {
+    const w = makeWorld(1);
+    emitFx(w, FX_SLAM, 0, 0, 0, 6);
+    const fx = new FxView(flatTerrain(100));
+    fx.ingest(w);
+    expect(fx.liveCracks).toBe(1);
+    fx.update(0.001);
+    const early = fx.bolts.count;
+    fx.update(0.2);
+    const later = fx.bolts.count;
+    expect(later).toBeGreaterThan(early);
+    // On the ground, inside the wave's reach.
+    const m = fx.bolts.instanceMatrix.array;
+    for (let i = 0; i < later; i++) {
+      expect(m[i * 16 + 13]).toBeLessThan(0.15);
+      expect(Math.hypot(m[i * 16 + 12], m[i * 16 + 14])).toBeLessThan(6);
+    }
+    const col = fx.bolts.instanceColor;
+    if (!col) throw new Error('no colours');
+    expect(col.getY(0)).toBeCloseTo(new Color(PALETTE.slam).g, 5);
+    for (let k = 0; k < 8; k++) fx.update(0.1);
+    expect(fx.liveCracks).toBe(0);
+    expect(fx.bolts.visible).toBe(false);
+  });
+
+  it('re-jags a bolt while it lasts, keeping it through the struck enemies, and flashes on each', () => {
+    const w = makeWorld(1);
+    emitFx(w, FX_ARC, 4, 0, 3, 0);
+    emitFx(w, FX_ARC, 8, 0, 6, 1);
+    const fx = new FxView(flatTerrain(100));
+    fx.ingest(w, 0, 0, 0);
+    // A flash on each enemy struck, at the height the bolt strikes it.
+    expect(fx.liveGlows).toBe(2);
+    const before = point(fx, 0, 1);
+    fx.update(BOLT_REROLL + 0.001);
+    const after = point(fx, 0, 1);
+    expect(Math.hypot(after[0] - before[0], after[1] - before[1], after[2] - before[2])).toBeGreaterThan(1e-4);
+    expect(point(fx, 0, BOLT_JAG)[0]).toBeCloseTo(4, 5);
+    expect(point(fx, 0, 2 * BOLT_JAG)[2]).toBeCloseTo(6, 5);
+    expect(fx.glows.instanceMatrix.array[13]).toBeCloseTo(BOLT_TO + 0.2, 5);
+  });
+
+  it('rings the rider on a level-up, the rings climbing and following it as it rides on', () => {
+    const w = makeWorld(1);
+    emitFx(w, FX_LEVEL_UP, 0, 0, 0, 2);
+    const fx = new FxView(flatTerrain(100));
+    fx.ingest(w, 0, 0, 0);
+    expect(fx.liveBigGlows).toBeGreaterThanOrEqual(3);
+    expect(fx.liveShards).toBeGreaterThan(5);
+    fx.update(0.05);
+    const y0 = fx.glows.instanceMatrix.array[13];
+    // The next tick: the rider is 5 m on, nothing new happened.
+    const quiet = makeWorld(1);
+    fx.ingest(quiet, 5, 0, 0);
+    fx.update(0.2);
+    const m = fx.glows.instanceMatrix.array;
+    expect(m[12]).toBeCloseTo(5, 5);
+    expect(m[13]).toBeGreaterThan(y0);
+    const c = fx.glows.instanceColor;
+    if (!c) throw new Error('no colours');
+    expect(c.getZ(0)).toBeCloseTo(new Color(PALETTE.spark).b, 5);
+  });
+
+  it('throws the Bumper\'s ring out to the shove radius at hip height when a hit lands, only if it is carried', () => {
+    const plain = makeWorld(1);
+    emitFx(plain, FX_PLAYER_HIT, 0, 0, 0, 10);
+    const a = new FxView(flatTerrain(100));
+    a.ingest(plain);
+    expect(a.liveGlows).toBe(0);
+    expect(a.hitTint).toBeGreaterThan(0);
+    const w = makeWorld(1);
+    w.player.loadout.weaponLevel[W_BUMPER] = 1;
+    emitFx(w, FX_PLAYER_HIT, 0, 1, 0, 10);
+    const b = new FxView(flatTerrain(100));
+    b.ingest(w);
+    expect(b.liveBigGlows).toBe(2);
+    let r = 0;
+    for (let t = 0; t < 0.4; t += 0.04) {
+      b.update(0.04);
+      if (b.glows.count > 0 && b.glows.instanceMatrix.array[13] > 1.5) r = Math.max(r, b.glows.instanceMatrix.array[0]);
+    }
+    expect(r).toBeGreaterThan(FEEL.hitShoveRadius * 0.9);
+    expect(r).toBeLessThanOrEqual(FEEL.hitShoveRadius + 1e-6);
+  });
+
+  it('pops a spark where it was taken', () => {
+    const w = makeWorld(1);
+    emitFx(w, FX_SPARK, 1, 0, 2, 3);
+    const fx = new FxView(flatTerrain(100));
+    fx.ingest(w);
+    expect(fx.liveGlows).toBe(1);
+    expect(fx.liveBigGlows).toBe(0);
+    fx.update(0.01);
+    const c = fx.glows.instanceColor;
+    if (!c) throw new Error('no colours');
+    expect(c.getZ(0)).toBeCloseTo(new Color(PALETTE.spark).b, 5);
   });
 });
