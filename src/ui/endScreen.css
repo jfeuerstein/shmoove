@@ -66,3 +66,19 @@
   filter: brightness(1.15);
   transform: scale(0.98);
 }
+
+.end-howto {
+  min-height: 48px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  font: 800 16px/1 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  letter-spacing: 0.16em;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.end-howto:active {
+  filter: brightness(1.2);
+}

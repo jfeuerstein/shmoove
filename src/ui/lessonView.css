@@ -1,0 +1,108 @@
+.lesson {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  color: #fff;
+  z-index: 26;
+}
+
+.lesson[hidden] {
+  display: none;
+}
+
+/* Under the speed readout and the SKIP button, above the middle of the screen. */
+.lesson-band {
+  position: absolute;
+  top: calc(env(safe-area-inset-top, 0px) + 96px);
+  left: calc(env(safe-area-inset-left, 0px) + 16px);
+  right: calc(env(safe-area-inset-right, 0px) + 16px);
+  box-sizing: border-box;
+  padding: 10px 14px 10px;
+  border-radius: 14px;
+  background: rgba(27, 22, 48, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  text-align: center;
+}
+
+.lesson-text {
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1.2;
+  min-height: 24px;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+}
+
+.lesson-dots {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.lesson-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.lesson-dot-now {
+  background: rgba(255, 255, 255, 0.85);
+}
+
+.lesson-dot-done {
+  background: var(--lesson-accent, #ff4d8d);
+}
+
+.tick-a {
+  animation: lesson-tick-a 0.4s ease-out;
+}
+
+.tick-b {
+  animation: lesson-tick-b 0.4s ease-out;
+}
+
+@keyframes lesson-tick-a {
+  0% { transform: scale(1.06); filter: brightness(1.8); }
+  100% { transform: scale(1); filter: brightness(1); }
+}
+
+@keyframes lesson-tick-b {
+  0% { transform: scale(1.06); filter: brightness(1.8); }
+  100% { transform: scale(1); filter: brightness(1); }
+}
+
+/* Under the kills counter; at least 44 px each way. */
+.lesson-skip {
+  position: absolute;
+  top: calc(env(safe-area-inset-top, 0px) + 42px);
+  right: calc(env(safe-area-inset-right, 0px) + 10px);
+  min-width: 64px;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 12px;
+  background: rgba(27, 22, 48, 0.7);
+  color: #fff;
+  font: 800 14px/1 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  letter-spacing: 0.14em;
+  pointer-events: auto;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.lesson-skip:active {
+  filter: brightness(1.3);
+}
+
+.lesson-debug .lesson-band {
+  top: calc(env(safe-area-inset-top, 0px) + 136px);
+}
+
+/* The debug button sits at the top right: the kills counter, and SKIP, go under it. */
+.lesson-debug .lesson-skip {
+  top: calc(env(safe-area-inset-top, 0px) + 82px);
+}

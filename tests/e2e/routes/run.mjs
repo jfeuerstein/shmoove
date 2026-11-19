@@ -18,7 +18,7 @@ const dist = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
 
 export default {
   name: 'run',
-  query: '?hook',
+  query: '?hook&nolesson',
   async run(t) {
     const { page, hook, check } = t;
     const hurt = (n) => page.evaluate((d) => window.__shmoove.hurt(d), n);

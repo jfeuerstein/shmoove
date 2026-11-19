@@ -28,8 +28,8 @@ export default {
     check(across < 0.5, 'and not sideways', { along, across });
     check(Math.abs(run.speed - RUN_SPEED) < 0.75, 'speed is near run speed', run);
     check(run.gear === 2, 'the sim is in gear 2', run);
-    const gearText = await page.evaluate(() => document.querySelector('.hud-gear')?.textContent ?? null);
-    check(gearText === '2', 'HUD shows gear 2', gearText);
+    const speedText = await page.evaluate(() => document.querySelector('.hud-speed')?.textContent ?? null);
+    check(speedText === `${Math.round(run.speed)} m/s`, 'HUD shows the speed the sim reports', { speedText, speed: run.speed });
 
     // Hop: within a few ticks the mover is off the ground, and it comes back down.
     await hook.hop();

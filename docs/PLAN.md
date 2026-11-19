@@ -163,8 +163,8 @@ To do, in order:
    it and launches it at 30 m/s and the same field takes the same damage.
 2. Draw the M3 content (enemies, zones, map objects, weapon effects); the mover becomes a rider on
    a board. Restarted.
-3. A first-run lesson and a how-to sheet for the game as it now is; the HUD stops making the gear
-   the biggest thing on screen. Restarted.
+3. Done: a first-run lesson (seven lines on the real bowl, SKIP), a how-to sheet, and a HUD that leads
+   with a small speed readout instead of the gear.
 4. Bots and balance for standard rules, with `STRICT` back on in `tests/sim/balance.test.ts`.
 5. An independent verification of all of M3.
 6. Then the park: rails to grind, and whatever the owner's next play asks for.

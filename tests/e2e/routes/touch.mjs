@@ -111,8 +111,8 @@ export default {
     check(moved > 25, 'the mover moved', { moved });
     check(Math.abs(held.speed - RUN_SPEED) < 0.75, 'and runs at run speed', held);
     check(held.gear === 2, 'in gear 2', held);
-    const gearText = await page.evaluate(() => document.querySelector('.hud-gear')?.textContent ?? null);
-    check(gearText === '2', 'the HUD shows gear 2', gearText);
+    const speedText = await page.evaluate(() => document.querySelector('.hud-speed')?.textContent ?? null);
+    check(speedText === `${Math.round(held.speed)} m/s`, 'the HUD shows the speed the sim reports', { speedText, speed: held.speed });
 
     await f.up();
     await hook.step(2);

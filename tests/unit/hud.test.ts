@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PALETTE } from '../../src/render/look';
+import { gearCss, PALETTE } from '../../src/render/look';
 import { RUN_TICKS } from '../../src/sim/balance';
 import { Sim } from '../../src/sim/sim';
 import { flatTerrain } from '../../src/sim/terrain';
@@ -53,13 +53,44 @@ const writesOf = (all: FakeEl[]): number => all.reduce((n, e) => n + e.writes, 0
 const hex = (c: number): string => `#${c.toString(16).padStart(6, '0')}`;
 
 describe('Hud', () => {
-  it('shows the gear and the speed', () => {
+  it('shows the speed in m/s, tinted by the gear', () => {
     const { hud, parts, sim } = build(false);
-    sim.state.mover.gear = 2;
-    sim.state.mover.speed = 12.4;
+    const speed = parts.get('hud-speed');
+    for (const [gear, v, text] of [
+      [1, 4.4, '4 m/s'],
+      [2, 12.4, '12 m/s'],
+      [3, 17.5, '18 m/s'],
+      [5, 29.6, '30 m/s'],
+    ] as const) {
+      sim.state.mover.gear = gear;
+      sim.state.mover.speed = v;
+      hud.update(sim);
+      expect(speed?.textContent, `gear ${gear}`).toBe(text);
+      expect(speed?.style.color, `gear ${gear}`).toBe(gearCss(gear));
+    }
+    expect(gearCss(1)).not.toBe(gearCss(5));
+  });
+
+  it('has no gear numeral and no gear name', () => {
+    const { parts, all } = build(true);
+    expect(parts.has('hud-gear')).toBe(false);
+    expect(parts.has('hud-name')).toBe(false);
+    expect(all.some((e) => /gear/i.test(e.className))).toBe(false);
+  });
+
+  it('shows the ollie chain only above zero', () => {
+    const { hud, parts, sim } = build(false);
+    const chain = parts.get('hud-chain');
+    sim.state.mover.chain = 0;
     hud.update(sim);
-    expect(parts.get('hud-gear')?.textContent).toBe('2');
-    expect(parts.get('hud-speed')?.textContent).toBe('12 m/s');
+    expect(chain?.hidden).toBe(true);
+    sim.state.mover.chain = 4;
+    hud.update(sim);
+    expect(chain?.hidden).toBe(false);
+    expect(chain?.textContent).toBe('OLLIE CHAIN ×4');
+    sim.state.mover.chain = 0;
+    hud.update(sim);
+    expect(chain?.hidden).toBe(true);
   });
 
   it('has none of the run parts without a run', () => {
