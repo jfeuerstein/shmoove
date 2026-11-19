@@ -50,6 +50,7 @@ import {
   SPAWN_TICKS,
   spawnEnemy,
   ZONE_RING,
+  HURT_RING,
   type World,
 } from './world';
 
@@ -456,7 +457,7 @@ function stepRings(w: World, s: SimState): void {
     const bx = m.x - zn.x[k];
     const bz = m.z - zn.z[k];
     const crossed = ax * ax + az * az > r0 * r0 && bx * bx + bz * bz <= r1 * r1;
-    if (crossed && m.grounded && m.rail < 0 && p.invuln === 0 && w.run.phase === PHASE_PLAY) hurtPlayer(w, s, zn.power[k]);
+    if (crossed && m.grounded && m.rail < 0 && p.invuln === 0 && w.run.phase === PHASE_PLAY) hurtPlayer(w, s, zn.power[k], HURT_RING);
     if (zn.life[k] === 0 || r1 >= S.ringReach) removeZone(w, k);
   }
 }

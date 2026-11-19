@@ -74,6 +74,19 @@ export function glowMaterial(color: number, glow = 0.55): MeshLambertMaterial {
   return m;
 }
 
+/**
+ * A colour made lighter (k > 0, toward white) or darker (k < 0, toward black), k in -1..1. For the
+ * two or three tones a model is built from: derive them from the palette, do not invent colours.
+ */
+export function tone(color: number, k: number): number {
+  const to = k > 0 ? 255 : 0;
+  const a = Math.min(1, Math.abs(k));
+  const r = Math.round(((color >> 16) & 255) * (1 - a) + to * a);
+  const g = Math.round(((color >> 8) & 255) * (1 - a) + to * a);
+  const b = Math.round((color & 255) * (1 - a) + to * a);
+  return (r << 16) | (g << 8) | b;
+}
+
 /** Recolour a glow material, keeping surface and glow in step. */
 export function setGlowColor(m: MeshLambertMaterial, color: number): void {
   m.color.setHex(color);

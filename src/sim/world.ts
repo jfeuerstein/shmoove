@@ -89,6 +89,13 @@ export const KINDS: readonly EnemyKind[] = [
   { name: 'standstill', radius: 3, height: 7, speed: 2.5, accel: 0, hp: 2600, damage: 25, weight: WEIGHT_HEAVY, xp: 30, boss: true },
 ];
 
+/** `Tally.hits` and `.hurt` indices past the enemy kinds: a lobbed shot landing, a boss's ring, anything else. */
+export const HURT_LOB = KINDS.length;
+export const HURT_RING = KINDS.length + 1;
+export const HURT_OTHER = KINDS.length + 2;
+export const HURT_COUNT = KINDS.length + 3;
+
+
 /** The widest enemy, m. Every query that must reach an enemy's edge pads by this. */
 export const MAX_ENEMY_RADIUS = KINDS.reduce((r, k) => (k.radius > r ? k.radius : r), 0);
 
@@ -372,6 +379,22 @@ export interface DirectorState {
   budget: number;
 }
 
+/**
+ * Who dealt and who took what this run: counters for the end card and the playtest report. Nothing
+ * in the sim reads them.
+ */
+export interface Tally {
+  /** Damage dealt, by source: a weapon id, or `SRC_OTHER` (a bomb crate, a clinger shaken off). */
+  dealt: Float64Array;
+  /** Hits and damage the player took, by cause: an enemy kind (bosses included) or a `HURT_*`. */
+  hits: Uint16Array;
+  hurt: Float64Array;
+}
+
+/** `Tally.dealt` index for damage no weapon dealt. */
+export const SRC_OTHER = WEAPON_COUNT;
+export const SRC_COUNT = WEAPON_COUNT + 1;
+
 function makeBoss(): BossState {
   return { kind: -1, hp: 0, maxHp: 0, x: 0, z: 0, felled: 0, next: 0, lastTick: -2, aimX: 0, aimZ: 1, fromX: 0, fromZ: 0, moverX: 0, moverZ: 0 };
 }
@@ -436,6 +459,9 @@ export interface World {
   /** The boss on the field, for the HUD and the camera. `kind` is -1 when there is none. */
   boss: BossState;
   director: DirectorState;
+  tally: Tally;
+  /** What is dealing damage right now (a weapon id or `SRC_OTHER`), for the tally. */
+  source: number;
   /** `player.pops` as the hazards last saw it: a rise means a loop popped since. */
   popsSeen: number;
   /** Places a totem has asked for an elite pack, waiting for the director: [0, packs). */
@@ -569,6 +595,8 @@ export function makeWorld(seed: number): World {
     seekerMeter: 0,
     boss: makeBoss(),
     director: makeDirector(),
+    tally: { dealt: new Float64Array(SRC_COUNT), hits: new Uint16Array(HURT_COUNT), hurt: new Float64Array(HURT_COUNT) },
+    source: SRC_OTHER,
     popsSeen: 0,
     packs: 0,
     packX: new Float32Array(4),
@@ -610,6 +638,10 @@ export function resetWorld(w: World): void {
   w.packs = 0;
   Object.assign(w.boss, makeBoss());
   Object.assign(w.director, makeDirector());
+  w.tally.dealt.fill(0);
+  w.tally.hits.fill(0);
+  w.tally.hurt.fill(0);
+  w.source = SRC_OTHER;
   w.popsSeen = 0;
   w.run.ticks = 0;
   w.run.phase = PHASE_PLAY;
@@ -686,7 +718,10 @@ export function damageEnemy(w: World, i: number, amount: number, quiet = false):
   const h = w.horde;
   if (h.hp[i] <= 0) return;
   // A shield aura halves damage to the enemies in it. Not to a boss: nothing shields a boss.
-  h.hp[i] -= (h.mark[i] & MARK_SHIELDED) !== 0 && KINDS[h.kind[i]].boss !== true ? amount * 0.5 : amount;
+  const dealt = (h.mark[i] & MARK_SHIELDED) !== 0 && KINDS[h.kind[i]].boss !== true ? amount * 0.5 : amount;
+  // The tally counts what was there to take, not the overkill.
+  w.tally.dealt[w.source] += dealt < h.hp[i] ? dealt : h.hp[i];
+  h.hp[i] -= dealt;
   h.flash[i] = FLASH_TICKS;
   if (!quiet) emitFx(w, FX_ENEMY_HIT, h.x[i], h.y[i], h.z[i], amount);
 }

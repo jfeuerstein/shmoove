@@ -25,7 +25,7 @@ import { stepSeekers } from '../seekers';
 import type { Terrain } from '../terrain';
 import type { SimState } from '../types';
 import { stepWake } from '../wake';
-import type { World } from '../world';
+import { SRC_OTHER, type World } from '../world';
 import { stepCrumbs } from './crumbs';
 import { stepLance } from './lance';
 import { stepOrbit } from './orbit';
@@ -69,6 +69,10 @@ export function stepWeapons(w: World, s: SimState, terrain: Terrain): void {
     const level = levels[id];
     if (level === 0) continue;
     const weapon = WEAPONS[id];
-    if (weapon && weapon.step) weapon.step(w, s, terrain, level);
+    if (weapon && weapon.step) {
+      w.source = id;
+      weapon.step(w, s, terrain, level);
+    }
   }
+  w.source = SRC_OTHER;
 }

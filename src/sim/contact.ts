@@ -5,6 +5,7 @@
  * How fast the player is going changes nothing here. Movement is how you get out of the way: a
  * hop clears the small ones, a slope outruns the rest.
  */
+import { W_BUMPER } from './arsenal';
 import { PLAYER_RADIUS } from './balance';
 import { DT, FEEL } from './constants';
 import { dcos, dsin, len2, len3 } from './math';
@@ -23,6 +24,8 @@ import {
   SPAWN_TICKS,
   STATE_LATCHED,
   WEIGHT_HEAVY,
+  HURT_OTHER,
+  SRC_OTHER,
   type World,
 } from './world';
 
@@ -32,12 +35,14 @@ const REACH = MAX_ENEMY_RADIUS + PLAYER_RADIUS;
 const CLEAR = 0.6;
 
 /** The player takes a hit: damage, a breath, and room. */
-export function hurtPlayer(w: World, s: SimState, damage: number): void {
+export function hurtPlayer(w: World, s: SimState, damage: number, cause: number = HURT_OTHER): void {
   const m = s.mover;
   const p = w.player;
   // Armour takes a little off every hit, never all of it.
   const taken = Math.max(1, damage - p.stats.armour);
   p.hp -= taken;
+  w.tally.hits[cause]++;
+  w.tally.hurt[cause] += taken;
   p.invuln = FEEL.invulnTicks;
   emitFx(w, FX_PLAYER_HIT, m.x, m.y, m.z, taken);
 
@@ -50,7 +55,11 @@ export function hurtPlayer(w: World, s: SimState, damage: number): void {
     if (h.hp[i] <= 0 || h.age[i] < SPAWN_TICKS) continue;
     if (KINDS[h.kind[i]].weight === WEIGHT_HEAVY) continue;
     shoveEnemy(w, i, h.x[i] - m.x, h.z[i] - m.z, FEEL.hitShoveSpeed, FEEL.hitStunTicks);
-    if (thorns > 0) damageEnemy(w, i, thorns, true);
+    if (thorns > 0) {
+      w.source = W_BUMPER;
+      damageEnemy(w, i, thorns, true);
+      w.source = SRC_OTHER;
+    }
   }
 
   if (p.hp <= 0) {
@@ -122,7 +131,7 @@ export function stepContact(w: World, s: SimState): void {
       }
     }
 
-    if (p.invuln === 0) hurtPlayer(w, s, kind.damage);
+    if (p.invuln === 0) hurtPlayer(w, s, kind.damage, h.kind[i]);
   }
 
   m.speed = m.grounded ? len3(m.vx, m.vy, m.vz) : len2(m.vx, m.vz);

@@ -24,6 +24,7 @@ import {
   STATE_LATCHED,
   ZONE_LOB,
   ZONE_TAR,
+  HURT_LOB,
   type World,
 } from './world';
 
@@ -152,7 +153,7 @@ export function stepHazards(w: World, s: SimState, terrain: Terrain): void {
     } else if (zn.life[i] === 0 && inside && p.invuln === 0 && w.run.phase === PHASE_PLAY) {
       // The shot lands. Over it in the air is safe; low or on the ground is not.
       const up = m.grounded ? 0 : m.y - terrain.heightAt(m.x, m.z);
-      if (up < H.lobClear) hurtPlayer(w, s, zn.power[i]);
+      if (up < H.lobClear) hurtPlayer(w, s, zn.power[i], HURT_LOB);
     }
     if (zn.life[i] === 0) removeZone(w, i);
   }
