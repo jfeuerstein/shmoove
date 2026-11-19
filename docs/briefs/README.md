@@ -18,6 +18,7 @@ what to return. The verifier gets the same file.
 | `m2-sparks-seekers.md` | M2 | sonnet | merged |
 | `m2-hud.md` | M2 | sonnet | merged |
 | `m2-balance.md` | M2 | opus | out |
+| `m2-verifier-fixes.md` | M2 | sonnet | out |
 
 Verification: one opus verifier checked the five merged briefs together; its findings became
 `m1-verifier-fixes.md`.
