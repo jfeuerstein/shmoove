@@ -3,19 +3,30 @@
 How the game in `PITCH.md` gets built. Status lives here and is updated in the same commit that
 changes it.
 
-**Now: building to a full playtest.** The owner asked for development to continue until the game
-is ready for one. That is taken to mean: a whole ten-minute run with two mini-bosses and a final
-boss (M4), sound and hit feedback (the part of M5 a player notices first), balanced with bots,
-and independently verified. Riders, unlocks and the rest of the meta (M6) wait until after it.
+**Now: ready for a full playtest.** A whole ten-minute run with two mini-bosses and a final boss
+(M4), sound and hit feedback (the part of M5 a player notices first), balanced with bots,
+independently verified and its findings fixed, and an art pass: the rider, the horde and the
+bosses as characters, a look for every weapon, a dressed park with points of interest, drawn
+icons, and four looks to choose between. Riders, unlocks and the rest of the meta (M6) wait
+until after the playtest.
 
 The design changed once already: after a first play the owner asked for "a pretty standard
 survivor-like but with fun movement", and chose a skateboard for the movement. `PITCH.md` is the
 second pitch; touching hurts at any speed, weapons fire on timers, nothing reads how fast the
 player is going.
 
-Done: the whole run with its three bosses, sound, and hit feedback. In progress: balance for the
-ten-minute run (`docs/briefs/m4-balance.md`) and an independent verification of everything since
-M2. After them: fixes, a last gate, and the playtest.
+What the playtest is for, and how to run it, is `docs/PLAYTEST.md`: a 45-minute session, the
+measures the game records itself (COPY REPORT on the end card) with a target for each, and ten
+ratings only a thumb can give. After it, in the order the reports suggest:
+
+1. Whatever misses its target in the reports, performance first.
+2. The pace of levelling (the bots take 5 to 8 cards a minute) and a late game that a full build
+   finds too safe (DECISIONS 73).
+3. Choosing one of the four looks and finishing it; the others go.
+4. Art still weak, as its own tasks reported: the Slipstream is mostly behind the camera, the
+   Lance's core is thin, tar is dark on dark, the gnat and the clinger are close at a distance,
+   the rim is rarely on screen from the floor of the bowl.
+5. The rest of M5 (music variation, more effects), then M6.
 
 Milestones M0 to M2 stand as built (toolchain, the mover and the bowl, the horde, sparks and
 levels). M3's content (cards, ten weapons, eleven passives, seven enemies, elites, map objects)

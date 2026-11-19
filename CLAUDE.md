@@ -4,10 +4,10 @@ Portrait-mode, one-thumb 3D survivor on a skateboard: a standard survivor (weapo
 touching hurts, sparks, levels, cards) where the movement is the fun part and not a stat. Pitch and
 design: `docs/PITCH.md`. Milestones and status: `docs/PLAN.md`. Decisions: `docs/DECISIONS.md`.
 
-**State of the repo:** M0 to M2 are built. M3's content is in (cards, ten weapons, eleven passives,
-seven enemies, elites, map objects). The design changed after the owner's first play (DECISIONS
-42): the core rules are already standard-survivor; `docs/PLAN.md` lists what is left of the change
-(weapons to timers, drawing the M3 content, a lesson, balance).
+**State of the repo:** M0 to M4 are built, with the part of M5 a player notices first (sound, hit
+feedback) and an art pass (characters, weapon effects, the park, icons, four looks). It is ready
+for the owner's first full playtest; `docs/PLAYTEST.md` says how to run one and what to measure,
+and `docs/PLAN.md` what comes after.
 
 **Rules of the game that code must not break:** how fast the player is moving never changes damage
 dealt, damage taken or healing. Weapons fire on timers. Touching an enemy hurts.
@@ -28,6 +28,7 @@ TypeScript + Three.js (WebGL2) + Vite, shipped as an installable offline PWA.
 | `npm run e2e` | Playwright at 390x844 with touch: every route in `tests/e2e/routes/`; fails on a console error or warning; saves `artifacts/screens/*.png` |
 | `npm run e2e:pwa` | The built app installs, works offline and updates through the bottom bar |
 | `npm run perf` | Headless Chrome at 4x CPU throttle against `tests/perf/budgets.json`; writes `artifacts/perf.json` |
+| `npm run balance` | Bots play whole ten-minute runs on five seeds against the bands in `tests/balance/`; about five minutes; not in the gate. Rerun and commit `tests/balance/last.json` whenever a tuned table changes (a test in `npm test` checks) |
 | `npm run gate` | All of the above in order, stopping at the first failure. A milestone is done only when this is green |
 
 URL parameters: `?debug` (feel panel), `?scheme=tuck|lift|swipe`, `?seed=N` (map and run), `?solo`
@@ -56,9 +57,11 @@ saved on the device once chosen).
   the effects (a pure mapping from the tick's events to sounds), behind one `GameAudio`.
 - `src/ui/` DOM overlay: HUD, cards, build bar, end card, lesson, how-to, threat cues, stick view,
   debug panel.
-- `src/app/` boot, main loop, settings, platform glue, PWA, test hook.
+- `src/app/` boot, main loop, settings, platform glue, PWA, test hook, the run recorder and the kept
+  reports (`runLog.ts`, `reports.ts`).
 - `scripts/` the gate, the icon generator, the service-worker generator.
-- `tests/unit`, `tests/sim` (bots in `tests/sim/bot/`), `tests/e2e`, `tests/perf`.
+- `tests/unit`, `tests/sim` (bots in `tests/sim/bot/`), `tests/balance` (the full balance harness),
+  `tests/e2e`, `tests/perf`.
 - `docs/briefs/` one file per delegated task.
 
 ## Conventions
