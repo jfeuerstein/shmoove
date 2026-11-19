@@ -14,7 +14,7 @@ what to return. The verifier gets the same file.
 | `m1-verifier-fixes.md` | M1 | sonnet | merged |
 | `m2-common.md` | M2 | - | shared rules for the four below |
 | `m2-horde.md` | M2 | opus | merged |
-| `m2-render.md` | M2 | opus | out |
+| `m2-render.md` | M2 | opus | merged |
 | `m2-sparks-seekers.md` | M2 | sonnet | merged |
 | `m2-hud.md` | M2 | sonnet | merged |
 | `m2-balance.md` | M2 | opus | out |

@@ -3,8 +3,9 @@
 Portrait-mode, one-thumb 3D survivor where speed is the build. Pitch and design: `docs/PITCH.md`.
 Milestones and status: `docs/PLAN.md`.
 
-**State of the repo:** M0 is built and the M1 feel slice is playable: one mover on a seeded bowl,
-three control schemes, the debug panel. No enemies, weapons or run structure yet (M2 on).
+**State of the repo:** M0 and M1 are built; M2 (the horde slice) is assembled and being balanced: a
+three-minute run on the bowl with enemies, contact by gear, the Wake and its loop pop, Seekers,
+sparks, XP and levels, a HUD and an end card. No cards, bosses or meta yet (M3 on).
 
 ## Stack
 
@@ -24,16 +25,22 @@ TypeScript + Three.js (WebGL2) + Vite, shipped as an installable offline PWA.
 | `npm run perf` | Headless Chrome at 4x CPU throttle against `tests/perf/budgets.json`; writes `artifacts/perf.json` |
 | `npm run gate` | All of the above in order, stopping at the first failure. A milestone is done only when this is green |
 
-URL parameters: `?debug` (feel panel), `?scheme=tuck|lift|swipe`, `?seed=N` (map), `?flat` (level
-ground, for tests), `?hook` (`window.__shmoove` test hook), `?perf`.
+URL parameters: `?debug` (feel panel), `?scheme=tuck|lift|swipe`, `?seed=N` (map and run), `?solo`
+(the bowl with no horde), `?flat` (level ground with no horde, for tests), `?horde=N&sparks=M` (a
+fixed crowd with the director off, for perf and screenshots), `?hook` (`window.__shmoove` test
+hook), `?perf`.
 
 ## Layout
 
 - `src/sim/` deterministic simulation. Pure TypeScript. Fixed 60 Hz step, seeded RNG.
-  `mover.ts` (carve, tuck, hop), `flow.ts` (gears), `bowl.ts` (the map), `constants.ts` (`FEEL`).
+  `mover.ts` (carve, tuck, hop), `flow.ts` (gears), `bowl.ts` (the map), `constants.ts` (`FEEL`:
+  how it feels), `balance.ts` (how strong things are), `world.ts` (the horde, sparks, shots, player
+  and run state, as dense arrays), `contact.ts` (hurt, plow, bonk), `wake.ts`, `seekers.ts`,
+  `sparks.ts`, `horde.ts` (movement), `director.ts` (spawning), `sim.ts` (the tick order).
 - `src/input/` touch gestures -> `InputFrame`. `gestures.ts` is pure; `touch.ts` binds the DOM.
-- `src/render/` Three.js. Reads sim state, never writes it. `camera.ts`, `look.ts` (palette).
-- `src/ui/` DOM overlay: HUD, stick view, debug panel (level-up cards and menus later).
+- `src/render/` Three.js. Reads sim state, never writes it. `camera.ts`, `look.ts` (palette), one
+  view per kind of thing; the horde, sparks and shots are instanced.
+- `src/ui/` DOM overlay: HUD, end card, threat cues, stick view, debug panel.
 - `src/app/` boot, main loop, settings, platform glue, PWA, test hook.
 - `scripts/` the gate, the icon generator, the service-worker generator.
 - `tests/unit`, `tests/sim` (bots in `tests/sim/bot/`), `tests/e2e`, `tests/perf`.
@@ -64,7 +71,8 @@ ground, for tests), `?hook` (`window.__shmoove` test hook), `?perf`.
 Fable is the scarce resource; Opus does the bulk of the work.
 
 - **Fable (lead):** architecture and plan, interface contracts, the movement controller
-  (`src/sim/mover.ts`), gears and Wake loop logic (`src/sim/flow.ts`, `src/sim/wake.ts` from M2), the camera
+  (`src/sim/mover.ts`), gears, contact and Wake loop logic (`src/sim/flow.ts`, `src/sim/contact.ts`,
+  `src/sim/wake.ts`), the shared world state (`src/sim/world.ts`), the camera
   (`src/render/camera.ts`), the core look (`src/render/look.ts`), integration, and debugging anything
   Opus has failed at twice.
 - **Opus subagents:** contract-bound work that needs design judgement: bowl generation, the app

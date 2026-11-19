@@ -15,7 +15,8 @@ Rules:
 
 - Touch only the files your brief says you own. If the contract is wrong or you need a change outside
   your files, stop and report it instead of working around it. Never edit `src/sim/mover.ts`,
-  `src/sim/flow.ts`, `src/sim/wake.ts`, `src/render/camera.ts` or `src/render/look.ts` unless the
+  `src/sim/flow.ts`, `src/sim/wake.ts`, `src/sim/contact.ts`, `src/sim/world.ts`, `src/render/camera.ts` or
+  `src/render/look.ts` unless the
   brief says so.
 - Everything under `src/sim/` is deterministic and pure: no DOM, no three.js, no `Date`, no
   `Math.random`, no `Math.sin/cos/tan/atan2/pow/exp/log` (use `src/sim/math.ts`). Seeded RNG only.
