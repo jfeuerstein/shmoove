@@ -10,6 +10,12 @@ export function gearPower(gear: number): number {
   return GEAR_POWER[gear < 1 ? 0 : gear > 5 ? 4 : gear - 1];
 }
 
+/**
+ * Health regained per second in each gear, 1..5. Speed is the only healing there is until the
+ * build adds more: a player who keeps their gears outlasts one who only dodges.
+ */
+export const GEAR_REGEN: readonly number[] = [0, 0, 0.6, 1.1, 1.6];
+
 /** The lowest gear that plows an enemy of each weight (light, medium, heavy) instead of being hurt. */
 export const PLOW_GEAR: readonly number[] = [3, 4, 5];
 

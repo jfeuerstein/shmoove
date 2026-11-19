@@ -1,6 +1,8 @@
 /** What a player would notice touching the horde: hurt, plow, bonk. */
 import { describe, expect, it } from 'vitest';
-import { RUN_TICKS } from '../../src/sim/balance';
+import { GEAR_REGEN, RUN_TICKS } from '../../src/sim/balance';
+import { hurtPlayer } from '../../src/sim/contact';
+import { flatTerrain } from '../../src/sim/terrain';
 import { FEEL } from '../../src/sim/constants';
 import { EV_GEAR_DOWN } from '../../src/sim/types';
 import {
@@ -115,6 +117,64 @@ describe('at the gear that plows it', () => {
     run(sim, TUCK, 240);
     expect(sim.world.player.kills).toBeGreaterThan(3);
     expect(sim.world.player.hp).toBeLessThan(100);
+  });
+});
+
+describe('losing the gear inside a crowd', () => {
+  it('still goes through for a moment, then hurts', () => {
+    // A mover that has just dropped out of gear 3 meets a shuffler straight away, or a while later.
+    const meet = (ticksAfter: number): number => {
+      const sim = arena();
+      launch(sim, 16);
+      sim.step(TUCK);
+      expect(sim.state.mover.gear).toBe(3);
+      // Lose the gear without being hit: slow to run speed and let it drop.
+      const m = sim.state.mover;
+      m.vz = 9;
+      while (sim.state.mover.gear > 2) sim.step(FORWARD);
+      run(sim, FORWARD, ticksAfter);
+      place(sim, KIND_SHUFFLER, sim.state.mover.x, sim.state.mover.z + 1.5);
+      run(sim, FORWARD, 20);
+      return sim.world.player.hp;
+    };
+    expect(meet(5)).toBe(100);
+    expect(meet(FEEL.plowGraceTicks + 30)).toBeLessThan(100);
+  });
+
+  it('a hit ends the grace', () => {
+    const sim = arena();
+    launch(sim, 16);
+    sim.step(TUCK);
+    hurtPlayer(sim.world, sim.state, 5);
+    // Take the moment of safety away so only the grace could protect now.
+    sim.world.player.invuln = 0;
+    place(sim, KIND_SHUFFLER, sim.state.mover.x, sim.state.mover.z + 1.5);
+    run(sim, FORWARD, 20);
+    expect(sim.world.player.hp).toBeLessThan(95);
+  });
+});
+
+describe('health', () => {
+  it('comes back in gear 3 and higher, faster the higher, and not at all below', () => {
+    const after = (speed: number): number => {
+      const sim = arena(flatTerrain(100000));
+      sim.world.player.hp = 50;
+      for (let t = 0; t < 600; t++) {
+        launch(sim, speed);
+        sim.step(TUCK);
+      }
+      return sim.world.player.hp;
+    };
+    expect(after(9)).toBe(50);
+    expect(after(15)).toBeCloseTo(50 + GEAR_REGEN[2] * 10, 0);
+    expect(after(30)).toBeGreaterThan(after(15) + 5);
+    // Never past full.
+    const sim = arena(flatTerrain(100000));
+    for (let t = 0; t < 300; t++) {
+      launch(sim, 30);
+      sim.step(TUCK);
+    }
+    expect(sim.world.player.hp).toBe(100);
   });
 });
 

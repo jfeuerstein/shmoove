@@ -171,6 +171,10 @@ export interface Player {
   maxHp: number;
   /** Ticks left during which nothing can hurt. */
   invuln: number;
+  /** The gear contact goes by: the highest held within the grace period. At least the mover's gear. */
+  graceGear: number;
+  /** Ticks the grace gear outlasts the gear itself. */
+  graceTicks: number;
   xp: number;
   /** XP needed for the next level. */
   xpNext: number;
@@ -235,6 +239,8 @@ function makePlayer(): Player {
     hp: 100,
     maxHp: 100,
     invuln: 0,
+    graceGear: 1,
+    graceTicks: 0,
     xp: 0,
     xpNext: xpForLevel(1),
     level: 1,
@@ -538,6 +544,8 @@ export function hashWorld(w: World): number {
   mix(w.seekerMeter);
   mix(p.hp);
   mix(p.invuln);
+  mix(p.graceGear);
+  mix(p.graceTicks);
   mix(p.xp);
   mix(p.level);
   mix(p.kills);

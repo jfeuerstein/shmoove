@@ -89,6 +89,7 @@ const DEFS = {
   hitStunTicks: { v: 44, min: 0, max: 120, step: 2, group: 'combat', note: 'How long a thrown enemy stays harmless, ticks' },
   plowSpeedCost: { v: 0.25, min: 0, max: 2, step: 0.05, group: 'combat', note: 'Speed each plowed enemy costs you, m/s' },
   plowShove: { v: 7, min: 0, max: 20, step: 0.5, group: 'combat', note: 'How hard a plowed enemy is knocked aside, m/s' },
+  plowGraceTicks: { v: 45, min: 0, max: 180, step: 5, group: 'combat', note: 'How long after losing a gear you still go through what that gear plowed, ticks. The way out of a crowd you rode into' },
   bonkBounce: { v: 3, min: 0, max: 10, step: 0.5, group: 'combat', note: 'Speed you rebound with off something too heavy to plow, m/s' },
   // wake (the trail behind you and the loop that pops)
   wakeLength: { v: 34, min: 10, max: 80, step: 1, group: 'wake', note: 'Length of the trail in gear 1, m' },

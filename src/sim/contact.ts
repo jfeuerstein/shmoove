@@ -1,13 +1,13 @@
 /**
- * The mover against the horde: hurt, plow, bonk.
+ * The mover against the horde: hurt, plow, bonk. And the one thing that heals: speed.
  *
  * Below the gear that plows an enemy's weight, touching it hurts: damage, one gear lost, a moment
  * when nothing else can hurt, and everything close thrown back so there is a way out. At or above
  * that gear the mover goes through it: the enemy takes the ram and is knocked aside, and it costs a
  * little speed. Something too heavy to plow is also a wall: the mover stops dead against it.
  */
-import { gearPower, PLAYER_RADIUS, PLOW_GEAR, RAM_DAMAGE_PER_SPEED } from './balance';
-import { FEEL } from './constants';
+import { GEAR_REGEN, gearPower, PLAYER_RADIUS, PLOW_GEAR, RAM_DAMAGE_PER_SPEED } from './balance';
+import { DT, FEEL } from './constants';
 import { gearFloor, gearForSpeed } from './flow';
 import { dcos, dsin, len2, len3 } from './math';
 import { EV_GEAR_DOWN, type MoverState, type SimState } from './types';
@@ -58,6 +58,9 @@ export function hurtPlayer(w: World, s: SimState, damage: number): void {
     m.gearHold = 0;
     s.events |= EV_GEAR_DOWN;
   }
+  // A hit ends any grace: what you rode through a moment ago can hurt you now.
+  p.graceGear = m.gear;
+  p.graceTicks = 0;
 
   const h = w.horde;
   const n = queryEnemies(w, m.x, m.z, FEEL.hitShoveRadius, w.nearB);
@@ -80,6 +83,23 @@ export function stepContact(w: World, s: SimState): void {
   const h = w.horde;
   if (p.invuln > 0) p.invuln--;
 
+  // Health comes back with speed.
+  if (p.hp > 0 && p.hp < p.maxHp) {
+    p.hp += GEAR_REGEN[m.gear - 1] * DT;
+    if (p.hp > p.maxHp) p.hp = p.maxHp;
+  }
+
+  // The gear contact goes by outlasts the gear itself for a moment, so riding into a crowd and
+  // losing the gear inside it is not a trap: there is time to come out the other side.
+  if (m.gear >= p.graceGear) {
+    p.graceGear = m.gear;
+    p.graceTicks = FEEL.plowGraceTicks;
+  } else if (p.graceTicks > 0) {
+    p.graceTicks--;
+  } else {
+    p.graceGear = m.gear;
+  }
+
   const n = queryEnemies(w, m.x, m.z, REACH, w.nearA);
   for (let q = 0; q < n; q++) {
     const i = w.nearA[q];
@@ -97,8 +117,10 @@ export function stepContact(w: World, s: SimState): void {
 
     // Plowing takes the gear and the speed that earns it: a gear the mover is about to lose (it has
     // just been stopped by something) does not plow.
+    // In grace (the gear was held a moment ago) it only takes still being on the move.
     const plowGear = PLOW_GEAR[kind.weight];
-    if (m.gear >= plowGear && speed >= gearFloor(plowGear) - FEEL.gearHyst) {
+    const need = m.gear >= plowGear ? gearFloor(plowGear) - FEEL.gearHyst : gearFloor(2);
+    if (p.graceGear >= plowGear && speed >= need) {
       // Through it.
       const heavy = kind.weight === WEIGHT_HEAVY;
       damageEnemy(w, i, heavy ? h.hp[i] : speed * RAM_DAMAGE_PER_SPEED * gearPower(m.gear));
@@ -139,13 +161,15 @@ export function stepContact(w: World, s: SimState): void {
       h.stun[i] = 12;
       emitFx(w, FX_BONK, h.x[i], h.y[i], h.z[i], h.kind[i]);
       if (p.invuln === 0) hurtPlayer(w, s, kind.damage);
-      // Stopped dead means the gears go too, at once.
+      // Stopped dead means the gears go too, at once, and any grace with them.
       const now = gearForSpeed(len3(m.vx, m.vy, m.vz));
       if (now < m.gear) {
         m.gear = now;
         m.gearHold = 0;
         s.events |= EV_GEAR_DOWN;
       }
+      p.graceGear = m.gear;
+      p.graceTicks = 0;
       continue;
     }
 
