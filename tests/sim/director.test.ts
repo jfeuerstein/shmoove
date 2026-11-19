@@ -11,6 +11,7 @@ import {
   ELITE_SHIELD,
   hashWorld,
   KIND_BOLLARD,
+  KIND_BRUISER,
   KIND_CLINGER,
   KIND_COUNT,
   KIND_CUTTER,
@@ -18,6 +19,7 @@ import {
   KIND_LOBBER,
   KIND_SHUFFLER,
   KIND_SLUDGE,
+  KIND_STANDSTILL,
   makeWorld,
   reapHorde,
   removeEnemy,
@@ -113,7 +115,12 @@ interface Tally {
 
 const n: Vec3 = { x: 0, y: 1, z: 0 };
 
-/** Run a whole three-minute lap, checking every spawn and the count as it goes. */
+/** How long the whole-run laps go, s: past the last kind's arrival and the cap's top at 8:00. */
+const WHOLE = 510;
+/** From here on the run counts as late, for the shares, s. */
+const LATE = 450;
+
+/** Run a whole lap of the run up to `WHOLE`, checking every spawn and the count as it goes. */
 function wholeRun(seed: number): Tally {
   const sc = new Scripted(seed);
   const h = sc.w.horde;
@@ -134,9 +141,10 @@ function wholeRun(seed: number): Tally {
     badElites: 0,
   };
   const alive = new Array<number>(KIND_COUNT).fill(0);
-  // What the rate alone would have brought by now, held to the cap: nothing dies on a lap.
+  // What the rate alone would have brought by now, held to the cap, less what was killed.
   let brought = 0;
-  for (let t = 0; t < 180 * 60; t++) {
+  let lastKill = -Infinity;
+  for (let t = 0; t < WHOLE * 60; t++) {
     lap(sc);
     const m = sc.s.mover;
     let gnats = 0;
@@ -169,14 +177,34 @@ function wholeRun(seed: number): Tally {
     brought = Math.min(capCount(sc.seconds), Math.max(floorCount(sc.seconds), brought + spawnRate(sc.seconds) / 60));
     tally.overCap = Math.max(tally.overCap, h.count - capCount(sc.seconds));
     if (sc.seconds >= 3) {
-      // A cloud is saved up for and arrives whole, so allow a cloud and a second of rate either way.
-      const slack = DIRECTOR.cloudSize + spawnRate(sc.seconds) + 2;
+      // A cloud is saved up for and arrives whole, so allow a cloud and a second of rate either way;
+      // just after kills, also the bank the director may spend at once.
+      const bank = t - lastKill < 3 * 60 ? DIRECTOR.bank * spawnRate(sc.seconds) : 0;
+      const slack = DIRECTOR.cloudSize + spawnRate(sc.seconds) + 2 + bank;
       tally.worstTrack = Math.max(tally.worstTrack, Math.abs(h.count - brought) - slack);
     }
-    if (sc.seconds >= 150 && t % 60 === 0) tally.lateGnatShare.push(gnats / h.count);
+    if (sc.seconds >= LATE && t % 60 === 0) tally.lateGnatShare.push(gnats / h.count);
     for (let k = 0; k < KIND_COUNT; k++) {
       tally.most[k] = Math.max(tally.most[k], alive[k]);
-      if (sc.seconds >= 150 && t % 60 === 0) tally.lateShare[k].push(alive[k] / h.count);
+      if (sc.seconds >= LATE && t % 60 === 0) tally.lateShare[k].push(alive[k] / h.count);
+    }
+    // A player who kills about as fast as the horde comes keeps it off the cap: near the cap the
+    // lap kills a tenth of it, spread over the rest of the horde, so what is due can come up.
+    const cap = Math.floor(capCount(sc.seconds));
+    if (h.count >= cap * 0.9) {
+      const want = Math.ceil(h.count - cap * 0.8);
+      let killed = 0;
+      lastKill = t;
+      for (let j = 0; killed < want; j++) {
+        const i = (t * 7919 + j * 104729) % h.count;
+        // What dies first is the small stuff: bollards and elites take longer to bring down.
+        if (h.hp[i] <= 0 || h.kind[i] === KIND_BOLLARD || h.elite[i] !== 0) continue;
+        h.hp[i] = 0;
+        killed++;
+      }
+      sc.w.deaths.count = 0;
+      reapHorde(sc.w);
+      brought -= killed;
     }
   }
   tally.mostBollards = Math.max(tally.mostBollards, 0);
@@ -187,7 +215,7 @@ describe('a whole run on the bowl', () => {
   const runs = [1, 2, 3].map((seed) => ({ seed, tally: wholeRun(seed) }));
 
   for (const { seed, tally } of runs) {
-    it(`seed ${seed}: with nothing dying the horde grows at the rate, from the floor, up to the cap`, () => {
+    it(`seed ${seed}: the horde grows at the rate, from the floor, less what is killed, and never past the cap`, () => {
       expect(tally.worstTrack).toBeLessThanOrEqual(0);
     });
 
@@ -239,14 +267,14 @@ describe('a whole run on the bowl', () => {
       expect(mean(tally.lateShare[KIND_CLINGER])).toBeLessThan(DIRECTOR.clingerShare * 1.3);
     });
 
-    it(`seed ${seed}: from 90 s, about every 25 s, a shuffler or cutter comes up an elite`, () => {
+    it(`seed ${seed}: from 5:00, about every 30 s, a shuffler or cutter comes up an elite`, () => {
       expect(tally.badElites).toBe(0);
       expect(tally.elites[0]).toBeGreaterThanOrEqual(DIRECTOR.eliteFrom);
-      expect(tally.elites[0]).toBeLessThan(DIRECTOR.eliteFrom + 2);
-      // 90, 115, 140, 165 when something comes up the moment one is due; on this lap nothing dies,
+      expect(tally.elites[0]).toBeLessThan(DIRECTOR.eliteFrom + 7);
+      // 300, 330, ... 510 when something comes up the moment one is due; on this lap nothing dies,
       // so at the cap the next spawn waits for something to be recycled.
-      expect(tally.elites.length).toBeGreaterThanOrEqual(3);
-      expect(tally.elites.length).toBeLessThanOrEqual(4);
+      expect(tally.elites.length).toBeGreaterThanOrEqual(5);
+      expect(tally.elites.length).toBeLessThanOrEqual(8);
       for (let k = 1; k < tally.elites.length; k++) {
         const gap = tally.elites[k] - tally.elites[k - 1];
         expect(gap).toBeGreaterThanOrEqual(DIRECTOR.eliteEvery);
@@ -295,8 +323,10 @@ describe('where they come from', () => {
       const h = sc.w.horde;
       let ahead = 0;
       let all = 0;
-      for (let t = 0; t < 20 * 60; t++) {
+      for (let t = 0; t < 40 * 60; t++) {
         const { x, dir } = shuttle(sc, 20, 125);
+        // Away from the turns at the ends of the line, where ahead runs off the map.
+        if (Math.abs(x) > 70) continue;
         for (let i = 0; i < h.count; i++) {
           if (h.age[i] !== 1) continue;
           all++;
@@ -424,25 +454,31 @@ describe('the rate, the floor and the cap', () => {
     }
   });
 
-  it('the schedules are what the table says: the rate rises, the cap ends at 400, the floor is under the cap', () => {
-    for (let s = 0; s <= 180; s += 5) {
+  it('the schedules are what the table says over ten minutes: the rate rises, the cap tops out at 400 at 8:00, the floor is under the cap', () => {
+    for (let s = 0; s <= 600; s += 5) {
       expect(spawnRate(s + 5)).toBeGreaterThanOrEqual(spawnRate(s));
+      expect(capCount(s + 5)).toBeGreaterThanOrEqual(capCount(s));
       expect(floorCount(s)).toBeLessThan(capCount(s));
     }
-    expect(capCount(180)).toBe(400);
-    expect(capCount(240)).toBe(400);
+    expect(capCount(470)).toBeLessThan(400);
+    expect(capCount(480)).toBe(400);
+    expect(capCount(600)).toBe(400);
+    expect(capCount(900)).toBe(400);
+    // Each act is busier than the one before.
+    expect(spawnRate(360)).toBeGreaterThan(spawnRate(180) * 1.2);
+    expect(spawnRate(540)).toBeGreaterThan(spawnRate(360) * 1.2);
   });
 });
 
 describe('cost with every kind', () => {
   it('director and horde together stay well under a millisecond a tick with 400 enemies of mixed kinds', () => {
     const sc = new Scripted(1);
-    sc.w.run.ticks = 180 * 60;
+    sc.w.run.ticks = 480 * 60;
     lap(sc);
     const m = sc.s.mover;
     const kinds = [KIND_SHUFFLER, KIND_SHUFFLER, KIND_SHUFFLER, KIND_GNAT, KIND_GNAT, KIND_CUTTER, KIND_LOBBER, KIND_SLUDGE, KIND_CLINGER, KIND_BOLLARD];
     const auras = [ELITE_HASTE, ELITE_SHIELD, ELITE_JAM];
-    for (let k = 0; sc.w.horde.count < capCount(180); k++) {
+    for (let k = 0; sc.w.horde.count < capCount(480); k++) {
       const a = k * 2.399963;
       const r = 12 + (k % 55);
       const x = m.x + Math.sin(a) * r;
@@ -459,6 +495,70 @@ describe('cost with every kind', () => {
     const avg = (performance.now() - t0) / ticks;
     console.log(`[horde+director, mixed] ${sc.w.horde.count} enemies: ${avg.toFixed(3)} ms/tick`);
     expect(avg).toBeLessThan(3);
+  });
+});
+
+describe('the cap', () => {
+  it('with nothing dying the horde fills up to the cap and no further', () => {
+    const sc = new Scripted(1);
+    let most = 0;
+    for (let t = 0; t < 120 * 60; t++) {
+      lap(sc);
+      expect(sc.w.horde.count).toBeLessThanOrEqual(Math.floor(capCount(sc.seconds)));
+      most = Math.max(most, sc.w.horde.count - Math.floor(capCount(sc.seconds)));
+    }
+    expect(most).toBeGreaterThanOrEqual(-2);
+  });
+});
+
+describe('while a boss is up', () => {
+  /**
+   * From 3:20, laps with the horde held at a level above the floor and under the cap (the newest are
+   * taken away by hand, which the director does not refund), so every spawn is paid for at the rate.
+   * Returns the spawns and the bollards seen in 30 s.
+   */
+  function heldLap(withBoss: boolean): { spawns: number; bollards: number } {
+    const sc = new Scripted(1);
+    sc.w.run.ticks = 200 * 60;
+    if (withBoss) {
+      const i = spawnEnemy(sc.w, KIND_BRUISER, 0, sc.terrain.heightAt(0, 0), 0);
+      sc.w.horde.age[i] = SPAWN_TICKS;
+    }
+    const h = sc.w.horde;
+    let spawns = 0;
+    let bollards = 0;
+    for (let t = 0; t < 30 * 60; t++) {
+      lap(sc);
+      for (let i = 0; i < h.count; i++) {
+        if (h.age[i] !== 1) continue;
+        spawns++;
+        if (h.kind[i] === KIND_BOLLARD) bollards++;
+      }
+      const keep = floorCount(sc.seconds) + 20;
+      for (let i = h.count - 1; i >= 0 && h.count > keep; i--) if (h.kind[i] !== KIND_BRUISER) removeEnemy(sc.w, i);
+    }
+    return { spawns, bollards };
+  }
+
+  it('enemies come at 0.6 of the rate, and no new bollards', () => {
+    const calm = heldLap(false);
+    const boss = heldLap(true);
+    expect(calm.bollards).toBeGreaterThan(0);
+    expect(boss.bollards).toBe(0);
+    const share = boss.spawns / calm.spawns;
+    expect(share).toBeGreaterThan(DIRECTOR.bossRate - 0.08);
+    expect(share).toBeLessThan(DIRECTOR.bossRate + 0.08);
+  });
+
+  it('a boss is never taken away, however far behind', () => {
+    const sc = new Scripted(2);
+    sc.w.run.ticks = 400 * 60;
+    const i = spawnEnemy(sc.w, KIND_STANDSTILL, -120, sc.terrain.heightAt(-120, 0), 0);
+    sc.w.horde.age[i] = SPAWN_TICKS;
+    for (let t = 0; t < 10 * 60; t++) shuttle(sc, 20, 125);
+    let bosses = 0;
+    for (let j = 0; j < sc.w.horde.count; j++) if (sc.w.horde.kind[j] === KIND_STANDSTILL) bosses++;
+    expect(bosses).toBe(1);
   });
 });
 
@@ -511,11 +611,11 @@ describe('determinism', () => {
 describe('cost', () => {
   it('director and horde together take well under a millisecond a tick with 400 enemies', () => {
     const sc = new Scripted(3);
-    sc.w.run.ticks = 180 * 60;
+    sc.w.run.ticks = 480 * 60;
     lap(sc);
     // Fill to the cap by hand around the mover (the rate would take most of a minute).
     const m = sc.s.mover;
-    for (let k = 0; sc.w.horde.count < capCount(180); k++) {
+    for (let k = 0; sc.w.horde.count < capCount(480); k++) {
       const a = k * 2.399963;
       const r = 20 + (k % 50);
       const x = m.x + Math.sin(a) * r;
