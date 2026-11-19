@@ -138,19 +138,26 @@ describe('the loop', () => {
     expect(pops).toBeLessThanOrEqual(Math.ceil(laps));
   });
 
-  it('sweeps the sparks inside it toward the player and leaves the rest', () => {
+  it('sweeps the sparks inside it to the player and leaves the rest', () => {
     const sim = arena();
     const s = sim.world.sparks;
+    // One in the middle of the loop, far outside the magnet; one well outside the loop.
     s.count = 2;
     s.x[0] = c.cx;
     s.z[0] = c.cz;
-    s.x[1] = c.cx + c.r + 8;
+    s.value[0] = 3;
+    s.x[1] = c.cx + c.r + 12;
     s.z[1] = c.cz;
+    s.value[1] = 2;
     const counts = new Map<number, number>();
-    rideCircle(sim, 420, counts);
+    rideCircle(sim, 480, counts);
     expect(counts.get(FX_POP) ?? 0).toBeGreaterThan(0);
-    expect(s.pull[0]).toBe(1);
-    expect(s.pull[1]).toBe(0);
+    // The swept one flew in and was taken; the other has not moved.
+    expect(sim.world.player.xp).toBe(3);
+    expect(s.count).toBe(1);
+    expect(s.value[0]).toBe(2);
+    expect(s.pull[0]).toBe(0);
+    expect(s.x[0]).toBeCloseTo(c.cx + c.r + 12, 3);
   });
 
   it('hits harder in a higher gear', () => {
