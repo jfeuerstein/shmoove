@@ -22,11 +22,11 @@ import {
 /** By weapon level 1..5. */
 export const SEEKERS = {
   /** Metres travelled between volleys. */
-  interval: [14, 12, 10, 9, 8],
+  interval: [12, 10, 9, 8, 7],
   /** Darts per volley. */
   darts: [1, 2, 2, 3, 4],
   /** Damage per dart before gear power. */
-  damage: [6, 7, 9, 11, 13],
+  damage: [8, 10, 12, 14, 17],
 } as const;
 
 /** An enemy must be this close to the mover to be shot at, m. */

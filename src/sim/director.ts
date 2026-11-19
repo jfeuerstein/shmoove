@@ -17,7 +17,7 @@ const DEG = PI / 180;
 export const DIRECTOR = {
   /** The number of living enemies wanted, by run time: seconds and counts, linear between. */
   targetAt: [0, 30, 60, 120, 180],
-  target: [25, 60, 120, 260, 400],
+  target: [20, 45, 100, 260, 400],
   /** Most spawns in one tick while below the target. */
   perTick: 4,
 

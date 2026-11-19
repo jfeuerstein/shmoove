@@ -28,7 +28,7 @@ export const RUN_TICKS = 180 * 60;
 
 /** XP needed to go from `level` to the next. */
 export function xpForLevel(level: number): number {
-  return 4 + level * 3;
+  return 2 + level * 3;
 }
 
 /**

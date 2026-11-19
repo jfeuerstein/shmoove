@@ -44,7 +44,7 @@ export interface EnemyKind {
 }
 
 export const KINDS: readonly EnemyKind[] = [
-  { name: 'shuffler', radius: 0.6, height: 1.7, speed: 4.5, accel: 10, hp: 10, damage: 8, weight: WEIGHT_LIGHT, xp: 1 },
+  { name: 'shuffler', radius: 0.6, height: 1.7, speed: 4, accel: 10, hp: 10, damage: 8, weight: WEIGHT_LIGHT, xp: 1 },
   { name: 'gnat', radius: 0.35, height: 0.6, speed: 8.5, accel: 18, hp: 2, damage: 3, weight: WEIGHT_LIGHT, xp: 0.5 },
   { name: 'bollard', radius: 1.3, height: 2.4, speed: 1.6, accel: 3, hp: 120, damage: 15, weight: WEIGHT_HEAVY, xp: 12 },
 ];
