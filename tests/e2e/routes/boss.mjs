@@ -26,6 +26,8 @@ const BOSSES = [
 ];
 /** Ticks after the Standstill's arrival when its first ring is about 6 m out, inside its 12 m disc. */
 const AURA_WAIT = 36 + 210 + 40;
+/** `BOSS.heal` in src/sim/bosses.ts: the share of maximum health a fallen boss gives back. */
+const BOSS_HEAL = 0.15;
 /** OFFER_BOSS: the rare card a fallen boss gives. */
 const OFFER_BOSS = 4;
 
@@ -215,8 +217,8 @@ export default {
       s = await hook.state();
       check(s.boss.kind === -1, 'the bar is for no boss now', s.boss);
       check(s.boss.felled === before.boss.felled + 1, 'one more boss felled', s.boss);
-      const give = Math.min(s.maxHp - before.hp, s.maxHp * 0.4);
-      check(Math.abs(s.hp - (before.hp + give)) < 1.5, 'it gave back 40% of maximum health', { before: before.hp, after: s.hp, give });
+      const give = Math.min(s.maxHp - before.hp, s.maxHp * BOSS_HEAL);
+      check(Math.abs(s.hp - (before.hp + give)) < 1.5, `it gave back ${BOSS_HEAL * 100}% of maximum health`, { before: before.hp, after: s.hp, give });
       check((await shown(page, '.hud-boss')) === false, 'the bar is gone');
 
       if (b.kind !== 9) {
