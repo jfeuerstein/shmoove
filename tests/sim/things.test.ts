@@ -20,6 +20,7 @@ import {
   crateReward,
   HOOP_TAKEN,
   SLALOM_MISSED,
+  stepThings,
 } from '../../src/sim/things';
 import { makeInputFrame, type InputFrame } from '../../src/sim/types';
 import {
@@ -584,16 +585,38 @@ describe('a totem', () => {
     expect(sim.state.mover.gear).toBe(1);
     expect(w.things.state[t]).toBe(THING_DONE);
     expect(of(seen, FX_THING)).toEqual([THING_TOTEM]);
-    expect(w.packs).toBe(1);
-    expect([w.packX[0], w.packZ[0]]).toEqual([0, 0]);
+    // The director answers the request on the next tick: an elite carrying the pack's mark and its
+    // ten followers come up in a ring round where the totem stood.
+    step(sim, 2, []);
+    expect(w.packs).toBe(0);
+    const h = w.horde;
+    let marked = 0;
+    let far = 0;
+    for (let i = 0; i < h.count; i++) {
+      const d = Math.hypot(h.x[i], h.z[i]);
+      if ((h.mark[i] & MARK_PACK) !== 0) {
+        // The elite stands where the totem was.
+        marked++;
+        if (d > 3) far++;
+      } else if (d < 10 || d > 32) {
+        far++;
+      }
+    }
+    expect(marked).toBe(1);
+    expect(h.count).toBe(11);
+    expect(far).toBe(0);
   });
 
   it('is spent without a request when the requests are full', () => {
     const { sim } = recordingArena();
     const w = sim.world;
-    w.packs = w.packX.length;
+    // Inside a run the director empties the queue every tick, so a full one can only be shown by
+    // running the things' step on its own.
     const t = addThing(w, THING_TOTEM, 0, 0, 0, 0, 0);
-    rideThrough(sim, 9);
+    w.packs = w.packX.length;
+    sim.state.mover.x = 0;
+    sim.state.mover.z = 0;
+    stepThings(w, sim.state, sim.terrain);
     expect(w.things.state[t]).toBe(THING_DONE);
     expect(w.packs).toBe(w.packX.length);
   });
