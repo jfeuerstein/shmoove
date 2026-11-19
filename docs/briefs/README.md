@@ -24,9 +24,9 @@ what to return. The verifier gets the same file.
 | `m3-enemies.md` | M3 | opus | merged |
 | `m3-things.md` | M3 | opus | merged |
 | `m3-cards-ui.md` | M3 | sonnet | merged |
-| `m3-render.md` | M3 | opus | stopped at the pivot, part done (three commits and uncommitted work in its worktree); not restarted |
+| `m3-render.md` | M3 | opus | restarted from `wip/m3-render` on the owner's say-so |
 | `m3-balance.md` | M3 | opus | stopped at the pivot; not merged |
-| `m3-lesson.md` | M3 (pulled forward from M6) | sonnet | stopped at the pivot, written for the old rules; not restarted |
+| `m3-lesson.md` | M3 (pulled forward from M6) | sonnet | restarted from `wip/m3-lesson` with a new script |
 | `m3b-weapons-timers.md` | M3, second pass | opus | merged |
 
 Verification: one opus verifier checked the five merged M0/M1 briefs together; its findings became

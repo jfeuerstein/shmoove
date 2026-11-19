@@ -16,8 +16,7 @@ stands; its rules were rewritten.
 Still only the owner can:
 
 1. Play it and say what is and is not fun. The deploy works now; every push updates the link.
-2. Choose the toy: this pass takes the skateboard (it is most of what the mover already is). A
-   grappling hook is the alternative the owner named.
+2. Say whether the board lands. The owner chose the skateboard over a grappling hook.
 
 ## The order, and why
 
@@ -163,9 +162,9 @@ To do, in order:
 1. Weapons fire on timers, not metres or hops or tucks. Done: a test holds the mover still, rides
    it and launches it at 30 m/s and the same field takes the same damage.
 2. Draw the M3 content (enemies, zones, map objects, weapon effects); the mover becomes a rider on
-   a board. Part done and stopped; waiting on the owner's go-ahead to restart.
+   a board. Restarted.
 3. A first-run lesson and a how-to sheet for the game as it now is; the HUD stops making the gear
-   the biggest thing on screen. Stopped; waiting on the owner's go-ahead to restart.
+   the biggest thing on screen. Restarted.
 4. Bots and balance for standard rules, with `STRICT` back on in `tests/sim/balance.test.ts`.
 5. An independent verification of all of M3.
 6. Then the park: rails to grind, and whatever the owner's next play asks for.

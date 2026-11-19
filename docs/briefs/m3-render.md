@@ -1,5 +1,10 @@
 # M3: drawing what M3 added
 
+> **Restarted.** This task was stopped about three quarters done when the game's design changed
+> (`docs/DECISIONS.md` 42 to 47). The work so far is on the branch `wip/m3-render`: four commits,
+> the last an untested snapshot. Start by merging that branch into yours and getting it to build
+> and pass; then finish what the brief lists and do the section "Second pass" at the end.
+
 Model: opus. Read `docs/briefs/m3-common.md` first, then `docs/briefs/m2-render.md` (its rules and
 budgets still hold), `src/render/hordeView.ts`, `shotsView.ts`, `fxView.ts`, `wakeView.ts`,
 `sparksView.ts`, `moverView.ts`, `src/render/look.ts`, `src/app/fixtures.ts`, `src/app/main.ts`,
@@ -83,3 +88,28 @@ in `w.things`; do not assume where it came from.
    and each thing be told apart; is the mover still the brightest; is the middle of the screen
    readable or is it noise. If it is noise, say what you turned down.
 5. Report the perf numbers.
+
+## Second pass (the design change, and the board)
+
+The game is now a standard survivor on a skateboard. Movement never changes damage or health;
+weapons fire on timers. For you that means:
+
+- **Weapons.** They were converted after `wip/m3-render` was written. The exports you read still
+  exist, but `slamRadius(level, area)` has new arguments (draw the Slam from `FX_SLAM`'s radius
+  instead), and the Lance and Slipstream are always on while carried. Fix whatever no longer
+  compiles or no longer matches; do not edit `src/sim/`.
+- **Fixtures.** A run starts with the Seekers, not the Wake. The map's things are now placed from
+  the bowl's sites by the `Sim` itself, so on the real bowl `w.things` is already full: your
+  `?arsenal` row of things is added to them, not instead of them.
+- **Elites** carry `MARK_ELITE` in `Horde.mark` as well as their aura in `Horde.elite`.
+- **The mover is a rider on a board** (`src/render/moverView.ts` and its test are yours for
+  this). A board about 0.9 m long and 0.25 m wide with four small wheels, under a figure standing
+  side-on to the direction of travel, knees bent. Coasting (`tucked`) it crouches low; in the air
+  the board's nose comes up and the figure tucks; it leans into turns as now; pushing (carving
+  below run speed) it stands taller. At most about 70 triangles, still `glowMaterial` in
+  `PALETTE.mover` for the figure (the board may be `PALETTE.accent`), still the brightest thing on
+  screen, and the blob shadow stays. A unit test for the poses (coasting is lower than pushing;
+  airborne tilts the board; the board points along the heading).
+
+Acceptance is the brief's, plus: a third screenshot from the `arsenal` route, close enough to the
+rider to judge the board, described like the others.

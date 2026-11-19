@@ -149,3 +149,7 @@ Things decided without the owner, newest last. Overrule any of them.
    Static and Lance are within 3%; Skipper and Crumbs differ (0.73 and 2.61) only because their
    stones and mines stay where they were put while a riding player's crowd moves. Untuned: the
    Lance does about a tenth of the leaders, the Slam and the Skipper the most.
+48. **Skateboard: the owner's choice.** Asked "skateboard or grappling hook", the owner said to go
+   with the skateboard. The rider gets a board, and rails to grind come next. The drawing task and
+   the lesson were restarted on the owner's say-so from the work that had been stopped
+   (`wip/m3-render`, `wip/m3-lesson`).

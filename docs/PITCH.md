@@ -129,9 +129,6 @@ daily bowl; flat-shaded low-poly with a dark ground and saturated enemies; a gen
 in stems that follow your speed; TypeScript, Three.js and Vite as an installable offline PWA; a
 deterministic 60 Hz sim so bots can play whole runs in tests.
 
-## 9. Open
+## 9. Decided
 
-- **Skateboard or grappling hook?** The owner named both. This pitch takes the skateboard because
-  the movement already built (carve, coast, ollie, slopes, pipes, kickers) is most of one. A
-  grapple (tap a post to sling round it) could be added as a rider's gadget or a map feature
-  later, or swapped in as the core toy if the board does not land.
+- **Skateboard, not grappling hook.** The owner named both and then chose the board.
