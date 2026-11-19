@@ -66,6 +66,30 @@
   font-size: 22px;
 }
 
+.howto-sound {
+  margin-top: auto;
+  min-height: 48px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  font: 900 16px/1 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  letter-spacing: 0.16em;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.howto-sound.off {
+  background: transparent;
+  opacity: 0.75;
+}
+
+/* With the sound button above it, the replay button no longer takes the free space. */
+.howto-sound + .howto-replay {
+  margin-top: 0;
+}
+
+.howto-sound:active,
 .howto-replay:active,
 .howto-close:active {
   filter: brightness(1.15);

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   collectOverrides,
+  DEFAULT_MUSIC_VOLUME,
   overridesText,
   parseStored,
   Settings,
@@ -189,6 +190,37 @@ describe('settings', () => {
     expect(new Settings(store, '', 'tuck', defaults(), true).reducedMotion).toBe(false);
     b.chooseReducedMotion(true);
     expect(new Settings(store, '', 'tuck', defaults(), false).reducedMotion).toBe(true);
+  });
+
+  it('keeps the sound on at the default volume unless changed, and remembers the switch and the volume', () => {
+    const store = memoryStorage();
+    const feel = defaults();
+    const a = new Settings(store, '', 'tuck', feel);
+    expect(a.mute).toBe(false);
+    expect(a.musicVolume).toBe(DEFAULT_MUSIC_VOLUME);
+    a.chooseSound(true, 0.4);
+    const b = new Settings(store, '', 'tuck', defaults());
+    expect(b.mute).toBe(true);
+    expect(b.musicVolume).toBeCloseTo(0.4, 9);
+    // Other saves do not lose it.
+    feel.grip = 20;
+    a.saveFeel();
+    a.chooseAutoPick(true);
+    a.chooseLessonDone(true);
+    expect(new Settings(store, '', 'tuck', defaults()).mute).toBe(true);
+    a.chooseSound(false, 0.4);
+    expect(new Settings(store, '', 'tuck', defaults()).mute).toBe(false);
+    expect(new Settings(store, '', 'tuck', defaults()).musicVolume).toBeCloseTo(0.4, 9);
+  });
+
+  it('reads bad sound settings as the defaults, and clamps the volume', () => {
+    expect(parseStored(JSON.stringify({ v: 1, feel: {}, sound: { mute: 'yes', music: 'loud' } })).sound).toEqual({ mute: false, music: DEFAULT_MUSIC_VOLUME });
+    expect(parseStored(JSON.stringify({ v: 1, feel: {}, sound: { mute: true, music: 3 } })).sound).toEqual({ mute: true, music: 1 });
+    expect(parseStored(JSON.stringify({ v: 1, feel: {}, sound: { music: -1 } })).sound).toEqual({ mute: false, music: 0 });
+    expect(parseStored(JSON.stringify({ v: 1, feel: {}, sound: null })).sound).toEqual({ mute: false, music: DEFAULT_MUSIC_VOLUME });
+    const s = new Settings(memoryStorage(), '', 'tuck', defaults());
+    s.chooseSound(false, Number.NaN);
+    expect(s.musicVolume).toBe(DEFAULT_MUSIC_VOLUME);
   });
 
   it('runs without storage: the lesson is simply not remembered', () => {

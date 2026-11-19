@@ -1,10 +1,12 @@
 /**
  * The feel panel, only with `?debug`. A button at the top right opens a sheet over the right two
- * thirds of the screen (the game keeps running on the left): the control scheme switch, then one
+ * thirds of the screen (the game keeps running on the left): auto-pick, the sound switch and music
+ * volume, the control scheme switch, then one
  * collapsible section per group with a slider per `FEEL` constant. Edits write `FEEL` directly and
  * are saved through `Settings`. `update()` keeps the rows in step with `FEEL` when it changes under
  * them (reset all) and does nothing while the sheet is closed.
  */
+import type { SoundControls } from '../audio/audio';
 import type { Settings } from '../app/settings';
 import { PALETTE } from '../render/look';
 import { FEEL, FEEL_DEFS, FEEL_KEYS, resetFeel, type FeelDef, type FeelKey } from '../sim/constants';
@@ -55,6 +57,42 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, text?: s
   return e;
 }
 
+/** The sound switch and the music volume slider, side by side. */
+function soundRow(sound: SoundControls): HTMLElement {
+  const row = el('div', 'dbg-head dbg-sound');
+  row.style.marginBottom = '6px';
+  row.style.alignItems = 'center';
+  const mute = el('button', 'dbg-btn dbg-mute');
+  mute.type = 'button';
+  const volume = document.createElement('input');
+  volume.type = 'range';
+  volume.className = 'dbg-volume';
+  volume.min = '0';
+  volume.max = '1';
+  volume.step = '0.05';
+  volume.value = String(sound.volume);
+  volume.setAttribute('aria-label', 'Music volume');
+  volume.style.flex = '1 1 0';
+  volume.style.minWidth = '0';
+  volume.style.accentColor = 'var(--dbg-accent)';
+  const sync = (): void => {
+    mute.textContent = sound.muted ? 'Sound: off' : 'Sound: ON';
+    mute.setAttribute('aria-pressed', String(!sound.muted));
+  };
+  mute.addEventListener('click', () => {
+    sound.setMuted(!sound.muted);
+    sync();
+  });
+  volume.addEventListener('input', () => {
+    const v = Number(volume.value);
+    if (Number.isFinite(v)) sound.setVolume(v);
+  });
+  sync();
+  row.appendChild(mute);
+  row.appendChild(volume);
+  return row;
+}
+
 export class DebugPanel {
   readonly element: HTMLElement;
   private readonly toggle: HTMLButtonElement;
@@ -75,6 +113,7 @@ export class DebugPanel {
     private readonly settings: Settings,
     private readonly onScheme: (s: Scheme) => void,
     private readonly onAutoPick: (on: boolean) => void = () => undefined,
+    sound: SoundControls | null = null,
   ) {
     const wrap = el('div', 'dbg');
     wrap.style.setProperty('--dbg-accent', cssHex(PALETTE.accent));
@@ -106,6 +145,7 @@ export class DebugPanel {
       this.syncAutoPick();
     });
     this.sheet.appendChild(this.autoPickBtn);
+    if (sound) this.sheet.appendChild(soundRow(sound));
 
     // Haptics and reduced motion; the main loop reads them from the settings each frame.
     this.hapticsBtn = el('button', 'dbg-toggle-row', 'Haptics');

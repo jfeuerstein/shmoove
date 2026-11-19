@@ -1,6 +1,7 @@
 /**
- * What the owner has tuned, kept between visits: the control scheme and every `FEEL` value that
- * differs from its shipped default, under one versioned `localStorage` key.
+ * What the owner has tuned, kept between visits: the control scheme, every `FEEL` value that
+ * differs from its shipped default, and the sound switch and music volume, under one versioned
+ * `localStorage` key.
  *
  * The logic is pure (`parseStored`, `collectOverrides`, `applyOverrides`, `overridesText`); `Settings`
  * is the thin wrapper around a storage object. Storage can be missing, full or throw (private mode),
@@ -32,6 +33,25 @@ export interface Stored {
   haptics: boolean;
   /** No shake, no hit-stop, a steady low-health tint. Null: never chosen, follow the browser. */
   reducedMotion: boolean | null;
+  /** Sound off, and the music's volume (0..1). */
+  sound: SoundPrefs;
+}
+
+export interface SoundPrefs {
+  mute: boolean;
+  music: number;
+}
+
+export const DEFAULT_MUSIC_VOLUME = 0.7;
+
+/** Saved sound settings, or the defaults for anything missing or wrong. */
+export function parseSound(v: unknown): SoundPrefs {
+  const out: SoundPrefs = { mute: false, music: DEFAULT_MUSIC_VOLUME };
+  if (typeof v !== 'object' || v === null) return out;
+  const rec = v as Record<string, unknown>;
+  out.mute = rec.mute === true;
+  if (typeof rec.music === 'number' && Number.isFinite(rec.music)) out.music = Math.min(1, Math.max(0, rec.music));
+  return out;
 }
 
 function isScheme(v: unknown): v is Scheme {
@@ -50,7 +70,7 @@ export function clampFeel(key: FeelKey, v: number): number {
 
 /** Read saved text: anything wrong with it gives the empty settings, never a throw. */
 export function parseStored(raw: string | null): Stored {
-  const empty: Stored = { scheme: null, feel: {}, autoPick: false, lessonDone: false, haptics: true, reducedMotion: null };
+  const empty: Stored = { scheme: null, feel: {}, autoPick: false, lessonDone: false, haptics: true, reducedMotion: null, sound: parseSound(null) };
   if (raw === null) return empty;
   let data: unknown;
   try {
@@ -61,7 +81,7 @@ export function parseStored(raw: string | null): Stored {
   if (typeof data !== 'object' || data === null) return empty;
   const rec = data as Record<string, unknown>;
   if (rec.v !== VERSION) return empty;
-  const out: Stored = { scheme: isScheme(rec.scheme) ? rec.scheme : null, feel: {}, autoPick: rec.autoPick === true, lessonDone: rec.lessonDone === true, haptics: rec.haptics !== false, reducedMotion: typeof rec.reducedMotion === 'boolean' ? rec.reducedMotion : null };
+  const out: Stored = { scheme: isScheme(rec.scheme) ? rec.scheme : null, feel: {}, autoPick: rec.autoPick === true, lessonDone: rec.lessonDone === true, haptics: rec.haptics !== false, reducedMotion: typeof rec.reducedMotion === 'boolean' ? rec.reducedMotion : null, sound: parseSound(rec.sound) };
   const feel = rec.feel;
   if (typeof feel === 'object' && feel !== null) {
     for (const [k, v] of Object.entries(feel as Record<string, unknown>)) {
@@ -86,6 +106,7 @@ export function serialize(
   lessonDone = false,
   haptics = true,
   reducedMotion: boolean | null = null,
+  sound: SoundPrefs | null = null,
 ): string {
   const body: {
     v: number;
@@ -95,12 +116,14 @@ export function serialize(
     lessonDone?: boolean;
     haptics?: boolean;
     reducedMotion?: boolean;
+    sound?: SoundPrefs;
   } = { v: VERSION, feel: collectOverrides(feel) };
   if (scheme !== null) body.scheme = scheme;
   if (autoPick) body.autoPick = true;
   if (lessonDone) body.lessonDone = true;
   if (!haptics) body.haptics = false;
   if (reducedMotion !== null) body.reducedMotion = reducedMotion;
+  if (sound !== null && (sound.mute || sound.music !== DEFAULT_MUSIC_VOLUME)) body.sound = { mute: sound.mute, music: sound.music };
   return JSON.stringify(body);
 }
 
@@ -178,6 +201,16 @@ export class Settings {
     return this.stored.reducedMotion ?? this.prefersReduced;
   }
 
+  /** Whether the player switched the sound off. */
+  get mute(): boolean {
+    return this.stored.sound.mute;
+  }
+
+  /** The music's volume, 0..1. */
+  get musicVolume(): number {
+    return this.stored.sound.music;
+  }
+
   constructor(
     storage: StorageLike | null,
     search: string,
@@ -233,6 +266,12 @@ export class Settings {
     this.save();
   }
 
+  /** The player changed the sound switch or the music volume. */
+  chooseSound(mute: boolean, music: number): void {
+    this.stored.sound = parseSound({ mute, music });
+    this.save();
+  }
+
   /** Save the live constants' differences from the defaults. */
   saveFeel(): void {
     this.stored.feel = collectOverrides(this.feel);
@@ -246,7 +285,7 @@ export class Settings {
   private save(): void {
     if (!this.storage) return;
     try {
-      this.storage.setItem(STORAGE_KEY, serialize(this.stored.scheme, this.feel, this.stored.autoPick, this.stored.lessonDone, this.stored.haptics, this.stored.reducedMotion));
+      this.storage.setItem(STORAGE_KEY, serialize(this.stored.scheme, this.feel, this.stored.autoPick, this.stored.lessonDone, this.stored.haptics, this.stored.reducedMotion, this.stored.sound));
     } catch (_err) {
       // Full or refused: the settings last for this visit only.
     }
