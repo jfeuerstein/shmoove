@@ -144,7 +144,13 @@ Goal: runs differ from each other.
 - HUD: timer, HP, gear, XP bar, build icons, damage numbers (pooled, capped).
 - Bots that take builds; a test per weapon that it kills more per minute in a higher gear.
 
-Done when: gate green, and two runs with different first picks play visibly differently.
+Done when: gate green with `STRICT = true` in `tests/sim/balance.test.ts` (three balance bands are
+printed but not asserted while M3's content lands), and two runs with different first picks play
+visibly differently.
+
+Status: the build system, cards on screen, all ten weapons, all eleven passives, the four new
+enemies and elites are merged. In progress: the map's drive-through objects, drawing the new
+content, then the balance pass and an independent verification.
 
 ## M4. Run
 
