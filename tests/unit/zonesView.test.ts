@@ -15,9 +15,10 @@ import {
   mineLight,
   mineStrength,
   RING_BAND,
+  tarGeometry,
   ZonesView,
 } from '../../src/render/zonesView';
-import { PALETTE } from '../../src/render/look';
+import { LOOKS, PALETTE, paletteOf } from '../../src/render/look';
 import { BOSS } from '../../src/sim/bosses';
 import { DT } from '../../src/sim/constants';
 import { terrainFromHeight } from '../../src/sim/terrain';
@@ -291,4 +292,34 @@ describe('ZonesView: the things on the zones', () => {
     }
     expect(seen).toBeGreaterThan(10);
   });
+
+  it('gives tar a light wet rim and a sheen round a dark middle, so it reads on the floor in every look', () => {
+    /** Brightness of a linear colour (the geometry's colours are linear). */
+    const lum = (r: number, g: number, b: number): number => 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    const lin = (hex: number): number => {
+      const c = new Color(hex);
+      return lum(c.r, c.g, c.b);
+    };
+    for (const look of LOOKS) {
+      const p = paletteOf(look.id);
+      const floor = Math.max(lin(p.groundA), lin(p.groundB));
+      const col = tarGeometry(p.zones[ZONE_TAR]).getAttribute('color');
+      let lo = Infinity;
+      let hi = 0;
+      let light = 0;
+      for (let v = 0; v < col.count; v++) {
+        const l = lum(col.getX(v), col.getY(v), col.getZ(v));
+        lo = Math.min(lo, l);
+        hi = Math.max(hi, l);
+      }
+      for (let v = 0; v < col.count; v++) if (lum(col.getX(v), col.getY(v), col.getZ(v)) > lo * 4) light++;
+      // Light against dark within the patch: the rim (all round) and the sheen against the middle.
+      expect(lo, look.id).toBeLessThan(hi / 4);
+      expect(light, look.id).toBeGreaterThan(14 * 3 + 10);
+      // And against the floor: on a dark floor the rim is far lighter than it; on a light one the tar is far darker.
+      if (floor < 0.1) expect(hi, look.id).toBeGreaterThan(floor * 2.5);
+      else expect(lo, look.id).toBeLessThan(floor / 2.5);
+    }
+  });
 });
+

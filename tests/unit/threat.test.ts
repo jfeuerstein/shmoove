@@ -5,6 +5,9 @@ import {
   BOSS_MARGIN,
   bossMarkerPulses,
   bossMarkerShown,
+  CLOSING_SPEED,
+  glowTarget,
+  isClosing,
   isThreat,
   MARKER_MARGIN,
   placeMarker,
@@ -14,6 +17,7 @@ import {
   ringCueStrength,
   THREAT_FULL,
   THREAT_RANGE,
+  riderOnScreen,
   threatCount,
   ThreatView,
   type MarkerPlace,
@@ -83,51 +87,90 @@ describe('view frame', () => {
   });
 });
 
+describe('isClosing', () => {
+  it('is true when the gap shrinks faster than the threshold, false when it holds or grows', () => {
+    // Behind at -5 z, coming on at 3 m/s relative.
+    expect(isClosing(0, -5, 0, 3)).toBe(true);
+    // Coming on, but slower than the threshold.
+    expect(isClosing(0, -5, 0, CLOSING_SPEED * 0.5)).toBe(false);
+    // Falling behind: a rider outrunning a chaser.
+    expect(isClosing(0, -5, 0, -2)).toBe(false);
+    // Crossing at right angles: the gap holds.
+    expect(isClosing(0, -5, 4, 0)).toBe(false);
+  });
+});
+
 describe('isThreat', () => {
-  it('counts what is behind, even in frame', () => {
-    expect(isThreat(0, -5, 0, true)).toBe(true);
-    expect(isThreat(2, -1, 0, false)).toBe(true);
+  it('counts what is behind and closing, even in frame', () => {
+    expect(isThreat(0, -5, 0, true, true)).toBe(true);
+    expect(isThreat(2, -1, 0, false, true)).toBe(true);
+  });
+
+  it('never counts what is not closing, however near and unseen', () => {
+    expect(isThreat(0, -3, 0, true, false)).toBe(false);
+    expect(isThreat(8, 2, 0, false, false)).toBe(false);
   });
 
   it('does not count what is ahead and in frame', () => {
-    expect(isThreat(0, 6, 0, true)).toBe(false);
-    expect(isThreat(-3, 9, 0, true)).toBe(false);
+    expect(isThreat(0, 6, 0, true, true)).toBe(false);
+    expect(isThreat(-3, 9, 0, true, true)).toBe(false);
   });
 
   it('counts what is ahead but out of frame', () => {
-    expect(isThreat(10, 3, 0, false)).toBe(true);
+    expect(isThreat(9, 3, 0, false, true)).toBe(true);
   });
 
   it('does not count anything out of range', () => {
-    expect(isThreat(0, -(THREAT_RANGE + 0.5), 0, true)).toBe(false);
-    expect(isThreat(THREAT_RANGE, 1, 0, false)).toBe(false);
+    expect(THREAT_RANGE).toBeLessThanOrEqual(10);
+    expect(isThreat(0, -(THREAT_RANGE + 0.5), 0, true, true)).toBe(false);
+    expect(isThreat(THREAT_RANGE, 1, 0, false, true)).toBe(false);
   });
 
   it('turns with the view', () => {
     // Facing +x: something at -x is behind.
-    expect(isThreat(-5, 0, Math.PI / 2, true)).toBe(true);
-    expect(isThreat(5, 0, Math.PI / 2, true)).toBe(false);
+    expect(isThreat(-5, 0, Math.PI / 2, true, true)).toBe(true);
+    expect(isThreat(5, 0, Math.PI / 2, true, true)).toBe(false);
+  });
+});
+
+describe('glowTarget', () => {
+  it('is nothing with none near and closing', () => {
+    expect(glowTarget(0)).toBe(0);
+  });
+
+  it('grows with how many are near and closing, full at THREAT_FULL and no further', () => {
+    for (let n = 1; n < THREAT_FULL; n++) expect(glowTarget(n + 1)).toBeGreaterThan(glowTarget(n));
+    expect(glowTarget(1)).toBeCloseTo(1 / THREAT_FULL);
+    expect(glowTarget(THREAT_FULL)).toBe(1);
+    expect(glowTarget(THREAT_FULL * 3)).toBe(1);
   });
 });
 
 describe('threatCount', () => {
-  it('counts risen enemies in range that are behind or out of frame', () => {
+  it('counts risen enemies in range that are behind or out of frame and closing', () => {
     const w = makeWorld(1);
     const vp = chaseViewProj();
-    const put = (x: number, z: number, age = SPAWN_TICKS): void => {
+    /** An enemy at (x, z) heading for the mover at the origin at `speed` m/s (0: standing). */
+    const put = (x: number, z: number, age = SPAWN_TICKS, speed = 2): number => {
       const i = spawnEnemy(w, KIND_SHUFFLER, x, 0, z);
       w.horde.age[i] = age;
+      const l = Math.hypot(x, z);
+      w.horde.vx[i] = (-x / l) * speed;
+      w.horde.vz[i] = (-z / l) * speed;
+      return i;
     };
-    put(0, -4); // behind (between the mover and the camera): counts
-    put(12, 3); // ahead, off the side of the narrow frame: counts
+    put(0, -4); // behind (between the mover and the camera), closing: counts
+    put(9, 3); // ahead, off the side of the narrow frame, closing: counts
     put(0, 8); // ahead, in frame: no
     put(-1, 4); // ahead, in frame: no
     put(0, -20); // behind but out of range: no
     put(1, -3, 0); // behind but still rising: no
-    const dead = spawnEnemy(w, KIND_SHUFFLER, -1, 0, -2);
-    w.horde.age[dead] = SPAWN_TICKS;
+    put(-1, -3, SPAWN_TICKS, 0); // behind, standing: not closing, no
+    const dead = put(-1, -2);
     w.horde.hp[dead] = 0; // dead this tick: no
     expect(threatCount(w, 0, 0, 0, vp)).toBe(2);
+    // The mover pulling away at 5 m/s along +z outruns the one behind; the one off the side still closes.
+    expect(threatCount(w, 0, 0, 0, vp, 0, 5)).toBe(1);
   });
 });
 
@@ -231,16 +274,64 @@ describe('ThreatView glow', () => {
     return { view, sim, camera, glow };
   }
 
-  /** The mover at the origin heading +z, with THREAT_FULL enemies right behind it. */
+  /** The mover standing at the origin heading +z, with THREAT_FULL enemies right behind it, closing. */
   function crowdBehind(sim: Sim): void {
     sim.state.mover.x = 0;
     sim.state.mover.z = 0;
+    sim.state.mover.vx = 0;
+    sim.state.mover.vz = 0;
     sim.state.viewYaw = 0;
     for (let i = 0; i < THREAT_FULL; i++) {
       const j = spawnEnemy(sim.world, KIND_SHUFFLER, i - 2.5, 0, -6);
       sim.world.horde.age[j] = SPAWN_TICKS;
+      sim.world.horde.vz[j] = 2;
     }
   }
+
+  it('shows no glow and no flash at full health with nothing near', () => {
+    const { view, sim, camera, glow } = build();
+    const hit = (view.element as unknown as FakeEl).children[1];
+    sim.state.mover.x = 0;
+    sim.state.mover.z = 0;
+    sim.state.viewYaw = 0;
+    // Enemies about, but none within range.
+    for (let i = 0; i < 20; i++) {
+      const j = spawnEnemy(sim.world, KIND_SHUFFLER, i - 10, 0, -(THREAT_RANGE + 4));
+      sim.world.horde.age[j] = SPAWN_TICKS;
+      sim.world.horde.vz[j] = 3;
+    }
+    for (let f = 0; f < 120; f++) view.update(sim.world, sim.state, camera, 1 / 60, 0, W, H);
+    expect(view.strength).toBe(0);
+    expect(glow.opacity).toBe('0');
+    expect(hit.opacity).toBe('0');
+  });
+
+  it('lets the glow die away to nothing, not a faint step above it, once the danger has passed', () => {
+    const { view, sim, camera, glow } = build();
+    crowdBehind(sim);
+    for (let f = 0; f < 60; f++) view.update(sim.world, sim.state, camera, 1 / 60, 0, W, H);
+    expect(view.strength).toBeGreaterThan(0.5);
+    // They stop: none closing.
+    for (let i = 0; i < sim.world.horde.count; i++) sim.world.horde.vz[i] = 0;
+    for (let f = 0; f < 240; f++) view.update(sim.world, sim.state, camera, 1 / 60, 0, W, H);
+    expect(view.strength).toBe(0);
+    expect(glow.opacity).toBe('0');
+  });
+
+  it('says where the rider is on the screen, and how far 2 m round it reaches there', () => {
+    const { view, sim, camera } = build();
+    sim.state.mover.x = 0;
+    sim.state.mover.z = 0;
+    sim.state.viewYaw = 0;
+    view.update(sim.world, sim.state, camera, 1 / 60, 0, W, H);
+    expect(riderOnScreen.known).toBe(true);
+    expect(riderOnScreen.x).toBeCloseTo(W / 2, 0);
+    expect(riderOnScreen.y).toBeGreaterThan(H / 2);
+    expect(riderOnScreen.y).toBeLessThan(H);
+    // About 9 m from the camera with a 74 degree view: tens of pixels, not a few, not the screen.
+    expect(riderOnScreen.r).toBeGreaterThan(30);
+    expect(riderOnScreen.r).toBeLessThan(W / 2);
+  });
 
   it('follows a step change in the count about 63% of the way in a third of a second', () => {
     const { view, sim, camera } = build();

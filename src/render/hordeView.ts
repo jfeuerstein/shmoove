@@ -89,10 +89,19 @@ import { GroundRings } from './zonesView';
 const ENEMY_GLOW = 0.38;
 /** Ticks of hit flash shown at full strength; below that it fades out. */
 const FLASH_FULL_TICKS = 3;
-/** Blob shadow: radius as a share of the body radius, height above the ground, opacity. */
-const SHADOW_SCALE = 1.25;
+/**
+ * Up to this many enemies flashing at once each flash fully; beyond it each flashes less (in
+ * proportion), down to `FLASH_FLOOR`, so an area hit tints a crowd instead of turning it white.
+ */
+export const FLASH_CROWD = 6;
+export const FLASH_FLOOR = 0.3;
+/**
+ * Blob shadow: radius as a share of the body radius, height above the ground, opacity. Black (the
+ * darkest tone of the palette) whatever the look, so it darkens any floor and pins the enemy to it.
+ */
+export const SHADOW_SCALE = 1.35;
 const SHADOW_LIFT = 0.05;
-const SHADOW_OPACITY = 0.5;
+export const SHADOW_OPACITY = 0.6;
 const SHADOW_SEGMENTS = 8;
 /** Below this speed an enemy counts as standing and turns to face the mover, m/s. */
 const STILL_SPEED = 0.05;
@@ -837,6 +846,16 @@ interface Shared {
 }
 
 /**
+ * How strongly each flashing enemy flashes when `n` of the `count` in `flash` are flashing this
+ * frame: fully up to `FLASH_CROWD`, then `FLASH_CROWD / n`, never under `FLASH_FLOOR`.
+ */
+export function crowdFlash(flash: ArrayLike<number>, count: number): number {
+  let n = 0;
+  for (let i = 0; i < count; i++) if (flash[i] > 0) n++;
+  return n <= FLASH_CROWD ? 1 : Math.max(FLASH_FLOOR, FLASH_CROWD / n);
+}
+
+/**
  * The flat material, with the parts' motion and the wobble in the vertex shader and the baked tones,
  * glow and hit flash in the fragment shader.
  */
@@ -952,7 +971,7 @@ export class HordeView {
   /** With a terrain, the aura rings follow the ground; without, they lie level at the elite's feet. */
   constructor(terrain: Terrain | null = null) {
     this.object.name = 'horde';
-    const shadowMat = flatMaterial(PALETTE.sky);
+    const shadowMat = flatMaterial(tone(PALETTE.sky, -1));
     shadowMat.transparent = true;
     shadowMat.opacity = SHADOW_OPACITY;
     shadowMat.depthWrite = false;
@@ -1025,6 +1044,7 @@ export class HordeView {
     this.auras.begin();
     const hs = Math.sin(heading);
     const hc = Math.cos(heading);
+    const flashPeak = crowdFlash(h.flash, h.count);
 
     for (let i = 0; i < h.count; i++) {
       const k = h.kind[i];
@@ -1086,7 +1106,7 @@ export class HordeView {
 
       const a = this.anim[k].array as Float32Array;
       const f = h.flash[i];
-      let flash = f >= FLASH_FULL_TICKS ? 1 : f / FLASH_FULL_TICKS;
+      let flash = (f >= FLASH_FULL_TICKS ? 1 : f / FLASH_FULL_TICKS) * flashPeak;
       if (big && flash < ELITE_SHEEN) flash = ELITE_SHEEN;
       a[n * 3] = h.phase[i];
       a[n * 3 + 1] = speed / def.speed;

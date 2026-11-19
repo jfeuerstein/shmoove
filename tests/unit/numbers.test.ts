@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { emitFx, FX_ENEMY_DIE, FX_ENEMY_HIT, FX_POP, FX_SPARK, makeWorld, type World } from '../../src/sim/world';
-import { NUMBER_LIFE, NUMBER_POOL, Numbers } from '../../src/ui/numbers';
+import { MERGE_DIST, MERGE_TIME, NUMBER_BOTTOM, NUMBER_LIFE, NUMBER_POOL, Numbers, RIDER_KEEP_MIN } from '../../src/ui/numbers';
 
 class FakeEl {
   className = '';
@@ -36,13 +36,24 @@ function tick(w: World, hits: { x: number; dmg: number }[]): void {
 }
 
 const SIZE = 800;
-const upTo = (n: number): number[] => Array.from({ length: n }, (_, i) => i);
+
+/** Screen x (px) and y of a shown number, from its transform. */
+function at(e: FakeEl): { x: number; y: number } {
+  const m = /translate3d\((-?\d+)px, (-?\d+)px, 0\)/.exec(e.style.transform);
+  if (!m) throw new Error(`no transform: ${e.style.transform}`);
+  return { x: Number(m[1]), y: Number(m[2]) };
+}
+
+/** Hits at x = 0, 1.3, 2.6, ... m: each far enough from the others not to merge. */
+const apart = (i: number): number => i * (MERGE_DIST + 0.1);
+/** A projection that fits 20 m across the screen, so hits metres apart are all on it. */
+const WIDE = [0.05, 0, 0, 0, 0, 0.05, 0, 0, 0, 0, 0.05, 0, 0, 0, 0, 1];
 
 describe('Numbers', () => {
-  it('makes a pool of 24 up front and nothing after', () => {
+  it('makes its small pool up front and nothing after', () => {
     const { nums, els, made } = build();
     expect(els).toHaveLength(NUMBER_POOL);
-    expect(NUMBER_POOL).toBe(24);
+    expect(NUMBER_POOL).toBeLessThanOrEqual(10);
     const w = makeWorld(1);
     const created = made();
     for (let i = 0; i < 200; i++) {
@@ -76,10 +87,10 @@ describe('Numbers', () => {
     const e = els.find((x) => !x.hidden);
     expect(e).toBeDefined();
     if (!e) return;
-    const y0 = Number(/, (-?\d+)px, 0/.exec(e.style.transform)?.[1]);
+    const y0 = at(e).y;
     const o0 = Number(e.style.opacity);
     nums.update(NUMBER_LIFE / 2, IDENTITY, SIZE, SIZE);
-    const y1 = Number(/, (-?\d+)px, 0/.exec(e.style.transform)?.[1]);
+    const y1 = at(e).y;
     const o1 = Number(e.style.opacity);
     expect(y1).toBeLessThan(y0);
     expect(o1).toBeLessThan(o0);
@@ -91,22 +102,79 @@ describe('Numbers', () => {
     expect(NUMBER_LIFE).toBeLessThan(0.7);
   });
 
-  it('reuses the oldest for the 25th number', () => {
+  it('adds hits on the same enemy in a short time into one number', () => {
     const { nums, els } = build();
     const w = makeWorld(1);
-    for (const i of upTo(NUMBER_POOL)) {
-      tick(w, [{ x: 0, dmg: i + 1 }]);
+    // An enemy hit every tick for a fifth of a second, drifting a little: one number with the sum.
+    for (let t = 0; t < 12; t++) {
+      tick(w, [{ x: t * 0.01, dmg: 3 }]);
       nums.ingest(w);
-      nums.update(0.01, IDENTITY, SIZE, SIZE);
+      nums.update(1 / 60, IDENTITY, SIZE, SIZE);
+    }
+    expect(MERGE_TIME).toBeGreaterThan(12 / 60);
+    const shown = els.filter((e) => !e.hidden);
+    expect(shown).toHaveLength(1);
+    expect(shown[0].textContent).toBe('36');
+    expect(nums.merged).toBe(11);
+  });
+
+  it('starts a new number for the same place once the first is old, and for another enemy at once', () => {
+    const { nums } = build();
+    const w = makeWorld(1);
+    tick(w, [{ x: 0, dmg: 3 }]);
+    nums.ingest(w);
+    nums.update(MERGE_TIME + 0.01, IDENTITY, SIZE, SIZE);
+    tick(w, [{ x: 0, dmg: 3 }]);
+    nums.ingest(w);
+    expect(nums.active).toBe(2);
+    tick(w, [{ x: MERGE_DIST + 0.2, dmg: 3 }]);
+    nums.ingest(w);
+    expect(nums.active).toBe(3);
+  });
+
+  it('never shows more than its cap; a bigger hit takes the place of the least, a smaller one is not shown', () => {
+    const { nums, els } = build();
+    const w = makeWorld(1);
+    for (let i = 0; i < NUMBER_POOL; i++) {
+      tick(w, [{ x: apart(i), dmg: 10 + i }]);
+      nums.ingest(w);
+      nums.update(0.01, WIDE, SIZE, SIZE);
     }
     expect(nums.active).toBe(NUMBER_POOL);
-    expect(els.map((e) => e.textContent)).toEqual(upTo(NUMBER_POOL).map((i) => String(i + 1)));
-    tick(w, [{ x: 0, dmg: 99 }]);
+    // A small hit elsewhere: the screen is full of bigger ones; it is not shown.
+    tick(w, [{ x: apart(NUMBER_POOL + 1), dmg: 2 }]);
     nums.ingest(w);
-    nums.update(0.01, IDENTITY, SIZE, SIZE);
-    expect(els[0].textContent).toBe('99');
-    expect(els.slice(1).map((e) => e.textContent)).toEqual(upTo(NUMBER_POOL - 1).map((i) => String(i + 2)));
+    nums.update(0.01, WIDE, SIZE, SIZE);
     expect(nums.active).toBe(NUMBER_POOL);
+    expect(nums.dropped).toBe(1);
+    expect(els.map((e) => e.textContent)).not.toContain('2');
+    // A big hit takes the place of the least (10).
+    tick(w, [{ x: apart(NUMBER_POOL + 2), dmg: 99 }]);
+    nums.ingest(w);
+    nums.update(0.01, WIDE, SIZE, SIZE);
+    const texts = els.map((e) => e.textContent);
+    expect(texts).toContain('99');
+    expect(texts).not.toContain('10');
+    expect(nums.active).toBe(NUMBER_POOL);
+  });
+
+  it('marks a hit that killed, and a kill wins the cap over a bigger plain hit', () => {
+    const { nums, els } = build();
+    const w = makeWorld(1);
+    for (let i = 0; i < NUMBER_POOL; i++) {
+      tick(w, [{ x: apart(i), dmg: 50 }]);
+      nums.ingest(w);
+      nums.update(0.01, WIDE, SIZE, SIZE);
+    }
+    w.fx.count = 0;
+    emitFx(w, FX_ENEMY_HIT, apart(NUMBER_POOL + 1), 0, 0, 4);
+    emitFx(w, FX_ENEMY_DIE, apart(NUMBER_POOL + 1), 0, 0, 0);
+    nums.ingest(w);
+    nums.update(0.01, WIDE, SIZE, SIZE);
+    const kill = els.find((e) => e.textContent === '4');
+    expect(kill).toBeDefined();
+    expect(kill?.className).toContain('num-kill');
+    expect(els.filter((e) => e.textContent === '50')).toHaveLength(NUMBER_POOL - 1);
   });
 
   it('shows one larger number at the loop centre with how many died that tick', () => {
@@ -133,6 +201,38 @@ describe('Numbers', () => {
     emitFx(w, FX_ENEMY_DIE, 0, 0, 0, 0);
     nums.ingest(w);
     expect(nums.active).toBe(0);
+  });
+
+  it('draws no number over the rider: one landing there is pushed out to the edge of its room', () => {
+    const { nums, els } = build();
+    const w = makeWorld(1);
+    tick(w, [{ x: 0, dmg: 9 }]);
+    nums.ingest(w);
+    // The rider sits right where the number would be drawn.
+    const keep = { x: 400, y: 400 - 0.9 * 400, r: 50, known: true };
+    nums.update(0, IDENTITY, SIZE, SIZE, keep);
+    const p = at(els.filter((e) => !e.hidden)[0]);
+    expect(Math.hypot(p.x - keep.x, p.y - keep.y)).toBeGreaterThanOrEqual(keep.r - 1);
+    // A far rider leaves the room at its least.
+    nums.reset();
+    tick(w, [{ x: 0, dmg: 9 }]);
+    nums.ingest(w);
+    const small = { ...keep, r: 1 };
+    nums.update(0, IDENTITY, SIZE, SIZE, small);
+    const q = at(els.filter((e) => !e.hidden)[0]);
+    expect(Math.hypot(q.x - keep.x, q.y - keep.y)).toBeGreaterThanOrEqual(RIDER_KEEP_MIN - 1);
+  });
+
+  it('draws no number over the build bar along the bottom of the screen', () => {
+    const { nums, els } = build();
+    const w = makeWorld(1);
+    w.fx.count = 0;
+    // Low on the screen: y = -0.98 in the frame (the lift of 0.9 m takes it up by 0.9 of a unit).
+    emitFx(w, FX_ENEMY_HIT, 0, -1.88, 0, 5);
+    nums.ingest(w);
+    nums.update(0, IDENTITY, SIZE, SIZE);
+    expect(SIZE * 0.01).toBeLessThan(NUMBER_BOTTOM);
+    expect(els.every((e) => e.hidden)).toBe(true);
   });
 
   it('hides a number that is off screen, and reset clears everything', () => {

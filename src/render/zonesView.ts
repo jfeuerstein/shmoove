@@ -4,8 +4,9 @@
  * - a mine (`ZONE_MINE`, the Crumbs): a squat spiked ball in tones of the mine's colour with a
  *   light on top that blinks fast while it arms and slowly once armed, over a small glow on the
  *   ground that is dim while it arms and blinks once armed. A little bigger the bigger its blast;
- * - tar (`ZONE_TAR`): a dark blob as wide as it drags with a glossy wet edge, bubbles swelling and
- *   popping on it, spreading when it is laid and shrinking away at the end of its life;
+ * - tar (`ZONE_TAR`): a dark blob as wide as it drags with a light, wet rim and a sheen across it
+ *   (so it reads on a dark floor in every look), bubbles swelling and popping on it, spreading when
+ *   it is laid and shrinking away at the end of its life;
  * - a lob ring (`ZONE_LOB`): an outline where the shot will land that pulses faster as its time runs
  *   out and fills in from the middle, so the moment it lands is the moment it is full, and the shot
  *   itself on its way down out of the sky, its shadow on the ground growing as it falls;
@@ -192,9 +193,19 @@ export function zonesKit(mine: number, shell: number, tar: number): ShapeBuilder
   return b;
 }
 
+/** Tar's tones: its dark middle, the body, the light wet rim and the sheen on it (`tone` of `tar`). */
+export const TAR_MIDDLE = -0.2;
+export const TAR_BODY = 0.12;
+export const TAR_RIM = 0.62;
+export const TAR_SHEEN = 0.42;
+/** Where the wet rim starts, as a share of the radius. */
+export const TAR_RIM_FROM = 0.74;
+
 /**
  * A patch of tar: a disc of radius 1 with a lumpy edge pulled in here and there (never out past 1),
- * dark in the middle and glossy at the wet edge, in tones of `tar` (absolute colours).
+ * dark in the middle with a light, wet rim round it and a sheen across it (a crescent of light off
+ * its glossy top), in tones of `tar` (absolute colours). The rim and the sheen make it read on a
+ * dark floor in every look, dark on dark otherwise.
  */
 export function tarGeometry(tar: number): BufferGeometry {
   const seg = 14;
@@ -203,17 +214,24 @@ export function tarGeometry(tar: number): BufferGeometry {
   const centre = new Float32Array(3);
   const mid = new Float32Array(3);
   const edge = new Float32Array(3);
-  rgbInto(centre, 0, tone(tar, -0.3));
-  rgbInto(mid, 0, tone(tar, 0.08));
-  rgbInto(edge, 0, tone(tar, 0.5));
+  const sheen = new Float32Array(3);
+  rgbInto(centre, 0, tone(tar, TAR_MIDDLE));
+  rgbInto(mid, 0, tone(tar, TAR_BODY));
+  rgbInto(edge, 0, tone(tar, TAR_RIM));
+  rgbInto(sheen, 0, tone(tar, TAR_SHEEN));
   const b = new ShapeBuilder();
   const at = (j: number, k: number): [number, number] => {
     const a = ((j % seg) / seg) * Math.PI * 2;
     return [Math.sin(a) * rr[j % seg] * k, Math.cos(a) * rr[j % seg] * k];
   };
+  const paint = (c: Float32Array) => (_x: number, _y: number, _z: number, out: Float32Array): void => {
+    out[0] = c[0];
+    out[1] = c[1];
+    out[2] = c[2];
+  };
   for (let j = 0; j < seg; j++) {
-    const [ax, az] = at(j, 0.78);
-    const [bx, bz] = at(j + 1, 0.78);
+    const [ax, az] = at(j, TAR_RIM_FROM);
+    const [bx, bz] = at(j + 1, TAR_RIM_FROM);
     const [cx, cz] = at(j, 1);
     const [dx, dz] = at(j + 1, 1);
     // Wound to face up: the dark middle, then the wet rim, raised a hair.
@@ -235,6 +253,30 @@ export function tarGeometry(tar: number): BufferGeometry {
       out[1] = c[1];
       out[2] = c[2];
     });
+  }
+  // The sheen: a thin crescent across a third of the patch, raised a hair over the body.
+  const arc = 5;
+  const from = Math.PI * 1.15;
+  const span = Math.PI * 0.6;
+  const s = paint(sheen);
+  for (let k = 0; k < arc; k++) {
+    const a0 = from + (k / arc) * span;
+    const a1 = from + ((k + 1) / arc) * span;
+    // Thickest in the middle of the arc, to a point at its ends.
+    const w0 = 0.09 * Math.sin((k / arc) * Math.PI);
+    const w1 = 0.09 * Math.sin(((k + 1) / arc) * Math.PI);
+    const r = 0.5;
+    const y = 0.006;
+    const ox0 = Math.sin(a0) * (r + w0);
+    const oz0 = Math.cos(a0) * (r + w0);
+    const ix0 = Math.sin(a0) * (r - w0);
+    const iz0 = Math.cos(a0) * (r - w0);
+    const ox1 = Math.sin(a1) * (r + w1);
+    const oz1 = Math.cos(a1) * (r + w1);
+    const ix1 = Math.sin(a1) * (r - w1);
+    const iz1 = Math.cos(a1) * (r - w1);
+    b.tri(ix0, y, iz0, ox1, y, oz1, ox0, y, oz0, s);
+    b.tri(ix0, y, iz0, ix1, y, iz1, ox1, y, oz1, s);
   }
   const g = b.build();
   g.deleteAttribute('aPart');

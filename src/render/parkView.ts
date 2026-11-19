@@ -6,9 +6,11 @@
  * - The dressing, all of it outside the rideable radius (on and beyond the rim's lip): a deck round
  *   the lip; a fence of wall panels with posts between them (a rhythm that ticks past at speed) and
  *   blocks of colour sprayed on their inner face; floodlight towers with glowing heads; bleachers
- *   with a crowd; billboards with glowing stripes; and a skyline of tall dark blocks with neon bands
- *   beyond the rim. What must read from across the bowl (the lamps on the fence posts, the
- *   floodlights, the billboards and the skyline, dark shapes with glowing parts) is a second
+ *   with a crowd; billboards with lit stripes; and a skyline of tall dark blocks with a band of light
+ *   each beyond the rim. All of it is dim: silhouettes with a little light (`LIGHT_DIM`,
+ *   `LIGHT_GLOW`), quieter than anything in the bowl, so the top of the screen does not pull the eye
+ *   from the fight. What must read from across the bowl (the lamps on the fence posts, the
+ *   floodlights, the billboards and the skyline, dark shapes with lit parts) is a second
  *   instanced mesh drawn without fog: the camera sees the rim's lip only from far across the bowl,
  *   where the fog has nearly taken everything else, and silhouettes and lights there still say where
  *   the edge is and that it is a place. Both built once.
@@ -55,7 +57,15 @@ const BLEACHER_STEPS = 5;
 const BLEACHER_WIDE = 18;
 const CROWD_PER_STEP = 7;
 const SIGNS = 6;
-const SKYLINE = 28;
+/** Blocks in the skyline: close enough together to stand as one dark wall of city round the bowl. */
+const SKYLINE = 44;
+/**
+ * The scenery's lights (fence lamps, floodlight heads, billboard stripes, the skyline's bands): a
+ * darker tone of their colour and a little glow, so they are silhouettes with a little light,
+ * dimmer than anything in the bowl, and never outshine an enemy below them.
+ */
+export const LIGHT_DIM = -0.45;
+export const LIGHT_GLOW = 0.3;
 /** Upper bound on the dressing's boxes, for the instanced mesh. */
 export const MAX_DRESSING = 1400;
 export const MAX_UNFOGGED = 360;
@@ -326,15 +336,17 @@ export class ParkView {
     const panelA = tone(rim, -0.35);
     const panelB = tone(rim, -0.2);
     const post = tone(rim, 0.25);
+    const lampA = tone(PALETTE.pad, LIGHT_DIM);
+    const lampB = tone(PALETTE.accent, LIGHT_DIM);
     for (let k = 0; k < panels; k++) {
       const a = (k / panels) * Math.PI * 2;
       const y = lip(a);
       const wide = ((Math.PI * 2 * rFence) / panels) * 1.01;
       solid.ringBox(a, rFence, wide, PANEL_DEEP, y - PANEL_SINK, y + PANEL_HIGH, k % 2 === 0 ? panelA : panelB, 0.05);
       const pa = a + Math.PI / panels;
-      solid.ringBox(pa, rFence + 0.05, 0.55, PANEL_DEEP + 0.25, y - PANEL_SINK, y + PANEL_HIGH + 0.6, post, 0.2);
-      // A light on every post: a dotted line round the lip, seen from across the bowl.
-      clear.ringBox(pa, rFence + 0.05, 0.4, 0.4, y + PANEL_HIGH + 0.6, y + PANEL_HIGH + 1, k % 2 === 0 ? PALETTE.pad : PALETTE.accent, 0.9);
+      solid.ringBox(pa, rFence + 0.05, 0.55, PANEL_DEEP + 0.25, y - PANEL_SINK, y + PANEL_HIGH + 0.6, post, 0.1);
+      // A small light on every post: a dotted line round the lip, seen from across the bowl.
+      clear.ringBox(pa, rFence + 0.05, 0.4, 0.4, y + PANEL_HIGH + 0.6, y + PANEL_HIGH + 1, k % 2 === 0 ? lampA : lampB, LIGHT_GLOW);
       if (rng.chance(0.75)) {
         const blocks = 1 + rng.int(3);
         let x = -wide / 2 + 0.4;
@@ -346,21 +358,22 @@ export class ParkView {
           const t = x + w / 2;
           const cx = Math.sin(a) * (R + FENCE_IN - 0.04) + Math.cos(a) * t;
           const cz = Math.cos(a) * (R + FENCE_IN - 0.04) - Math.sin(a) * t;
-          solid.box(cx, yb + h / 2, cz, a, w, h, 0.12, graffiti[rng.int(graffiti.length)], 0.3);
+          solid.box(cx, yb + h / 2, cz, a, w, h, 0.12, graffiti[rng.int(graffiti.length)], 0.12);
           x += w + 0.2 + rng.next() * 0.8;
         }
       }
     }
 
-    // Floodlight towers behind the fence: a mast, a bar and a glowing head turned to the middle.
+    // Floodlight towers behind the fence: a mast, a bar and a dimly lit head turned to the middle.
     const mast = tone(PALETTE.railPost, -0.25);
+    const head = tone(PALETTE.sun, LIGHT_DIM);
     for (const a of towerAt) {
       const y = lip(a);
       const h = 22 + rng.next() * 8;
       const r = R + 6;
       clear.ringBox(a, r, 1, 1, y - 1, y + h, mast, 0);
       clear.ringBox(a, r - 0.4, 6, 0.4, y + h - 0.2, y + h + 0.3, mast, 0);
-      clear.ringBox(a, r - 0.9, 5.2, 0.9, y + h + 0.3, y + h + 2.4, PALETTE.sun, 1.1);
+      clear.ringBox(a, r - 0.9, 5.2, 0.9, y + h + 0.3, y + h + 2.4, head, LIGHT_GLOW);
     }
 
     // Bleachers: steps rising away from the bowl, side walls, and a crowd in colours.
@@ -380,7 +393,7 @@ export class ParkView {
           const cx = Math.sin(a) * r + Math.cos(a) * t;
           const cz = Math.cos(a) * r - Math.sin(a) * t;
           const hh = 1 + rng.next() * 0.4;
-          solid.box(cx, top + hh / 2, cz, a, 0.7, hh, 0.55, graffiti[rng.int(graffiti.length)], 0.15);
+          solid.box(cx, top + hh / 2, cz, a, 0.7, hh, 0.55, graffiti[rng.int(graffiti.length)], 0.06);
         }
       }
       for (let e = -1; e <= 1; e += 2) {
@@ -407,23 +420,24 @@ export class ParkView {
       clear.ringBox(a, r, 10, 0.4, y + 5, y + 9, board, 0);
       const c0 = graffiti[rng.int(graffiti.length)];
       const c1 = graffiti[rng.int(graffiti.length)];
-      clear.ringBox(a, r - 0.25, 8.6, 0.12, y + 7.4, y + 8.4, c0, 0.8);
-      clear.ringBox(a, r - 0.25, 4 + rng.next() * 4, 0.12, y + 5.6, y + 6.6, c1, 0.6);
+      clear.ringBox(a, r - 0.25, 8.6, 0.12, y + 7.4, y + 8.4, tone(c0, LIGHT_DIM), LIGHT_GLOW);
+      clear.ringBox(a, r - 0.25, 4 + rng.next() * 4, 0.12, y + 5.6, y + 6.6, tone(c1, LIGHT_DIM), LIGHT_GLOW * 0.8);
     }
 
-    // The skyline beyond the rim: tall dark blocks, each with a neon band.
-    const block = tone(rim, -0.55);
-    const blockB = tone(PALETTE.sky, 0.12);
+    // The skyline beyond the rim: tall dark blocks standing close, a wall of city darker than the sky
+    // and the bowl, each with one dim band of light.
+    const block = tone(rim, -0.7);
+    const blockB = tone(PALETTE.fog, -0.6);
     for (let k = 0; k < SKYLINE; k++) {
       const a = ((k + rng.next() * 0.8) / SKYLINE) * Math.PI * 2;
       const r = R + 30 + rng.next() * 45;
       const y = lip(a);
-      const h = 35 + rng.next() * 55;
-      const wide = 12 + rng.next() * 18;
+      const h = 40 + rng.next() * 55;
+      const wide = 16 + rng.next() * 20;
       const deep = 12 + rng.next() * 10;
       clear.ringBox(a, r, wide, deep, y - 4, y + h, k % 2 === 0 ? block : blockB, 0);
       const band = y + h * (0.55 + rng.next() * 0.35);
-      clear.ringBox(a, r - deep / 2 - 0.2, wide * 0.8, 0.6, band, band + 1.2, graffiti[rng.int(graffiti.length)], 0.7);
+      clear.ringBox(a, r - deep / 2 - 0.2, wide * 0.8, 0.6, band, band + 1.2, tone(graffiti[rng.int(graffiti.length)], LIGHT_DIM), LIGHT_GLOW);
     }
   }
 
