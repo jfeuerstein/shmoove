@@ -34,7 +34,10 @@
  *   `EV_GRIND_START` and `EV_GRIND_END` each throw a burst of them. Same pool as the other shards.
  *
  * Effects round the rider (level up, heal) follow it: they are drawn from where the latest tick left
- * the mover. `ingest` must be called once per tick, right after the step (the queue is only valid
+ * the mover. Effects centred on the rider (slam, the Bumper, level up, heal) keep `RIDER_CLEAR` of
+ * ground round it readable: their flashes are bands outside it, their rings start at its edge and
+ * the rings climbing round it are thin and faint, so the rider is found at a glance under its own
+ * weapons and none of them outshines the fight for more than a blink. `ingest` must be called once per tick, right after the step (the queue is only valid
  * until the next one); `update` once per frame. Nothing allocates after construction.
  */
 import {
@@ -467,6 +470,25 @@ const LINK_FLASH_PEAK = 0.6;
 
 const GLOW_RING = 0;
 const GLOW_FLASH = 1;
+/**
+ * Effects centred on the rider keep this much ground round it clear, m: their flashes are bands
+ * outside it and their rings start at its edge, so the rider and the ground at its feet stay
+ * readable under its own weapons.
+ */
+export const RIDER_CLEAR = 2;
+/** A ring that starts small starts at this share of its radius. */
+const RING_START = 0.25;
+
+/** The share of a glow of radius `r` round the rider that is inside `RIDER_CLEAR` (its inner edge), at most 0.9. */
+export function clearShare(r: number): number {
+  return r > RIDER_CLEAR / 0.9 ? RIDER_CLEAR / r : 0.9;
+}
+
+/** Where a ring of radius `r` and inner edge `inner` (share) round the rider starts, as a share of `r`: its band outside `RIDER_CLEAR`. */
+function ringStart(r: number, inner: number): number {
+  const k = r * inner > 1e-6 ? RIDER_CLEAR / (r * inner) : 1;
+  return Math.min(1, Math.max(RING_START, k));
+}
 /** Spreads a little and lingers, then fades: a splat or embers on the ground. */
 const GLOW_SPLAT = 2;
 /** A ring round the rider, climbing and narrowing as it fades. */
@@ -542,16 +564,22 @@ const SLAM_LIFE = 0.45;
 const CRACK_LIFE = 0.9;
 const CRACK_WIDTH = 0.14;
 const CRACK_LIFT = 0.06;
-const CRACK_PEAK = 0.85;
+const CRACK_PEAK = 0.6;
+/** Cracks start no nearer the slam's centre (the rider) than this, m, room allowing. */
+const CRACK_CLEAR = 1.5;
 /** Level up: the rings round the rider, the ring out over the ground, the glints. */
 const LEVEL_RING_LIFE = 0.9;
 const LEVEL_GROUND_RING = 3.5;
+const LEVEL_FLASH = 2.6;
 const LEVEL_GLINTS = 10;
+/** Rings climbing round the rider are thin bands: their inner edge, share of the radius. */
+const RISE_INNER = 0.9;
 /** Heal: rings climbing round the rider. */
 const HEAL_RING_LIFE = 0.8;
 /** The Bumper's ring: at hip height, its life. */
 export const BUMPER_HIP = 0.55;
 const BUMPER_RING_LIFE = 0.35;
+const BUMPER_FLASH = 2.5;
 /** A spark taken: the pop's radius for a spark worth 1, m, and its life. */
 const SPARK_POP = 0.45;
 const SPARK_POP_LIFE = 0.18;
@@ -658,6 +686,8 @@ export class FxView {
   /** Climb, m over its life, for a ring round the rider; such a ring is drawn from the rider. */
   private readonly gRise = new Float32Array(GLOW_POOL + SMALL_GLOW_POOL);
   private readonly gFollow = new Uint8Array(GLOW_POOL + SMALL_GLOW_POOL);
+  /** A ring's radius when it starts, as a share of its full radius. */
+  private readonly gStart = new Float32Array(GLOW_POOL + SMALL_GLOW_POOL);
   private readonly gRgb = new Float32Array((GLOW_POOL + SMALL_GLOW_POOL) * 3);
   private glowNext = 0;
   private smallNext = 0;
@@ -874,12 +904,14 @@ export class FxView {
         const r = a > 0.5 ? a : 0.5;
         this.ground(x, z);
         this.glow(false, GLOW_RING, x, y, z, r, 0.5, 1, 0.88, this.popColor);
-        this.glow(false, GLOW_FLASH, x, y, z, r, 0.3, 0.55, 0, this.popColor);
+        this.glow(false, GLOW_FLASH, x, y, z, r, 0.3, 0.3, 0, this.popColor);
       } else if (type === FX_SLAM) {
         const r = a > 0.5 ? a : 0.5;
         this.ground(x, z);
-        this.glow(false, GLOW_RING, x, y, z, r, SLAM_LIFE, 1, 0.9, this.slamColor);
-        this.glow(false, GLOW_FLASH, x, y, z, r * 0.6, 0.2, 0.35, 0, this.slamColor);
+        // Round the rider: the edge starts outside its room and the flash is a band beyond it.
+        const ring = this.glow(false, GLOW_RING, x, y, z, r, SLAM_LIFE, 0.75, 0.9, this.slamColor);
+        this.gStart[ring] = ringStart(r, 0.9);
+        this.glow(false, GLOW_FLASH, x, y, z, r, 0.2, 0.3, clearShare(r), this.slamColor);
         this.cracks(x, z, r);
       } else if (type === FX_BLAST) {
         const r = a > 0.5 ? a : 0.5;
@@ -909,8 +941,8 @@ export class FxView {
       } else if (type === FX_HEAL) {
         this.mark(MARK_HEAL, x, y, z);
         this.up();
-        this.rise(0.9, 1.6, HEAL_RING_LIFE, 0.9, this.hpColor);
-        this.rise(1.15, 1.1, HEAL_RING_LIFE * 0.85, 0.7, this.hpColor);
+        this.rise(0.9, 1.6, HEAL_RING_LIFE, 0.45, this.hpColor);
+        this.rise(1.15, 1.1, HEAL_RING_LIFE * 0.85, 0.35, this.hpColor);
       } else if (type === FX_TOKEN) {
         this.mark(MARK_TOKEN, x, y, z);
       } else if (type === FX_LEVEL_UP) {
@@ -1008,6 +1040,7 @@ export class FxView {
     this.gPeak[p] = peak;
     this.gInner[p] = inner;
     this.gRise[p] = 0;
+    this.gStart[p] = RING_START;
     this.gFollow[p] = 0;
     rgbInto(this.gRgb, p * 3, color);
     return p;
@@ -1016,28 +1049,32 @@ export class FxView {
   /** A ring round the rider, from its feet, climbing `climb` m over its life. */
   private rise(r: number, climb: number, life: number, peak: number, color: number): void {
     this.up();
-    const p = this.glow(false, GLOW_RISE, 0, 0.1, 0, r, life, peak, 0.8, color);
+    const p = this.glow(false, GLOW_RISE, 0, 0.1, 0, r, life, peak, RISE_INNER, color);
     this.gRise[p] = climb;
     this.gFollow[p] = 1;
   }
 
   /** The level-up: rings climbing round the rider, a ring out over the ground, a fountain of glints. */
   private levelUp(x: number, y: number, z: number): void {
-    this.rise(0.8, 2.6, LEVEL_RING_LIFE, 0.7, this.sparkColor);
-    this.rise(1.05, 1.9, LEVEL_RING_LIFE * 0.9, 0.55, this.sparkColor);
-    this.rise(1.3, 1.2, LEVEL_RING_LIFE * 0.8, 0.45, this.sparkColor);
+    this.rise(0.8, 2.6, LEVEL_RING_LIFE, 0.4, this.sparkColor);
+    this.rise(1.05, 1.9, LEVEL_RING_LIFE * 0.9, 0.32, this.sparkColor);
+    this.rise(1.3, 1.2, LEVEL_RING_LIFE * 0.8, 0.25, this.sparkColor);
     this.ground(x, z);
-    this.glow(false, GLOW_RING, x, y, z, LEVEL_GROUND_RING, 0.45, 0.5, 0.93, this.sparkColor);
-    this.glow(false, GLOW_FLASH, x, y, z, 1.4, 0.3, 0.45, 0, this.sparkColor);
-    this.spray(SPARK_COLOR, x, y + 0.8, z, LEVEL_GLINTS, 0.6, 0, 0, 2.5, 10, 0.8, 1, 0.5, false, 0.6);
+    const ring = this.glow(false, GLOW_RING, x, y, z, LEVEL_GROUND_RING, 0.45, 0.4, 0.93, this.sparkColor);
+    this.gStart[ring] = ringStart(LEVEL_GROUND_RING, 0.93);
+    // The flash is a band just outside the rider's room, not a disc under it.
+    this.glow(false, GLOW_FLASH, x, y, z, LEVEL_FLASH, 0.3, 0.3, clearShare(LEVEL_FLASH), this.sparkColor);
+    this.spray(SPARK_COLOR, x, y + 0.8, z, LEVEL_GLINTS, 0.6, 0, 0, 2.5, 10, 0.8, 0.7, 0.5, false, 0.6);
   }
 
   /** The Bumper went off: its ring thrown out at hip height to `reach`, and a flash. */
   private bumper(x: number, y: number, z: number, reach: number): void {
     this.up();
-    this.glow(false, GLOW_RING, x, y + BUMPER_HIP, z, reach, BUMPER_RING_LIFE, 1, 0.86, this.bumperColor);
+    const ring = this.glow(false, GLOW_RING, x, y + BUMPER_HIP, z, reach, BUMPER_RING_LIFE, 0.75, 0.86, this.bumperColor);
+    this.gStart[ring] = ringStart(reach, 0.86);
     this.ground(x, z);
-    this.glow(false, GLOW_FLASH, x, y, z, 1.8, 0.2, 0.7, 0, this.bumperColor);
+    // A band on the ground just outside the rider's room, not a disc of colour under its feet.
+    this.glow(false, GLOW_FLASH, x, y, z, BUMPER_FLASH, 0.2, 0.35, clearShare(BUMPER_FLASH), this.bumperColor);
     this.spray(BUMPER_COLOR, x, y + BUMPER_HIP, z, 8, 0.7, 0, 0, 9, 3, 0.3, 0.9, 0.5, false, 0.3);
   }
 
@@ -1126,8 +1163,8 @@ export class FxView {
       const a = ((k + this.rand() * 0.6) / n) * Math.PI * 2;
       const sa = Math.sin(a);
       const ca = Math.cos(a);
-      const d0 = r * (0.18 + 0.12 * this.rand());
       const d1 = r * (0.7 + 0.25 * this.rand());
+      const d0 = Math.max(r * (0.18 + 0.12 * this.rand()), Math.min(CRACK_CLEAR, d1 * 0.6));
       this.crackFrom[c * CRACKS_MAX + k] = d0;
       for (let p = 0; p < CRACK_POINTS; p++) {
         const f = p / (CRACK_POINTS - 1);
@@ -1299,7 +1336,8 @@ export class FxView {
       const type = this.gType[p];
       if (type === GLOW_RING) {
         const grow = 1 - (1 - t) * (1 - t) * (1 - t);
-        r *= 0.25 + 0.75 * grow;
+        const from = this.gStart[p];
+        r *= from + (1 - from) * grow;
       } else if (type === GLOW_FLASH) {
         fade *= 1 - t;
       } else if (type === GLOW_SPLAT) {
