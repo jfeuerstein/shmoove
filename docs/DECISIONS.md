@@ -153,3 +153,7 @@ Things decided without the owner, newest last. Overrule any of them.
    with the skateboard. The rider gets a board, and rails to grind come next. The drawing task and
    the lesson were restarted on the owner's say-so from the work that had been stopped
    (`wip/m3-render`, `wip/m3-lesson`).
+49. **Rails, as built in the sim.** Catching one takes being in the air, coming down within about
+   a metre of it, and going mostly along it; then the rail steers. Hopping off counts as a clean
+   hop. A rail lifts the board over shufflers and gnats but not bollards, and on a rail a bollard
+   cannot shove the board off: it scrapes past and takes the hit. No rails are on the bowl yet.
