@@ -1,7 +1,7 @@
 import { Color, Matrix4, Vector3, type MeshLambertMaterial } from 'three';
 import { describe, expect, it } from 'vitest';
 import { PALETTE } from '../../src/render/look';
-import { BAR_THICK, POST_EVERY, RailsView } from '../../src/render/railsView';
+import { BAR_THICK, POST_EVERY, POST_THICK, RailsView, TRIM_PER_RAIL } from '../../src/render/railsView';
 import { makeBowl } from '../../src/sim/bowl';
 import { flatTerrain, railOver, terrainFromHeight, type Rail, type Terrain } from '../../src/sim/terrain';
 
@@ -93,17 +93,54 @@ describe('RailsView', () => {
     expect(used).toBe(view.posts.count);
   });
 
-  it('is built once: two draw calls, static, with nothing to do per frame', () => {
+  it('is built once: three draw calls, static, with nothing to do per frame', () => {
     const view = new RailsView(park());
-    expect(view.object.children).toEqual([view.bars, view.posts]);
-    for (const mesh of [view.bars, view.posts]) {
+    expect(view.object.children).toEqual([view.bars, view.posts, view.trim]);
+    for (const mesh of [view.bars, view.posts, view.trim]) {
       expect(mesh.visible).toBe(true);
       expect(mesh.matrixAutoUpdate).toBe(false);
       // Written once when built, and never again.
       expect(mesh.instanceMatrix.version).toBe(1);
-      expect(mesh.instanceColor).toBeNull();
     }
+    expect(view.bars.instanceColor).toBeNull();
+    expect(view.posts.instanceColor).toBeNull();
     expect('update' in view).toBe(false);
+  });
+
+  it('gives every post a foot on the ground, and every rail a glowing top edge and a cap on each end', () => {
+    const t = park();
+    const view = new RailsView(t);
+    expect(view.trim.count).toBe(view.posts.count + t.rails.length * TRIM_PER_RAIL);
+    const trims = Array.from({ length: view.trim.count }, (_, i) => boxOf(view.trim.instanceMatrix.array, i));
+    const glow = view.trim.geometry.getAttribute('aGlow');
+    const colors = view.trim.instanceColor;
+    if (!colors) throw new Error('no colours');
+    // Feet: flat plates, wider than the posts, lying on the ground under each post.
+    const posts = Array.from({ length: view.posts.count }, (_, i) => boxOf(view.posts.instanceMatrix.array, i));
+    for (const p of posts) {
+      const foot = trims.find((b) => Math.hypot(b.mid.x - p.mid.x, b.mid.z - p.mid.z) < 1e-6 && Math.abs(b.b.y) < 0.1);
+      expect(foot).toBeDefined();
+      if (!foot) continue;
+      expect(foot.a.length() * 2).toBeGreaterThan(POST_THICK * 2);
+      expect(Math.abs(foot.mid.y - t.heightAt(p.mid.x, p.mid.z))).toBeLessThan(0.1);
+    }
+    t.rails.forEach((r) => {
+      const len = Math.hypot(r.x1 - r.x0, r.y1 - r.y0, r.z1 - r.z0);
+      // The top edge spans the rail, its top just at the rail's line, and glows hard.
+      const k = trims.findIndex((b) => Math.abs(b.c.length() * 2 - len) < 1e-6 && Math.abs(b.mid.x - (r.x0 + r.x1) / 2) < 1e-6);
+      expect(k).toBeGreaterThanOrEqual(0);
+      const e = trims[k];
+      expect(e.mid.y + Math.abs(e.b.y)).toBeGreaterThanOrEqual((r.y0 + r.y1) / 2 - 1e-3);
+      expect(e.mid.y + Math.abs(e.b.y)).toBeLessThan((r.y0 + r.y1) / 2 + 0.02);
+      expect(e.a.length() * 2).toBeGreaterThan(BAR_THICK);
+      expect(glow.getX(k)).toBeGreaterThanOrEqual(1);
+      expect(colors.getX(k) + colors.getY(k) + colors.getZ(k)).toBeGreaterThan(2.5);
+      // A cap at each end, fatter than the bar.
+      for (const [x, z] of [[r.x0, r.z0], [r.x1, r.z1]]) {
+        const cap = trims.find((b) => Math.hypot(b.mid.x - x, b.mid.z - z) < 0.3 && b.a.length() * 2 > BAR_THICK);
+        expect(cap).toBeDefined();
+      }
+    });
   });
 
   it('draws every rail of a real bowl, and nothing on ground with none', () => {
