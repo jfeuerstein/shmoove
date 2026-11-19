@@ -1,8 +1,11 @@
-// park: the bowl as a place. Each kind of point of interest is looked at from 8 m and from 60 m,
-// fresh (park-<kind>-fresh-8.png, park-<kind>-fresh-60.png), then used up by riding it the way a
-// player would (rammed, ridden round, ridden through, flown through) and looked at again
-// (park-<kind>-spent-8.png, -60). Then a rail with the rider grinding it (park-rail.png), a boost
-// pad (park-pad.png), a kicker with its hoop from behind and from the side (park-kicker.png,
+// park: the bowl as a place. Each kind of point of interest is looked at from 8 m, with its label,
+// and from 60 m, with its beacon, fresh (park-<kind>-fresh-8.png, park-<kind>-fresh-60.png), then
+// used up by riding it the way a player would and looked at again (park-<kind>-spent-8.png, -60):
+// crates rammed; the shrine ridden into (park-shrine-riding.png) and its cards
+// (park-shrine-cards.png); the slalom's first two gates ridden and the third looked at
+// (park-gate-2of5.png, labelled GATES 2/5) before the rest; the hoop ridden through off its kicker
+// (park-hoop-through.png). Then a rail with the rider grinding it (park-rail.png), a boost pad
+// (park-pad.png), a kicker with its hoop from behind and from the side (park-kicker.png,
 // park-kicker-side.png), and three wide views of the bowl from different places that show the rim's
 // dressing (park-wide-1..3.png; the route's own park.png is the first).
 //
@@ -21,15 +24,10 @@ const THING_HOOP = 4;
 /** PHASE_CHOOSE in src/sim/world.ts; OFFER_SHRINE in src/sim/offer.ts. */
 const PHASE_CHOOSE = 3;
 const OFFER_SHRINE = 3;
-/** The shrine's ring is ridden round between 4 and 11 m from it; three laps inside 10 s. */
-const SHRINE_ORBIT = 7.5;
-const SHRINE_SPEED = 18;
-const DT = 1 / 60;
-/** HOOP_AHEAD in src/sim/bowl.ts: a hoop hangs this far past its kicker's top. */
-const HOOP_AHEAD = 5;
-/** A hoop run starts this far behind its kicker's top, m; the hop is pressed this far before its mark. */
-const HOOP_BACK = 22;
-const HOP_EARLY = 2.5;
+/** A shrine opens when the rider comes within its reach (THINGS.shrineReach in src/sim/things.ts), m. */
+const SHRINE_REACH = 4;
+/** A hoop run starts this far behind the hoop (which stands on its kicker's top), m. */
+const HOOP_BACK = 18;
 const WAIT = { steerX: 0, steerY: 0, carve: true };
 const FORWARD = { steerX: 0, steerY: 1, carve: true };
 
@@ -69,8 +67,8 @@ function placeMover(simModule, S, x, z, yaw, speed) {
 
 /**
  * The things the page's sim places for this seed (kind, position, yaw, group, in order), and a way
- * to fly through one of its hoops: found here, on the same sim, by trying run-ins from behind its
- * kicker at a few speeds, with and without a hop at the lip. The page replays it exactly.
+ * through one of its hoops: found here, on the same sim, by trying straight runs up its kicker at a
+ * few speeds with no ollie. The page replays it exactly.
  */
 async function thingsOf(seed) {
   const sim = (await runnerImport(join(ROOT, 'src', 'sim', 'sim.ts'))).module;
@@ -82,27 +80,17 @@ async function thingsOf(seed) {
   for (let i = 0; i < t0.count; i++) things.push({ i, kind: t0.kind[i], x: t0.x[i], y: t0.y[i], z: t0.z[i], yaw: t0.yaw[i], group: t0.group[i] });
   let hoopRun = null;
   for (const hp of things.filter((th) => th.kind === THING_HOOP)) {
-    for (const speed of [16, 14, 18, 20, 12, 24]) {
-      for (const hopAt of [0, -1, 1, 2]) {
-        if (hoopRun) break;
-        const S = new sim.Sim(b, { seed, horde: true });
-        fixtures.applyFixture(S, 0, 1);
-        const t = S.world.things;
-        const fx = Math.sin(hp.yaw);
-        const fz = Math.cos(hp.yaw);
-        const cx = hp.x - fx * HOOP_AHEAD;
-        const cz = hp.z - fz * HOOP_AHEAD;
-        placeMover(sim, S, cx - fx * HOOP_BACK, cz - fz * HOOP_BACK, hp.yaw, speed);
-        const input = { steerX: 0, steerY: 1, carve: false, hop: false };
-        let hopped = false;
-        for (let i = 0; i < 200 && t.state[hp.i] === 0; i++) {
-          const m = S.state.mover;
-          input.hop = hopAt >= 0 && !hopped && (m.x - cx) * fx + (m.z - cz) * fz > hopAt - HOP_EARLY;
-          if (input.hop) hopped = true;
-          S.step(input);
-        }
-        if (t.state[hp.i] !== 0) hoopRun = { i: hp.i, speed, hopAt };
-      }
+    for (const speed of [14, 12, 18]) {
+      if (hoopRun) break;
+      const S = new sim.Sim(b, { seed, horde: true });
+      fixtures.applyFixture(S, 0, 1);
+      const t = S.world.things;
+      const fx = Math.sin(hp.yaw);
+      const fz = Math.cos(hp.yaw);
+      placeMover(sim, S, hp.x - fx * HOOP_BACK, hp.z - fz * HOOP_BACK, hp.yaw, speed);
+      const input = { steerX: 0, steerY: 1, carve: true, hop: false };
+      for (let i = 0; i < 200 && t.state[hp.i] === 0; i++) S.step(input);
+      if (t.state[hp.i] !== 0) hoopRun = { i: hp.i, speed };
     }
   }
   return { things, hoopRun, kickers: b.features.kickers, pads: b.pads, radius: b.radius };
@@ -151,18 +139,6 @@ async function look(page, x, z, dist, from, file) {
   await page.screenshot({ path: join(SCREENS, file) });
 }
 
-/**
- * Being put down behind a gate counts as riding through it when the rider was last on its far side,
- * which starts the slalom. Wait there until a started slalom has timed out and is ready again
- * (SLALOM gateTicks + missTicks in src/sim/things.ts, 324 ticks).
- */
-async function settleSlalom(page, gate, dist) {
-  const x = gate.x - Math.sin(gate.yaw) * dist;
-  const z = gate.z - Math.cos(gate.yaw) * dist;
-  await call(page, 'place', x, z, gate.yaw, 0);
-  await call(page, 'step', 340);
-}
-
 /** Ride at (x, z) from `back` m away at `speed`, through it. */
 async function rideInto(page, x, z, yaw, back, speed, ticks) {
   await call(page, 'place', x - Math.sin(yaw) * back, z - Math.cos(yaw) * back, yaw, speed);
@@ -202,7 +178,6 @@ export default {
       check(th !== undefined, `the map has a ${KINDS[k]}`);
       if (!th) continue;
       const lookY = th.kind === THING_HOOP ? 14 : 8;
-      if (th.kind === 3) await settleSlalom(page, th, lookY);
       await look(page, th.x, th.z, lookY, facing(th), `park-${KINDS[k]}-fresh-8.png`);
       await look(page, th.x, th.z, 60, facing(th), `park-${KINDS[k]}-fresh-60.png`);
     }
@@ -216,72 +191,57 @@ export default {
     }
     const afterCrates = await call(page, 'state');
     check(afterCrates.tokens >= before.tokens + 5, 'the gold crate opened (its tokens)', { before: before.tokens, after: afterCrates.tokens });
-    // Shrine: three laps round it, each tick put back on the circle at speed (the shrine counts the
-    // turn of the rider's motion about it).
+    // Shrine: ridden straight into. A picture as the rider comes in, and of its cards.
     const sh = first(2);
-    const offers = await page.evaluate(
-      ([x, z, r, v, dt]) => {
-        const h = window.__shmoove;
-        const sources = [];
-        let a = 0;
-        // Put back on the circle every few ticks: in between it rides a short chord, still in the ring.
-        const every = 8;
-        for (let i = 0; i < 75; i++) {
-          h.place(x + Math.sin(a) * r, z + Math.cos(a) * r, Math.atan2(Math.cos(a), -Math.sin(a)), v);
-          h.step(every);
-          const s = h.state();
-          if (s.phase === 3) {
-            if (s.offer) sources.push(s.offer.source);
-            h.pick(0);
-            h.step(1);
-            break;
-          }
-          a += (v * dt * every) / r;
-        }
-        return sources;
-      },
-      [sh.x, sh.z, SHRINE_ORBIT, SHRINE_SPEED, DT],
-    );
-    check(offers.includes(OFFER_SHRINE), 'three laps round the shrine give its boon', offers);
-    // Slalom: through each gate of the first slalom in order.
+    const shYaw = facing(sh);
+    await call(page, 'place', sh.x - Math.sin(shYaw) * 16, sh.z - Math.cos(shYaw) * 16, shYaw, 9);
+    await call(page, 'hold', FORWARD);
+    const offers = [];
+    for (let i = 0; i < 120; i++) {
+      const s = await call(page, 'state');
+      if (Math.hypot(s.x - sh.x, s.z - sh.z) < SHRINE_REACH + 3.5) break;
+      await call(page, 'step', 1);
+    }
+    await settle(page);
+    await page.screenshot({ path: join(SCREENS, 'park-shrine-riding.png') });
+    for (let i = 0; i < 60; i++) {
+      await call(page, 'step', 1);
+      const s = await call(page, 'state');
+      if (s.phase === PHASE_CHOOSE) {
+        if (s.offer) offers.push(s.offer.source);
+        break;
+      }
+    }
+    await settle(page);
+    await page.waitForTimeout(250);
+    await page.screenshot({ path: join(SCREENS, 'park-shrine-cards.png') });
+    check(offers.includes(OFFER_SHRINE), 'riding into the shrine opens its boons', offers);
+    await call(page, 'pick', 0);
+    await call(page, 'step', 1);
+    // Slalom: through the first two gates, a look at the third (its label counts them), then the rest.
     const gates = map.things.filter((th) => th.kind === 3 && th.group === first(3).group);
     const preSlalom = (await call(page, 'state')).tokens;
-    for (const g of gates) await rideInto(page, g.x, g.z, g.yaw, 2.5, 10, 20);
+    for (const g of gates.slice(0, 2)) await rideInto(page, g.x, g.z, g.yaw, 2.5, 10, 20);
+    await look(page, gates[2].x, gates[2].z, 10, gates[2].yaw, 'park-gate-2of5.png');
+    for (const g of gates.slice(2)) await rideInto(page, g.x, g.z, g.yaw, 2.5, 10, 20);
     check((await call(page, 'state')).tokens >= preSlalom + 2, 'the slalom was cleared (its tokens)', { pre: preSlalom });
-    // Hoop: the run found in node, replayed tick for tick near the lip.
+    // Hoop: the run found in node, replayed tick for tick; the picture as the rider goes through.
     const hp = first(THING_HOOP);
     const preHoop = (await call(page, 'state')).tokens;
-    check(map.hoopRun !== null, 'a way through a hoop was found');
-    const run = map.hoopRun ?? { speed: 16, hopAt: 0 };
-    const took = await page.evaluate(
-      ([hx, hz, yaw, ahead, back, early, speed, hopAt, pre]) => {
-        const h = window.__shmoove;
-        const fx = Math.sin(yaw);
-        const fz = Math.cos(yaw);
-        const cx = hx - fx * ahead;
-        const cz = hz - fz * ahead;
-        h.place(cx - fx * back, cz - fz * back, yaw, speed);
-        h.hold({ steerX: 0, steerY: 1, carve: false });
-        let hopped = false;
-        for (let ticks = 0; ticks < 200; ) {
-          const s = h.state();
-          if (s.tokens > pre) return true;
-          if (s.phase === 3) h.pick(0);
-          const along = (s.x - cx) * fx + (s.z - cz) * fz;
-          if (hopAt >= 0 && !hopped && along > hopAt - early) {
-            h.hop();
-            hopped = true;
-          }
-          // Tick by tick round the lip, where the hop is timed; a few at a time before it.
-          const n = along > hopAt - early - 4 ? 1 : 3;
-          h.step(n);
-          ticks += n;
-        }
-        return h.state().tokens > pre;
-      },
-      [hp.x, hp.z, hp.yaw, HOOP_AHEAD, HOOP_BACK, HOP_EARLY, run.speed, run.hopAt, preHoop],
-    );
-    check(took, 'the hoop was flown through (its token)');
+    check(map.hoopRun !== null, 'a straight run through a hoop was found');
+    const run = map.hoopRun ?? { speed: 14 };
+    await call(page, 'place', hp.x - Math.sin(hp.yaw) * HOOP_BACK, hp.z - Math.cos(hp.yaw) * HOOP_BACK, hp.yaw, run.speed);
+    await call(page, 'hold', FORWARD);
+    let took = false;
+    for (let i = 0; i < 200 && !took; i++) {
+      await call(page, 'step', 1);
+      const s = await call(page, 'state');
+      if (s.phase === PHASE_CHOOSE) await call(page, 'pick', 0);
+      took = s.tokens > preHoop;
+    }
+    await settle(page);
+    await page.screenshot({ path: join(SCREENS, 'park-hoop-through.png') });
+    check(took, 'the hoop was ridden through off its kicker (its token)');
     // Totem: rammed; the shots catch it shaking with its eyes lit, then the stump.
     const tm = first(5);
     await rideInto(page, tm.x, tm.z, facing(tm), 4, 8, 25);

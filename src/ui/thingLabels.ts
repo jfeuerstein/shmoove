@@ -84,7 +84,7 @@ function liftOf(kind: number): number {
     case THING_SHRINE:
       return PILLAR_HIGH + 2.2;
     case THING_GATE:
-      return POST_HIGH + 0.9;
+      return POST_HIGH + 0.2;
     case THING_HOOP:
       return HOOP_RADIUS + 0.9;
     case THING_TOTEM:
