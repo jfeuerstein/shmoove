@@ -1,7 +1,7 @@
 // cards: the build on screen. On the bowl with a run: enough XP for a level brings up three cards in
 // the lower half and the world holds still behind them; a real touch on the second card takes it, the
 // cards go, the build bar shows the new tile, the world advances again and the mover keeps its speed.
-// Several more levels grow the build. Riding three laps round a shrine brings its boon offer; a
+// Several more levels grow the build. Riding into a shrine brings its boon offer; a
 // boss brought down brings a BOSS DOWN offer, and the same cards fit a 360x640 screen without
 // scrolling. Every card and every build tile is an icon, never a two-letter code. The build bar full.
 // With the auto-pick setting on (a real tap on its switch in the debug panel) a level never shows
@@ -80,18 +80,17 @@ function cardFaces(page) {
 const allIcons = (faces) => faces.length > 0 && faces.every((f) => f.svg === 1 && f.tileText === '' && !CODE.test(f.text));
 
 /**
- * Ride `laps` laps round (cx, cz) at radius `r` in `seconds`, placing the mover on the circle each
- * tick, answering any other offer on the way. Resolves when the shrine's offer is up.
+ * Ride straight into the shrine at (cx, cz) from `back` m away at `speed`, answering any other offer
+ * on the way. Resolves when the shrine's offer is up.
  */
-function orbit(page, cx, cz, r, laps, seconds) {
+function rideIn(page, cx, cz, back, speed) {
   return page.evaluate(
-    ([cx, cz, r, laps, seconds, shrine, choose]) => {
+    ([cx, cz, back, speed, shrine, choose, forward]) => {
       const h = window.__shmoove;
-      const ticks = Math.round(seconds * 60);
-      const w = (laps * 2 * Math.PI) / ticks;
-      const speed = w * 60 * r;
-      let a = 0;
-      for (let t = 0; t < ticks + 120; t++) {
+      const yaw = Math.atan2(cx, cz);
+      h.place(cx - Math.sin(yaw) * back, cz - Math.cos(yaw) * back, yaw, speed);
+      h.hold(forward);
+      for (let t = 0; t < 240; t++) {
         const s = h.state();
         if (s.phase === choose) {
           if (s.offer?.source === shrine) return { done: true, t };
@@ -100,13 +99,11 @@ function orbit(page, cx, cz, r, laps, seconds) {
           continue;
         }
         if (s.phase !== 0) return { done: false, t, phase: s.phase };
-        h.place(cx + Math.sin(a) * r, cz + Math.cos(a) * r, a + Math.PI / 2, speed);
         h.step(1);
-        a += w;
       }
-      return { done: false, t: ticks };
+      return { done: false, t: 240 };
     },
-    [cx, cz, r, laps, seconds, OFFER_SHRINE, PHASE_CHOOSE],
+    [cx, cz, back, speed, OFFER_SHRINE, PHASE_CHOOSE, FORWARD],
   );
 }
 
@@ -229,12 +226,12 @@ export default {
     await hook.hold(null);
     const source = await loadSource();
 
-    // A shrine: three laps round it inside its ring bring three boons.
+    // A shrine: riding into its ring brings three boons.
     const shrines = source.makeBowl(1).features.sites.filter((x) => x.kind === 'shrine');
     check(shrines.length > 0, 'the map has a shrine', shrines.length);
     if (shrines.length > 0) {
-      const ride = await orbit(page, shrines[0].x, shrines[0].z, 7, 3.2, 9.5);
-      check(ride.done === true, 'three laps round the shrine bring its offer', ride);
+      const ride = await rideIn(page, shrines[0].x, shrines[0].z, 14, 9);
+      check(ride.done === true, 'riding into the shrine brings its offer', ride);
       if (ride.done) {
         await page.waitForTimeout(300);
         await settle(page);
