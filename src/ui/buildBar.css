@@ -85,9 +85,28 @@
   visibility: hidden;
 }
 
-/* On the end card the row sits in the card's flow and wraps if it must. */
+/* On the end card the row sits in the card's flow, a little smaller so all eight fit on one line. */
 .bb-row {
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 3px;
   margin: 4px 0 2px;
+}
+
+.bb-row .bb-tile,
+.bb-row .bb-icon {
+  width: 34px;
+}
+
+.bb-row .bb-icon {
+  height: 32px;
+}
+
+/* A little air between the weapons and the passives, as on the bar. */
+.bb-row .bb-weapon + .bb-passive {
+  margin-left: 5px;
+}
+
+.bb-row .bb-icon .icon {
+  width: 26px;
+  height: 26px;
 }

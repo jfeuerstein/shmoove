@@ -200,11 +200,9 @@ function crumbs(): string {
 /** Lance: a beam straight ahead, from the emitter to whatever it burns through. */
 function lance(): string {
   return (
-    fill(rrectD(9.4, 4.6, 5.2, 13.6, 1.2) + rrectD(11.2, 7, 1.6, 9, 0.8)) +
-    fill(polyD(starPts(12, 4.2, 4, 4.2, 1.3, 0))) +
-    stroke('M6 9V16.4', 1.8) +
-    stroke('M18 9V16.4', 1.8) +
-    fill('M5.6 23.2A6.4 5 0 0 1 18.4 23.2Z')
+    fill(rrectD(9.2, 7, 5.6, 12, 1.2) + rrectD(11.2, 9.6, 1.6, 7.4, 0.8)) +
+    fill(polyD(starPts(12, 5.6, 8, 5.6, 2.4, 0))) +
+    fill('M5 23.4A7 5 0 0 1 19 23.4Z')
   );
 }
 
