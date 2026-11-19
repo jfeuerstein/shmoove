@@ -17,6 +17,7 @@
  */
 import { BoxGeometry, Group, type InstancedBufferAttribute, type InstancedMesh, TorusGeometry } from 'three';
 import type { Terrain } from '../sim/terrain';
+import { THINGS } from '../sim/things';
 import {
   MAX_THINGS,
   THING_CRATE,
@@ -32,13 +33,13 @@ import { PALETTE } from './look';
 import { addInstanceColor, addInstanceFloat, fadeMaterial, makeInstanced, rgbInto, tintMaterial, writeMatrix } from './fxView';
 import { GroundRings } from './zonesView';
 
-/** From the map's rules (PITCH section 9): the shrine's band, its laps, and a gate's half-width, m. */
-export const SHRINE_INNER = 4;
-export const SHRINE_OUTER = 11;
-export const SHRINE_LAPS = 3;
-export const GATE_HALF = 3;
+/** From the map's rules: the shrine's band, its laps, and a gate's half-width, m. */
+export const SHRINE_INNER = THINGS.shrineInner;
+export const SHRINE_OUTER = THINGS.shrineOuter;
+export const SHRINE_LAPS = THINGS.shrineLaps;
+export const GATE_HALF = THINGS.gateHalf;
 /** A hoop is taken within this of its middle: drawn that big, m. */
-export const HOOP_RADIUS = 1.6;
+export const HOOP_RADIUS = THINGS.hoopReach;
 
 /** Most boxes one thing is drawn with. */
 const SOLIDS_PER_THING = 3;

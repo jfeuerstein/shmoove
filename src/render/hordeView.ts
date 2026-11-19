@@ -12,8 +12,8 @@
  *
  * Seven silhouettes that cannot be mistaken for each other at 30 m: the chunky shuffler, the gnat's
  * shard, the fat bollard, the cutter leaning on its blade, the squat lobber with its ball held up,
- * the wide low sludge and the small spiky clinger. An elite is drawn `ELITE_SCALE` larger with a
- * white sheen, and its aura is a ring on the ground at the aura's reach in `AURA_COLORS`. A clinger
+ * the wide low sludge and the small spiky clinger. An elite (`MARK_ELITE`, or any aura) is drawn
+ * `ELITE_SCALE` larger with a white sheen, and its aura is a ring on the ground at the aura's reach in `AURA_COLORS`. A clinger
  * holding on (`STATE_LATCHED`) is drawn on the mover's back, not where the sim keeps it.
  */
 import {
@@ -45,6 +45,7 @@ import {
   KIND_SHUFFLER,
   KIND_SLUDGE,
   KINDS,
+  MARK_ELITE,
   MAX_ENEMIES,
   SPAWN_TICKS,
   STATE_LATCHED,
@@ -463,7 +464,9 @@ export class HordeView {
       const age = h.age[i];
       const rise = age >= SPAWN_TICKS ? 1 : age / SPAWN_TICKS;
       const elite = h.elite[i];
-      const scale = elite !== ELITE_NONE ? rise * ELITE_SCALE : rise;
+      // An elite is marked as one and carries an aura; either makes it big.
+      const big = elite !== ELITE_NONE || (h.mark[i] & MARK_ELITE) !== 0;
+      const scale = big ? rise * ELITE_SCALE : rise;
 
       const m = this.meshes[k].instanceMatrix.array;
       const o = n * 16;
@@ -487,7 +490,7 @@ export class HordeView {
       const a = this.anim[k].array as Float32Array;
       const f = h.flash[i];
       let flash = f >= FLASH_FULL_TICKS ? 1 : f / FLASH_FULL_TICKS;
-      if (elite !== ELITE_NONE && flash < ELITE_SHEEN) flash = ELITE_SHEEN;
+      if (big && flash < ELITE_SHEEN) flash = ELITE_SHEEN;
       a[n * 3] = h.phase[i];
       a[n * 3 + 1] = speed / def.speed;
       a[n * 3 + 2] = flash;

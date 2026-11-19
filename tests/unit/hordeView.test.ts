@@ -28,6 +28,7 @@ import {
   KIND_SLUDGE,
   KINDS,
   makeWorld,
+  MARK_ELITE,
   removeEnemy,
   SPAWN_TICKS,
   spawnEnemy,
@@ -278,6 +279,14 @@ describe('HordeView', () => {
     view.update(w, 1, 0, 0, -30);
     expect(view.auras.count).toBe(0);
     expect(view.auras.mesh.visible).toBe(false);
+    const back = matrix(view.meshes[KIND_SHUFFLER], 1);
+    expect(len(back[4], back[5], back[6])).toBeCloseTo(1, 5);
+    // Marked an elite with no aura of its own: still big, still no ring.
+    w.horde.mark[e] |= MARK_ELITE;
+    view.update(w, 1, 0, 0, -30);
+    const marked = matrix(view.meshes[KIND_SHUFFLER], 1);
+    expect(len(marked[4], marked[5], marked[6])).toBeCloseTo(ELITE_SCALE, 5);
+    expect(view.auras.count).toBe(0);
   });
 
   it('draws a latched clinger on the mover\'s back, following it, not where it stands', () => {
