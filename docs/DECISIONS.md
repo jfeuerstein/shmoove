@@ -120,3 +120,21 @@ Things decided without the owner, newest last. Overrule any of them.
 40. **Elites are never recycled**, and a totem's pack comes even with the director switched off.
 41. **The Skipper's stones never skip backwards**, so two neighbours cannot trade one stone
    between them and use up its skips.
+42. **The pivot.** After a first play the owner said they were confused about how to play it
+   properly, and then: "rather than making the movement tied to the health and damage, I'd rather
+   it just be a pretty standard survivor like but with fun movement. Think Megabonk but with a
+   grappling hook or skateboard." Decisions 7, 18 (in part), 19, 23, 24 and 34 and the pillars
+   "speed is the build" and "metres, not seconds" are withdrawn. Gear power is 1 in every gear,
+   nothing plows, a hit costs health and nothing else, healing is a passive.
+43. **Skateboard, not grappling hook, for now.** The owner named both and left it open. The
+   mover already built is most of a skateboard (push, coast, ollie, slopes, pipes, kickers), so
+   that is the cheaper way to find out whether the movement is fun. A grapple can be added later
+   or swapped in.
+44. **Carving is no longer penalised.** When speed was power, holding the stick had to cost
+   something or it was an engine. Now it is just steering: a slope pulls the same whether the
+   thumb is down or up, and steering straight bleeds little. Letting go only coasts.
+45. **The gears stay under the hood** for the camera and the sound, and are no longer a rule the
+   player needs to know. The HUD will stop leading with them.
+46. **The lesson, the M3 balance pass and its bots were stopped mid-task** when the direction
+   changed; what they had written for the old rules is not merged. The rendering task was stopped
+   too but its work stands and is resumed.

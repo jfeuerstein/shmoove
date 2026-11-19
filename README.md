@@ -1,11 +1,11 @@
 # SHMOOVE
 
-A one-thumb 3D survivor for a phone held upright, where your speed is your build. Carve, tuck and hop
-around a giant bowl; your weapons fire themselves, count metres instead of seconds, and hit harder in
-every gear.
+A one-thumb 3D survivor on a skateboard, for a phone held upright. A horde closes in on a giant
+skate bowl; your weapons fire themselves, the dead drop sparks, levels are cards. The board is how
+you get about: push, coast, ollie, and be somewhere else before the horde arrives.
 
-**Where it is:** the feel slice. One mover on a seeded bowl, three one-thumb control schemes to
-compare, a debug panel to tune every feel constant on the phone. No enemies yet.
+**Where it is:** a three-minute run with ten weapons, eleven passives, seven kinds of enemy and a
+map full of things to ride through. Not yet balanced, and the newest content is only partly drawn.
 
 ```
 npm ci

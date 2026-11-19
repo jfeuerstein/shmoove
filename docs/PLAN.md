@@ -3,20 +3,21 @@
 How the game in `PITCH.md` gets built. Status lives here and is updated in the same commit that
 changes it.
 
-**Now:** M0, M1 and M2 are built with a green gate (M2 at the commit that follows `83f2344` on
-this branch; tags cannot be pushed from the build session). M3 (the build: cards, the full
-arsenal, the other enemies, the drive-through map) is in progress. The owner said to carry on past
-the M1 go / no-go without a playtest, so everything since assumes the default control scheme
-(`tuck`). Nothing here has been under a real thumb; the bots say it is not broken, not that it is
-fun.
+**Now: the design changed.** The owner played the M3 build and asked for "a pretty standard
+survivor-like but with fun movement", not movement tied to health and damage. `PITCH.md` is
+rewritten for that (a survivor on a skateboard) and the core rules already follow it: touching
+hurts at any speed, weapons hit the same in every gear, nothing heals with speed, a run starts
+with the Seekers. What is left of the change is listed under "M3, second pass" below.
+
+Milestones M0 to M2 stand as built (toolchain, the mover and the bowl, the horde, sparks and
+levels). M3's content (cards, ten weapons, eleven passives, seven enemies, elites, map objects)
+stands; its rules were rewritten.
 
 Still only the owner can:
 
-1. Let the deploy run. GitHub rejects it until the `github-pages` environment allows this branch:
-   Settings, Environments, `github-pages`, Deployment branches, add `claude/festive-babbage-zk6cxn`
-   (and Settings, Pages, source "GitHub Actions"). Then re-run the Pages workflow.
-2. Play it (`docs/PLAYTEST.md`) and send back the scheme and any tuning (the panel's Copy changes
-   button). `?solo` gives the bowl without the horde.
+1. Play it and say what is and is not fun. The deploy works now; every push updates the link.
+2. Choose the toy: this pass takes the skateboard (it is most of what the mover already is). A
+   grappling hook is the alternative the owner named.
 
 ## The order, and why
 
@@ -149,8 +150,24 @@ printed but not asserted while M3's content lands), and two runs with different 
 visibly differently.
 
 Status: the build system, cards on screen, all ten weapons, all eleven passives, the four new
-enemies and elites are merged. In progress: the map's drive-through objects, drawing the new
-content, then the balance pass and an independent verification.
+enemies and elites and the map's drive-through objects are merged.
+
+### M3, second pass (after the owner's first play)
+
+Done: contact, damage and healing no longer read speed or gear; Seekers is the starting weapon;
+passives renamed to the genre's (Might, Haste, Regen); crates open to a touch; carving no longer
+gives up a slope's pull.
+
+To do, in order:
+
+1. Weapons fire on timers, not metres or hops or tucks (they are still fed by movement).
+2. Draw the M3 content (enemies, zones, map objects, weapon effects); the mover becomes a rider on
+   a board.
+3. A first-run lesson and a how-to sheet for the game as it now is; the HUD stops making the gear
+   the biggest thing on screen.
+4. Bots and balance for standard rules, with `STRICT` back on in `tests/sim/balance.test.ts`.
+5. An independent verification of all of M3.
+6. Then the park: rails to grind, and whatever the owner's next play asks for.
 
 ## M4. Run
 

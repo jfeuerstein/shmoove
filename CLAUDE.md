@@ -1,12 +1,16 @@
 # SHMOOVE
 
-Portrait-mode, one-thumb 3D survivor where speed is the build. Pitch and design: `docs/PITCH.md`.
-Milestones and status: `docs/PLAN.md`.
+Portrait-mode, one-thumb 3D survivor on a skateboard: a standard survivor (weapons on timers,
+touching hurts, sparks, levels, cards) where the movement is the fun part and not a stat. Pitch and
+design: `docs/PITCH.md`. Milestones and status: `docs/PLAN.md`. Decisions: `docs/DECISIONS.md`.
 
-**State of the repo:** M0 to M2 are built (a three-minute run with a horde, the Wake, Seekers,
-sparks and levels). M3 is in progress: the build system is in (loadout, stats, card offers, a
-weapon registry, all eleven passives, the Bumper); the other seven weapons, four more enemies and
-elites, the map's drive-through objects and the card screen are being built. No bosses or meta yet.
+**State of the repo:** M0 to M2 are built. M3's content is in (cards, ten weapons, eleven passives,
+seven enemies, elites, map objects). The design changed after the owner's first play (DECISIONS
+42): the core rules are already standard-survivor; `docs/PLAN.md` lists what is left of the change
+(weapons to timers, drawing the M3 content, a lesson, balance).
+
+**Rules of the game that code must not break:** how fast the player is moving never changes damage
+dealt, damage taken or healing. Weapons fire on timers. Touching an enemy hurts.
 
 ## Stack
 
