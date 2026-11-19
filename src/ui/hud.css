@@ -52,3 +52,94 @@
 .hud-chain[hidden] {
   display: none;
 }
+
+/* ---- the run: clock, kills, health along the top edge, XP along the bottom edge ---- */
+
+.hud-clock,
+.hud-kills {
+  position: fixed;
+  font-size: 20px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+}
+
+.hud-clock {
+  top: calc(env(safe-area-inset-top, 0px) + 16px);
+  left: calc(env(safe-area-inset-left, 0px) + 14px);
+}
+
+.hud-kills {
+  top: calc(env(safe-area-inset-top, 0px) + 18px);
+  right: calc(env(safe-area-inset-right, 0px) + 14px);
+  font-size: 14px;
+  font-weight: 700;
+  opacity: 0.85;
+}
+
+/* The debug button sits at the top right: kills go under it. */
+.hud-debug .hud-kills {
+  top: calc(env(safe-area-inset-top, 0px) + 58px);
+}
+
+.hud-hp {
+  position: fixed;
+  top: env(safe-area-inset-top, 0px);
+  left: env(safe-area-inset-left, 0px);
+  right: env(safe-area-inset-right, 0px);
+  height: 6px;
+  background: rgba(255, 255, 255, 0.16);
+  overflow: hidden;
+}
+
+.hud-fill {
+  width: 100%;
+  height: 100%;
+  transform-origin: left center;
+  transform: scaleX(1);
+}
+
+.hud-xp {
+  position: fixed;
+  bottom: env(safe-area-inset-bottom, 0px);
+  left: env(safe-area-inset-left, 0px);
+  right: env(safe-area-inset-right, 0px);
+  height: 18px;
+  display: flex;
+  align-items: flex-end;
+}
+
+.hud-level {
+  min-width: 34px;
+  padding: 0 6px 0 10px;
+  box-sizing: border-box;
+  font-size: 14px;
+  font-weight: 900;
+  line-height: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+.hud-track {
+  flex: 1;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.16);
+  overflow: hidden;
+}
+
+.pulse-a {
+  animation: hud-pulse-a 0.35s ease-out;
+}
+
+.pulse-b {
+  animation: hud-pulse-b 0.35s ease-out;
+}
+
+@keyframes hud-pulse-a {
+  0% { filter: brightness(2.2); }
+  100% { filter: brightness(1); }
+}
+
+@keyframes hud-pulse-b {
+  0% { filter: brightness(2.2); }
+  100% { filter: brightness(1); }
+}

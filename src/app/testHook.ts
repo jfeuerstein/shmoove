@@ -5,6 +5,7 @@
  * Without a script holding it, `HookInput` reads as a thumb off the screen (tucked, no stick).
  */
 import type { InputSource } from '../input/source';
+import { hurtPlayer } from '../sim/contact';
 import type { Sim } from '../sim/sim';
 import type { InputFrame } from '../sim/types';
 import type { FrameStatsSummary } from './loop';
@@ -21,6 +22,18 @@ export interface HookState {
   chain: number;
   viewYaw: number;
   events: number;
+  hp: number;
+  maxHp: number;
+  level: number;
+  xp: number;
+  xpNext: number;
+  kills: number;
+  enemies: number;
+  sparks: number;
+  /** PHASE_PLAY 0, PHASE_DEAD 1, PHASE_WON 2. */
+  phase: number;
+  /** Run time, s. */
+  seconds: number;
 }
 
 export interface TestHook {
@@ -35,6 +48,10 @@ export interface TestHook {
   pause(on: boolean): void;
   /** Advance n ticks now and render one frame. */
   step(n: number): void;
+  /** The player takes a hit of this much damage now (as `hurtPlayer`). */
+  hurt(damage: number): void;
+  /** Start a new run, as the AGAIN button does. */
+  restart(): void;
   /** Averages over the last 120 frames. */
   stats(): FrameStatsSummary;
 }
@@ -97,6 +114,8 @@ export interface HookHost {
   pause(on: boolean): void;
   /** Run n sim steps now and draw one frame of the result. */
   stepNow(n: number): void;
+  /** Start a new run. */
+  restart(): void;
   stats(): FrameStatsSummary;
 }
 
@@ -106,6 +125,7 @@ export function installTestHook(host: HookHost): TestHook {
     state() {
       const s = host.sim.state;
       const m = s.mover;
+      const w = host.sim.world;
       return {
         tick: s.tick,
         x: m.x,
@@ -118,6 +138,16 @@ export function installTestHook(host: HookHost): TestHook {
         chain: m.chain,
         viewYaw: s.viewYaw,
         events: s.events,
+        hp: w.player.hp,
+        maxHp: w.player.maxHp,
+        level: w.player.level,
+        xp: w.player.xp,
+        xpNext: w.player.xpNext,
+        kills: w.player.kills,
+        enemies: w.horde.count,
+        sparks: w.sparks.count,
+        phase: w.run.phase,
+        seconds: w.run.ticks / 60,
       };
     },
     hold(frame) {
@@ -133,6 +163,12 @@ export function installTestHook(host: HookHost): TestHook {
       const k = Math.floor(n);
       if (!(k > 0)) return;
       host.stepNow(k);
+    },
+    hurt(damage) {
+      hurtPlayer(host.sim.world, host.sim.state, damage);
+    },
+    restart() {
+      host.restart();
     },
     stats() {
       return host.stats();
