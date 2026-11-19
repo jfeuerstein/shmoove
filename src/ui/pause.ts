@@ -20,6 +20,8 @@ export interface PauseHost {
   onResume(): void;
   /** HOW TO PLAY on the overlay. */
   onHowTo(): void;
+  /** REPORTS on the overlay (the kept run reports). No button without it. */
+  onReports?(): void;
 }
 
 /**
@@ -45,7 +47,7 @@ export class PauseView {
   constructor(
     root: HTMLElement,
     private readonly host: PauseHost,
-    options: { debug?: boolean } = {},
+    options: { debug?: boolean; reports?: boolean } = {},
     doc: Document = document,
   ) {
     const button = doc.createElement('button');
@@ -76,6 +78,18 @@ export class PauseView {
     sheet.appendChild(title);
     sheet.appendChild(resume);
     sheet.appendChild(howTo);
+    const reports = options.reports === true ? doc.createElement('button') : null;
+    if (reports) {
+      reports.className = 'pause-howto pause-reports';
+      reports.type = 'button';
+      reports.textContent = 'REPORTS';
+      sheet.appendChild(reports);
+      reports.addEventListener('click', (e) => {
+        e.stopPropagation();
+        reports.blur();
+        if (this.on) this.host.onReports?.();
+      });
+    }
     overlay.appendChild(sheet);
 
     for (const type of STOP) {
