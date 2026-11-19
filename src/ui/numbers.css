@@ -13,19 +13,28 @@
   translate: -50% -100%;
   will-change: transform, opacity;
   font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  font-size: 16px;
-  font-weight: 900;
+  font-size: 13px;
+  font-weight: 800;
   line-height: 1;
   font-variant-numeric: tabular-nums;
-  color: #fff;
-  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+  color: rgba(255, 255, 255, 0.92);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
 }
 
 .num[hidden] {
   display: none;
 }
 
+/* A hit that killed: a touch larger and warmer. */
+.num-kill {
+  font-size: 15px;
+  font-weight: 900;
+  color: #fff1b0;
+}
+
+/* A loop's pop: how many it took. */
 .num-big {
-  font-size: 30px;
+  font-size: 22px;
+  font-weight: 900;
   color: #fff1b0;
 }

@@ -1,12 +1,14 @@
 /**
  * Screen-edge cues for what the narrow portrait frame cannot show.
  *
- * - A glow along the bottom and lower sides in `PALETTE.threat`, as strong as the number of risen
- *   enemies within `THREAT_RANGE` of the mover that are behind it or outside the frame, smoothed
- *   over about a third of a second.
+ * - A thin glow along the bottom and lower sides in `PALETTE.threat`, as strong as the number of
+ *   risen enemies within `THREAT_RANGE` of the mover that are behind it or outside the frame and
+ *   closing on it, smoothed over about a third of a second. Red means "now": an enemy the rider is
+ *   outrunning, or one it can see coming, lights nothing, and with none the glow is gone.
+ * - The rider's place on the screen, each frame, in `riderOnScreen` (the damage numbers keep off it).
  * - For each bollard within `MARKER_RANGE` that is off screen (the nearest `MARKER_POOL` of them),
  *   a chevron pinned to the screen edge, pointing at it.
- * - The red wash after a hit (strength from the effects view).
+ * - The flash at the edges after a hit (strength from the effects view: `hitWash`).
  * - While a boss is alive and outside the frame, one bigger marker on the edge pointing at it, in
  *   that boss's colour; it pulses hard while the Bruiser tells or charges. It is its own element,
  *   never one of the bollards' pool.
@@ -25,10 +27,12 @@ import type { SimState } from '../sim/types';
 import { KIND_BOLLARD, KIND_BRUISER, KINDS, SPAWN_TICKS, ZONE_RING, type World } from '../sim/world';
 import './threat.css';
 
-/** Enemies nearer than this, behind you or out of frame, light the glow, m. */
-export const THREAT_RANGE = 14;
+/** Enemies nearer than this, behind you or out of frame and closing, light the glow, m. */
+export const THREAT_RANGE = 10;
 /** This many such enemies light it fully. */
 export const THREAT_FULL = 6;
+/** An enemy counts as closing when the gap to the rider shrinks faster than this, m/s. */
+export const CLOSING_SPEED = 0.5;
 /** Seconds the glow takes to follow (time constant). */
 export const THREAT_SMOOTH = 0.33;
 /** Bollards nearer than this get an edge marker when off screen, m. */
@@ -42,6 +46,8 @@ export const BOSS_MARGIN = 34;
 export const RING_CUE_SECONDS = 1.2;
 /** The ring cue's size at its faintest (furthest) and its strength steps. */
 const RING_CUE_MIN = 0.35;
+/** How far round the rider counts as its own space on the screen, m. */
+export const RIDER_CLEAR = 2;
 /** Height on an enemy that is tested against the frame, m. */
 const AIM_HEIGHT = 0.9;
 const BOLLARD_AIM_HEIGHT = 1.2;
@@ -80,16 +86,53 @@ export function rightOf(dx: number, dz: number, yaw: number): number {
   return -dx * Math.cos(yaw) + dz * Math.sin(yaw);
 }
 
-/** Does an enemy at (dx, dz) from the mover count toward the glow? */
-export function isThreat(dx: number, dz: number, yaw: number, inFrame: boolean): boolean {
+/**
+ * Is an enemy at (dx, dz) from the mover, moving at (rvx, rvz) relative to it, closing: is the gap
+ * between them shrinking faster than `CLOSING_SPEED`?
+ */
+export function isClosing(dx: number, dz: number, rvx: number, rvz: number): boolean {
+  const d = Math.sqrt(dx * dx + dz * dz);
+  if (d < 1e-6) return true;
+  return -(dx * rvx + dz * rvz) / d > CLOSING_SPEED;
+}
+
+/**
+ * Does an enemy at (dx, dz) from the mover count toward the glow? Near, unseen (behind or out of
+ * frame) and closing.
+ */
+export function isThreat(dx: number, dz: number, yaw: number, inFrame: boolean, closing: boolean): boolean {
+  if (!closing) return false;
   if (dx * dx + dz * dz > THREAT_RANGE * THREAT_RANGE) return false;
   return aheadOf(dx, dz, yaw) < 0 || !inFrame;
 }
 
+/** The glow's target strength, 0..1, for `n` enemies near, unseen and closing. */
+export function glowTarget(n: number): number {
+  return n <= 0 ? 0 : Math.min(1, n / THREAT_FULL);
+}
+
+/**
+ * Where the rider is on the screen this frame, CSS px, and roughly how far 2 m round it reaches
+ * there (`r`, px): written by `ThreatView.update`, read by the damage numbers to keep off the rider.
+ * `known` is false until the first frame.
+ */
+export const riderOnScreen = { x: 0, y: 0, r: 0, known: false };
+
 const scratch: Projected = { x: 0, y: 0, w: 0 };
 
-/** Risen enemies within range of the mover that are behind it or out of the frame. */
-export function threatCount(w: World, mx: number, mz: number, yaw: number, viewProj: ArrayLike<number>): number {
+/**
+ * Risen enemies within range of the mover that are behind it or out of the frame and closing on it;
+ * (mvx, mvz) is the mover's velocity.
+ */
+export function threatCount(
+  w: World,
+  mx: number,
+  mz: number,
+  yaw: number,
+  viewProj: ArrayLike<number>,
+  mvx = 0,
+  mvz = 0,
+): number {
   const h = w.horde;
   const r2 = THREAT_RANGE * THREAT_RANGE;
   let n = 0;
@@ -98,8 +141,10 @@ export function threatCount(w: World, mx: number, mz: number, yaw: number, viewP
     const dx = h.x[i] - mx;
     const dz = h.z[i] - mz;
     if (dx * dx + dz * dz > r2) continue;
+    const closing = isClosing(dx, dz, h.vx[i] - mvx, h.vz[i] - mvz);
+    if (!closing) continue;
     const inFrame = project(viewProj, h.x[i], h.y[i] + AIM_HEIGHT, h.z[i], scratch);
-    if (isThreat(dx, dz, yaw, inFrame)) n++;
+    if (isThreat(dx, dz, yaw, inFrame, closing)) n++;
   }
   return n;
 }
@@ -306,9 +351,11 @@ export class ThreatView {
     const yaw = s.viewYaw;
 
     // Glow.
-    const target = Math.min(1, threatCount(w, m.x, m.z, yaw, vp) / THREAT_FULL);
+    const target = glowTarget(threatCount(w, m.x, m.z, yaw, vp, m.vx, m.vz));
     const k = dt > 0 ? 1 - Math.exp(-dt / THREAT_SMOOTH) : 0;
     this.strength += (target - this.strength) * k;
+    // Gone, not lingering at a faint step above nothing.
+    if (target === 0 && this.strength < OPACITY_STEP) this.strength = 0;
     const g = Math.round(this.strength / OPACITY_STEP);
     if (g !== this.glowShown) {
       this.glowShown = g;
@@ -351,7 +398,13 @@ export class ThreatView {
     if (project(vp, m.x, m.y + 0.8, m.z, this.mover) || this.mover.w > 0) {
       ox = ((this.mover.x + 1) / 2) * width;
       oy = ((1 - this.mover.y) / 2) * height;
+      // 2 m at the rider's distance, in px: the projection's x scale over clip w.
+      const px = camera.projectionMatrix.elements[0];
+      riderOnScreen.r = this.mover.w > 1e-6 ? ((px * RIDER_CLEAR) / this.mover.w) * (width / 2) : 0;
     }
+    riderOnScreen.x = ox;
+    riderOnScreen.y = oy;
+    riderOnScreen.known = true;
     for (let q = 0; q < MARKER_POOL; q++) {
       const el = this.markers[q];
       if (q >= n) {
