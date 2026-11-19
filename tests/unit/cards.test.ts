@@ -33,7 +33,8 @@ import {
   type Offer,
 } from '../../src/sim/offer';
 import { makeWorld, PHASE_CHOOSE, PHASE_PLAY } from '../../src/sim/world';
-import { autoPickCard, Cards, describeCard, describeOffer, PICK_LOCK_SEC, sourceHeader } from '../../src/ui/cards';
+import { autoPickCard, Cards, describeCard, describeOffer, PICK_LOCK_SEC, pipClass, sourceHeader } from '../../src/ui/cards';
+import { iconSvg } from '../../src/ui/icons';
 
 function offerOf(source: number, cards: [number, number, number][]): Offer {
   const o = makeOffer();
@@ -52,7 +53,10 @@ describe('card text', () => {
   it('says NEW and the blurb for a weapon not carried, with what feeds it', () => {
     const c = describeCard(offerOf(OFFER_LEVEL, [[CARD_WEAPON, W_SLAM, 1]]), 0, makeLoadout());
     expect(c.kind).toBe('weapon');
-    expect(c.code).toBe('SL');
+    expect(c.icon).toBe(iconSvg('weapon', W_SLAM));
+    expect(c.isNew).toBe(true);
+    expect(c.from).toBe(0);
+    expect(c.to).toBe(1);
     expect(c.name).toBe('Slam');
     expect(c.tag).toBe('NEW');
     expect(c.blurb).toBe(WEAPON_INFO[W_SLAM].blurb);
@@ -66,6 +70,8 @@ describe('card text', () => {
     raiseWeapon(l, W_SEEKERS, 2);
     const c = describeCard(offerOf(OFFER_LEVEL, [[CARD_WEAPON, W_SEEKERS, 1]]), 0, l);
     expect(c.tag).toBe('Lv 2 > 3');
+    expect(c.isNew).toBe(false);
+    expect([c.from, c.to]).toEqual([2, 3]);
     expect(c.rare).toBe(false);
   });
 
@@ -81,7 +87,9 @@ describe('card text', () => {
   it('never promises more than level 5', () => {
     const l = makeLoadout();
     raiseWeapon(l, W_WAKE, 4);
-    expect(describeCard(offerOf(OFFER_LEVEL, [[CARD_WEAPON, W_WAKE, 2]]), 0, l).tag).toBe('Lv 4 > 5');
+    const c = describeCard(offerOf(OFFER_LEVEL, [[CARD_WEAPON, W_WAKE, 2]]), 0, l);
+    expect(c.tag).toBe('Lv 4 > 5');
+    expect(c.to).toBe(5);
   });
 
   it('a new rare weapon starts at level 2', () => {
@@ -99,7 +107,8 @@ describe('card text', () => {
     ]);
     const fresh = describeCard(o, 0, l);
     expect(fresh.kind).toBe('passive');
-    expect(fresh.code).toBe(PASSIVE_INFO[P_HEART].code);
+    expect(fresh.icon).toBe(iconSvg('passive', P_HEART));
+    expect(fresh.isNew).toBe(true);
     expect(fresh.tag).toBe('NEW');
     expect(fresh.blurb).toBe(PASSIVE_INFO[P_HEART].blurb);
     expect(fresh.fedBy).toBe('');
@@ -113,7 +122,8 @@ describe('card text', () => {
       expect(c.name).toBe(BOON_INFO[id].name);
       expect(c.blurb).toBe(BOON_INFO[id].blurb);
       expect(c.tag).toBe('BOON');
-      expect(c.code).toHaveLength(2);
+      expect(c.icon).toBe(iconSvg('boon', id));
+      expect(c.isNew).toBe(false);
       expect(c.rare).toBe(false);
     }
   });
@@ -123,7 +133,8 @@ describe('card text', () => {
       const c = describeCard(offerOf(OFFER_LEVEL, [[CARD_WEAPON, id, 1]]), 0, makeLoadout());
       expect(c.name.length).toBeGreaterThan(0);
       expect(c.blurb.length).toBeGreaterThan(0);
-      expect(c.code).toHaveLength(2);
+      expect(c.icon).toBe(iconSvg('weapon', id));
+      expect(c.icon).toContain('<svg');
     }
   });
 
@@ -206,6 +217,7 @@ class FakeEl {
   className = '';
   hidden = false;
   textContent = '';
+  innerHTML = '';
   readonly children: FakeEl[] = [];
   readonly handlers = new Map<string, Handler[]>();
   readonly style = { setProperty: (): void => undefined };
@@ -247,7 +259,66 @@ function open(w: ReturnType<typeof makeWorld>, source: number, cards: [number, n
   w.run.phase = PHASE_CHOOSE;
 }
 
+/** Every piece of text a card shows, joined. */
+function cardText(e: FakeEl): string {
+  return [e.textContent, ...e.children.map(cardText)].join(' ');
+}
+
+describe('level pips', () => {
+  it('lights what is carried, marks what the card gives, leaves the rest dark', () => {
+    expect([0, 1, 2, 3, 4].map((p) => pipClass(p, 2, 4))).toEqual([
+      'card-pip on',
+      'card-pip on',
+      'card-pip gain',
+      'card-pip gain',
+      'card-pip',
+    ]);
+    expect([0, 1, 2, 3, 4].map((p) => pipClass(p, 0, 1))).toEqual(['card-pip gain', 'card-pip', 'card-pip', 'card-pip', 'card-pip']);
+  });
+});
+
 describe('Cards overlay', () => {
+  it('draws each card with its icon and no two-letter code, and tells new, level and boon apart', () => {
+    const { cards, buttons } = build();
+    const w = makeWorld(1);
+    raiseWeapon(w.player.loadout, W_WAKE, 2);
+    open(w, OFFER_LEVEL, [
+      [CARD_WEAPON, W_SLAM, 1],
+      [CARD_WEAPON, W_WAKE, 1],
+      [CARD_PASSIVE, P_HEART, 1],
+    ]);
+    cards.update(w, 0.016);
+    const tile = (b: FakeEl): FakeEl => b.children[0];
+    expect(tile(buttons[0]).innerHTML).toBe(iconSvg('weapon', W_SLAM));
+    expect(tile(buttons[1]).innerHTML).toBe(iconSvg('weapon', W_WAKE));
+    expect(tile(buttons[2]).innerHTML).toBe(iconSvg('passive', P_HEART));
+    expect(buttons[0].className).toContain('card-weapon');
+    expect(buttons[0].className).toContain('card-new');
+    expect(buttons[1].className).not.toContain('card-new');
+    expect(buttons[2].className).toContain('card-passive');
+    // The pips: Wake carried at 2, this card makes it 3.
+    const pips = buttons[1].children[1].children.find((c) => c.className === 'card-pips');
+    expect(pips?.children.map((p) => p.className)).toEqual(['card-pip on', 'card-pip on', 'card-pip gain', 'card-pip', 'card-pip']);
+    const codes = [WEAPON_INFO[W_SLAM].code, WEAPON_INFO[W_WAKE].code, PASSIVE_INFO[P_HEART].code];
+    for (let i = 0; i < 3; i++) {
+      expect(tile(buttons[i]).textContent).toBe('');
+      expect(cardText(buttons[i]).split(/\s+/)).not.toContain(codes[i]);
+    }
+
+    open(w, OFFER_SHRINE, [
+      [CARD_BOON, BOON_MIGHT, 1],
+      [CARD_BOON, BOON_VIGOUR, 1],
+      [CARD_BOON, BOON_REACH, 1],
+    ]);
+    cards.update(w, 0.016);
+    for (let i = 0; i < 3; i++) {
+      expect(buttons[i].className).toContain('card-boon');
+      const pipRow = buttons[i].children[1].children.find((c) => c.className === 'card-pips');
+      expect(pipRow?.hidden).toBe(true);
+    }
+    expect(tile(buttons[2]).innerHTML).toBe(iconSvg('boon', BOON_REACH));
+  });
+
   it('shows only while an offer is open and writes the text for each card', () => {
     const { cards, root, buttons } = build();
     const w = makeWorld(1);

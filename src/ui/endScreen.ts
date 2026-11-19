@@ -7,6 +7,7 @@
 import { PALETTE } from '../render/look';
 import { BOSS_TIMES } from '../sim/balance';
 import { PHASE_DEAD, PHASE_PLAY, PHASE_WON, type World } from '../sim/world';
+import { BuildRow } from './buildBar';
 import { formatTime } from './hud';
 import './endScreen.css';
 
@@ -57,6 +58,8 @@ export class EndScreen {
   readonly element: HTMLElement;
   private readonly titleEl: HTMLElement;
   private readonly rows: HTMLElement[] = [];
+  /** The build the run ended with, as icons with levels. */
+  private readonly build: BuildRow;
   private readonly button: HTMLElement;
   private readonly howToButton: HTMLElement;
   private readonly statsEl: HTMLElement | null = null;
@@ -83,6 +86,7 @@ export class EndScreen {
       el.appendChild(row);
       this.rows.push(row);
     }
+    this.build = new BuildRow(el, doc);
     let copyButton: HTMLElement | null = null;
     if (report) {
       const stats = doc.createElement('div');
@@ -148,6 +152,7 @@ export class EndScreen {
     // Loops only mean something to a player who carried the Wake and closed one.
     this.rows[4].textContent = card.pops > 0 ? `Loops  ${card.pops}  (best ${card.bestPop})` : '';
     this.rows[4].hidden = card.pops === 0;
+    this.build.show(w.player.loadout);
     if (this.statsEl && this.report) this.statsEl.textContent = this.report.lines().join('\n');
     this.element.className = 'end end-show';
   }

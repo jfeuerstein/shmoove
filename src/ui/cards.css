@@ -57,8 +57,9 @@
   font: inherit;
   color: inherit;
   background: rgba(42, 37, 72, 0.96);
-  border: 2px solid rgba(255, 255, 255, 0.16);
+  border: 2px solid var(--card-kind);
   border-radius: 16px;
+  --card-kind: var(--card-weapon);
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
 }
@@ -71,32 +72,47 @@
   filter: brightness(1.25);
 }
 
-.card-rare {
-  border-color: var(--card-rare);
-  box-shadow: 0 0 14px rgba(255, 210, 63, 0.45);
+.card-passive {
+  --card-kind: var(--card-passive);
 }
 
+.card-boon {
+  --card-kind: var(--card-boon);
+}
+
+/* Rare: two levels at once. A white frame that glows, over the kind's colour. */
+.card-rare {
+  border-color: var(--card-rare);
+  box-shadow: 0 0 0 2px var(--card-kind), 0 0 16px rgba(255, 255, 255, 0.45);
+}
+
+/* The icon: on a dark tile in the kind's colour for a level on something carried, inverted on a
+   solid tile for something new and for a boon. */
 .card-tile {
   flex: 0 0 auto;
-  width: 54px;
-  height: 54px;
+  width: 64px;
+  height: 64px;
+  box-sizing: border-box;
+  padding: 5px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 12px;
-  font-size: 22px;
-  font-weight: 900;
-  letter-spacing: 0.02em;
-  color: #1b1630;
-  background: var(--card-weapon);
+  border-radius: 14px;
+  color: var(--card-kind);
+  background: rgba(27, 22, 48, 0.9);
+  border: 2px solid var(--card-kind);
 }
 
-.card-passive .card-tile {
-  background: var(--card-passive);
-}
-
+.card-new .card-tile,
 .card-boon .card-tile {
-  background: var(--card-boon);
+  color: #1b1630;
+  background: var(--card-kind);
+}
+
+.card-tile .icon {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
 .card-body {
@@ -124,7 +140,16 @@
   letter-spacing: 0.06em;
   font-variant-numeric: tabular-nums;
   white-space: pre;
-  color: var(--card-passive);
+  color: var(--card-kind);
+}
+
+/* NEW is a solid tag in the kind's colour. */
+.card-new .card-tag,
+.card-boon .card-tag {
+  padding: 1px 6px;
+  border-radius: 6px;
+  color: #1b1630;
+  background: var(--card-kind);
 }
 
 .card-bonus {
@@ -138,7 +163,8 @@
 }
 
 .card-bonus[hidden],
-.card-fed[hidden] {
+.card-fed[hidden],
+.card-pips[hidden] {
   display: none;
 }
 
@@ -153,4 +179,36 @@
   font-weight: 600;
   letter-spacing: 0.04em;
   opacity: 0.6;
+}
+
+.card-pips {
+  display: flex;
+  gap: 3px;
+  margin-top: 2px;
+}
+
+.card-pip {
+  width: 14px;
+  height: 5px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.card-pip.on {
+  background: var(--card-kind);
+}
+
+/* The levels this card gives: lit, and pulsing so the step reads at a glance. */
+.card-pip.gain {
+  background: #fff;
+  animation: card-pip-gain 0.9s ease-in-out infinite alternate;
+}
+
+@keyframes card-pip-gain {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0.45;
+  }
 }
