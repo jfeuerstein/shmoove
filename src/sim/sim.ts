@@ -1,6 +1,8 @@
 import { RUN_TICKS } from './balance';
 import { stepContact } from './contact';
+import { stepDirector } from './director';
 import { stepGear } from './flow';
+import { stepHorde } from './horde';
 import { makeMover, stepMover } from './mover';
 import type { Terrain } from './terrain';
 import type { InputFrame, MoverState, SimState } from './types';
@@ -66,8 +68,8 @@ function stepWorld(w: World, s: SimState, terrain: Terrain): void {
   w.fx.count = 0;
   w.deaths.count = 0;
 
-  // [director] spawns and recycles, if w.spawning
-  // [horde] moves
+  stepDirector(w, s, _terrain); // [director] spawns and recycles, if w.spawning
+  stepHorde(w, s, _terrain); // [horde] moves
   rebuildGrid(w);
   stepContact(w, s);
   if (w.run.phase !== PHASE_PLAY) return;
