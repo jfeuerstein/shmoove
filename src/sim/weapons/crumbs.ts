@@ -1,5 +1,5 @@
 /**
- * Crumbs: a mine dropped every few metres along the mover's path. It arms after a moment and goes
+ * Crumbs: a mine dropped at the mover's feet every second or so. It arms after a moment and goes
  * off when an enemy steps near it. The horde chasing you walks into what you left behind.
  */
 import { W_CRUMBS } from '../arsenal';
@@ -21,12 +21,13 @@ import {
   ZONE_MINE,
   type World,
 } from '../world';
+import { afterShot, isReady, waitOf } from './timer';
 
 /** The Crumbs' numbers. Arrays are by weapon level 1..5. */
 export const CRUMBS = {
-  /** Metres travelled per mine. */
-  interval: [14, 12, 10, 9, 8],
-  /** Damage of a blast, before gear power (the gear when the mine was dropped). */
+  /** Seconds between mines, before Haste. */
+  wait: [1.6, 1.4, 1.2, 1.05, 0.9],
+  /** Damage of a blast, before might (the might when the mine was dropped). */
   damage: [26, 32, 40, 50, 62],
   /** Blast radius, m, times area. */
   radius: [3, 3.3, 3.6, 4, 4.5],
@@ -40,7 +41,8 @@ export const CRUMBS = {
   trigger: 1.2,
 } as const;
 
-const MEM_METRES = 0;
+/** mem: seconds waited since the last mine. */
+const MEM_WAITED = 0;
 
 /** Remove the oldest mine. */
 function dropOldest(w: World): void {
@@ -123,12 +125,11 @@ export function stepCrumbs(w: World, s: SimState, terrain: Terrain, level: numbe
     }
   }
 
-  const m = s.mover;
-  const at = W_CRUMBS * WEAPON_MEM + MEM_METRES;
-  w.mem[at] += Math.sqrt(m.vx * m.vx + m.vz * m.vz) * DT;
-  const interval = CRUMBS.interval[level - 1];
-  if (w.mem[at] >= interval) {
-    w.mem[at] -= interval;
+  const at = W_CRUMBS * WEAPON_MEM + MEM_WAITED;
+  const wait = waitOf(CRUMBS.wait[level - 1], w.player.stats);
+  w.mem[at] += DT;
+  if (isReady(w.mem[at], wait)) {
+    w.mem[at] = afterShot(w.mem[at], wait);
     layMine(w, s, terrain, level);
   }
 }
