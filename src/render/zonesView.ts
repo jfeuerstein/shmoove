@@ -1,14 +1,19 @@
 /**
- * Zones on the ground, one instanced mesh per kind, each disc tilted to the ground under it:
+ * Zones on the ground, each tilted to the ground under it:
  *
- * - a mine (`ZONE_MINE`): a small disc in the mine's colour, dim while it arms, blinking once armed;
- * - tar (`ZONE_TAR`): a dark patch as wide as it drags, spreading when it is laid and shrinking
- *   away at the end of its life;
- * - a lob ring (`ZONE_LOB`): an outline where the shot will land, filling in from the middle as its
- *   time runs out, so the moment it lands is the moment it is full;
+ * - a mine (`ZONE_MINE`, the Crumbs): a squat spiked ball in tones of the mine's colour with a
+ *   light on top that blinks fast while it arms and slowly once armed, over a small glow on the
+ *   ground that is dim while it arms and blinks once armed. A little bigger the bigger its blast;
+ * - tar (`ZONE_TAR`): a dark blob as wide as it drags with a glossy wet edge, bubbles swelling and
+ *   popping on it, spreading when it is laid and shrinking away at the end of its life;
+ * - a lob ring (`ZONE_LOB`): an outline where the shot will land that pulses faster as its time runs
+ *   out and fills in from the middle, so the moment it lands is the moment it is full, and the shot
+ *   itself on its way down out of the sky, its shadow on the ground growing as it falls;
  * - the Standstill's ring (`ZONE_RING`): a bright band on the ground in `PALETTE.ring` at the front's
  *   radius, following the ground, drawn where the front will be at the frame (it spreads steadily),
  *   so the moment to ollie can be read off it.
+ *
+ * The mines' balls, the falling shots, their shadows and the bubbles are one kit mesh (one draw).
  *
  * Also `GroundRings`: wide rings drawn as one strip that follows the ground (elites' auras, shrines'
  * orbits), for the views that need one.
@@ -17,12 +22,19 @@ import {
   BufferAttribute,
   BufferGeometry,
   CircleGeometry,
+  ConeGeometry,
   DoubleSide,
   DynamicDrawUsage,
   Group,
+  IcosahedronGeometry,
   type InstancedBufferAttribute,
   type InstancedMesh,
+  Matrix4,
   Mesh,
+  OctahedronGeometry,
+  Quaternion,
+  SphereGeometry,
+  Vector3,
 } from 'three';
 import type { Terrain } from '../sim/terrain';
 import type { Vec3 } from '../sim/types';
@@ -30,28 +42,63 @@ import { BOSS } from '../sim/bosses';
 import { DT } from '../sim/constants';
 import { CRUMBS } from '../sim/weapons/crumbs';
 import { MAX_ZONES, ZONE_LOB, ZONE_MINE, ZONE_RING, ZONE_TAR, type World } from '../sim/world';
-import { PALETTE, flatMaterial } from './look';
-import { addInstanceColor, addInstanceFloat, discMaterial, fadeMaterial, makeInstanced, rgbInto, writeMatrix } from './fxView';
+import { PALETTE, flatMaterial, tone } from './look';
+import {
+  addInstanceColor,
+  addInstanceFloat,
+  discMaterial,
+  fadeMaterial,
+  groundMatrix,
+  kitMaterial,
+  makeInstanced,
+  rgbInto,
+  ShapeBuilder,
+  solidPaint,
+  tonePaint,
+  toneRatioInto,
+  uploadFirst,
+  writeMatrix,
+} from './fxView';
 
 /** A mine's disc radius, m (the blast reaches further; the disc is where it lies). */
 export const MINE_SIZE = 0.6;
 /** Ticks a blink of an armed mine lasts (on, then off). */
 export const MINE_BLINK_TICKS = 12;
+/** Ticks a blink of the light lasts while the mine arms: quick, nervous. */
+export const MINE_ARMING_BLINK_TICKS = 3;
 /** Strength of an unarmed mine, of an armed one's off beat, and its on beat. */
 export const MINE_IDLE = 0.3;
 export const MINE_OFF = 0.35;
 export const MINE_ON = 1;
+/** The ball: its radius at the first level's blast, m; it grows with the square root of the blast. */
+export const MINE_BALL = 0.3;
+const MINE_BALL_MAX = 1.5;
 /** A lob ring's outline starts at this share of its radius; its fill reaches that far when full. */
 export const LOB_INNER = 0.84;
 const LOB_CORE_SHARE = 0.45;
 const LOB_FADE = 0.9;
+/** How far the ring's pulse dips, and how fast it beats at first and at the end, rad a tick. */
+const LOB_PULSE = 0.25;
+const LOB_BEAT_FROM = 0.12;
+const LOB_BEAT_TO = 0.6;
+/** The falling shot: how high it starts, m, its radius, and its shadow's size at first and at the end, share of the ring. */
+export const LOB_DROP = 16;
+const LOB_SHELL = 0.34;
+const SHADOW_FROM = 0.2;
+const SHADOW_TO = 0.75;
 /** Tar spreads over this many ticks when laid and shrinks over the last `TAR_SHRINK` of its life. */
 const TAR_GROW = 12;
 const TAR_SHRINK = 30;
+/** Bubbles on each patch of tar: how many, how long one lives, s, their size and how far out they rise, share of the patch. */
+const TAR_BUBBLES = 2;
+const BUBBLE_LIFE = 1.3;
+const BUBBLE_SIZE = 0.24;
+const BUBBLE_SPREAD = 0.55;
 /** Heights above the ground, m. */
 const MINE_LIFT = 0.08;
 const TAR_LIFT = 0.04;
 const LOB_LIFT = 0.12;
+const SHADOW_LIFT = 0.1;
 const RING_LIFT = 0.18;
 /** The Standstill's ring: how wide its band is, m (behind the front), its strength, and how many at once. */
 export const RING_BAND = 0.7;
@@ -59,24 +106,16 @@ const RING_FADE = 1;
 const RING_SEGMENTS = 96;
 export const MAX_RINGS = 4;
 
-/** Columns of a disc of radius r lying on ground of unit normal n, into slot i. */
-function groundDisc(m: { [i: number]: number }, i: number, n: Vec3, r: number, x: number, y: number, z: number): void {
-  // X = n x (0, 0, 1), Z = X x n: the flat basis when n is straight up.
-  let ax = n.y;
-  let ay = -n.x;
-  const l = Math.sqrt(ax * ax + ay * ay);
-  if (l > 1e-6) {
-    ax /= l;
-    ay /= l;
-  } else {
-    ax = 1;
-    ay = 0;
-  }
-  const cx = ay * n.z;
-  const cy = -ax * n.z;
-  const cz = ax * n.y - ay * n.x;
-  writeMatrix(m, i, ax * r, ay * r, 0, n.x, n.y, n.z, cx * r, cy * r, cz * r, x, y, z);
-}
+/** Kit shapes. */
+const SHAPE_MINE = 0;
+const SHAPE_SHELL = 1;
+const SHAPE_SHADOW = 2;
+const SHAPE_BUBBLE = 3;
+const MAX_PROPS = MAX_ZONES * (1 + TAR_BUBBLES);
+/** Light on top of an armed mine when on and off, and while arming. */
+const BULB_ON = 1.1;
+const BULB_OFF = 0.12;
+const BULB_ARMING = 0.6;
 
 /** How full a lob ring is: 0 when made, 1 when it lands. */
 export function lobFill(age: number, life: number): number {
@@ -90,38 +129,159 @@ export function mineStrength(age: number): number {
   return Math.floor((age - CRUMBS.armTicks) / MINE_BLINK_TICKS) % 2 === 0 ? MINE_ON : MINE_OFF;
 }
 
+/** How brightly the light on top of a mine of this age shines: a quick blink while it arms, then the slow one. */
+export function mineLight(age: number): number {
+  if (age < CRUMBS.armTicks) return Math.floor(age / MINE_ARMING_BLINK_TICKS) % 2 === 0 ? BULB_ARMING : BULB_OFF;
+  return mineStrength(age) === MINE_ON ? BULB_ON : BULB_OFF;
+}
+
+/** How high the falling shot of a lob ring this full is above the ground, m: it falls as things fall, faster and faster. */
+export function lobHeight(fill: number): number {
+  const f = fill < 0 ? 0 : fill > 1 ? 1 : fill;
+  return LOB_DROP * (1 - f * f);
+}
+
+/** A fixed pseudo-random 0..1 for a place on the ground. */
+function hash(x: number, z: number): number {
+  const v = Math.sin(x * 12.9898 + z * 78.233) * 43758.5453;
+  return v - Math.floor(v);
+}
+
+/**
+ * The kit: a spiked mine with its light on top (part 0, in tones of `mine`), a lobbed shell (part 1,
+ * tones of `shell`), a flat shadow (part 2, one tone: its instance colour) and a bubble (part 3,
+ * tones of `tar`).
+ */
+export function zonesKit(mine: number, shell: number, tar: number): ShapeBuilder {
+  const b = new ShapeBuilder();
+  b.partId = SHAPE_MINE;
+  const body = new Float32Array(3);
+  const spike = new Float32Array(3);
+  const bulb = new Float32Array(3);
+  toneRatioInto(body, 0, mine, -0.68);
+  toneRatioInto(spike, 0, mine, -0.35);
+  toneRatioInto(bulb, 0, mine, 0.3);
+  const one = (c: Float32Array) => solidPaint(c[0], c[1], c[2]);
+  const r = MINE_BALL;
+  b.add(new IcosahedronGeometry(r, 0), one(body));
+  const up = new Vector3(0, 1, 0);
+  const dir = new Vector3();
+  const q = new Quaternion();
+  const m = new Matrix4();
+  for (let k = 0; k < 8; k++) {
+    const a = (k / 8) * Math.PI * 2;
+    const el = k % 2 === 0 ? 0 : 0.75;
+    dir.set(Math.sin(a) * Math.cos(el), Math.sin(el), Math.cos(a) * Math.cos(el));
+    const cone = new ConeGeometry(r * 0.26, r * 0.7, 4);
+    m.makeRotationFromQuaternion(q.setFromUnitVectors(up, dir));
+    m.setPosition(dir.x * r * 1.15, dir.y * r * 1.15, dir.z * r * 1.15);
+    b.add(cone, one(spike), m);
+  }
+  b.add(new OctahedronGeometry(r * 0.32, 0), one(bulb), new Matrix4().makeTranslation(0, r * 1.15, 0));
+
+  b.partId = SHAPE_SHELL;
+  b.add(new IcosahedronGeometry(LOB_SHELL, 0), tonePaint(shell, -LOB_SHELL, -0.4, LOB_SHELL, 0.3));
+
+  b.partId = SHAPE_SHADOW;
+  const disc = new CircleGeometry(1, 10);
+  disc.rotateX(-Math.PI / 2);
+  b.add(disc, solidPaint(1, 1, 1));
+
+  b.partId = SHAPE_BUBBLE;
+  b.add(new SphereGeometry(0.5, 6, 3, 0, Math.PI * 2, 0, Math.PI / 2), tonePaint(tar, 0, 0.15, 0.5, 0.55));
+  return b;
+}
+
+/**
+ * A patch of tar: a disc of radius 1 with a lumpy edge pulled in here and there (never out past 1),
+ * dark in the middle and glossy at the wet edge, in tones of `tar` (absolute colours).
+ */
+export function tarGeometry(tar: number): BufferGeometry {
+  const seg = 14;
+  const rr: number[] = [];
+  for (let j = 0; j < seg; j++) rr.push(1 - 0.16 * (((j * 7) % 5) / 4));
+  const centre = new Float32Array(3);
+  const mid = new Float32Array(3);
+  const edge = new Float32Array(3);
+  rgbInto(centre, 0, tone(tar, -0.25));
+  rgbInto(mid, 0, tar);
+  rgbInto(edge, 0, tone(tar, 0.32));
+  const b = new ShapeBuilder();
+  const at = (j: number, k: number): [number, number] => {
+    const a = ((j % seg) / seg) * Math.PI * 2;
+    return [Math.sin(a) * rr[j % seg] * k, Math.cos(a) * rr[j % seg] * k];
+  };
+  for (let j = 0; j < seg; j++) {
+    const [ax, az] = at(j, 0.78);
+    const [bx, bz] = at(j + 1, 0.78);
+    const [cx, cz] = at(j, 1);
+    const [dx, dz] = at(j + 1, 1);
+    // Wound to face up: the dark middle, then the wet rim, raised a hair.
+    b.tri(0, 0, 0, bx, 0, bz, ax, 0, az, (x, _y, z, out) => {
+      const c = x === 0 && z === 0 ? centre : mid;
+      out[0] = c[0];
+      out[1] = c[1];
+      out[2] = c[2];
+    });
+    b.tri(ax, 0, az, bx, 0, bz, dx, 0.012, dz, (_x, y, _z, out) => {
+      const c = y > 0 ? edge : mid;
+      out[0] = c[0];
+      out[1] = c[1];
+      out[2] = c[2];
+    });
+    b.tri(ax, 0, az, dx, 0.012, dz, cx, 0.012, cz, (_x, y, _z, out) => {
+      const c = y > 0 ? edge : mid;
+      out[0] = c[0];
+      out[1] = c[1];
+      out[2] = c[2];
+    });
+  }
+  const g = b.build();
+  g.deleteAttribute('aPart');
+  return g;
+}
 export class ZonesView {
   readonly object = new Group();
   readonly mines: InstancedMesh;
   readonly tar: InstancedMesh;
   readonly lobs: InstancedMesh;
+  /** Mines' balls, falling shots, their shadows, bubbles on the tar. */
+  readonly props: InstancedMesh;
   /** The Standstill's rings. */
   readonly rings: GroundRings;
   private readonly ringRgb = new Float32Array(3);
+  private readonly mineRgb = new Float32Array(3);
+  private readonly shellRgb = new Float32Array(3);
+  private readonly shadowRgb = new Float32Array(3);
+  private readonly tarRgb = new Float32Array(3);
   private readonly terrain: Terrain | null;
   private readonly mineDisc: InstancedBufferAttribute;
   private readonly lobDisc: InstancedBufferAttribute;
+  private readonly propShape: InstancedBufferAttribute;
+  private readonly propGlow: InstancedBufferAttribute;
+  private readonly propRgb: Float32Array;
   private readonly normal: Vec3 = { x: 0, y: 1, z: 0 };
 
   /** Without a terrain the ground is taken as level at each zone's height. */
   constructor(terrain: Terrain | null = null) {
     this.terrain = terrain;
     this.object.name = 'zones';
+    const mine = PALETTE.zones[ZONE_MINE];
+    const tarColor = PALETTE.zones[ZONE_TAR];
+    const shell = PALETTE.enemies[4];
 
     const mineGeo = new CircleGeometry(1, 12);
     mineGeo.rotateX(-Math.PI / 2);
     this.mineDisc = addInstanceFloat(mineGeo, 'aDisc', MAX_ZONES, 3);
     this.mines = makeInstanced(mineGeo, discMaterial(0), MAX_ZONES, 'zones-mines');
     const mineCol = addInstanceColor(this.mines, MAX_ZONES);
-    for (let i = 0; i < MAX_ZONES; i++) rgbInto(mineCol, i * 3, PALETTE.zones[ZONE_MINE]);
+    for (let i = 0; i < MAX_ZONES; i++) rgbInto(mineCol, i * 3, mine);
 
-    const tarGeo = new CircleGeometry(1, 14);
-    tarGeo.rotateX(-Math.PI / 2);
-    const tarMat = flatMaterial(PALETTE.zones[ZONE_TAR]);
+    const tarMat = flatMaterial(0xffffff, true);
     tarMat.polygonOffset = true;
     tarMat.polygonOffsetFactor = -1;
     tarMat.polygonOffsetUnits = -1;
-    this.tar = makeInstanced(tarGeo, tarMat, MAX_ZONES, 'zones-tar');
+    this.tar = makeInstanced(tarGeometry(tarColor), tarMat, MAX_ZONES, 'zones-tar');
 
     const lobGeo = new CircleGeometry(1, 32);
     lobGeo.rotateX(-Math.PI / 2);
@@ -130,13 +290,23 @@ export class ZonesView {
     const lobCol = addInstanceColor(this.lobs, MAX_ZONES);
     for (let i = 0; i < MAX_ZONES; i++) rgbInto(lobCol, i * 3, PALETTE.zones[ZONE_LOB]);
 
+    const kit = zonesKit(mine, shell, tarColor).build();
+    this.propShape = addInstanceFloat(kit, 'aShape', MAX_PROPS);
+    this.propGlow = addInstanceFloat(kit, 'aGlow', MAX_PROPS);
+    this.props = makeInstanced(kit, kitMaterial(), MAX_PROPS, 'zones-props');
+    this.propRgb = addInstanceColor(this.props, MAX_PROPS);
+    rgbInto(this.mineRgb, 0, mine);
+    rgbInto(this.shellRgb, 0, shell);
+    rgbInto(this.shadowRgb, 0, tone(PALETTE.groundA, -0.65));
+    rgbInto(this.tarRgb, 0, tarColor);
+
     this.rings = new GroundRings(MAX_RINGS, RING_SEGMENTS, 'zones-rings', terrain, RING_LIFT);
     rgbInto(this.ringRgb, 0, PALETTE.ring);
 
     this.tar.renderOrder = 1;
     this.mines.renderOrder = 2;
     this.lobs.renderOrder = 2;
-    this.object.add(this.tar, this.mines, this.lobs, this.rings.mesh);
+    this.object.add(this.tar, this.props, this.mines, this.lobs, this.rings.mesh);
   }
 
   private groundNormal(x: number, z: number): Vec3 {
@@ -150,6 +320,14 @@ export class ZonesView {
     return n;
   }
 
+  private prop(i: number, shape: number, glow: number, rgb: Float32Array): void {
+    (this.propShape.array as Float32Array)[i] = shape;
+    (this.propGlow.array as Float32Array)[i] = glow;
+    this.propRgb[i * 3] = rgb[0];
+    this.propRgb[i * 3 + 1] = rgb[1];
+    this.propRgb[i * 3 + 2] = rgb[2];
+  }
+
   /** `alpha` (0..1) is how far the frame is from the previous tick to the latest. */
   update(w: World, alpha = 1): void {
     const zn = w.zones;
@@ -157,11 +335,13 @@ export class ZonesView {
     const mm = this.mines.instanceMatrix.array;
     const tm = this.tar.instanceMatrix.array;
     const lm = this.lobs.instanceMatrix.array;
+    const pm = this.props.instanceMatrix.array;
     const md = this.mineDisc.array as Float32Array;
     const ld = this.lobDisc.array as Float32Array;
     let mines = 0;
     let tar = 0;
     let lobs = 0;
+    let props = 0;
     for (let i = 0; i < zn.count; i++) {
       const kind = zn.kind[i];
       const x = zn.x[i];
@@ -171,23 +351,61 @@ export class ZonesView {
       const life = zn.life[i];
       if (kind === ZONE_MINE) {
         const n = this.groundNormal(x, z);
-        groundDisc(mm, mines, n, MINE_SIZE, x + n.x * MINE_LIFT, y + n.y * MINE_LIFT, z + n.z * MINE_LIFT);
+        groundMatrix(mm, mines, n, MINE_SIZE, x + n.x * MINE_LIFT, y + n.y * MINE_LIFT, z + n.z * MINE_LIFT);
         md[mines * 3] = 0;
         md[mines * 3 + 1] = 0;
         md[mines * 3 + 2] = mineStrength(age);
         mines++;
+        // The ball sits on the ground, turned its own way, bigger for a bigger blast.
+        const k = Math.min(MINE_BALL_MAX, Math.max(0.8, Math.sqrt(zn.r[i] / CRUMBS.radius[0])));
+        const lift = MINE_BALL * k * 0.85;
+        groundMatrix(pm, props, n, k, x + n.x * lift, y + n.y * lift, z + n.z * lift, k);
+        this.turn(pm, props, hash(x, z) * Math.PI * 2);
+        this.prop(props++, SHAPE_MINE, mineLight(age), this.mineRgb);
       } else if (kind === ZONE_TAR) {
         const n = this.groundNormal(x, z);
         const grow = Math.min(1, age / TAR_GROW) * Math.min(1, life / TAR_SHRINK);
-        groundDisc(tm, tar, n, zn.r[i] * grow, x + n.x * TAR_LIFT, y + n.y * TAR_LIFT, z + n.z * TAR_LIFT);
+        const r = zn.r[i] * grow;
+        groundMatrix(tm, tar, n, r, x + n.x * TAR_LIFT, y + n.y * TAR_LIFT, z + n.z * TAR_LIFT);
         tar++;
+        // Bubbles swell and pop, each somewhere new on the patch.
+        const h0 = hash(x, z);
+        for (let b = 0; b < TAR_BUBBLES; b++) {
+          const clock = (age * DT) / BUBBLE_LIFE + h0 + b * 0.5;
+          const cycle = Math.floor(clock);
+          const t = clock - cycle;
+          if (t > 0.85 || r <= 0) continue;
+          const hb = hash(x + cycle * 3.1 + b, z - cycle * 1.7);
+          const a = hb * Math.PI * 2;
+          const d = BUBBLE_SPREAD * r * Math.sqrt(hash(z + b, x + cycle));
+          const bx = x + Math.sin(a) * d;
+          const bz = z + Math.cos(a) * d;
+          const by = this.terrain ? this.terrain.heightAt(bx, bz) : y;
+          const size = BUBBLE_SIZE * (0.6 + 0.6 * hb) * Math.min(1, r / zn.r[i]) * (t / 0.85);
+          groundMatrix(pm, props, n, size, bx + n.x * TAR_LIFT, by + n.y * TAR_LIFT, bz + n.z * TAR_LIFT, size);
+          this.prop(props++, SHAPE_BUBBLE, 0.05, this.tarRgb);
+        }
       } else if (kind === ZONE_LOB) {
         const n = this.groundNormal(x, z);
-        groundDisc(lm, lobs, n, zn.r[i], x + n.x * LOB_LIFT, y + n.y * LOB_LIFT, z + n.z * LOB_LIFT);
+        const fill = lobFill(age, life);
+        groundMatrix(lm, lobs, n, zn.r[i], x + n.x * LOB_LIFT, y + n.y * LOB_LIFT, z + n.z * LOB_LIFT);
+        // It beats faster as the shot comes down.
+        const beat = LOB_BEAT_FROM + (LOB_BEAT_TO - LOB_BEAT_FROM) * fill;
+        const pulse = 1 - LOB_PULSE * 0.5 * (1 - Math.cos(age * beat));
         ld[lobs * 3] = LOB_INNER;
-        ld[lobs * 3 + 1] = LOB_INNER * lobFill(age, life);
-        ld[lobs * 3 + 2] = LOB_FADE;
+        ld[lobs * 3 + 1] = LOB_INNER * fill;
+        ld[lobs * 3 + 2] = LOB_FADE * pulse;
         lobs++;
+        // Its shadow, growing as the shot falls, and the shot itself.
+        const sr = zn.r[i] * (SHADOW_FROM + (SHADOW_TO - SHADOW_FROM) * fill);
+        groundMatrix(pm, props, n, sr, x + n.x * SHADOW_LIFT, y + n.y * SHADOW_LIFT, z + n.z * SHADOW_LIFT);
+        this.prop(props++, SHAPE_SHADOW, 0, this.shadowRgb);
+        const hgt = lobHeight(fill) + LOB_SHELL;
+        const spin = age * 0.15;
+        const c = Math.cos(spin);
+        const s = Math.sin(spin);
+        writeMatrix(pm, props, c, 0, -s, 0, 1, 0, s, 0, c, x, y + hgt, z);
+        this.prop(props++, SHAPE_SHELL, 0.5, this.shellRgb);
       } else if (kind === ZONE_RING) {
         // The front as it stands at the frame: back from the latest tick by what it spreads in the rest of one.
         const r = Math.max(0, zn.r[i] - BOSS.standstill.ringSpeed * (1 - alpha) * DT);
@@ -198,6 +416,27 @@ export class ZonesView {
     this.finish(this.mines, mines, this.mineDisc);
     this.finish(this.tar, tar, null);
     this.finish(this.lobs, lobs, this.lobDisc);
+    this.props.count = props;
+    this.props.visible = props > 0;
+    if (props > 0) {
+      uploadFirst(this.props.instanceMatrix, props);
+      uploadFirst(this.propShape, props);
+      uploadFirst(this.propGlow, props);
+      if (this.props.instanceColor) uploadFirst(this.props.instanceColor, props);
+    }
+  }
+
+  /** Turn the shape in slot i about its own up axis by `a`. */
+  private turn(m: { [i: number]: number }, i: number, a: number): void {
+    const o = i * 16;
+    const c = Math.cos(a);
+    const s = Math.sin(a);
+    for (let k = 0; k < 3; k++) {
+      const x = m[o + k];
+      const z = m[o + 8 + k];
+      m[o + k] = x * c - z * s;
+      m[o + 8 + k] = x * s + z * c;
+    }
   }
 
   private finish(mesh: InstancedMesh, n: number, attr: InstancedBufferAttribute | null): void {
