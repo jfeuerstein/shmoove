@@ -1,5 +1,5 @@
 /**
- * How to play: one sheet of seven lines, opened from the end card and closed by a button on it, with
+ * How to play: one sheet of eight lines, opened from the end card and closed by a button on it, with
  * a second button that sends the player back into the lesson. It fits 390x844 without scrolling.
  * Like the end card it is a DOM sibling of the canvas and stops touches reaching the game.
  */
@@ -12,7 +12,7 @@ export interface HowToLine {
   text: string;
 }
 
-/** The seven lines, in the order read. */
+/** The eight lines, in the order read. */
 export const HOW_TO_LINES: readonly HowToLine[] = [
   { lead: 'Drag', text: 'steer. Let go: coast. Tap: ollie.' },
   { text: 'Tap again as you land and you keep your speed.' },
@@ -20,6 +20,7 @@ export const HOW_TO_LINES: readonly HowToLine[] = [
   { text: 'Your weapons fire themselves. You only have to move.' },
   { text: 'Touching an enemy hurts. An ollie clears the small ones.' },
   { text: 'Sparks are XP. A level is a card: a weapon, a level on one you carry, or a passive.' },
+  { text: 'Ollie onto a white rail to grind it. Ollie again to get off.' },
   { text: 'Ride into crates. Circle shrines. Thread the gates. Fly through hoops.' },
 ];
 

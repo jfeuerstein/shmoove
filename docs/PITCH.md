@@ -110,7 +110,8 @@ mid-range phone.
 ## 7. The map
 
 **The Bowl.** About 340 m across, generated from a seed: a banked rim that turns you round
-instead of stopping you, rolling hills, a crater, two half-pipes, kickers, boost pads.
+instead of stopping you, rolling hills, a crater, two half-pipes, kickers, boost pads, and eight to
+twelve rails.
 
 | Thing | How you use it | Reward |
 | --- | --- | --- |
@@ -119,8 +120,9 @@ instead of stopping you, rolling hills, a crater, two half-pipes, kickers, boost
 | **Slalom** | Clear a line of five gates in time. | Sparks and tokens |
 | **Hoop** | A ring in the air over a kicker. | Tokens; a streak bonus |
 | **Totem** | Ride into it to call an elite pack on purpose. | A rare card when its elite falls |
+| **Rail** | Ollie onto it. The rail steers; you pick up speed. Ollie off, or ride off the end. | Speed, and a lane above the small enemies' reach |
 
-To come: rails to grind, and more of the park (see `PLAN.md`).
+To come: more of the park (see `PLAN.md`).
 
 ## 8. Between runs, look, sound, platform
 

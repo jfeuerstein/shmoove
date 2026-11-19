@@ -167,7 +167,9 @@ To do, in order:
    with a small speed readout instead of the gear.
 4. Bots and balance for standard rules, with `STRICT` back on in `tests/sim/balance.test.ts`.
 5. An independent verification of all of M3.
-6. Then the park: rails to grind, and whatever the owner's next play asks for.
+6. Rails to grind. Done: in the sim, on the map (eight to twelve a bowl), drawn, with a grind
+   pose and sparks.
+7. Then whatever the owner's next play asks for.
 
 ## M4. Run
 

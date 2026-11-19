@@ -149,20 +149,30 @@ describe('grinding', () => {
     expect(sim.state.mover.rail).toBe(-1);
   });
 
-  it('from one rail to the next: a hop off the first can catch a second', () => {
-    const sim = new Sim(park(flat, [
-      [0, 10, 0, 30],
-      [0, 36, 0, 60],
-    ]));
-    hopOnto(sim, 12, 14, 10);
-    let caught = 0;
-    for (let t = 0; t < 300; t++) {
-      sim.step(TUCK);
-      if ((sim.state.events & EV_GRIND_START) !== 0) caught++;
-    }
-    // Off the end of the first with a pop, and down onto the second.
-    expect(caught).toBe(1);
-    expect(sim.state.mover.z).toBeGreaterThan(60);
+  it('from one rail to the next takes a hop: rolling off the end falls short, hopping off it lands on the second', () => {
+    const twoRails = (): Sim =>
+      new Sim(
+        park(flat, [
+          [0, 10, 0, 30],
+          [0, 36, 0, 60],
+        ]),
+      );
+    /** Ride the first rail; `hopAtEnd` taps just before its end. Returns how many rails were caught in all. */
+    const ride = (hopAtEnd: boolean): number => {
+      const sim = twoRails();
+      let caught = (hopOnto(sim, 12, 14, 1) & EV_GRIND_START) !== 0 ? 1 : 0;
+      let hopped = false;
+      for (let t = 0; t < 300; t++) {
+        const m = sim.state.mover;
+        const tap = hopAtEnd && !hopped && m.rail === 0 && m.railT > 0.93;
+        if (tap) hopped = true;
+        sim.step(tap ? hopNow(TUCK) : TUCK);
+        if ((sim.state.events & EV_GRIND_START) !== 0) caught++;
+      }
+      return caught;
+    };
+    expect(ride(false)).toBe(1);
+    expect(ride(true)).toBe(2);
   });
 });
 

@@ -54,14 +54,14 @@ const button = (el: FakeEl, label: string): FakeEl => {
 };
 
 describe('HowTo', () => {
-  it('has seven lines with the rules in them', () => {
-    expect(HOW_TO_LINES).toHaveLength(7);
+  it('has eight lines with the rules in them', () => {
+    expect(HOW_TO_LINES).toHaveLength(8);
     const all = HOW_TO_LINES.map((l) => `${l.lead ?? ''} ${l.text}`).join(' ');
     for (const word of ['steer', 'coast', 'ollie', 'Hills', 'fire themselves', 'hurts', 'Sparks', 'card', 'crates', 'shrines', 'gates', 'hoops']) expect(all).toContain(word);
     expect(all).not.toMatch(/gear|trail|loop/i);
   });
 
-  it('is closed at first, shows its seven lines when opened, and closes on its button', () => {
+  it('is closed at first, shows its eight lines when opened, and closes on its button', () => {
     const { sheet, el } = build();
     expect(el.hidden).toBe(true);
     expect(sheet.isOpen).toBe(false);
@@ -69,9 +69,10 @@ describe('HowTo', () => {
     expect(el.hidden).toBe(false);
     expect(sheet.isOpen).toBe(true);
     const lines = el.children.filter((c) => c.className === 'howto-line');
-    expect(lines).toHaveLength(7);
+    expect(lines).toHaveLength(8);
     expect(lines[0].text()).toBe('Drag: steer. Let go: coast. Tap: ollie.');
-    expect(lines[6].text()).toBe('Ride into crates. Circle shrines. Thread the gates. Fly through hoops.');
+    expect(lines[6].text()).toBe('Ollie onto a white rail to grind it. Ollie again to get off.');
+    expect(lines[7].text()).toBe('Ride into crates. Circle shrines. Thread the gates. Fly through hoops.');
     button(el, 'CLOSE').fire('click');
     expect(el.hidden).toBe(true);
     expect(sheet.isOpen).toBe(false);

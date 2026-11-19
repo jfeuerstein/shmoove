@@ -253,7 +253,7 @@ export default {
       };
     });
     check(sheet !== null, 'HOW TO PLAY opens the sheet');
-    check(sheet !== null && sheet.lines === 7, 'seven lines', sheet);
+    check(sheet !== null && sheet.lines === 8, 'eight lines', sheet);
     check(sheet !== null && sheet.fits, 'the sheet fits without scrolling', sheet);
     await page.waitForTimeout(300);
     await page.screenshot({ path: join(ROOT, 'artifacts', 'screens', 'lesson-howto.png'), timeout: 120_000 });

@@ -166,3 +166,15 @@ Things decided without the owner, newest last. Overrule any of them.
    shield, magenta for jam; the Lance, the Slipstream, aura rings and the next slalom gate were
    dimmed until the rider was the brightest thing on screen again; the rider turns orange while
    coasting, as the old mover did; `?arsenal` answers card offers itself.
+52. **Getting from one rail to the next takes an ollie.** Rolling off the end of a rail drops the
+   board about half a metre before it can catch again, which is as far as it can reach, so on
+   level ground the next rail is missed; an ollie at the end lands on it. The generator's
+   two-rail chains are placed on ground that steepens, where rolling off does carry on to the
+   second rail (it rides each candidate chain with a copy of the mover's numbers, so a feel
+   slider never changes the map). A third rail never fits.
+53. **Rails, as placed.** Eight to twelve a map: one down each half-pipe off its centre line, two
+   chains of two, two down hillsides, the rest where they fit. Each is 14 to 32 m, stands 1.2 m
+   above the ground at its ends, falls by at most 0.3, and has 3 m of run-up from which a hop
+   reaches the bar. `x0, z0` is the high end. The heightfield, sites and pads are unchanged.
+54. **A boardslide.** On a rail the board lies across the bar and the rider faces along it, arms
+   out, with sparks. Grind sparks glow; other shards do not.
