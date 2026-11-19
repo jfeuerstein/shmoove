@@ -88,8 +88,8 @@ const DEFS = {
   hitShoveSpeed: { v: 12, min: 0, max: 25, step: 0.5, group: 'combat', note: 'How hard a hit throws the horde back, m/s' },
   hitStunTicks: { v: 44, min: 0, max: 120, step: 2, group: 'combat', note: 'How long a thrown enemy stays harmless, ticks' },
   // wake (the trail behind you and the loop that pops)
-  wakeLength: { v: 34, min: 10, max: 80, step: 1, group: 'wake', note: 'Length of the trail in gear 1, m' },
-  wakeLengthPerGear: { v: 5, min: 0, max: 20, step: 0.5, group: 'wake', note: 'Trail added per gear, m' },
+  wakeLength: { v: 40, min: 10, max: 80, step: 1, group: 'wake', note: 'Length of the trail in gear 1, m' },
+  wakeLengthPerGear: { v: 0, min: 0, max: 20, step: 0.5, group: 'wake', note: 'Trail added per gear, m' },
   wakeLifeTicks: { v: 420, min: 60, max: 1200, step: 10, group: 'wake', note: 'How long a piece of trail lasts, ticks' },
   wakeWidth: { v: 1.1, min: 0.3, max: 4, step: 0.1, group: 'wake', note: 'How far either side of the trail burns, m' },
   wakeCloseDist: { v: 2.6, min: 0.5, max: 8, step: 0.1, group: 'wake', note: 'How near your own trail you must pass to close a loop, m' },

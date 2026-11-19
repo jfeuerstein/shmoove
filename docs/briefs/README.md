@@ -24,9 +24,10 @@ what to return. The verifier gets the same file.
 | `m3-enemies.md` | M3 | opus | merged |
 | `m3-things.md` | M3 | opus | merged |
 | `m3-cards-ui.md` | M3 | sonnet | merged |
-| `m3-render.md` | M3 | opus | out |
-| `m3-balance.md` | M3 | opus | out |
-| `m3-lesson.md` | M3 (pulled forward from M6) | sonnet | out |
+| `m3-render.md` | M3 | opus | stopped at the pivot; resumed |
+| `m3-balance.md` | M3 | opus | stopped at the pivot; not merged |
+| `m3-lesson.md` | M3 (pulled forward from M6) | sonnet | stopped at the pivot; resumed with a new script |
+| `m3b-weapons-timers.md` | M3, second pass | opus | out |
 
 Verification: one opus verifier checked the five merged M0/M1 briefs together; its findings became
 `m1-verifier-fixes.md`. A second checked the four M2 briefs and the lead's M2 core; the core's

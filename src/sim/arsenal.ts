@@ -27,21 +27,21 @@ export interface WeaponInfo {
   name: string;
   /** One line for the card of a weapon you do not have yet. */
   blurb: string;
-  /** What feeds it, for the card's small print. */
+  /** Small print under the blurb. Empty since weapons stopped being fed by movement; the card hides it. */
   fedBy: string;
 }
 
 export const WEAPON_INFO: readonly WeaponInfo[] = [
-  { code: 'WK', name: 'Wake', blurb: 'A burning trail. Close a loop and everything inside pops.', fedBy: 'metres, loops' },
-  { code: 'SK', name: 'Seekers', blurb: 'Homing darts at whatever is nearest.', fedBy: 'metres' },
-  { code: 'BU', name: 'Bumper', blurb: 'When you are hit, everything near you is hurt and thrown back.', fedBy: 'being hit' },
-  { code: 'SL', name: 'Slam', blurb: 'A shockwave where you land.', fedBy: 'air time, impact' },
-  { code: 'OR', name: 'Orbit', blurb: 'Discs circling you. They spin as fast as you move.', fedBy: 'speed' },
-  { code: 'ST', name: 'Static', blurb: 'Charge builds as you travel, then arcs through a chain.', fedBy: 'metres' },
-  { code: 'SP', name: 'Skipper', blurb: 'Every hop throws a stone that skips through the crowd.', fedBy: 'hops; clean hops throw two' },
-  { code: 'DR', name: 'Slipstream', blurb: 'Your draft drags sparks and small enemies into your line.', fedBy: 'gear' },
-  { code: 'CR', name: 'Crumbs', blurb: 'Drops a mine at intervals along your path.', fedBy: 'metres' },
-  { code: 'LA', name: 'Lance', blurb: 'A beam ahead of you, only while you are tucked.', fedBy: 'tucking, gear' },
+  { code: 'WK', name: 'Wake', blurb: 'A burning trail behind you. Ride a loop round a crowd and it pops.', fedBy: '' },
+  { code: 'SK', name: 'Seekers', blurb: 'Homing darts at whatever is nearest.', fedBy: '' },
+  { code: 'BU', name: 'Bumper', blurb: 'When you are hit, everything near you is hurt and thrown back.', fedBy: '' },
+  { code: 'SL', name: 'Slam', blurb: 'A shockwave round you, every few seconds.', fedBy: '' },
+  { code: 'OR', name: 'Orbit', blurb: 'Discs circling you.', fedBy: '' },
+  { code: 'ST', name: 'Static', blurb: 'A bolt that chains from enemy to enemy.', fedBy: '' },
+  { code: 'SP', name: 'Skipper', blurb: 'Stones that skip from one enemy to the next.', fedBy: '' },
+  { code: 'DR', name: 'Slipstream', blurb: 'Your draft drags sparks and small enemies in behind you.', fedBy: '' },
+  { code: 'CR', name: 'Crumbs', blurb: 'Mines dropped behind you.', fedBy: '' },
+  { code: 'LA', name: 'Lance', blurb: 'A beam straight ahead.', fedBy: '' },
 ];
 
 // ---- passives -------------------------------------------------------------------------------

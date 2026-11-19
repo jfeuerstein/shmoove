@@ -182,8 +182,8 @@ most useful thing this slice can tell us.
 
 | Constant | Now | Too low feels like | Too high feels like |
 | --- | --- | --- | --- |
-| `wakeLength` | 34 m | no room to circle anything in gear 1 and 2 | loops close by accident; the trail is a wall |
-| `wakeLengthPerGear` | 5 m | going fast does not help looping | at speed the trail covers the map |
+| `wakeLength` | 40 m | no room to circle anything in gear 1 and 2 | loops close by accident; the trail is a wall |
+| `wakeLengthPerGear` | 0 m | going fast does not help looping | at speed the trail covers the map |
 | `wakeLifeTicks` | 420 ticks (7 s) | the trail vanishes before you can come back to it | an old trail closes loops you did not mean |
 | `wakeWidth` | 1.1 m | enemies cross the trail unburnt | the trail is a moat |
 | `wakeCloseDist` | 2.6 m | you pass right by your trail and it does not close | loops close when you were only near the trail |
