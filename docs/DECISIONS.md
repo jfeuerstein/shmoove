@@ -280,3 +280,15 @@ Things decided without the owner, newest last. Overrule any of them.
    thing to do each, with labels (`docs/briefs/clear-objectives.md`: a shrine is ridden into,
    a slalom has no clock and no miss, a hoop is forgiving), and the picture is calmed so what
    matters stands out (`docs/briefs/clear-picture.md`).
+75. **Clear objectives and a calmer picture, as built.** A hoop now stands on its kicker's top
+   with a 2.2 m catch and counts riding or flying: measured on seeds 1 to 3, a rider at run speed
+   never leaves the ground on a kicker and at 30 m/s rises under a metre, so the old ring in the
+   air needed a perfect ollie. (Kickers that do not launch are a weakness of the bowl itself,
+   left for the owner to call.) A shrine's reach is 4 m, gates stand 4 m either side; crossing
+   a gate's or hoop's line further in a tick than riding allows does not count. Labels show
+   within 35 m, three at most; beacons fade between 50 and 30 m and plain crates have none.
+   The edge glow counts only enemies within 10 m that are out of frame and closing; the hit
+   wash is an edge flash sized by the hit; low health is a steady thin line; damage numbers
+   merge per enemy and cap at eight; effects centred on the rider keep 2 m round it clear;
+   scenery lights are dim; shadows are dark in every look. POOL DAY's walls are tile blue,
+   not cream, and RENTAL TAPE's fog is darker, so the top of the screen is the quiet part.
