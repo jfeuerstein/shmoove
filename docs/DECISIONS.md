@@ -135,6 +135,9 @@ Things decided without the owner, newest last. Overrule any of them.
    thumb is down or up, and steering straight bleeds little. Letting go only coasts.
 45. **The gears stay under the hood** for the camera and the sound, and are no longer a rule the
    player needs to know. The HUD will stop leading with them.
-46. **The lesson, the M3 balance pass and its bots were stopped mid-task** when the direction
-   changed; what they had written for the old rules is not merged. The rendering task was stopped
-   too but its work stands and is resumed.
+46. **Three tasks were stopped mid-way when the direction changed** and have not been restarted:
+   the M3 balance pass (written for the old rules; not merged), the first-run lesson (its script
+   taught the old rules; its structure is reusable), and the drawing of the M3 content (three
+   commits and more uncommitted in its worktree: enemy shapes, elite auras, zones, map objects,
+   weapon effects; untested as a whole). Until the drawing is finished the four newest enemies
+   are stand-in blocks and the map objects, zones and most weapon effects cannot be seen.

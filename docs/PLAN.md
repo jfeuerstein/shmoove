@@ -160,11 +160,12 @@ gives up a slope's pull.
 
 To do, in order:
 
-1. Weapons fire on timers, not metres or hops or tucks (they are still fed by movement).
+1. Weapons fire on timers, not metres or hops or tucks (they are still fed by movement). In
+   progress.
 2. Draw the M3 content (enemies, zones, map objects, weapon effects); the mover becomes a rider on
-   a board.
+   a board. Part done and stopped; waiting on the owner's go-ahead to restart.
 3. A first-run lesson and a how-to sheet for the game as it now is; the HUD stops making the gear
-   the biggest thing on screen.
+   the biggest thing on screen. Stopped; waiting on the owner's go-ahead to restart.
 4. Bots and balance for standard rules, with `STRICT` back on in `tests/sim/balance.test.ts`.
 5. An independent verification of all of M3.
 6. Then the park: rails to grind, and whatever the owner's next play asks for.
