@@ -32,8 +32,9 @@ TypeScript + Three.js (WebGL2) + Vite, shipped as an installable offline PWA.
 
 URL parameters: `?debug` (feel panel), `?scheme=tuck|lift|swipe`, `?seed=N` (map and run), `?solo`
 (the bowl with no horde), `?flat` (level ground with no horde, for tests), `?horde=N&sparks=M` (a
-fixed crowd with the director off, for perf and screenshots), `?hook` (`window.__shmoove` test
-hook), `?perf`.
+fixed crowd with the director off, for perf and screenshots), `?arsenal` (every weapon and one of
+each map object, for screenshots), `?lesson` / `?nolesson` (force or skip the first-run lesson),
+`?mute`, `?hook` (`window.__shmoove` test hook), `?perf`.
 
 ## Layout
 
@@ -48,7 +49,10 @@ hook), `?perf`.
 - `src/input/` touch gestures -> `InputFrame`. `gestures.ts` is pure; `touch.ts` binds the DOM.
 - `src/render/` Three.js. Reads sim state, never writes it. `camera.ts`, `look.ts` (palette), one
   view per kind of thing; the horde, sparks and shots are instanced.
-- `src/ui/` DOM overlay: HUD, end card, threat cues, stick view, debug panel.
+- `src/audio/` Web Audio synthesis: the generated soundtrack (pure pattern, mix and scheduler) and
+  the effects (a pure mapping from the tick's events to sounds), behind one `GameAudio`.
+- `src/ui/` DOM overlay: HUD, cards, build bar, end card, lesson, how-to, threat cues, stick view,
+  debug panel.
 - `src/app/` boot, main loop, settings, platform glue, PWA, test hook.
 - `scripts/` the gate, the icon generator, the service-worker generator.
 - `tests/unit`, `tests/sim` (bots in `tests/sim/bot/`), `tests/e2e`, `tests/perf`.

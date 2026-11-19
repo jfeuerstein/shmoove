@@ -190,3 +190,13 @@ Things decided without the owner, newest last. Overrule any of them.
    last one falls, not on a clock.
 57. **The three-minute balance bands and their bots are deleted** with the three-minute run. A
    balance task follows the M4 run and writes new ones.
+58. **Sound, as built, unheard.** 104 bpm in E dorian, a four-bar phrase with a variation every
+   fourth time; drums, bass, keys, guitar and horns come in with speed tiers 1 to 5; the map's
+   seed picks the groove. Nobody who built it could hear it: every level in the mix is a guess,
+   and the bass (41 Hz) may vanish on a phone speaker. Not tested on iOS, where the hardware
+   silent switch mutes Web Audio.
+59. **Hit feedback, as built, unfelt.** Shake at most 5 cm and under 2 degrees, hit-stop of 70 ms
+   on a hit and 250 ms when a boss falls, haptics on Android only. The strengths are guesses.
+60. **The gate's perf stage is sensitive to what else the machine is doing.** It failed once
+   during a merge while another agent's tests were running, and passed alone on the same commit
+   (7.98 ms against 9.5). Run the gate on a quiet machine before trusting a perf failure.
