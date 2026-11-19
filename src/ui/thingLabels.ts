@@ -1,7 +1,7 @@
 /**
  * Labels over the map's points of interest: a small tag over a live thing the rider is near enough
  * to act on and can see, with its name and, in a few words, what to do with it. `CRATE`,
- * `GOLD CRATE`, `SHRINE · ride in`, `GATES 2/5` (over the gate that is next), `HOOP · jump through`,
+ * `GOLD CRATE`, `SHRINE · ride in`, `GATES 2/5 · ride through` (over the gate that is next), `HOOP · go through`,
  * `TOTEM · calls elites`.
  *
  * At most `LABEL_MAX` at once, the nearest first; only within `LABEL_RANGE` of the rider and in
@@ -64,7 +64,7 @@ function label(name: string, hint = ''): Label {
 const CRATE_LABEL = label('CRATE');
 const GOLD_LABEL = label('GOLD CRATE');
 const SHRINE_LABEL = label('SHRINE', 'ride in');
-const HOOP_LABEL = label('HOOP', 'jump through');
+const HOOP_LABEL = label('HOOP', 'go through');
 const TOTEM_LABEL = label('TOTEM', 'calls elites');
 /** Slaloms of up to this many gates have their labels made ahead. */
 const MAX_GATES = 12;
@@ -72,7 +72,7 @@ const MAX_GATES = 12;
 const GATE_LABELS: Label[][] = [];
 for (let n = 0; n <= MAX_GATES; n++) {
   const row: Label[] = [];
-  for (let d = 0; d <= n; d++) row.push(label(`GATES ${d}/${n}`));
+  for (let d = 0; d <= n; d++) row.push(label(`GATES ${d}/${n}`, 'ride through'));
   GATE_LABELS.push(row);
 }
 

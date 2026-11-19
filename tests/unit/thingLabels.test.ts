@@ -70,7 +70,7 @@ describe('what a label says', () => {
     expect(text(w, crate)).toBe('CRATE');
     expect(text(w, gold)).toBe('GOLD CRATE');
     expect(text(w, shrine)).toBe('SHRINE · ride in');
-    expect(text(w, hoop)).toBe('HOOP · jump through');
+    expect(text(w, hoop)).toBe('HOOP · go through');
     expect(text(w, totem)).toBe('TOTEM · calls elites');
     // Spent, or a hoop not back yet: nothing.
     for (const i of [crate, gold, shrine, totem]) w.things.state[i] = THING_DONE;
@@ -85,10 +85,10 @@ describe('what a label says', () => {
     const first = w.things.count;
     for (let k = 0; k < 5; k++) addThing(w, THING_GATE, 0, 0, 18 * k, 0, 2);
     const texts = (): (string | null)[] => [0, 1, 2, 3, 4].map((k) => text(w, first + k));
-    expect(texts()).toEqual(['GATES 0/5', null, null, null, null]);
+    expect(texts()).toEqual(['GATES 0/5 · ride through', null, null, null, null]);
     for (let k = 0; k < 5; k++) w.things.state[first + k] = 2;
-    expect(texts()).toEqual([null, null, 'GATES 2/5', null, null]);
-    expect(text(w, 0)).toBe('GATES 0/5');
+    expect(texts()).toEqual([null, null, 'GATES 2/5 · ride through', null, null]);
+    expect(text(w, 0)).toBe('GATES 0/5 · ride through');
     for (let k = 0; k < 5; k++) w.things.state[first + k] = THING_DONE;
     expect(texts()).toEqual([null, null, null, null, null]);
   });
