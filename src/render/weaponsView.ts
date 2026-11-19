@@ -27,14 +27,14 @@ const DISC_SPIN = 2;
 const DISC_GLOW = 0.35;
 /** The beam rides this high above the mover's feet, m. */
 export const LANCE_HEIGHT = 0.9;
-const LANCE_CORE = 0.22;
-const LANCE_CORE_FADE = 0.6;
-const LANCE_BAND_FADE = 0.18;
+const LANCE_CORE = 0.12;
+const LANCE_CORE_FADE = 0.3;
+const LANCE_BAND_FADE = 0.07;
 /** Streaks in the draft, how long each is as a share of the draft, how fast they flow, their strength. */
 export const STREAKS = 6;
 const STREAK_SHARE = 0.3;
 const STREAK_RATE = 1.4;
-const STREAK_FADE = 0.3;
+const STREAK_FADE = 0.14;
 const STREAK_WIDTH = 0.08;
 const STREAK_HEIGHT = 0.5;
 const MAX_BEAMS = 2 + STREAKS;

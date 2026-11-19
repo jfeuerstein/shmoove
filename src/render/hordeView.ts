@@ -77,7 +77,7 @@ const ELITE_SHEEN = 0.22;
 export const AURA_COLORS: readonly number[] = [PALETTE.elite, PALETTE.wake, PALETTE.gears[1], PALETTE.accent];
 /** Width of an aura's ring at the edge of its reach, m, and its strength. */
 const AURA_BAND = 0.4;
-const AURA_FADE = 0.55;
+const AURA_FADE = 0.35;
 const AURA_SEGMENTS = 48;
 const AURA_LIFT = 0.15;
 /** Most aura rings drawn at once. */

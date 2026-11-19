@@ -188,7 +188,7 @@ function boot(): void {
   };
 
   const draw = (alpha: number, dt: number): void => {
-    mover.update(sim.prev, sim.state, alpha, terrain);
+    mover.update(sim.prev, sim.state, alpha, terrain, dt);
     chase.update(sim.prev, sim.state, alpha, dt, terrain);
     const w = sim.world;
     const a = sim.prev.mover;
