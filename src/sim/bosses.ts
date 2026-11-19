@@ -177,11 +177,6 @@ function brainOf(w: World, s: SimState): BossBrain {
   return b;
 }
 
-/** Is `kind` a boss? */
-export function isBoss(kind: number): boolean {
-  return KINDS[kind].boss === true;
-}
-
 /** Index of the boss in the horde, or -1. */
 export function findBoss(w: World): number {
   const h = w.horde;
