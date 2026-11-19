@@ -212,3 +212,11 @@ Things decided without the owner, newest last. Overrule any of them.
    in lead-owned code.
 63. **Boss arrivals and falls have no effect of their own yet** beyond sound, shake and the name
    on screen; a boss's death burst is drawn in the shuffler's colour.
+64. **The check before the playtest** (`docs/briefs/playtest-verify.md`) found the whole run works
+   in a real browser, and failed it on one thing: a boss is in frame about a tenth of the time in
+   its own fight and nothing pointed at it. Its other findings: no pause, the Standstill's slow
+   not drawn, run state kept outside the world (fixed by the lead: it is now in `World`, reset
+   and hashed), and a boss's card headed TOTEM (now BOSS DOWN). The rest is
+   `docs/briefs/playtest-fixes.md`.
+65. **Known and left for the playtest to judge:** riding the rim fills the screen with the bank
+   and shows little else; `setClock` past two boss times skips the earlier boss (test hook only).
