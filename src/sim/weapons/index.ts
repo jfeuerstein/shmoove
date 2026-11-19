@@ -8,6 +8,7 @@
  */
 import {
   W_BUMPER,
+  W_ORBIT,
   W_SEEKERS,
   W_SLAM,
   W_WAKE,
@@ -18,6 +19,7 @@ import type { Terrain } from '../terrain';
 import type { SimState } from '../types';
 import { stepWake } from '../wake';
 import type { World } from '../world';
+import { stepOrbit } from './orbit';
 import { stepSlam } from './slam';
 
 export interface Weapon {
@@ -36,6 +38,7 @@ registerWeapon({ id: W_WAKE, step: (w, s) => stepWake(w, s) });
 registerWeapon({ id: W_SEEKERS, step: stepSeekers });
 registerWeapon({ id: W_BUMPER });
 registerWeapon({ id: W_SLAM, step: stepSlam });
+registerWeapon({ id: W_ORBIT, step: stepOrbit });
 
 /** Mark in `pool` the weapons that exist. */
 export function builtWeapons(pool: Uint8Array): void {
