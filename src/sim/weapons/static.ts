@@ -1,6 +1,6 @@
 /**
- * Static: charge builds with distance travelled and, once full, arcs from the nearest enemy through
- * a chain of its neighbours. With nothing in reach the charge holds until something comes close.
+ * Static: every few seconds a bolt arcs from the nearest enemy through a chain of its neighbours.
+ * With nothing in reach it stays ready and goes the moment something comes close.
  */
 import { W_STATIC } from '../arsenal';
 import { DT } from '../constants';
@@ -8,14 +8,15 @@ import { powerOf } from '../stats';
 import type { Terrain } from '../terrain';
 import type { SimState } from '../types';
 import { damageEnemy, emitFx, FX_ARC, queryEnemies, SPAWN_TICKS, WEAPON_MEM, type World } from '../world';
+import { afterShot, isReady, waitOf } from './timer';
 
 /** Static's numbers. Arrays are by weapon level 1..5. */
 export const STATIC = {
-  /** Metres travelled per discharge. */
-  interval: [30, 26, 22, 19, 16],
+  /** Seconds between discharges, before Haste. */
+  wait: [3, 2.7, 2.4, 2.1, 1.8],
   /** Most enemies one discharge strikes. */
   chain: [3, 4, 5, 6, 8],
-  /** Damage to each enemy struck, before gear power. */
+  /** Damage to each enemy struck, before might. */
   damage: [14, 17, 21, 26, 32],
   /** The first link is the nearest enemy within this of the mover, m. */
   reach: 10,
@@ -24,14 +25,15 @@ export const STATIC = {
 } as const;
 
 const MAX_CHAIN = 8;
-const MEM_CHARGE = 0;
+/** mem: seconds waited since the last discharge. */
+const MEM_WAITED = 0;
 
 /** The enemies struck by the discharge being worked out, in order. */
 const struck = new Int16Array(MAX_CHAIN);
 
-/** Metres of charge held now, for the renderer and tests. */
+/** Seconds waited since the last discharge, for the renderer and tests. */
 export function staticCharge(w: World): number {
-  return w.mem[W_STATIC * WEAPON_MEM + MEM_CHARGE];
+  return w.mem[W_STATIC * WEAPON_MEM + MEM_WAITED];
 }
 
 /** The nearest living, risen enemy within `r` of (x, z) not yet in the first `got` of `struck`; -1 if none. */
@@ -81,11 +83,9 @@ function discharge(w: World, s: SimState, level: number): boolean {
 
 export function stepStatic(w: World, s: SimState, _terrain: Terrain, level: number): void {
   if (level <= 0) return;
-  const m = s.mover;
-  const at = W_STATIC * WEAPON_MEM + MEM_CHARGE;
-  const interval = STATIC.interval[level - 1];
-  w.mem[at] += Math.sqrt(m.vx * m.vx + m.vz * m.vz) * DT;
-  if (w.mem[at] < interval) return;
-  if (discharge(w, s, level)) w.mem[at] -= interval;
-  else w.mem[at] = interval;
+  const at = W_STATIC * WEAPON_MEM + MEM_WAITED;
+  const wait = waitOf(STATIC.wait[level - 1], w.player.stats);
+  w.mem[at] += DT;
+  if (!isReady(w.mem[at], wait)) return;
+  w.mem[at] = discharge(w, s, level) ? afterShot(w.mem[at], wait) : wait;
 }
