@@ -1,15 +1,23 @@
 /** What a player would notice about where the horde comes from, how much of it, and of what. */
 import { describe, expect, it } from 'vitest';
 import { makeBowl, type Bowl } from '../../src/sim/bowl';
-import { behindLimit, capCount, DIRECTOR, floorCount, spawnRate, stepDirector } from '../../src/sim/director';
+import { behindLimit, capCount, DIRECTOR, floorCount, makeElite, spawnRate, stepDirector } from '../../src/sim/director';
 import { stepHorde } from '../../src/sim/horde';
 import { makeSimState } from '../../src/sim/sim';
 import type { SimState, Vec3 } from '../../src/sim/types';
 import {
+  ELITE_HASTE,
+  ELITE_JAM,
+  ELITE_SHIELD,
   hashWorld,
   KIND_BOLLARD,
+  KIND_CLINGER,
+  KIND_COUNT,
+  KIND_CUTTER,
   KIND_GNAT,
+  KIND_LOBBER,
   KIND_SHUFFLER,
+  KIND_SLUDGE,
   makeWorld,
   reapHorde,
   removeEnemy,
@@ -93,6 +101,14 @@ interface Tally {
   /** Most alive above the cap at any tick. */
   overCap: number;
   lateGnatShare: number[];
+  /** By kind: run time of the first to come up, the most alive at once, and its late share. */
+  first: number[];
+  most: number[];
+  lateShare: number[][];
+  /** Run times at which elites came up. */
+  elites: number[];
+  /** An elite that is not a shuffler or a cutter, or has the wrong health. */
+  badElites: number;
 }
 
 const n: Vec3 = { x: 0, y: 1, z: 0 };
@@ -111,7 +127,13 @@ function wholeRun(seed: number): Tally {
     worstTrack: 0,
     overCap: -Infinity,
     lateGnatShare: [],
+    first: new Array<number>(KIND_COUNT).fill(Infinity),
+    most: new Array<number>(KIND_COUNT).fill(0),
+    lateShare: Array.from({ length: KIND_COUNT }, () => [] as number[]),
+    elites: [],
+    badElites: 0,
   };
+  const alive = new Array<number>(KIND_COUNT).fill(0);
   // What the rate alone would have brought by now, held to the cap: nothing dies on a lap.
   let brought = 0;
   for (let t = 0; t < 180 * 60; t++) {
@@ -119,12 +141,20 @@ function wholeRun(seed: number): Tally {
     const m = sc.s.mover;
     let gnats = 0;
     let bollards = 0;
+    alive.fill(0);
     for (let i = 0; i < h.count; i++) {
       if (h.kind[i] === KIND_GNAT) gnats++;
       if (h.kind[i] === KIND_BOLLARD) bollards++;
+      alive[h.kind[i]]++;
       if (h.age[i] !== 1) continue;
       // Came up this tick.
       tally.spawns++;
+      tally.first[h.kind[i]] = Math.min(tally.first[h.kind[i]], sc.seconds);
+      if (h.elite[i] !== 0) {
+        tally.elites.push(sc.seconds);
+        const ok = (h.kind[i] === KIND_SHUFFLER || h.kind[i] === KIND_CUTTER) && h.hp[i] === 6 * (h.kind[i] === KIND_SHUFFLER ? 10 : 26);
+        if (!ok) tally.badElites++;
+      }
       const d = Math.hypot(h.x[i] - m.x, h.z[i] - m.z);
       const r = Math.hypot(h.x[i], h.z[i]);
       sc.terrain.normalAt(h.x[i], h.z[i], n);
@@ -144,6 +174,10 @@ function wholeRun(seed: number): Tally {
       tally.worstTrack = Math.max(tally.worstTrack, Math.abs(h.count - brought) - slack);
     }
     if (sc.seconds >= 150 && t % 60 === 0) tally.lateGnatShare.push(gnats / h.count);
+    for (let k = 0; k < KIND_COUNT; k++) {
+      tally.most[k] = Math.max(tally.most[k], alive[k]);
+      if (sc.seconds >= 150 && t % 60 === 0) tally.lateShare[k].push(alive[k] / h.count);
+    }
   }
   tally.mostBollards = Math.max(tally.mostBollards, 0);
   return tally;
@@ -177,6 +211,47 @@ describe('a whole run on the bowl', () => {
       const share = tally.lateGnatShare.reduce((a, b) => a + b, 0) / tally.lateGnatShare.length;
       expect(share).toBeGreaterThan(0.22);
       expect(share).toBeLessThan(0.38);
+    });
+  }
+
+  const mean = (xs: number[]): number => xs.reduce((a, b) => a + b, 0) / xs.length;
+
+  for (const { seed, tally } of runs) {
+    it(`seed ${seed}: the newer kinds arrive on schedule, in their shares or under their caps`, () => {
+      const from = [
+        [KIND_CUTTER, DIRECTOR.cutterFrom],
+        [KIND_LOBBER, DIRECTOR.lobberFrom],
+        [KIND_SLUDGE, DIRECTOR.sludgeFrom],
+        [KIND_CLINGER, DIRECTOR.clingerFrom],
+      ];
+      for (const [kind, at] of from) {
+        expect(tally.first[kind]).toBeGreaterThanOrEqual(at);
+        expect(tally.first[kind]).toBeLessThan(at + 5);
+      }
+      expect(tally.most[KIND_LOBBER]).toBeLessThanOrEqual(DIRECTOR.lobberMax);
+      expect(tally.most[KIND_LOBBER]).toBeGreaterThanOrEqual(DIRECTOR.lobberMax - 2);
+      expect(tally.most[KIND_SLUDGE]).toBeLessThanOrEqual(DIRECTOR.sludgeMax);
+      expect(tally.most[KIND_SLUDGE]).toBeGreaterThanOrEqual(DIRECTOR.sludgeMax - 1);
+      // About 8% cutters, 6% clingers, late in the run.
+      expect(mean(tally.lateShare[KIND_CUTTER])).toBeGreaterThan(DIRECTOR.cutterShare * 0.7);
+      expect(mean(tally.lateShare[KIND_CUTTER])).toBeLessThan(DIRECTOR.cutterShare * 1.3);
+      expect(mean(tally.lateShare[KIND_CLINGER])).toBeGreaterThan(DIRECTOR.clingerShare * 0.7);
+      expect(mean(tally.lateShare[KIND_CLINGER])).toBeLessThan(DIRECTOR.clingerShare * 1.3);
+    });
+
+    it(`seed ${seed}: from 90 s, about every 25 s, a shuffler or cutter comes up an elite`, () => {
+      expect(tally.badElites).toBe(0);
+      expect(tally.elites[0]).toBeGreaterThanOrEqual(DIRECTOR.eliteFrom);
+      expect(tally.elites[0]).toBeLessThan(DIRECTOR.eliteFrom + 2);
+      // 90, 115, 140, 165 when something comes up the moment one is due; on this lap nothing dies,
+      // so at the cap the next spawn waits for something to be recycled.
+      expect(tally.elites.length).toBeGreaterThanOrEqual(3);
+      expect(tally.elites.length).toBeLessThanOrEqual(4);
+      for (let k = 1; k < tally.elites.length; k++) {
+        const gap = tally.elites[k] - tally.elites[k - 1];
+        expect(gap).toBeGreaterThanOrEqual(DIRECTOR.eliteEvery);
+        expect(gap).toBeLessThan(DIRECTOR.eliteEvery + 7);
+      }
     });
   }
 
@@ -356,6 +431,51 @@ describe('the rate, the floor and the cap', () => {
     }
     expect(capCount(180)).toBe(400);
     expect(capCount(240)).toBe(400);
+  });
+});
+
+describe('cost with every kind', () => {
+  it('director and horde together stay well under a millisecond a tick with 400 enemies of mixed kinds', () => {
+    const sc = new Scripted(1);
+    sc.w.run.ticks = 180 * 60;
+    lap(sc);
+    const m = sc.s.mover;
+    const kinds = [KIND_SHUFFLER, KIND_SHUFFLER, KIND_SHUFFLER, KIND_GNAT, KIND_GNAT, KIND_CUTTER, KIND_LOBBER, KIND_SLUDGE, KIND_CLINGER, KIND_BOLLARD];
+    const auras = [ELITE_HASTE, ELITE_SHIELD, ELITE_JAM];
+    for (let k = 0; sc.w.horde.count < capCount(180); k++) {
+      const a = k * 2.399963;
+      const r = 12 + (k % 55);
+      const x = m.x + Math.sin(a) * r;
+      const z = m.z + Math.cos(a) * r;
+      const i = spawnEnemy(sc.w, kinds[k % kinds.length], x, sc.terrain.heightAt(x, z), z);
+      sc.w.horde.age[i] = SPAWN_TICKS;
+      if (k % 50 === 0) makeElite(sc.w, i, auras[(k / 50) % 3]);
+    }
+    for (let t = 0; t < 300; t++) lap(sc);
+    expect(sc.w.horde.count).toBeGreaterThanOrEqual(380);
+    const ticks = 1200;
+    const t0 = performance.now();
+    for (let t = 0; t < ticks; t++) lap(sc);
+    const avg = (performance.now() - t0) / ticks;
+    console.log(`[horde+director, mixed] ${sc.w.horde.count} enemies: ${avg.toFixed(3)} ms/tick`);
+    expect(avg).toBeLessThan(3);
+  });
+});
+
+describe('packs', () => {
+  it('a pack asked for comes even with spawning off, and only once', () => {
+    const sc = new Scripted(1);
+    sc.w.spawning = false;
+    sc.w.packs = 2;
+    sc.w.packX[0] = 20;
+    sc.w.packZ[0] = 0;
+    sc.w.packX[1] = -20;
+    sc.w.packZ[1] = 30;
+    sc.step(0, 0, 0, 0);
+    expect(sc.w.packs).toBe(0);
+    expect(sc.w.horde.count).toBe(2 * (1 + DIRECTOR.packSize));
+    sc.step(0, 0, 0, 0);
+    expect(sc.w.horde.count).toBe(2 * (1 + DIRECTOR.packSize));
   });
 });
 
