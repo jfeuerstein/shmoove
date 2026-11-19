@@ -45,6 +45,7 @@ import { LessonView } from '../ui/lessonView';
 import { Numbers } from '../ui/numbers';
 import { bindAutoPause, PauseView } from '../ui/pause';
 import { StickView } from '../ui/stickView';
+import { ThingLabels } from '../ui/thingLabels';
 import { ThreatView } from '../ui/threat';
 import { applyArsenal, applyFixture } from './fixtures';
 import { Haptics } from './haptics';
@@ -198,6 +199,8 @@ function boot(): void {
   const hud = new Hud(hudRoot, { run: sim.horde, debug: params.debug });
   const stick = new StickView(hudRoot, touch.gestures);
   const threat = new ThreatView(hudRoot);
+  // What each point of interest near the rider is and wants, over it.
+  const labels = new ThingLabels(hudRoot);
   const lowHealth = new LowHealthView(hudRoot);
   const shake = new Shake();
   const hitStop = new HitStop();
@@ -396,12 +399,13 @@ function boot(): void {
     shots.update(w, alpha, now);
     bosses.update(w, alpha);
     zones.update(w, alpha);
-    things.update(w, now);
+    things.update(w, now, mx, mz);
     park.update(b, now);
     weapons.update(w, sim.prev, sim.state, alpha, now);
     wake.update(w.wake, mx, mz, groundAt, w.player.stats.area);
     fx.update(dt);
     threat.update(w, sim.state, view.camera, dt, fx.hitTint, window.innerWidth, window.innerHeight);
+    labels.update(w, view.camera, mx, my, mz, window.innerWidth, window.innerHeight);
     hud.update(sim);
     lowHealth.update(w.player.maxHp > 0 ? w.player.hp / w.player.maxHp : 1, dt);
     numbers?.updateCamera(dt, view.camera, window.innerWidth, window.innerHeight);

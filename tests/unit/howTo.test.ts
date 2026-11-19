@@ -81,7 +81,7 @@ describe('HowTo', () => {
   it('has eight lines with the rules in them', () => {
     expect(HOW_TO_LINES).toHaveLength(8);
     const all = HOW_TO_LINES.map((l) => `${l.lead ?? ''} ${l.text}`).join(' ');
-    for (const word of ['steer', 'coast', 'ollie', 'Hills', 'fire themselves', 'hurts', 'Sparks', 'card', 'crates', 'shrines', 'gates', 'hoops']) expect(all).toContain(word);
+    for (const word of ['steer', 'coast', 'ollie', 'Hills', 'fire themselves', 'hurts', 'Sparks', 'card', 'crates', 'shrines', 'gates', 'hoops', 'Totems']) expect(all).toContain(word);
     expect(all).not.toMatch(/gear|trail|loop/i);
   });
 
@@ -96,7 +96,7 @@ describe('HowTo', () => {
     expect(lines).toHaveLength(8);
     expect(lines[0].text()).toBe('Drag: steer. Let go: coast. Tap: ollie.');
     expect(lines[6].text()).toBe('Ollie onto a white rail to grind it. Ollie again to get off.');
-    expect(lines[7].text()).toBe('Ride into crates. Circle shrines. Thread the gates. Fly through hoops.');
+    expect(lines[7].text()).toBe('Ride into crates and shrines. Ride between the gates in order. Jump through hoops. Totems call elites.');
     button(el, 'CLOSE').fire('click');
     expect(el.hidden).toBe(true);
     expect(sheet.isOpen).toBe(false);

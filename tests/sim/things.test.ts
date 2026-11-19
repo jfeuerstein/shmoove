@@ -1,10 +1,11 @@
-/** The things on the map, as a rider meets them: rammed, orbited, ridden, flown through. */
+/** The things on the map, as a rider meets them: rammed, ridden into, ridden between, ridden through. */
 import thingsSource from '../../src/sim/things.ts?raw';
 import { describe, expect, it } from 'vitest';
 import { P_LUCK } from '../../src/sim/arsenal';
 import { PLAYER_RADIUS } from '../../src/sim/balance';
-import { makeBowl } from '../../src/sim/bowl';
+import { HOOP_AHEAD, makeBowl } from '../../src/sim/bowl';
 import { refreshBuild, setPassiveLevel } from '../../src/sim/build';
+import { FEEL } from '../../src/sim/constants';
 import { gearForSpeed } from '../../src/sim/flow';
 import { angleDiff } from '../../src/sim/math';
 import { OFFER_CRATE, OFFER_SHRINE, OFFER_TOTEM } from '../../src/sim/offer';
@@ -19,8 +20,8 @@ import {
   CRATE_MAGNET,
   crateReward,
   HOOP_TAKEN,
-  SLALOM_MISSED,
   stepThings,
+  THINGS,
 } from '../../src/sim/things';
 import { makeInputFrame, type InputFrame } from '../../src/sim/types';
 import {
@@ -46,7 +47,6 @@ import { letGo, stickToward, travelYaw, yawTo, type Bot } from './bot/steer';
 import { arena, place, root } from './world-fixtures';
 
 const TUCK = makeInputFrame();
-const TAU = 2 * Math.PI;
 
 /** Put the mover at (x, z) on the ground, travelling along `yaw` at `speed`, in the gear that speed earns. */
 function ride(sim: Sim, x: number, z: number, yaw: number, speed: number): void {
@@ -247,96 +247,86 @@ describe('a crate', () => {
   });
 });
 
-describe('a gold crate', () => {
-});
-
 describe('a shrine', () => {
-  /**
-   * Ride round the shrine at (0, 0) at radius `r`, `laps` laps in `seconds`, starting at `from`
-   * radians; `dir` 1 or -1. Each tick puts the mover on the circle moving along it.
-   */
-  function orbit(sim: Sim, r: number, laps: number, seconds: number, dir = 1, from = 0): number {
-    const ticks = Math.round(seconds * 60);
-    const w = (dir * laps * TAU) / ticks;
-    const speed = Math.abs(w) * 60 * r;
-    let a = from;
+  /** Ride straight along +z from (x, z0) at `speed` for `ticks`; returns the tick of its offer, or -1, and the distance then. */
+  function rideBy(sim: Sim, sources: number[], x: number, z0: number, speed: number, ticks: number): { at: number; dist: number; closest: number } {
+    ride(sim, x, z0, 0, speed);
+    let at = -1;
+    let dist = Infinity;
+    let closest = Infinity;
     for (let t = 0; t < ticks; t++) {
-      ride(sim, Math.sin(a) * r, Math.cos(a) * r, a + (dir * Math.PI) / 2, speed);
+      const n = sources.length;
       sim.step(TUCK);
-      a += w;
+      const m = sim.state.mover;
+      const d = Math.hypot(m.x, m.z);
+      if (sources.length > n && at < 0) {
+        at = t;
+        dist = d;
+      }
+      // Until it opens, the nearest the mover came.
+      if (at < 0) closest = Math.min(closest, d);
     }
-    return a;
+    return { at, dist, closest };
   }
 
-  it('three laps inside 10 s inside the ring finish it: a boon offer', () => {
+  it('opens its boons the tick the mover rides into its ring, and not a tick before', () => {
     const { sim, sources } = recordingArena();
     const s = addThing(sim.world, THING_SHRINE, 0, 0, 0, 0, 0);
-    orbit(sim, 6, 1, 3);
-    expect(sim.world.things.progress[s]).toBeCloseTo(1, 1);
-    orbit(sim, 6, 2.05, 6, 1, TAU);
-    expect(sim.world.things.state[s]).toBe(THING_DONE);
+    const seen: Seen[] = [];
+    ride(sim, 0, -20, 0, 9);
+    let opened = -1;
+    for (let t = 0; t < 120 && opened < 0; t++) {
+      const before = Math.hypot(sim.state.mover.x, sim.state.mover.z);
+      step(sim, 1, seen);
+      const m = sim.state.mover;
+      const d = Math.hypot(m.x, m.z);
+      if (sim.world.things.state[s] === THING_DONE) {
+        opened = t;
+        // In the ring now, and was not on the tick before.
+        expect(d).toBeLessThanOrEqual(THINGS.shrineReach);
+        expect(before).toBeGreaterThan(THINGS.shrineReach);
+      } else {
+        expect(d).toBeGreaterThan(THINGS.shrineReach);
+        expect(sources).toHaveLength(0);
+      }
+    }
+    expect(opened).toBeGreaterThan(0);
     expect(sources).toEqual([OFFER_SHRINE]);
+    expect(of(seen, FX_THING)).toEqual([THING_SHRINE]);
   });
 
-  it('either way round, anywhere in the ring from 4 to 11 m', () => {
-    for (const [r, dir] of [
-      [4.2, -1],
-      [10.8, 1],
+  it('opens however the mover comes in: slowly, fast, from the side, with no laps and no clock', () => {
+    for (const [x, speed] of [
+      [0, 4],
+      [3.5, 9],
+      [-3.9, 30],
     ]) {
       const { sim, sources } = recordingArena();
-      const s = addThing(sim.world, THING_SHRINE, 0, 0, 0, 0, 0);
-      orbit(sim, r, 3.05, 9.5, dir);
-      expect(sim.world.things.state[s]).toBe(THING_DONE);
+      addThing(sim.world, THING_SHRINE, 0, 0, 0, 0, 0);
+      const r = rideBy(sim, sources, x, -12, speed, 600);
+      expect(r.at, `x ${x} speed ${speed}`).toBeGreaterThanOrEqual(0);
+      expect(r.dist).toBeLessThanOrEqual(THINGS.shrineReach + 1e-3);
       expect(sources).toEqual([OFFER_SHRINE]);
     }
   });
 
-  it('two and a half laps and out of the ring do not', () => {
+  it('riding past just outside its ring does nothing', () => {
     const { sim, sources } = recordingArena();
     const s = addThing(sim.world, THING_SHRINE, 0, 0, 0, 0, 0);
-    const a = orbit(sim, 6, 2.5, 7);
-    expect(sim.world.things.progress[s]).toBeCloseTo(2.5, 1);
-    // Out past 11 m for a moment, then the last half lap: the count started again.
-    ride(sim, Math.sin(a) * 13, Math.cos(a) * 13, a, 8);
-    step(sim, 1);
-    expect(sim.world.things.progress[s]).toBe(0);
-    orbit(sim, 6, 0.6, 1.5, 1, a);
-    expect(sim.world.things.state[s]).not.toBe(THING_DONE);
-    expect(sources).toHaveLength(0);
+    const r = rideBy(sim, sources, THINGS.shrineReach + 0.3, -15, 9, 240);
+    expect(r.at).toBe(-1);
+    expect(r.closest).toBeLessThan(THINGS.shrineReach + 0.5);
+    expect(sim.world.things.state[s]).toBe(0);
   });
 
-  it('riding inside 4 m does not count', () => {
-    const { sim } = recordingArena();
-    const s = addThing(sim.world, THING_SHRINE, 0, 0, 0, 0, 0);
-    orbit(sim, 3.5, 3.5, 8);
-    expect(sim.world.things.state[s]).not.toBe(THING_DONE);
-    expect(sim.world.things.progress[s]).toBe(0);
-  });
-
-  it('a reversal starts the count again', () => {
+  it('is spent once opened: riding into it again gives nothing more', () => {
     const { sim, sources } = recordingArena();
     const s = addThing(sim.world, THING_SHRINE, 0, 0, 0, 0, 0);
-    let a = orbit(sim, 6, 2, 5);
-    a = orbit(sim, 6, 2.5, 6, -1, a);
-    expect(sim.world.things.state[s]).not.toBe(THING_DONE);
-    expect(sim.world.things.progress[s]).toBeCloseTo(2.5, 1);
-    orbit(sim, 6, 0.6, 1.5, -1, a);
-    expect(sim.world.things.state[s]).toBe(THING_DONE);
+    rideBy(sim, sources, 0, -10, 9, 180);
     expect(sources).toEqual([OFFER_SHRINE]);
-  });
-
-  it('too slow starts the count again: three laps in 11 s never finish it', () => {
-    const { sim, sources } = recordingArena();
-    const s = addThing(sim.world, THING_SHRINE, 0, 0, 0, 0, 0);
-    let a = 0;
-    let most = 0;
-    for (let k = 0; k < 30; k++) {
-      a = orbit(sim, 6, 0.3, 1.1, 1, a);
-      most = Math.max(most, sim.world.things.progress[s]);
-    }
-    expect(sim.world.things.state[s]).not.toBe(THING_DONE);
-    expect(most).toBeLessThan(3);
-    expect(sources).toHaveLength(0);
+    rideBy(sim, sources, 1, -10, 9, 180);
+    expect(sources).toEqual([OFFER_SHRINE]);
+    expect(sim.world.things.state[s]).toBe(THING_DONE);
   });
 });
 
@@ -363,7 +353,7 @@ describe('a slalom', () => {
     return [0, 1, 2, 3, 4].map((k) => sim.world.things.state[first + k]);
   }
 
-  it('all five gates in order and in time: 12 XP and 2 tokens', () => {
+  it('all five gates in order: 12 XP and 2 tokens', () => {
     const { sim } = recordingArena();
     const g = slalom(sim);
     const seen: Seen[] = [];
@@ -391,15 +381,15 @@ describe('a slalom', () => {
   it('counts a gate crossed in either direction, between its posts only', () => {
     const { sim } = recordingArena();
     const g = slalom(sim);
-    // Past gate 0 on the far side of a post: nothing.
-    weave(sim, -5, 5, 12, () => 6.5);
+    // Past gate 0 just outside a post (its posts stand 4 m either side of x = 3): nothing.
+    weave(sim, -5, 5, 12, () => 3 + THINGS.gateHalf + 0.3);
     expect(states(sim, g)[0]).toBe(0);
-    // Back through it the other way, between the posts: cleared.
-    weave(sim, 5, -5, 12, () => 1);
+    // Back through it the other way, near a post but between them: taken.
+    weave(sim, 5, -5, 12, () => 3 - THINGS.gateHalf + 0.3);
     expect(states(sim, g)[0]).toBe(1);
   });
 
-  it('clears gates only in order', () => {
+  it('takes gates only in order', () => {
     const { sim } = recordingArena();
     const g = slalom(sim);
     // Through gate 1 first: nothing.
@@ -412,21 +402,39 @@ describe('a slalom', () => {
     expect(states(sim, g)[0]).toBe(1);
   });
 
-  it('a gate later than 2.4 s after the last is a miss; the slalom starts again 3 s after', () => {
+  it('keeps its progress however long the rider takes and whatever it misses, and pays at the fifth', () => {
     const { sim } = recordingArena();
     const g = slalom(sim);
-    // 18 m at 7 m/s is 2.57 s: too slow for gate 1.
-    weave(sim, -2, 20, 7);
-    expect(states(sim, g)[0]).toBe(SLALOM_MISSED);
-    // While it waits, gate 0 does not start it.
-    weave(sim, -3, 3, 12, () => 3);
-    expect(states(sim, g)[0]).toBe(SLALOM_MISSED);
-    ride(sim, 50, -20, 0, 0);
-    step(sim, 180);
-    expect(states(sim, g)[0]).toBe(0);
-    // At 8 m/s (2.25 s a gate) it goes all the way.
-    weave(sim, -2, 76, 8);
+    const p = sim.world.player;
+    // The first two, slowly: 18 m at 3 m/s is six seconds a gate.
+    weave(sim, -2, 20, 3);
+    expect(states(sim, g)[0]).toBe(2);
+    // A minute away from it.
+    ride(sim, 60, -40, 0, 0);
+    step(sim, 3600);
+    expect(states(sim, g)[0]).toBe(2);
+    // Past gate 2 outside its posts, through gate 3 out of order, back past gate 2 on the wrong side.
+    weave(sim, 30, 40, 9, () => 3 + THINGS.gateHalf + 1);
+    weave(sim, 48, 60, 9, () => -3);
+    weave(sim, 40, 30, 9, () => 3 - THINGS.gateHalf - 1);
+    expect(states(sim, g)[0]).toBe(2);
+    expect(p.tokens).toBe(0);
+    // Another long wait, then the last three.
+    step(sim, 1800);
+    weave(sim, 30, 80, 9);
     expect(states(sim, g)[0]).toBe(THING_DONE);
+    expect(p.tokens).toBe(2);
+  });
+
+  it('is not ridden through by being put down on the other side of the next gate', () => {
+    const { sim } = recordingArena();
+    const g = slalom(sim);
+    ride(sim, 3, 10, 0, 0);
+    step(sim, 2);
+    // From 10 m past gate 0 to 10 m before it, in one tick, between its posts.
+    ride(sim, 3, -10, 0, 0);
+    step(sim, 2);
+    expect(states(sim, g)[0]).toBe(0);
   });
 });
 
@@ -451,13 +459,14 @@ describe('a hoop', () => {
     while (sim.world.run.ticks < tick) step(sim, 1);
   }
 
-  it('is taken by a mover in the air passing within 1.6 m of its middle: a token', () => {
+  it('is taken by a mover passing through it within its reach of its middle: a token', () => {
     const { sim } = recordingArena();
     const h = addThing(sim.world, THING_HOOP, 0, 4, 0, 0, 0);
     const seen: Seen[] = [];
-    fly(sim, 0, 4.9, -8, 0, 16);
+    // 1.5 m to the side of its middle and 1.5 m under it: 2.1 m off, inside its 2.2 m.
+    fly(sim, 1.5, 4 - 1.5 - PLAYER_RADIUS, -8, 0, 16);
     for (let t = 0; t < 60; t++) {
-      sim.state.mover.y = 4.9;
+      sim.state.mover.y = 4 - 1.5 - PLAYER_RADIUS;
       sim.state.mover.vy = 0;
       step(sim, 1, seen);
     }
@@ -467,16 +476,19 @@ describe('a hoop', () => {
     expect(of(seen, FX_THING)).toEqual([THING_HOOP]);
   });
 
-  it('is not taken from 1.7 m away, nor from the ground', () => {
+  it('is taken riding through it on the ground, and not from just outside its reach', () => {
     const { sim } = recordingArena();
-    const h = addThing(sim.world, THING_HOOP, 0, 4, 0, 0, 0);
-    flyThrough(sim, 1.7, 4);
-    expect(sim.world.things.state[h]).toBe(0);
-    const g = addThing(sim.world, THING_HOOP, 30, 1, 0, 0, 0);
-    ride(sim, 30, -8, 0, 16);
+    // Standing on the ground: its middle its reach up.
+    const g = addThing(sim.world, THING_HOOP, 0, THINGS.hoopReach, 0, 0, 0);
+    ride(sim, 1, -8, 0, 12);
     step(sim, 60);
-    expect(sim.world.things.state[g]).toBe(0);
-    expect(sim.world.player.tokens).toBe(0);
+    expect(sim.world.things.state[g]).toBe(HOOP_TAKEN);
+    const h = addThing(sim.world, THING_HOOP, 40, 4, 0, 0, 0);
+    flyThrough(sim, 40 + THINGS.hoopReach + 0.1, 4);
+    expect(sim.world.things.state[h]).toBe(0);
+    flyThrough(sim, 40, 4 + THINGS.hoopReach + 0.1);
+    expect(sim.world.things.state[h]).toBe(0);
+    expect(sim.world.player.tokens).toBe(1);
   });
 
   it('pays a streak: one more token for each hoop taken in the 20 s before, and comes back after 20 s', () => {
@@ -513,6 +525,71 @@ describe('a hoop', () => {
     expect(w.things.state[c]).toBe(0);
     flyThrough(sim, 40, 4);
     expect(w.player.tokens).toBe(9 + 1);
+  });
+
+  /** On the ground at (x, z) on the bowl, moving along `yaw` at `speed` along the slope. */
+  function rideOnSlope(sim: Sim, x: number, z: number, yaw: number, speed: number): void {
+    ride(sim, x, z, yaw, speed);
+    const m = sim.state.mover;
+    const n = { x: 0, y: 1, z: 0 };
+    sim.terrain.normalAt(x, z, n);
+    m.nx = n.x;
+    m.ny = n.y;
+    m.nz = n.z;
+    const hx = Math.sin(yaw);
+    const hz = Math.cos(yaw);
+    const hy = -(hx * n.x + hz * n.z) / n.y;
+    const k = speed / Math.hypot(hx, hy, hz);
+    m.vx = hx * k;
+    m.vy = hy * k;
+    m.vz = hz * k;
+  }
+
+  it('on seeds 1 to 3, every hoop is taken by a straight run up its kicker at run speed or faster, up to 1 m off its line, ollie or none', () => {
+    const missed: string[] = [];
+    let runs = 0;
+    for (const seed of [1, 2, 3]) {
+      const b = makeBowl(seed);
+      const base = new Sim(b, { seed, horde: true });
+      const t0 = base.world.things;
+      for (let i = 0; i < t0.count; i++) {
+        if (t0.kind[i] !== THING_HOOP) continue;
+        const yaw = t0.yaw[i];
+        const fx = Math.sin(yaw);
+        const fz = Math.cos(yaw);
+        // Across the line, to the right.
+        const ax = fz;
+        const az = -fx;
+        const tries: { speed: number; off: number; hopAt: number | null }[] = [];
+        for (const speed of [FEEL.runSpeed, 14, 20, 30]) for (const off of [-1, 0, 1]) tries.push({ speed, off, hopAt: null });
+        // An ollie off the lip, early, on time or late.
+        for (const speed of [FEEL.runSpeed, 20]) for (const hopAt of [-6, -2, 0.5]) tries.push({ speed, off: 0, hopAt });
+        for (const run of tries) {
+          runs++;
+          const sim = new Sim(b, { seed, horde: true });
+          sim.world.spawning = false;
+          // 18 m back from the hoop (which stands on the kicker's top), below the kicker's foot.
+          rideOnSlope(sim, t0.x[i] - fx * 18 + ax * run.off, t0.z[i] - fz * 18 + az * run.off, yaw, run.speed);
+          // The thumb down, pushing straight ahead.
+          const input = makeInputFrame();
+          input.carve = true;
+          input.steerY = 1;
+          let hopped = false;
+          let took = false;
+          for (let k = 0; k < 240 && !took; k++) {
+            const m = sim.state.mover;
+            const along = (m.x - t0.x[i]) * fx + (m.z - t0.z[i]) * fz;
+            input.hop = run.hopAt !== null && !hopped && m.grounded && along > run.hopAt;
+            if (input.hop) hopped = true;
+            sim.step(input);
+            took = sim.world.things.state[i] === HOOP_TAKEN;
+          }
+          if (!took) missed.push(`seed ${seed} hoop ${i} speed ${run.speed} off ${run.off} ollie ${run.hopAt ?? '-'}`);
+        }
+      }
+    }
+    expect(runs).toBeGreaterThanOrEqual(5 * 18);
+    expect(missed).toEqual([]);
   });
 });
 
@@ -610,10 +687,6 @@ const SEEK = {
   runInReach: 6,
   /** Tuck on a run while the line is within this, rad; carve to correct beyond it. */
   runAim: 0.05,
-  /** Orbit radius round a shrine, m, how hard it steers back to it per metre off, and the most. */
-  orbitR: 4.7,
-  orbitGain: 0.35,
-  orbitMax: 0.7,
   /** A slalom is entered from this far behind its first gate, m. */
   slalomRunIn: 14,
   /** On a run at a hoop, hop this far before the kicker's top, m. */
@@ -623,13 +696,13 @@ const SEEK = {
   rest: 90 * 60,
 } as const;
 
-type SeekMode = 'go' | 'runIn' | 'run' | 'orbit' | 'gates';
+type SeekMode = 'go' | 'runIn' | 'run' | 'gates';
 
 /**
  * Rides at the nearest unspent thing whose kind `wanted` asks for, and uses it the way a player
- * would: rams crates and totems at run speed; climbs above a gold crate and tucks down onto it;
- * rides round a shrine; enters a slalom from behind its first gate and steers gate to gate; climbs
- * the line behind a hoop's kicker and tucks down it, hopping off the lip. A thing it cannot get
+ * would: rams crates, shrines and totems at run speed; climbs above a gold crate and tucks down onto
+ * it; enters a slalom from behind its first gate and steers gate to gate; climbs the line behind a
+ * hoop's kicker and tucks down it through the hoop on its top, hopping at the lip. A thing it cannot get
  * after a while is left alone for a while.
  */
 function makeSeeker(wanted: (w: World, kind: number) => boolean): Bot {
@@ -643,7 +716,6 @@ function makeSeeker(wanted: (w: World, kind: number) => boolean): Bot {
   let tz = 0;
   let lineYaw = 0;
   let hopped = false;
-  let orbitDir = 1;
   const restUntil = new Map<number, number>();
 
   function spent(w: World, i: number): boolean {
@@ -704,13 +776,13 @@ function makeSeeker(wanted: (w: World, kind: number) => boolean): Bot {
     mode = 'runIn';
   }
 
-  /** A run down the line behind a hoop's kicker, from where the most height is. */
+  /** A run down the line behind a hoop's kicker (the hoop stands on its top), from where the most height is. */
   function planKicker(sim: Sim, i: number): void {
     const t = sim.world.things;
     const fx = Math.sin(t.yaw[i]);
     const fz = Math.cos(t.yaw[i]);
-    const kx = t.x[i] - fx * 5;
-    const kz = t.z[i] - fz * 5;
+    const kx = t.x[i];
+    const kz = t.z[i];
     const top = sim.terrain.heightAt(kx, kz);
     let best = -Infinity;
     let back = 30;
@@ -773,35 +845,8 @@ function makeSeeker(wanted: (w: World, kind: number) => boolean): Bot {
     const x = t.x[target];
     const z = t.z[target];
 
-    if (kind === THING_SHRINE) {
-      const ox = m.x - x;
-      const oz = m.z - z;
-      const r = Math.hypot(ox, oz);
-      if (mode !== 'orbit' && r < 11) {
-        mode = 'orbit';
-        orbitDir = ox * m.vz - oz * m.vx < 0 ? 1 : -1;
-      }
-      if (mode !== 'orbit') {
-        // Toward the edge of the orbit, the side the mover is already turning.
-        const off = Math.asin(Math.min(1, SEEK.orbitR / r));
-        const to = yawTo(m, x, z);
-        const a = angleDiff(travelYaw(m), to) >= 0 ? off : -off;
-        stickToward(sim, to + a, 1, out);
-        return;
-      }
-      if (r > 13) {
-        mode = 'go';
-        return;
-      }
-      const around = Math.atan2(ox, oz);
-      const pull = Math.max(-SEEK.orbitMax, Math.min(SEEK.orbitMax, SEEK.orbitGain * (r - SEEK.orbitR)));
-      stickToward(sim, around + orbitDir * (Math.PI / 2 + pull), 1, out);
-      return;
-    }
-
     if (kind === THING_GATE) {
       const state = t.state[target];
-      if (state === SLALOM_MISSED) mode = 'runIn';
       if (mode === 'runIn') {
         stickToward(sim, yawTo(m, rx, rz), 1, out);
         if (Math.hypot(m.x - rx, m.z - rz) < SEEK.runInReach && state === 0) mode = 'gates';
@@ -836,7 +881,7 @@ function makeSeeker(wanted: (w: World, kind: number) => boolean): Bot {
       return;
     }
 
-    // Crates and totems: straight at them, at run speed.
+    // Crates, shrines and totems: straight at them, at run speed.
     stickToward(sim, yawTo(m, x, z), 1, out);
   };
 }
@@ -898,11 +943,17 @@ describe('on a real bowl', () => {
       expect(t.count).toBe(b.features.sites.length);
       b.features.sites.forEach((s, i) => {
         expect(t.kind[i]).toBe(kinds[names.indexOf(s.kind)]);
-        expect([t.x[i], t.z[i], t.group[i]]).toEqual([Math.fround(s.x), Math.fround(s.z), s.group]);
+        expect(t.group[i]).toBe(s.group);
         expect(t.state[i]).toBe(0);
-        // On the ground, except a hoop: 3 m over the top of its kicker.
-        const ground = s.kind === 'hoop' ? b.heightAt(s.x - Math.sin(s.yaw) * 5, s.z - Math.cos(s.yaw) * 5) + 3 : b.heightAt(s.x, s.z);
-        expect(t.y[i]).toBeCloseTo(ground, 4);
+        // On the ground at its site, except a hoop: standing on the top of its kicker, which is
+        // HOOP_AHEAD behind its site, its middle its reach up.
+        const back = s.kind === 'hoop' ? HOOP_AHEAD : 0;
+        const x = s.x - Math.sin(s.yaw) * back;
+        const z = s.z - Math.cos(s.yaw) * back;
+        expect(t.x[i]).toBeCloseTo(x, 3);
+        expect(t.z[i]).toBeCloseTo(z, 3);
+        const ground = b.heightAt(x, z) + (s.kind === 'hoop' ? THINGS.hoopReach : 0);
+        expect(t.y[i]).toBeCloseTo(ground, 3);
       });
     };
     check();

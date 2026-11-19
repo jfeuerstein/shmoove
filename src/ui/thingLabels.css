@@ -1,0 +1,74 @@
+/* Labels over the map's points of interest: under the HUD, the build bar, the cards, the lesson,
+   the pause sheet and the end card; over the threat glow and the damage numbers. */
+.tl {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 9;
+  /* --tl-gold is set from PALETTE by thingLabels.ts. */
+}
+
+/* Nothing over a card, the pause sheet or how to play while one is up (the end card and the cards
+   also end play, which empties the labels). */
+body:has(.cards-show) .tl,
+body:has(.pause:not([hidden])) .tl,
+body:has(.howto:not([hidden])) .tl {
+  visibility: hidden;
+}
+
+/* A small dark pill, its bottom middle on the thing, with a notch pointing down at it. */
+.tl-tag {
+  position: absolute;
+  left: 0;
+  top: 0;
+  translate: -50% -100%;
+  will-change: transform;
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  padding: 3px 8px 4px;
+  margin-top: -6px;
+  border-radius: 9px;
+  border: 1px solid var(--tl-gold, #f6c445);
+  background: rgba(15, 12, 28, 0.74);
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-size: 11px;
+  line-height: 1.1;
+  white-space: nowrap;
+  color: #fff;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.tl-tag::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -6px;
+  translate: -50% 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 6px solid var(--tl-gold, #f6c445);
+}
+
+.tl-tag[hidden],
+.tl-hint[hidden] {
+  display: none;
+}
+
+.tl-name {
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  color: var(--tl-gold, #f6c445);
+}
+
+.tl-hint {
+  font-weight: 600;
+  opacity: 0.92;
+}
+
+.tl-hint::before {
+  content: '· ';
+  opacity: 0.7;
+}

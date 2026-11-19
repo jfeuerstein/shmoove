@@ -1,27 +1,26 @@
 /**
- * The things on the map, all of them ridden through, none of them a reason to stop: crates rammed
- * open, shrines orbited, slaloms ridden, hoops flown through, totems rammed to call a fight.
+ * The things on the map, all of them ridden through, none of them a reason to stop, and each one
+ * thing to do: crates rammed open, shrines ridden into, gates ridden between, hoops ridden through,
+ * totems rammed to call a fight.
  *
  * They are placed from the bowl's sites when a run starts (`placeThings`) and stepped once a tick
  * after the sparks (`stepThings`). Spent ones stay in `w.things` at `THING_DONE` for the renderer.
  *
  * Per kind, the fields of `w.things` mean:
- * - crate, gold crate: `timer` ticks until it may rattle again.
- * - shrine: `state` SHRINE_IDLE, SHRINE_YAW_UP or SHRINE_YAW_DOWN (the way it is being ridden round);
- *   `progress` laps so far; `timer` ticks since the count started.
+ * - crate, gold crate, shrine, totem: `state` 0 until it is used, then `THING_DONE`; nothing else.
  * - gate: the gates of one slalom are contiguous in `w.things`, in the order they are ridden, and
- *   share a `group`. Every gate of a slalom holds the slalom's `state` (the index of the gate that is
- *   next, or SLALOM_MISSED while it waits to start again) and its `timer` (ticks since the last gate,
- *   or since the miss). `progress` is the gate's own: which side of its line the mover was on last
- *   tick, signed metres (0 before the first tick).
- * - hoop: `state` HOOP_TAKEN and `timer` ticks until it is back. It is taken by the mover's middle,
- *   a body radius above its feet.
- * - totem: nothing until it is spent.
+ *   share a `group`. Every gate of a slalom holds the slalom's `state`: the index of the gate that
+ *   is next (so also how many are taken), kept however long the rider takes. `progress` is the
+ *   gate's own: which side of its line the mover was on last tick, signed metres (0 before the
+ *   first tick).
+ * - hoop: `state` HOOP_TAKEN and `timer` ticks until it is back; `progress` as a gate's. It stands
+ *   on its kicker's top and is taken by the mover's middle, a body radius above its feet, riding
+ *   through it, on the ground or in the air.
  */
-import { HOOP_AHEAD, HOOP_RISE, type Bowl, type SiteKind } from './bowl';
+import { HOOP_AHEAD, type Bowl, type SiteKind } from './bowl';
 import { queueOffer } from './build';
 import { PLAYER_RADIUS } from './balance';
-import { DT } from './constants';
+import { DT, FEEL } from './constants';
 import { dcos, dsin } from './math';
 import { OFFER_CRATE, OFFER_SHRINE, OFFER_TOTEM } from './offer';
 import { powerOf } from './stats';
@@ -51,11 +50,6 @@ import {
 export const THINGS = {
   /** A crate or totem is touched within this distance of its middle, m (and no higher above it). */
   touch: 1.4,
-  /** The lowest gear (counting plow grace) that breaks a crate, and a gold crate. */
-  crateGear: 1,
-  goldGear: 1,
-  /** A crate too slow to break rattles at most this often. */
-  rattleTicks: 60,
   /** What a crate gives, as shares of the roll before luck: a card, a heal, every spark, a bomb. */
   crateCard: 0.5,
   crateHeal: 0.2,
@@ -70,30 +64,20 @@ export const THINGS = {
   bombDamage: 60,
   bombRadius: 22,
   goldTokens: 5,
-  /** The shrine's ring, m from its middle; laps; and the time they must be ridden in. */
-  shrineInner: 4,
-  shrineOuter: 11,
-  shrineLaps: 3,
-  shrineTicks: 600,
+  /** A shrine opens when the mover comes within this of its middle, m: the ring drawn round it. */
+  shrineReach: 4,
   /** A gate's posts stand this far either side of its middle, m. */
-  gateHalf: 3,
-  /** Each next gate must come within this of the last; a miss waits this long before a fresh start. */
-  gateTicks: 144,
-  missTicks: 180,
+  gateHalf: 4,
   slalomXp: 12,
   slalomTokens: 2,
-  /** A hoop is taken within this distance of its middle, m; it comes back after `hoopTicks`. */
-  hoopReach: 1.6,
+  /**
+   * A hoop stands on its kicker's top, its middle this high over it, and is taken by riding through
+   * it within this of its middle, m (drawn that big); it comes back after `hoopTicks`.
+   */
+  hoopReach: 2.2,
   hoopTicks: 1200,
 } as const;
 
-/** `state` of a shrine. */
-export const SHRINE_IDLE = 0;
-/** Being ridden round with the yaw from the shrine to the mover growing, or shrinking. */
-export const SHRINE_YAW_UP = 1;
-export const SHRINE_YAW_DOWN = 2;
-/** `state` of a slalom's gates after a miss, until it can start again. */
-export const SLALOM_MISSED = 200;
 /** `state` of a hoop that has been taken and is not back yet. */
 export const HOOP_TAKEN = 1;
 
@@ -103,9 +87,12 @@ export const CRATE_HEAL = 1;
 export const CRATE_MAGNET = 2;
 export const CRATE_BOMB = 3;
 
-const TWO_PI = 6.283185307179586;
-/** A turn about the shrine slower than this, rad per tick, is neither way: it neither counts nor reverses. */
-const SHRINE_STILL = 1e-4;
+/**
+ * A crossing of a gate's or hoop's line that moved further along it than this in one tick, as a
+ * share of the hard speed limit's tick, is a jump of place (a reset, a test putting the mover down),
+ * not a ride through.
+ */
+const STRIDE_SLACK = 2;
 
 function kindOf(site: SiteKind): number {
   switch (site) {
@@ -125,7 +112,7 @@ function kindOf(site: SiteKind): number {
 }
 
 /**
- * Add one thing, waiting, at (x, z) on the ground (a hoop at height `y` instead). Returns its
+ * Add one thing, waiting, at (x, z) on the ground (a hoop with its middle at height `y` instead). Returns its
  * index, or -1 if the pool is full. Tests place things by hand with this; the gates of one slalom
  * must be added one after another, first gate first.
  */
@@ -157,12 +144,18 @@ export function placeThings(w: World, terrain: Terrain): void {
   for (let s = 0; s < sites.length; s++) {
     const site = sites[s];
     const kind = kindOf(site.kind);
-    let y = terrain.heightAt(site.x, site.z);
+    let x = site.x;
+    let z = site.z;
+    let y = terrain.heightAt(x, z);
     if (kind === THING_HOOP) {
-      // Over the top of its kicker, which is behind it along the kicker's line.
-      y = terrain.heightAt(site.x - dsin(site.yaw) * HOOP_AHEAD, site.z - dcos(site.yaw) * HOOP_AHEAD) + HOOP_RISE;
+      // The site is past the kicker's top, where a big jump would come down. Even at full speed the
+      // kicker throws the mover less than a metre up, and at run speed not at all: the ring stands on
+      // the top itself, where every straight run up the kicker goes, ollie or none.
+      x = site.x - dsin(site.yaw) * HOOP_AHEAD;
+      z = site.z - dcos(site.yaw) * HOOP_AHEAD;
+      y = terrain.heightAt(x, z) + THINGS.hoopReach;
     }
-    addThing(w, kind, site.x, y, site.z, site.yaw, site.group);
+    addThing(w, kind, x, y, z, site.yaw, site.group);
   }
 }
 
@@ -236,27 +229,10 @@ function openCrate(w: World, s: SimState, i: number): void {
 function stepCrate(w: World, s: SimState, i: number): void {
   const t = w.things;
   const m = s.mover;
-  if (t.timer[i] > 0) t.timer[i]--;
   const dx = m.x - t.x[i];
   const dz = m.z - t.z[i];
   if (dx * dx + dz * dz > THINGS.touch * THINGS.touch || m.y - t.y[i] > THINGS.touch) return;
-  // A crate opens to a touch. (The gear table is 1 for both kinds; kept so a later rule has a home.)
-  const gear = m.gear;
-  const need = t.kind[i] === THING_GOLD_CRATE ? THINGS.goldGear : THINGS.crateGear;
-  if (gear >= need) {
-    openCrate(w, s, i);
-  } else if (t.timer[i] === 0) {
-    // Too slow: it only rattles.
-    used(w, i);
-    t.timer[i] = THINGS.rattleTicks;
-  }
-}
-
-function resetShrine(w: World, i: number): void {
-  const t = w.things;
-  t.state[i] = SHRINE_IDLE;
-  t.progress[i] = 0;
-  t.timer[i] = 0;
+  openCrate(w, s, i);
 }
 
 function stepShrine(w: World, s: SimState, i: number): void {
@@ -264,100 +240,74 @@ function stepShrine(w: World, s: SimState, i: number): void {
   const m = s.mover;
   const dx = m.x - t.x[i];
   const dz = m.z - t.z[i];
-  const r2 = dx * dx + dz * dz;
-  if (r2 < THINGS.shrineInner * THINGS.shrineInner || r2 > THINGS.shrineOuter * THINGS.shrineOuter) {
-    // Out of the ring: the count starts again.
-    if (t.state[i] !== SHRINE_IDLE) resetShrine(w, i);
-    return;
-  }
-  // The angle swept this tick, from the mover's motion about the shrine.
-  const turn = ((dz * m.vx - dx * m.vz) / r2) * DT;
-  if (turn > -SHRINE_STILL && turn < SHRINE_STILL) {
-    if (t.state[i] !== SHRINE_IDLE) t.timer[i]++;
-  } else {
-    const way = turn > 0 ? SHRINE_YAW_UP : SHRINE_YAW_DOWN;
-    if (t.state[i] !== way) {
-      // Reversed (or just started): the count starts from here.
-      resetShrine(w, i);
-      t.state[i] = way;
-    }
-    t.progress[i] += (turn > 0 ? turn : -turn) / TWO_PI;
-    t.timer[i]++;
-  }
-  if (t.state[i] === SHRINE_IDLE) return;
-  if (t.progress[i] >= THINGS.shrineLaps) {
-    t.state[i] = THING_DONE;
-    t.progress[i] = THINGS.shrineLaps;
-    used(w, i);
-    queueOffer(w, OFFER_SHRINE);
-  } else if (t.timer[i] >= THINGS.shrineTicks) {
-    // Too slow.
-    resetShrine(w, i);
-  }
+  const r = THINGS.shrineReach;
+  // Into the ring drawn round it, on the ground or flying low over it: its boons open at once.
+  if (dx * dx + dz * dz > r * r || m.y - t.y[i] > r) return;
+  t.state[i] = THING_DONE;
+  used(w, i);
+  queueOffer(w, OFFER_SHRINE);
+}
+
+/**
+ * Did the mover cross the line through thing i, square to its yaw, this tick: from the side it was
+ * on last tick, by a ride and not a jump of place? Remembers the side in `progress`.
+ */
+function crossed(w: World, s: SimState, i: number): boolean {
+  const t = w.things;
+  const m = s.mover;
+  const along = (m.x - t.x[i]) * dsin(t.yaw[i]) + (m.z - t.z[i]) * dcos(t.yaw[i]);
+  const before = t.progress[i];
+  // 0 means "no side yet", so a mover exactly on the line counts as past it.
+  t.progress[i] = along === 0 ? 1e-6 : along;
+  if (before === 0 || before < 0 === along < 0) return false;
+  const moved = before > along ? before - along : along - before;
+  return moved <= STRIDE_SLACK * FEEL.maxSpeed * DT;
+}
+
+/** How far the mover is across the line through thing i, signed metres. */
+function across(w: World, s: SimState, i: number): number {
+  const t = w.things;
+  const m = s.mover;
+  return (m.x - t.x[i]) * dcos(t.yaw[i]) - (m.z - t.z[i]) * dsin(t.yaw[i]);
 }
 
 /** Step the slalom whose gates are [first, first + n). */
 function stepSlalom(w: World, s: SimState, first: number, n: number): void {
   const t = w.things;
-  const m = s.mover;
   const state = t.state[first];
   if (state === THING_DONE) return;
-  let timer = t.timer[first];
   let next = state;
-  if (timer < 65535) timer++;
-  if (state === SLALOM_MISSED) {
-    if (timer >= THINGS.missTicks) {
-      next = 0;
-      timer = 0;
-    }
-  } else if (state > 0 && timer > THINGS.gateTicks) {
-    // Too slow to the next gate.
-    next = SLALOM_MISSED;
-    timer = 0;
-  }
   for (let k = 0; k < n; k++) {
     const i = first + k;
-    // Along the gate's facing and across it.
-    const fx = dsin(t.yaw[i]);
-    const fz = dcos(t.yaw[i]);
-    const dx = m.x - t.x[i];
-    const dz = m.z - t.z[i];
-    const along = dx * fx + dz * fz;
-    const across = dx * fz - dz * fx;
-    const before = t.progress[i];
-    // 0 means "no side yet", so a mover exactly on the line counts as past it.
-    t.progress[i] = along === 0 ? 1e-6 : along;
-    if (k !== next || before === 0) continue;
-    if (before < 0 === along < 0 || across > THINGS.gateHalf || across < -THINGS.gateHalf) continue;
+    // Every gate keeps its side, so the next one knows where the mover came from.
+    if (!crossed(w, s, i) || k !== next) continue;
+    const a = across(w, s, i);
+    if (a > THINGS.gateHalf || a < -THINGS.gateHalf) continue;
     used(w, i);
     next = k + 1;
-    timer = 0;
   }
   if (next === n) {
     next = THING_DONE;
     w.player.xp += THINGS.slalomXp;
     giveTokens(w, s, THINGS.slalomTokens);
   }
-  for (let k = 0; k < n; k++) {
-    t.state[first + k] = next;
-    t.timer[first + k] = timer;
-  }
+  for (let k = 0; k < n; k++) t.state[first + k] = next;
 }
 
 function stepHoop(w: World, s: SimState, i: number): void {
   const t = w.things;
   const m = s.mover;
+  const through = crossed(w, s, i);
   if (t.state[i] === HOOP_TAKEN) {
     if (t.timer[i] > 0) t.timer[i]--;
     if (t.timer[i] === 0) t.state[i] = 0;
     return;
   }
-  if (m.grounded) return;
-  const dx = m.x - t.x[i];
+  if (!through) return;
   // The mover is a ball on its feet: its middle is a radius above them.
+  const a = across(w, s, i);
   const dy = m.y + PLAYER_RADIUS - t.y[i];
-  const dz = m.z - t.z[i];
-  if (dx * dx + dy * dy + dz * dz > THINGS.hoopReach * THINGS.hoopReach) return;
+  if (a * a + dy * dy > THINGS.hoopReach * THINGS.hoopReach) return;
   // A streak: one more token for every other hoop taken in the last 20 s (the ones not back yet).
   let streak = 0;
   for (let k = 0; k < t.count; k++) if (k !== i && t.kind[k] === THING_HOOP && t.state[k] === HOOP_TAKEN) streak++;

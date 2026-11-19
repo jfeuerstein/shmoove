@@ -318,13 +318,17 @@ function makeFighter(bowl: Bowl | null): Bot {
       if (kind === THING_CRATE || kind === THING_GOLD_CRATE) {
         if (t.state[i] !== THING_DONE) consider('crate', i, t.x[i], t.z[i], kind === THING_GOLD_CRATE ? 12 : 6);
       } else if (kind === THING_GATE) {
-        // The first gate of a slalom that has not been ridden.
-        if ((i === 0 || t.kind[i - 1] !== THING_GATE || t.group[i - 1] !== t.group[i]) && t.state[i] === 0) {
-          consider('slalom', i, t.x[i] - dsin(t.yaw[i]) * 6, t.z[i] - dcos(t.yaw[i]) * 6, 8);
+        // The first gate of a slalom not yet finished, sought at the gate that is next (a slalom keeps
+        // the gates already taken).
+        if ((i === 0 || t.kind[i - 1] !== THING_GATE || t.group[i - 1] !== t.group[i]) && t.state[i] !== THING_DONE) {
+          const g = i + t.state[i];
+          if (g < t.count && t.kind[g] === THING_GATE && t.group[g] === t.group[i]) {
+            consider('slalom', i, t.x[g] - dsin(t.yaw[g]) * 6, t.z[g] - dcos(t.yaw[g]) * 6, 8);
+          }
         }
       } else if (kind === THING_HOOP) {
         if (t.state[i] === 0) {
-          consider('hoop', i, t.x[i] - dsin(t.yaw[i]) * (BOARD.hoopRunUp + 5), t.z[i] - dcos(t.yaw[i]) * (BOARD.hoopRunUp + 5), 4);
+          consider('hoop', i, t.x[i] - dsin(t.yaw[i]) * BOARD.hoopRunUp, t.z[i] - dcos(t.yaw[i]) * BOARD.hoopRunUp, 4);
         }
       }
     }
@@ -423,11 +427,6 @@ function makeFighter(bowl: Bowl | null): Bot {
       }
       // The slalom's own count of gates passed (its state) says which gate is next.
       const passed = t.state[errandIdx];
-      if (passed >= 200) {
-        // Missed: give up on it for a while.
-        endErrand(true);
-        return NaN;
-      }
       const gi = errandIdx + passed;
       const fx = dsin(t.yaw[gi]);
       const fz = dcos(t.yaw[gi]);
@@ -468,9 +467,9 @@ function makeFighter(bowl: Bowl | null): Bot {
       }
       const fx = dsin(t.yaw[errandIdx]);
       const fz = dcos(t.yaw[errandIdx]);
-      // Ride the kicker (5 m before the hoop) straight along its line; the kicker does the rest.
-      const kx = t.x[errandIdx] - fx * 5;
-      const kz = t.z[errandIdx] - fz * 5;
+      // Ride the kicker straight along its line, through the hoop standing on its top.
+      const kx = t.x[errandIdx];
+      const kz = t.z[errandIdx];
       if (errandStep === 2) {
         const along = (m.x - kx) * fx + (m.z - kz) * fz;
         if (along > 12 || (m.grounded && along > 3)) endErrand(true);

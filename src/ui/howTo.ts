@@ -23,7 +23,7 @@ export const HOW_TO_LINES: readonly HowToLine[] = [
   { text: 'Touching an enemy hurts. An ollie clears the small ones.' },
   { text: 'Sparks are XP. A level is a card: a weapon, a level on one you carry, or a passive.' },
   { text: 'Ollie onto a white rail to grind it. Ollie again to get off.' },
-  { text: 'Ride into crates. Circle shrines. Thread the gates. Fly through hoops.' },
+  { text: 'Ride into crates and shrines. Ride between the gates in order. Jump through hoops. Totems call elites.' },
 ];
 
 export class HowTo {

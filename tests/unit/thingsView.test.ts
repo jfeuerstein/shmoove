@@ -17,9 +17,12 @@ import {
   HOOP_READY,
   PILLAR_HIGH,
   POST_HIGH,
-  SHRINE_INNER,
-  SHRINE_LAPS,
-  SHRINE_OUTER,
+  BEACON_FAR,
+  BEACON_NEAR,
+  beaconShare,
+  RING_LOW,
+  RING_SPENT,
+  SHRINE_REACH,
   ThingsView,
   TOTEM_HIGH,
 } from '../../src/render/thingsView';
@@ -136,48 +139,41 @@ describe('ThingsView', () => {
     expect(boxesOf(view, g)[0].h).toBeLessThan(0.3);
   });
 
-  it('draws a shrine as a pillar with a ring at the middle of its band that lights round by laps', () => {
+  it('draws a shrine as a pillar with a whole bright ring whose outer edge is its reach, faint once spent', () => {
     const w = makeWorld(1);
     const s = put(w, THING_SHRINE, 10, -10);
     const view = new ThingsView();
-    const litShare = (): number => {
-      const r = view.rings;
-      const verts = (r.segments + 1) * 2;
-      let lit = 0;
-      let max = 0;
-      for (let v = 0; v < verts; v++) max = Math.max(max, r.fades[v]);
-      for (let v = 0; v < verts; v++) if (r.fades[v] >= max - 1e-6) lit++;
-      return lit / verts;
-    };
+    const verts = (): number => (view.rings.segments + 1) * 2;
+    const fades = (): number[] => Array.from(view.rings.fades.slice(0, verts()));
     view.update(w, 0);
     const pillar = boxesOf(view, s);
     expect(pillar.length).toBe(2);
     expect(pillar[0].h).toBeCloseTo(PILLAR_HIGH, 5);
     expect(view.rings.count).toBe(1);
-    // The ring sits between the band's edges.
-    const mid = (SHRINE_INNER + SHRINE_OUTER) / 2;
-    for (let v = 0; v < (view.rings.segments + 1) * 2; v++) {
+    // The ring lies inside its reach, its outer edge on it: inside the ring is inside the reach.
+    let outer = 0;
+    for (let v = 0; v < verts(); v++) {
       const d = Math.hypot(view.rings.positions[v * 3] - 10, view.rings.positions[v * 3 + 2] + 10);
-      expect(Math.abs(d - mid)).toBeLessThan(0.5);
+      expect(d).toBeLessThanOrEqual(SHRINE_REACH + 1e-4);
+      expect(d).toBeGreaterThan(SHRINE_REACH - 1);
+      outer = Math.max(outer, d);
     }
-    // Waiting: only the start of the ring is lit; in progress: as far round as the laps; done: all.
-    const waiting = litShare();
-    expect(waiting).toBeLessThan(0.05);
-    w.things.progress[s] = SHRINE_LAPS / 2;
-    w.things.state[s] = 1;
-    view.update(w, 0);
-    expect(litShare()).toBeCloseTo(0.5, 1);
-    w.things.progress[s] = SHRINE_LAPS;
-    view.update(w, 0);
-    expect(litShare()).toBe(1);
+    expect(outer).toBeCloseTo(SHRINE_REACH, 3);
+    // Fresh: lit all the way round, brightly, and breathing.
+    const fresh = fades();
+    expect(Math.min(...fresh)).toBeGreaterThanOrEqual(RING_LOW - 1e-6);
+    const a = Math.max(...fresh);
+    view.update(w, 0.23);
+    const b = Math.max(...fades());
+    expect(a).not.toBeCloseTo(b, 3);
     // Spent: a stump and a faint ring.
-    const before = Math.max(...view.rings.fades.slice(0, (view.rings.segments + 1) * 2));
     w.things.state[s] = THING_DONE;
     view.update(w, 0);
     const stump = boxesOf(view, s);
     expect(stump.length).toBe(1);
     expect(stump[0].h).toBeLessThan(PILLAR_HIGH / 2);
-    expect(Math.max(...view.rings.fades.slice(0, (view.rings.segments + 1) * 2))).toBeLessThan(before / 2);
+    expect(Math.max(...fades())).toBeLessThanOrEqual(RING_SPENT + 1e-6);
+    expect(RING_SPENT).toBeLessThan(RING_LOW / 3);
   });
 
   it('draws gates as two posts and a bar, the next of the slalom bright, cleared ones grey, spent ones stumps', () => {
@@ -199,7 +195,7 @@ describe('ThingsView', () => {
       expect(g.glow).toBeCloseTo(GLOW_GATE);
       expect(brightness(g.rgb)).toBeLessThan(brightness(g0[0].rgb));
     }
-    // In progress: two cleared, the third next.
+    // In progress: two taken, the third next.
     for (let k = 0; k < 5; k++) w.things.state[first + k] = 2;
     view.update(w, 0);
     const looks = [0, 1, 2, 3, 4].map((k) => boxesOf(view, first + k)[0]);
@@ -208,10 +204,6 @@ describe('ThingsView', () => {
     expect(looks[1].glow).toBeCloseTo(0);
     expect(looks[3].glow).toBeCloseTo(GLOW_GATE);
     expect(looks[0].rgb).not.toEqual(looks[3].rgb);
-    // Waiting again after a miss (a state that names no gate): none bright, none grey.
-    for (let k = 0; k < 5; k++) w.things.state[first + k] = 200;
-    view.update(w, 0);
-    for (let k = 0; k < 5; k++) expect(boxesOf(view, first + k)[0].glow).toBeCloseTo(GLOW_GATE);
     // Spent: stumps, no bar.
     for (let k = 0; k < 5; k++) w.things.state[first + k] = THING_DONE;
     view.update(w, 0);
@@ -289,7 +281,7 @@ describe('ThingsView', () => {
     }
   });
 
-  it('puts a tall beacon of its colour over every live thing, one per slalom over its next gate, none when spent', () => {
+  it('puts a tall beacon of its colour over every live thing but a plain crate, one per slalom over its next gate, none when spent', () => {
     const w = makeWorld(1);
     const crate = put(w, THING_CRATE, 0, 0);
     const shrine = put(w, THING_SHRINE, 20, 0);
@@ -308,7 +300,9 @@ describe('ThingsView', () => {
       const f = view.beacons.geometry.getAttribute('aFade') as InstancedBufferAttribute;
       return { x: m[b * 16 + 12], y: m[b * 16 + 13], z: m[b * 16 + 14], high: m[b * 16 + 5], rgb: [c.getX(b), c.getY(b), c.getZ(b)], fade: f.getX(b) };
     };
-    for (const i of [crate, shrine, totem, hoop, gold]) {
+    // Plain crates are many and found by riding: none.
+    expect(view.beaconOf[crate]).toBe(-1);
+    for (const i of [shrine, totem, hoop, gold]) {
       const b = beam(i);
       expect([b.x, b.z]).toEqual([w.things.x[i], w.things.z[i]]);
       // Starts above the thing and stands far over any hill.
@@ -316,7 +310,7 @@ describe('ThingsView', () => {
       expect(b.high).toBeGreaterThanOrEqual(30);
       expect(b.rgb.map((v) => v.toFixed(4))).toEqual(linear(PALETTE.things[w.things.kind[i]]).map((v) => v.toFixed(4)));
     }
-    expect(beam(gold).fade).toBeGreaterThan(beam(crate).fade);
+    expect(beam(gold).fade).toBeGreaterThan(beam(shrine).fade);
     // Seen through the fog.
     expect((view.beacons.material as MeshLambertMaterial).fog).toBe(false);
     // Faint at its foot (up close only the foot is in view), brightest higher up, gone at the top.
@@ -345,6 +339,26 @@ describe('ThingsView', () => {
     view.update(w, 0);
     expect(view.beacons.count).toBe(0);
     expect(view.beacons.visible).toBe(false);
+  });
+
+  it('fades a beacon out as the rider comes near, where the label takes over', () => {
+    expect(beaconShare(BEACON_FAR + 10)).toBe(1);
+    expect(beaconShare(BEACON_FAR)).toBe(1);
+    expect(beaconShare((BEACON_FAR + BEACON_NEAR) / 2)).toBeCloseTo(0.5, 5);
+    expect(beaconShare(BEACON_NEAR)).toBe(0);
+    expect(beaconShare(0)).toBe(0);
+    const w = makeWorld(1);
+    const shrine = put(w, THING_SHRINE, 0, 0);
+    const view = new ThingsView();
+    const fade = view.beacons.geometry.getAttribute('aFade') as InstancedBufferAttribute;
+    view.update(w, 0, 0, -(BEACON_FAR + 20));
+    const far = fade.getX(view.beaconOf[shrine]);
+    view.update(w, 0, 0, -(BEACON_FAR + BEACON_NEAR) / 2);
+    expect(fade.getX(view.beaconOf[shrine])).toBeCloseTo(far / 2, 5);
+    // Near enough to act on it: no beacon at all.
+    view.update(w, 0, 0, -(BEACON_NEAR - 1));
+    expect(view.beaconOf[shrine]).toBe(-1);
+    expect(view.beacons.count).toBe(0);
   });
 
   it('builds a crate with a lid on top, and throws its planks out when it breaks', () => {
