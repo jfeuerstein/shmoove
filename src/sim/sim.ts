@@ -122,6 +122,7 @@ export class Sim {
     s.events = 0;
     if (this.horde && this.world.run.phase !== PHASE_PLAY) {
       // The run is over: the world holds still until `reset`.
+      stopMover(s.mover);
       this.world.fx.count = 0;
       this.world.deaths.count = 0;
       return;

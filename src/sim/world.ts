@@ -8,7 +8,6 @@
  */
 import { xpForLevel } from './balance';
 import { Rng } from './rng';
-import { makeWake, type Wake } from './wake';
 
 export const MAX_ENEMIES = 512;
 export const MAX_SPARKS = 640;
@@ -136,6 +135,33 @@ export interface Fx {
   y: Float32Array;
   z: Float32Array;
   a: Float32Array;
+}
+
+// ---- the Wake's trail (the logic is in wake.ts; the state lives here so nothing imports in a circle) ----
+
+export const WAKE_MAX = 128;
+
+export interface Wake {
+  /** Points [0, count), oldest first. */
+  count: number;
+  x: Float32Array;
+  y: Float32Array;
+  z: Float32Array;
+  /** The run tick each point was laid on. */
+  born: Int32Array;
+  /** Distance from the newest point to the mover, m. */
+  acc: number;
+}
+
+export function makeWake(): Wake {
+  return {
+    count: 0,
+    x: new Float32Array(WAKE_MAX),
+    y: new Float32Array(WAKE_MAX),
+    z: new Float32Array(WAKE_MAX),
+    born: new Int32Array(WAKE_MAX),
+    acc: 0,
+  };
 }
 
 // ---- player, run ----------------------------------------------------------------------------

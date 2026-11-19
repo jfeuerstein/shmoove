@@ -14,15 +14,19 @@ import {
   emitFx,
   FX_POP,
   KINDS,
+  makeWake,
   MARK_SWEPT,
   MAX_ENEMIES,
   MAX_ENEMY_RADIUS,
   queryEnemies,
   SPAWN_TICKS,
+  WAKE_MAX,
+  type Wake,
   type World,
 } from './world';
 
-export const WAKE_MAX = 128;
+export { makeWake, WAKE_MAX, type Wake };
+
 /** Metres between trail points. */
 export const WAKE_STEP = 1.25;
 /** The newest points are under the mover; they do not burn. */
@@ -31,29 +35,6 @@ const WAKE_SKIP_HEAD = 2;
 const BURN_EVERY = 4;
 /** Which enemies the trail has already burnt this burn, so each burns once however many points reach it. */
 const burnt = new Uint8Array(MAX_ENEMIES);
-
-export interface Wake {
-  /** Points [0, count), oldest first. */
-  count: number;
-  x: Float32Array;
-  y: Float32Array;
-  z: Float32Array;
-  /** The run tick each point was laid on. */
-  born: Int32Array;
-  /** Unused distance toward the next point (kept for the renderer's dashes). */
-  acc: number;
-}
-
-export function makeWake(): Wake {
-  return {
-    count: 0,
-    x: new Float32Array(WAKE_MAX),
-    y: new Float32Array(WAKE_MAX),
-    z: new Float32Array(WAKE_MAX),
-    born: new Int32Array(WAKE_MAX),
-    acc: 0,
-  };
-}
 
 function drop(k: Wake, n: number): void {
   if (n <= 0) return;
