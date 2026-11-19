@@ -194,10 +194,13 @@ describe('levels', () => {
     addSpark(sim, sim.state.mover.x, sim.state.mover.z, 60, 1);
     const counts = new Map<number, number>();
     stepCounting(sim, TUCK, 5, counts);
-    // 5 + 10 + 13 + 16 = 44 <= 60 < 63.
+    // Four levels' worth, whatever the curve is, with the rest left over.
+    const four = xpForLevel(1) + xpForLevel(2) + xpForLevel(3) + xpForLevel(4);
+    expect(four).toBeLessThanOrEqual(60);
+    expect(four + xpForLevel(5)).toBeGreaterThan(60);
     expect(p.level).toBe(5);
     expect(counts.get(FX_LEVEL_UP)).toBe(4);
-    expect(p.xp).toBeCloseTo(60 - 44, 4);
+    expect(p.xp).toBeCloseTo(60 - four, 4);
     expect(p.seekersLevel).toBe(2);
     expect(p.wakeLevel).toBe(3);
   });

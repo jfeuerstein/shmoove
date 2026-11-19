@@ -135,6 +135,26 @@ describe('a bollard', () => {
     expect(sim.state.mover.z).toBeLessThan(10);
   });
 
+  it('takes your gears with your speed: stopped against it, you do not plow what touches you next', () => {
+    const sim = arena();
+    place(sim, KIND_BOLLARD, 0, 10);
+    launch(sim, 20);
+    while (sim.world.player.hp === 100) sim.step(TUCK);
+    // Stopped dead: the gear went with the speed, on the same tick.
+    expect(sim.state.mover.speed).toBeLessThan(FEEL.bonkBounce + 0.5);
+    expect(sim.state.mover.gear).toBe(1);
+
+    // And a gear the mover still shows but no longer has the speed for does not plow either.
+    const slow = arena();
+    place(slow, KIND_SHUFFLER, 0, 1.5);
+    launch(slow, 3);
+    slow.state.mover.gear = 4;
+    slow.state.mover.gearHold = 0;
+    run(slow, FORWARD, 30);
+    expect(slow.world.player.hp).toBeLessThan(100);
+    expect(slow.world.player.kills).toBe(0);
+  });
+
   it('shatters in gear 5', () => {
     const sim = arena();
     place(sim, KIND_BOLLARD, 0, 10);
@@ -179,6 +199,20 @@ describe('the run', () => {
     expect(sim.state.mover.z).toBe(sim.terrain.spawnZ);
     run(sim, FORWARD, 60);
     expect(sim.state.mover.z).toBeGreaterThan(5);
+  });
+
+  it('counts what you killed on the tick you died', () => {
+    const sim = arena();
+    sim.world.player.hp = 1;
+    // In gear 3 a shuffler is plowed and a bollard right behind it is not.
+    place(sim, KIND_SHUFFLER, 0, 6);
+    place(sim, KIND_BOLLARD, 0, 6 + 1.6);
+    launch(sim, 16);
+    run(sim, TUCK, 60);
+    expect(sim.world.run.phase).toBe(PHASE_DEAD);
+    expect(sim.world.player.kills).toBe(1);
+    expect(sim.world.horde.count).toBe(1);
+    expect(sim.state.mover.speed).toBe(0);
   });
 
   it('is won when the clock runs out', () => {

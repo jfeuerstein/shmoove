@@ -1,10 +1,11 @@
 /** What a player would notice about the Wake: the trail burns, and a closed loop pops. */
 import { describe, expect, it } from 'vitest';
+import { gearPower, WAKE } from '../../src/sim/balance';
 import { FEEL } from '../../src/sim/constants';
 import type { Sim } from '../../src/sim/sim';
 import { wakeLength, WAKE_STEP } from '../../src/sim/wake';
 import { damageEnemy, KIND_BOLLARD, KIND_SHUFFLER, KINDS } from '../../src/sim/world';
-import { FORWARD, run, steer } from './fixtures';
+import { FORWARD, run, steer, TUCK } from './fixtures';
 import { arena, FX_POP, place, root, stepCounting } from './world-fixtures';
 
 /** A steady left-hand circle with a circumference inside the trail's length. */
@@ -78,6 +79,37 @@ describe('the trail', () => {
     expect(sim.world.horde.count).toBe(1);
     expect(sim.world.horde.hp[0]).toBe(KINDS[KIND_SHUFFLER].hp);
     expect(far).toBe(1);
+  });
+
+  it('burns at its stated rate, however fast you ride and however many trail points are near', () => {
+    const rate = (speed: number): number => {
+      const sim = arena();
+      const b = place(sim, KIND_BOLLARD, 0, 60);
+      // Ride a long way past it first, so the trail is steady, then lay trail right beside it.
+      sim.state.mover.z = 30;
+      sim.state.mover.x = KINDS[KIND_BOLLARD].radius + 0.9;
+      let burning = 0;
+      const before = KINDS[KIND_BOLLARD].hp;
+      for (let t = 0; t < 600; t++) {
+        root(sim.world);
+        // Hold the speed so only the trail's geometry differs between rides.
+        const m = sim.state.mover;
+        m.vx = 0;
+        m.vz = speed;
+        const hp = sim.world.horde.hp[b];
+        sim.step(TUCK);
+        if (sim.world.horde.hp[b] < hp) burning++;
+      }
+      const lost = before - sim.world.horde.hp[b];
+      // Damage per second while it was burning (a burn lands every fourth tick), with the gear's
+      // power taken out so rides at different speeds compare.
+      return lost / ((burning * 4) / 60) / gearPower(sim.state.mover.gear);
+    };
+    const stated = WAKE.burnDps[0];
+    for (const speed of [9, 20]) {
+      expect(rate(speed)).toBeGreaterThan(stated * 0.9);
+      expect(rate(speed)).toBeLessThan(stated * 1.1);
+    }
   });
 
   it('a straight line never pops', () => {
@@ -181,6 +213,17 @@ describe('the loop', () => {
     expect(sim.world.player.kills).toBe(1);
     expect(s.count).toBe(1);
     expect(s.pull[0]).toBe(0);
+  });
+
+  it('a strip beside your own trail is not a loop', () => {
+    const sim = arena();
+    const counts = new Map<number, number>();
+    // Out, a tight U-turn, and back alongside the way out.
+    stepCounting(sim, FORWARD, 150, counts);
+    stepCounting(sim, steer(-1, 0), 55, counts);
+    stepCounting(sim, FORWARD, 150, counts);
+    expect(counts.get(FX_POP) ?? 0).toBe(0);
+    expect(sim.world.player.pops).toBe(0);
   });
 
   it('hits harder in a higher gear', () => {

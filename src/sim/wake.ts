@@ -15,6 +15,8 @@ import {
   FX_POP,
   KINDS,
   MARK_SWEPT,
+  MAX_ENEMIES,
+  MAX_ENEMY_RADIUS,
   queryEnemies,
   SPAWN_TICKS,
   type World,
@@ -25,10 +27,10 @@ export const WAKE_MAX = 128;
 export const WAKE_STEP = 1.25;
 /** The newest points are under the mover; they do not burn. */
 const WAKE_SKIP_HEAD = 2;
-/** Each point burns every this many ticks. */
+/** The whole trail burns once every this many ticks. */
 const BURN_EVERY = 4;
-/** The widest enemy, for query padding, m. */
-const PAD = 1.5;
+/** Which enemies the trail has already burnt this burn, so each burns once however many points reach it. */
+const burnt = new Uint8Array(MAX_ENEMIES);
 
 export interface Wake {
   /** Points [0, count), oldest first. */
@@ -86,6 +88,13 @@ function inLoop(k: Wake, from: number, to: number, px: number, pz: number): bool
   return inside;
 }
 
+/** Area enclosed by trail points [from, to], m2. */
+function loopArea(k: Wake, from: number, to: number): number {
+  let twice = 0;
+  for (let i = from, j = to; i <= to; j = i++) twice += k.x[j] * k.z[i] - k.x[i] * k.z[j];
+  return twice < 0 ? -twice / 2 : twice / 2;
+}
+
 /** The trail point the newest point has come back to, closing a loop; -1 if none. */
 function closure(k: Wake): number {
   const n = k.count - 1;
@@ -137,14 +146,14 @@ function pop(w: World, from: number, power: number): void {
 
   const h = w.horde;
   const damage = WAKE.popDamage[w.player.wakeLevel - 1] * power;
-  const n = queryEnemies(w, cx, cz, radius + PAD, w.nearA);
+  const n = queryEnemies(w, cx, cz, radius + MAX_ENEMY_RADIUS, w.nearA);
   let killed = 0;
   for (let q = 0; q < n; q++) {
     const i = w.nearA[q];
     if (h.hp[i] <= 0 || h.age[i] < SPAWN_TICKS) continue;
     if (!inLoop(k, from, to, h.x[i], h.z[i])) continue;
     h.mark[i] |= MARK_SWEPT;
-    damageEnemy(w, i, damage);
+    damageEnemy(w, i, damage, true);
     if (h.hp[i] <= 0) killed++;
   }
 
@@ -203,24 +212,29 @@ export function stepWake(w: World, s: SimState): void {
   // Close.
   if (laid && k.count >= 4) {
     const j = closure(k);
-    if (j >= 0) pop(w, j, power);
+    if (j >= 0 && loopArea(k, j, k.count - 1) >= FEEL.wakeLoopMinArea) pop(w, j, power);
   }
 
-  // Burn. Each point takes its turn every BURN_EVERY ticks, so the cost is spread.
+  // Burn, once every BURN_EVERY ticks: everything within the trail's width takes one burn, however
+  // many trail points it is near, so the rate is the stated one at any speed.
+  if (now % BURN_EVERY !== 0) return;
   const h = w.horde;
   const burn = (WAKE.burnDps[level - 1] * power * BURN_EVERY) / TICK_HZ;
   const last = k.count - WAKE_SKIP_HEAD;
-  for (let p = now % BURN_EVERY; p < last; p += BURN_EVERY) {
+  burnt.fill(0, 0, h.count);
+  for (let p = 0; p < last; p++) {
     const px = k.x[p];
     const pz = k.z[p];
-    const n = queryEnemies(w, px, pz, FEEL.wakeWidth + PAD, w.nearA);
+    const n = queryEnemies(w, px, pz, FEEL.wakeWidth + MAX_ENEMY_RADIUS, w.nearA);
     for (let q = 0; q < n; q++) {
       const i = w.nearA[q];
-      if (h.hp[i] <= 0 || h.age[i] < SPAWN_TICKS) continue;
+      if (burnt[i] !== 0 || h.hp[i] <= 0 || h.age[i] < SPAWN_TICKS) continue;
       const reach = FEEL.wakeWidth + KINDS[h.kind[i]].radius;
       const dx = h.x[i] - px;
       const dz = h.z[i] - pz;
-      if (dx * dx + dz * dz <= reach * reach) damageEnemy(w, i, burn);
+      if (dx * dx + dz * dz > reach * reach) continue;
+      burnt[i] = 1;
+      damageEnemy(w, i, burn, true);
     }
   }
 }

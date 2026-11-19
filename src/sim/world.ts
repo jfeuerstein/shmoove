@@ -6,6 +6,7 @@
  * removing one moves the last into its place. Indices are therefore only stable within a tick, and
  * only until `reapHorde`. Nothing here allocates after `makeWorld`.
  */
+import { xpForLevel } from './balance';
 import { Rng } from './rng';
 import { makeWake, type Wake } from './wake';
 
@@ -48,6 +49,9 @@ export const KINDS: readonly EnemyKind[] = [
   { name: 'gnat', radius: 0.35, height: 0.6, speed: 8.5, accel: 18, hp: 2, damage: 3, weight: WEIGHT_LIGHT, xp: 0.5 },
   { name: 'bollard', radius: 1.3, height: 2.4, speed: 1.6, accel: 3, hp: 120, damage: 15, weight: WEIGHT_HEAVY, xp: 12 },
 ];
+
+/** The widest enemy, m. Every query that must reach an enemy's edge pads by this. */
+export const MAX_ENEMY_RADIUS = KINDS.reduce((r, k) => (k.radius > r ? k.radius : r), 0);
 
 /** Ticks an enemy takes to rise out of the ground; it cannot touch or be touched before. */
 export const SPAWN_TICKS = 36;
@@ -206,7 +210,7 @@ function makePlayer(): Player {
     maxHp: 100,
     invuln: 0,
     xp: 0,
-    xpNext: 5,
+    xpNext: xpForLevel(1),
     level: 1,
     kills: 0,
     wakeLevel: 1,
@@ -350,13 +354,17 @@ export function removeEnemy(w: World, i: number): void {
 
 const FLASH_TICKS = 6;
 
-/** Hurt an enemy. It stays in the horde until `reapHorde`, so indices hold for the rest of the tick. */
-export function damageEnemy(w: World, i: number, amount: number): void {
+/**
+ * Hurt an enemy. It stays in the horde until `reapHorde`, so indices hold for the rest of the tick.
+ * `quiet` skips the hit effect, for damage that lands on many enemies at once (burn, pop): the
+ * effect queue is small and the rare effects must not be crowded out.
+ */
+export function damageEnemy(w: World, i: number, amount: number, quiet = false): void {
   const h = w.horde;
   if (h.hp[i] <= 0) return;
   h.hp[i] -= amount;
   h.flash[i] = FLASH_TICKS;
-  emitFx(w, FX_ENEMY_HIT, h.x[i], h.y[i], h.z[i], amount);
+  if (!quiet) emitFx(w, FX_ENEMY_HIT, h.x[i], h.y[i], h.z[i], amount);
 }
 
 /** Throw an enemy along (dx, dz) (need not be unit) at `speed`, harmless for `stun` ticks. */
@@ -458,26 +466,59 @@ export function nearestEnemy(w: World, x: number, z: number, r: number): number 
   return best;
 }
 
-/** A cheap fingerprint of the world, for determinism tests. */
+/** A fingerprint of the world, for determinism tests. Covers everything a later tick can depend on. */
 export function hashWorld(w: World): number {
   const h = w.horde;
   const p = w.player;
-  let a = (0x811c9dc5 ^ h.count ^ (w.sparks.count << 10) ^ (w.shots.count << 20)) >>> 0;
+  const sp = w.sparks;
+  const sh = w.shots;
+  const k = w.wake;
+  let a = (0x811c9dc5 ^ h.count ^ (sp.count << 10) ^ (sh.count << 20)) >>> 0;
   const mix = (v: number): void => {
     a = Math.imul(a ^ (Math.round(v * 1024) | 0), 0x01000193) >>> 0;
   };
   for (let i = 0; i < h.count; i++) {
+    mix(h.kind[i]);
     mix(h.x[i]);
     mix(h.z[i]);
+    mix(h.vx[i]);
+    mix(h.vz[i]);
     mix(h.hp[i]);
+    mix(h.age[i]);
+    mix(h.stun[i]);
+    mix(h.mark[i]);
   }
-  for (let i = 0; i < w.sparks.count; i++) mix(w.sparks.x[i] + w.sparks.z[i]);
+  for (let i = 0; i < sp.count; i++) {
+    mix(sp.x[i]);
+    mix(sp.y[i]);
+    mix(sp.z[i]);
+    mix(sp.value[i]);
+    mix(sp.pull[i]);
+  }
+  for (let i = 0; i < sh.count; i++) {
+    mix(sh.x[i]);
+    mix(sh.y[i]);
+    mix(sh.z[i]);
+    mix(sh.vx[i]);
+    mix(sh.vz[i]);
+    mix(sh.life[i]);
+    mix(sh.damage[i]);
+  }
+  for (let i = 0; i < k.count; i++) {
+    mix(k.x[i]);
+    mix(k.z[i]);
+    mix(k.born[i]);
+  }
+  mix(w.seekerMeter);
   mix(p.hp);
+  mix(p.invuln);
   mix(p.xp);
   mix(p.level);
   mix(p.kills);
+  mix(p.wakeLevel);
+  mix(p.seekersLevel);
+  mix(p.pops);
   mix(w.run.ticks);
   mix(w.run.phase);
-  mix(w.wake.count);
   return a;
 }

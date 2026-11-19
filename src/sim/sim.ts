@@ -72,7 +72,11 @@ function stepWorld(w: World, s: SimState, terrain: Terrain): void {
   stepHorde(w, s, terrain);
   rebuildGrid(w);
   stepContact(w, s);
-  if (w.run.phase !== PHASE_PLAY) return;
+  if (w.run.phase !== PHASE_PLAY) {
+    // The player's last tick: what they killed on it still counts.
+    reapHorde(w);
+    return;
+  }
   stepWake(w, s);
   stepSeekers(w, s, terrain);
   reapHorde(w);
@@ -80,6 +84,14 @@ function stepWorld(w: World, s: SimState, terrain: Terrain): void {
 
   w.run.ticks++;
   if (w.run.ticks >= RUN_TICKS) w.run.phase = PHASE_WON;
+}
+
+/** The run is over: the mover stands where it is. */
+function stopMover(m: MoverState): void {
+  m.vx = 0;
+  m.vy = 0;
+  m.vz = 0;
+  m.speed = 0;
 }
 
 /**
@@ -116,7 +128,10 @@ export class Sim {
     }
     stepMover(s, input, this.terrain);
     stepGear(s);
-    if (this.horde) stepWorld(this.world, s, this.terrain);
+    if (this.horde) {
+      stepWorld(this.world, s, this.terrain);
+      if (this.world.run.phase !== PHASE_PLAY) stopMover(s.mover);
+    }
     s.tick++;
   }
 

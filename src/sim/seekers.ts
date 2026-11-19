@@ -7,7 +7,17 @@ import { DT } from './constants';
 import { dcos, dsin } from './math';
 import type { Terrain } from './terrain';
 import type { SimState } from './types';
-import { damageEnemy, emitFx, FX_SHOT, KINDS, MAX_SHOTS, queryEnemies, SPAWN_TICKS, type World } from './world';
+import {
+  damageEnemy,
+  emitFx,
+  FX_SHOT,
+  KINDS,
+  MAX_ENEMY_RADIUS,
+  MAX_SHOTS,
+  queryEnemies,
+  SPAWN_TICKS,
+  type World,
+} from './world';
 
 /** By weapon level 1..5. */
 export const SEEKERS = {
@@ -30,7 +40,7 @@ const HOLD_HEIGHT = 1;
 const HIT_PAD = 0.4;
 const MAX_DARTS = 4;
 /** Widest enemy radius plus the hit pad: how far to look for something a dart has reached. */
-const HIT_QUERY = 1.3 + HIT_PAD;
+const HIT_QUERY = MAX_ENEMY_RADIUS + HIT_PAD;
 
 const COS_TURN = dcos(TURN_RATE * DT);
 const SIN_TURN = dsin(TURN_RATE * DT);

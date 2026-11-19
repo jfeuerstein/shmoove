@@ -8,8 +8,8 @@
  */
 import { gearPower, PLAYER_RADIUS, PLOW_GEAR, RAM_DAMAGE_PER_SPEED } from './balance';
 import { FEEL } from './constants';
-import { gearFloor } from './flow';
-import { len2, len3 } from './math';
+import { gearFloor, gearForSpeed } from './flow';
+import { dcos, dsin, len2, len3 } from './math';
 import { EV_GEAR_DOWN, type MoverState, type SimState } from './types';
 import {
   damageEnemy,
@@ -18,6 +18,7 @@ import {
   FX_PLAYER_HIT,
   FX_PLOW,
   KINDS,
+  MAX_ENEMY_RADIUS,
   PHASE_DEAD,
   queryEnemies,
   shoveEnemy,
@@ -27,7 +28,7 @@ import {
 } from './world';
 
 /** Widest enemy plus the mover, for the query, m. */
-const REACH = 1.5 + PLAYER_RADIUS;
+const REACH = MAX_ENEMY_RADIUS + PLAYER_RADIUS;
 /** Share of an enemy's height the mover must clear to pass over it in the air. */
 const CLEAR = 0.6;
 const PLOW_STUN_TICKS = 24;
@@ -62,6 +63,7 @@ export function hurtPlayer(w: World, s: SimState, damage: number): void {
   const n = queryEnemies(w, m.x, m.z, FEEL.hitShoveRadius, w.nearB);
   for (let q = 0; q < n; q++) {
     const i = w.nearB[q];
+    if (h.hp[i] <= 0 || h.age[i] < SPAWN_TICKS) continue;
     if (KINDS[h.kind[i]].weight === WEIGHT_HEAVY) continue;
     shoveEnemy(w, i, h.x[i] - m.x, h.z[i] - m.z, FEEL.hitShoveSpeed, FEEL.hitStunTicks);
   }
@@ -93,7 +95,10 @@ export function stepContact(w: World, s: SimState): void {
     const speed = len3(m.vx, m.vy, m.vz);
     const hs = len2(m.vx, m.vz);
 
-    if (m.gear >= PLOW_GEAR[kind.weight]) {
+    // Plowing takes the gear and the speed that earns it: a gear the mover is about to lose (it has
+    // just been stopped by something) does not plow.
+    const plowGear = PLOW_GEAR[kind.weight];
+    if (m.gear >= plowGear && speed >= gearFloor(plowGear) - FEEL.gearHyst) {
       // Through it.
       const heavy = kind.weight === WEIGHT_HEAVY;
       damageEnemy(w, i, heavy ? h.hp[i] : speed * RAM_DAMAGE_PER_SPEED * gearPower(m.gear));
@@ -111,9 +116,21 @@ export function stepContact(w: World, s: SimState): void {
 
     if (kind.weight === WEIGHT_HEAVY) {
       // A wall: out of it, and stopped.
+      // The way out is straight back from its centre; if the mover is exactly on it, back the way
+      // it came, or failing that back along its heading.
       const d = Math.sqrt(d2);
-      const nx = d > 1e-6 ? -dx / d : -m.vx / (hs > 1e-6 ? hs : 1);
-      const nz = d > 1e-6 ? -dz / d : -m.vz / (hs > 1e-6 ? hs : 1);
+      let nx: number;
+      let nz: number;
+      if (d > 1e-6) {
+        nx = -dx / d;
+        nz = -dz / d;
+      } else if (hs > 1e-6) {
+        nx = -m.vx / hs;
+        nz = -m.vz / hs;
+      } else {
+        nx = -dsin(m.heading);
+        nz = -dcos(m.heading);
+      }
       m.x = h.x[i] + nx * touch;
       m.z = h.z[i] + nz * touch;
       m.vx = nx * FEEL.bonkBounce;
@@ -122,6 +139,13 @@ export function stepContact(w: World, s: SimState): void {
       h.stun[i] = 12;
       emitFx(w, FX_BONK, h.x[i], h.y[i], h.z[i], h.kind[i]);
       if (p.invuln === 0) hurtPlayer(w, s, kind.damage);
+      // Stopped dead means the gears go too, at once.
+      const now = gearForSpeed(len3(m.vx, m.vy, m.vz));
+      if (now < m.gear) {
+        m.gear = now;
+        m.gearHold = 0;
+        s.events |= EV_GEAR_DOWN;
+      }
       continue;
     }
 
