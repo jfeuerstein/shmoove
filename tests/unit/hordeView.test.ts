@@ -2,7 +2,7 @@ import type { InstancedMesh } from 'three';
 import { describe, expect, it } from 'vitest';
 import { bollardGeometry, gnatGeometry, HordeView, shufflerGeometry } from '../../src/render/hordeView';
 import { DT } from '../../src/sim/constants';
-import { KIND_BOLLARD, KIND_GNAT, KIND_SHUFFLER, makeWorld, removeEnemy, SPAWN_TICKS, spawnEnemy, type World } from '../../src/sim/world';
+import { KIND_BOLLARD, KIND_GNAT, KIND_SHUFFLER, KINDS, makeWorld, removeEnemy, SPAWN_TICKS, spawnEnemy, type World } from '../../src/sim/world';
 
 /** Column-major instance matrix `n` of a mesh. */
 function matrix(mesh: InstancedMesh, n: number): number[] {
@@ -164,13 +164,13 @@ describe('HordeView', () => {
 
   it('passes phase, speed and the hit flash to the shader per instance', () => {
     const w = makeWorld(3);
-    const i = add(w, KIND_SHUFFLER, 0, 0, 0, 2.25, 0);
+    const i = add(w, KIND_SHUFFLER, 0, 0, 0, KINDS[KIND_SHUFFLER].speed / 2, 0);
     w.horde.flash[i] = 6;
     const view = new HordeView();
     view.update(w, 1, 0, 0, 0);
     const anim = view.meshes[KIND_SHUFFLER].geometry.getAttribute('aAnim');
     expect(anim.getX(0)).toBeCloseTo(w.horde.phase[i], 6);
-    expect(anim.getY(0)).toBeCloseTo(0.5, 5); // half the shuffler's 4.5 m/s
+    expect(anim.getY(0)).toBeCloseTo(0.5, 5); // half the shuffler's top speed
     expect(anim.getZ(0)).toBe(1);
     w.horde.flash[i] = 0;
     view.update(w, 1, 0, 0, 0);

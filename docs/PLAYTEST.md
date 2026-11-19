@@ -144,6 +144,53 @@ the clean-hop bonus, the speed limit) are not on this list.
 | `camPosRate` | 9 /s | the camera drifts behind, floaty | every bump shakes the camera |
 | `camLandKick` | 0.05 m per m/s | landings have no weight | landings shake the screen |
 
+## The horde slice (M2)
+
+The game link opens straight into a three-minute run: the horde rises around you, contact below
+gear 3 hurts, the trail behind you burns, closing a loop pops everything inside it, and Seekers fire
+by distance once the first level grants them. `?solo` gives the bowl without the horde.
+
+Play three runs, on the scheme you picked:
+
+1. **Hold the stick and dodge.** Stay in gear 2, never tuck. Notice: how long until the first hit,
+   and is it fair (did you see it coming)? After a hit, does the shove give you room to get away,
+   or are you hit again before you can steer? Is the first level-up (Seekers) soon enough that you
+   can hurt what is in front of you?
+2. **Loop.** When a crowd follows you, turn round it and close the trail. Notice: can you tell
+   when a loop will close? Does a pop feel worth the risk of turning into the crowd? Is the trail's
+   length in gear 2 enough to circle a crowd without touching it?
+3. **Ride lines.** Tuck downhill, chain hops, use pads and pipes, plow through the small ones in
+   gear 3. Notice above all **what happens when you drop out of gear 3 in the middle of a crowd**:
+   the bots say this is where line riders take most of their hits. Does gear 3 and up feel safe,
+   or does the run feel the same as the dodging one? Does a bollard ever stop you without warning?
+
+For every run: when you die, was it the horde getting bigger or something you did? A thumb's
+answer to that is the most useful thing this slice can tell us.
+
+### combat
+
+| Constant | Now | Too low feels like | Too high feels like |
+| --- | --- | --- | --- |
+| `invulnTicks` | 48 ticks (0.8 s) | hit after hit with no time to steer away | brushing through a crowd after a hit is free |
+| `hitShoveRadius` | 7 m | after a hit you are still touching the crowd | a hit clears the screen; getting hit is a tactic |
+| `hitShoveSpeed` | 12 m/s | the shove is a nudge; the crowd closes again at once | enemies fly away like ragdolls |
+| `hitStunTicks` | 44 ticks | thrown enemies come straight back at you | after a hit the crowd stands about harmless for too long |
+| `plowSpeedCost` | 0.25 m/s | plowing a crowd costs nothing; gear 3 is armour | plowing a few drops you out of gear 3, into the crowd |
+| `plowShove` | 7 m/s | plowed enemies stay in your path | plowed enemies fly off; no sense of mass |
+| `bonkBounce` | 3 m/s | a bollard is glue | a bollard is a trampoline |
+
+### wake
+
+| Constant | Now | Too low feels like | Too high feels like |
+| --- | --- | --- | --- |
+| `wakeLength` | 34 m | no room to circle anything in gear 1 and 2 | loops close by accident; the trail is a wall |
+| `wakeLengthPerGear` | 5 m | going fast does not help looping | at speed the trail covers the map |
+| `wakeLifeTicks` | 420 ticks (7 s) | the trail vanishes before you can come back to it | an old trail closes loops you did not mean |
+| `wakeWidth` | 1.1 m | enemies cross the trail unburnt | the trail is a moat |
+| `wakeCloseDist` | 2.6 m | you pass right by your trail and it does not close | loops close when you were only near the trail |
+| `wakeLoopMinArea` | 18 m² | a thin strip beside your own trail pops | small, honest loops do not count |
+| `wakeLoopMin` | 16 m | tiny wiggles pop | you need a huge circle before anything pops |
+
 ## Sending it back
 
 In the panel, press **Copy changes**. It copies the scheme you were on and every number you moved,

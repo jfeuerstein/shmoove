@@ -191,16 +191,15 @@ describe('levels', () => {
   it('several levels from one big spark all happen', () => {
     const sim = arena();
     const p = sim.world.player;
-    addSpark(sim, sim.state.mover.x, sim.state.mover.z, 60, 1);
+    // Four levels' worth, whatever the curve is, with half of the fifth left over.
+    const four = xpForLevel(1) + xpForLevel(2) + xpForLevel(3) + xpForLevel(4);
+    const big = four + Math.floor(xpForLevel(5) / 2);
+    addSpark(sim, sim.state.mover.x, sim.state.mover.z, big, 1);
     const counts = new Map<number, number>();
     stepCounting(sim, TUCK, 5, counts);
-    // Four levels' worth, whatever the curve is, with the rest left over.
-    const four = xpForLevel(1) + xpForLevel(2) + xpForLevel(3) + xpForLevel(4);
-    expect(four).toBeLessThanOrEqual(60);
-    expect(four + xpForLevel(5)).toBeGreaterThan(60);
     expect(p.level).toBe(5);
     expect(counts.get(FX_LEVEL_UP)).toBe(4);
-    expect(p.xp).toBeCloseTo(60 - four, 4);
+    expect(p.xp).toBeCloseTo(big - four, 4);
     expect(p.seekersLevel).toBe(2);
     expect(p.wakeLevel).toBe(3);
   });
