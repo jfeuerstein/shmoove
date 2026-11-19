@@ -1,0 +1,68 @@
+.end {
+  position: fixed;
+  left: calc(env(safe-area-inset-left, 0px) + 16px);
+  right: calc(env(safe-area-inset-right, 0px) + 16px);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 28px);
+  box-sizing: border-box;
+  padding: 22px 20px 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  border-radius: 20px;
+  background: rgba(27, 22, 48, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: #fff;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  text-shadow: none;
+  line-height: 1.1;
+  z-index: 30;
+  transform: translateY(130%);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: transform 0.35s cubic-bezier(0.2, 0.9, 0.25, 1), opacity 0.25s ease-out, visibility 0s linear 0.35s;
+  touch-action: none;
+}
+
+.end-show {
+  transform: translateY(0);
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transition: transform 0.35s cubic-bezier(0.2, 0.9, 0.25, 1), opacity 0.25s ease-out, visibility 0s;
+}
+
+.end-title {
+  font-size: 34px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-align: center;
+  margin-bottom: 6px;
+}
+
+.end-row {
+  font-size: 17px;
+  font-weight: 600;
+  white-space: pre;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.9;
+}
+
+.end-again {
+  margin-top: 12px;
+  min-height: 64px;
+  border: 0;
+  border-radius: 16px;
+  color: #fff;
+  font: 900 26px/1 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  letter-spacing: 0.2em;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.end-again:active {
+  filter: brightness(1.15);
+  transform: scale(0.98);
+}
