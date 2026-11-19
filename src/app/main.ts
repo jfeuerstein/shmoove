@@ -6,10 +6,15 @@
  * render.
  */
 import { ChaseCamera } from '../render/camera';
+import { FxView } from '../render/fxView';
+import { HordeView } from '../render/hordeView';
 import { PALETTE } from '../render/look';
 import { MoverView } from '../render/moverView';
 import { GameScene } from '../render/scene';
+import { ShotsView } from '../render/shotsView';
+import { SparksView } from '../render/sparksView';
 import { makeTerrainView } from '../render/terrainView';
+import { WakeView } from '../render/wakeView';
 import type { InputSource, Scheme } from '../input/source';
 import { TouchInput } from '../input/touch';
 import { DT } from '../sim/constants';
@@ -21,6 +26,8 @@ import { DebugPanel } from '../ui/debugPanel';
 import { EndScreen } from '../ui/endScreen';
 import { Hud } from '../ui/hud';
 import { StickView } from '../ui/stickView';
+import { ThreatView } from '../ui/threat';
+import { applyFixture } from './fixtures';
 import { FixedStepper, FrameStats, RafDriver } from './loop';
 import { parseParams, type Params } from './params';
 import { setupPlatform } from './platform';
@@ -63,6 +70,7 @@ function boot(): void {
 
   const terrain = makeTerrain(params);
   const sim = new Sim(terrain, { seed: params.seed, horde: !params.flat && !params.solo });
+  if (params.horde > 0 || params.sparks > 0) applyFixture(sim, params.horde, params.sparks);
   const hookInput = new HookInput();
   const frameInput = makeInputFrame();
 
@@ -74,10 +82,19 @@ function boot(): void {
   view.scene.add(makeTerrainView(terrain));
   const mover = new MoverView();
   view.scene.add(mover.object);
+  // The horde, sparks, shots, the Wake and effects: drawn from the world, never writing it.
+  const horde = new HordeView();
+  const sparks = new SparksView();
+  const shots = new ShotsView();
+  const wake = new WakeView();
+  const fx = new FxView(terrain);
+  const groundAt = (x: number, z: number): number => terrain.heightAt(x, z);
+  view.scene.add(wake.mesh, horde.object, sparks.mesh, shots.mesh, fx.object);
   const chase = new ChaseCamera(view.camera);
   const hudRoot = document.getElementById('hud') ?? document.body;
   const hud = new Hud(hudRoot, { run: sim.horde, debug: params.debug });
   const stick = new StickView(hudRoot, touch.gestures);
+  const threat = new ThreatView(hudRoot);
   const panel = params.debug ? new DebugPanel(hudRoot, settings, (s) => touch.setScheme(s)) : null;
 
   const stepper = new FixedStepper(DT);
@@ -98,6 +115,7 @@ function boot(): void {
     const t0 = performance.now();
     input.sample(frameInput);
     sim.step(frameInput);
+    fx.ingest(sim.world);
     stepMs += performance.now() - t0;
     steps++;
   };
@@ -105,6 +123,18 @@ function boot(): void {
   const draw = (alpha: number, dt: number): void => {
     mover.update(sim.prev, sim.state, alpha, terrain);
     chase.update(sim.prev, sim.state, alpha, dt, terrain);
+    const w = sim.world;
+    const a = sim.prev.mover;
+    const b = sim.state.mover;
+    const mx = a.x + (b.x - a.x) * alpha;
+    const mz = a.z + (b.z - a.z) * alpha;
+    const now = performance.now() / 1000;
+    horde.update(w, alpha, now, mx, mz);
+    sparks.update(w, now);
+    shots.update(w, alpha);
+    wake.update(w.wake, mx, mz, groundAt);
+    fx.update(dt);
+    threat.update(w, sim.state, view.camera, dt, fx.hitTint, window.innerWidth, window.innerHeight);
     hud.update(sim);
     if (sim.horde) endScreen.update(sim.world, dt);
     stick.update();

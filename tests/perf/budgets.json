@@ -3,5 +3,9 @@
   "stepMs": 1,
   "drawCalls": 30,
   "triangles": 120000,
-  "jsGzipKb": 400
+  "jsGzipKb": 400,
+  "hordeFrameMs": 8,
+  "hordeStepMs": 2,
+  "hordeDrawCalls": 20,
+  "hordeTriangles": 110000
 }

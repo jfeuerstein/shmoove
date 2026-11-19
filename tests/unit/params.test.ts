@@ -4,7 +4,7 @@ import { parseParams } from '../../src/app/params';
 describe('parseParams', () => {
   it('has defaults for an empty query', () => {
     for (const q of ['', '?']) {
-      expect(parseParams(q)).toEqual({ debug: false, hook: false, perf: false, flat: false, solo: false, seed: 1, scheme: 'tuck' });
+      expect(parseParams(q)).toEqual({ debug: false, hook: false, perf: false, flat: false, solo: false, seed: 1, scheme: 'tuck', horde: 0, sparks: 0 });
     }
   });
 
@@ -48,6 +48,19 @@ describe('parseParams', () => {
     expect(parseParams('?scheme=SWIPE').scheme).toBe('swipe');
     for (const bad of ['', 'tap', 'lifts', 'toString', '__proto__']) {
       expect(parseParams(`?scheme=${bad}`).scheme, bad).toBe('tuck');
+    }
+  });
+
+  it('reads the crowd fixture counts as non-negative integers', () => {
+    const p = parseParams('?horde=400&sparks=600');
+    expect(p.horde).toBe(400);
+    expect(p.sparks).toBe(600);
+    expect(parseParams('?horde= 12 ').horde).toBe(12);
+    expect(parseParams('?horde=+5').horde).toBe(5);
+    expect(parseParams('?sparks=0').sparks).toBe(0);
+    for (const bad of ['', '-3', '1.5', 'abc', '1e3', '0x10', 'Infinity', '99999999999999999999']) {
+      expect(parseParams(`?horde=${encodeURIComponent(bad)}`).horde, bad).toBe(0);
+      expect(parseParams(`?sparks=${encodeURIComponent(bad)}`).sparks, bad).toBe(0);
     }
   });
 
