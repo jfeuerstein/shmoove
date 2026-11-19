@@ -4,6 +4,8 @@ import { stepGear } from './flow';
 import { makeMover, stepMover } from './mover';
 import type { Terrain } from './terrain';
 import type { InputFrame, MoverState, SimState } from './types';
+import { stepSeekers } from './seekers';
+import { stepSparks } from './sparks';
 import { stepWake } from './wake';
 import { makeWorld, PHASE_PLAY, PHASE_WON, reapHorde, rebuildGrid, resetWorld, type World } from './world';
 
@@ -60,7 +62,7 @@ export interface SimOptions {
  * rebuilt, then everything that hurts enemies runs against stable indices, and only then are the
  * dead removed and their sparks dropped.
  */
-function stepWorld(w: World, s: SimState, _terrain: Terrain): void {
+function stepWorld(w: World, s: SimState, terrain: Terrain): void {
   w.fx.count = 0;
   w.deaths.count = 0;
 
@@ -70,9 +72,9 @@ function stepWorld(w: World, s: SimState, _terrain: Terrain): void {
   stepContact(w, s);
   if (w.run.phase !== PHASE_PLAY) return;
   stepWake(w, s);
-  // [seekers] fires and flies shots
+  stepSeekers(w, s, terrain);
   reapHorde(w);
-  // [sparks] drops, magnet, XP and levels
+  stepSparks(w, s, terrain);
 
   w.run.ticks++;
   if (w.run.ticks >= RUN_TICKS) w.run.phase = PHASE_WON;
