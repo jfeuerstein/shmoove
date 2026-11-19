@@ -53,3 +53,101 @@
 .threat-marker[hidden] {
   display: none;
 }
+
+/* ---- the boss: one big marker in its colour, pointing at it while it is out of frame ---- */
+
+.threat-boss {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  will-change: transform;
+  /* --boss-rgb is set from PALETTE.bosses by threat.ts. */
+}
+
+.threat-boss::before {
+  content: '';
+  position: absolute;
+  left: -22px;
+  top: -20px;
+  width: 44px;
+  height: 38px;
+  background: rgb(var(--boss-rgb, 255, 51, 85));
+  clip-path: polygon(50% 0, 100% 100%, 50% 70%, 0 100%);
+  filter: drop-shadow(0 0 6px rgba(0, 0, 0, 0.75));
+}
+
+/* A ring of the same colour round it, so it reads as more than a chevron. */
+.threat-boss::after {
+  content: '';
+  position: absolute;
+  left: -27px;
+  top: -24px;
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  box-sizing: border-box;
+  border: 3px solid rgba(var(--boss-rgb, 255, 51, 85), 0.55);
+}
+
+/* The Bruiser is telling or charging: it throbs, big and bright, to be seen without looking. */
+.threat-boss-pulse::before {
+  animation: threat-boss-pulse 0.22s ease-in-out infinite alternate;
+}
+
+.threat-boss-pulse::after {
+  animation: threat-boss-ring 0.22s ease-in-out infinite alternate;
+}
+
+@keyframes threat-boss-pulse {
+  0% { transform: scale(1); filter: drop-shadow(0 0 6px rgba(0, 0, 0, 0.75)) brightness(1); }
+  100% { transform: scale(1.45); filter: drop-shadow(0 0 14px rgba(var(--boss-rgb, 255, 51, 85), 0.95)) brightness(1.6); }
+}
+
+@keyframes threat-boss-ring {
+  0% { transform: scale(1); opacity: 0.5; }
+  100% { transform: scale(1.6); opacity: 1; }
+}
+
+.threat-boss[hidden] {
+  display: none;
+}
+
+/* ---- a ring coming from where the rider cannot see: an arc on the edge toward its centre ---- */
+
+.threat-ring {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  will-change: transform;
+  /* --ring-rgb from PALETTE.ring; --cue (0..1) grows as the front nears. */
+}
+
+/* An arc bulging toward the rider, as the near part of the front does. */
+.threat-ring::before {
+  content: '';
+  position: absolute;
+  left: -48px;
+  top: -40px;
+  width: 96px;
+  height: 48px;
+  box-sizing: border-box;
+  border-radius: 0 0 50% 50% / 0 0 100% 100%;
+  border: 0 solid rgb(var(--ring-rgb));
+  border-bottom-width: 7px;
+  transform: scale(calc(0.6 + 0.7 * var(--cue, 0.5)));
+  opacity: calc(0.45 + 0.55 * var(--cue, 0.5));
+  animation: threat-ring-beat 0.18s ease-in-out infinite alternate;
+}
+
+@keyframes threat-ring-beat {
+  0% { filter: drop-shadow(0 0 4px rgba(var(--ring-rgb), 0.6)); }
+  100% { filter: drop-shadow(0 0 12px rgba(var(--ring-rgb), 1)); }
+}
+
+.threat-ring[hidden] {
+  display: none;
+}
