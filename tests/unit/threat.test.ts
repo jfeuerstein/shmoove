@@ -7,11 +7,15 @@ import {
   placeMarker,
   project,
   rightOf,
+  THREAT_FULL,
   THREAT_RANGE,
   threatCount,
+  ThreatView,
   type MarkerPlace,
   type Projected,
 } from '../../src/ui/threat';
+import { Sim } from '../../src/sim/sim';
+import { flatTerrain } from '../../src/sim/terrain';
 import { KIND_SHUFFLER, makeWorld, SPAWN_TICKS, spawnEnemy } from '../../src/sim/world';
 
 const W = 390;
@@ -173,5 +177,80 @@ describe('placeMarker', () => {
         Math.abs(m.y - (H - MARKER_MARGIN)) < 1e-6;
       expect(onEdge).toBe(true);
     }
+  });
+});
+
+/** Just enough of an element for the view to build and write to. */
+class FakeEl {
+  className = '';
+  hidden = false;
+  opacity = '';
+  transform = '';
+  readonly children: FakeEl[] = [];
+  readonly vars = new Map<string, string>();
+  readonly ownerDocument = { createElement: (): FakeEl => new FakeEl() };
+  get style(): FakeEl {
+    return this;
+  }
+  setProperty(k: string, v: string): void {
+    this.vars.set(k, v);
+  }
+  setAttribute(): void {}
+  appendChild(c: FakeEl): FakeEl {
+    this.children.push(c);
+    return c;
+  }
+}
+
+describe('ThreatView glow', () => {
+  function build(): { view: ThreatView; sim: Sim; camera: PerspectiveCamera; glow: FakeEl } {
+    const root = new FakeEl();
+    const view = new ThreatView(root as unknown as HTMLElement);
+    const glow = root.children[0].children[0];
+    const sim = new Sim(flatTerrain(170), { seed: 1, horde: true });
+    sim.world.spawning = false;
+    const camera = new PerspectiveCamera(74, W / H, 0.1, 400);
+    camera.position.set(0, 5.5, -7);
+    camera.lookAt(0, 1, 4);
+    return { view, sim, camera, glow };
+  }
+
+  /** The mover at the origin heading +z, with THREAT_FULL enemies right behind it. */
+  function crowdBehind(sim: Sim): void {
+    sim.state.mover.x = 0;
+    sim.state.mover.z = 0;
+    sim.state.viewYaw = 0;
+    for (let i = 0; i < THREAT_FULL; i++) {
+      const j = spawnEnemy(sim.world, KIND_SHUFFLER, i - 2.5, 0, -6);
+      sim.world.horde.age[j] = SPAWN_TICKS;
+    }
+  }
+
+  it('follows a step change in the count about 63% of the way in a third of a second', () => {
+    const { view, sim, camera } = build();
+    crowdBehind(sim);
+    const frames = 20; // a third of a second at 60 fps
+    for (let f = 0; f < frames; f++) view.update(sim.world, sim.state, camera, 1 / 60, 0, W, H);
+    expect(view.strength).toBeGreaterThan(0.58);
+    expect(view.strength).toBeLessThan(0.68);
+    // It keeps climbing toward full.
+    for (let f = 0; f < 600; f++) view.update(sim.world, sim.state, camera, 1 / 60, 0, W, H);
+    expect(view.strength).toBeGreaterThan(0.99);
+  });
+
+  it('reset zeroes the glow, in the number and on the screen', () => {
+    const { view, sim, camera, glow } = build();
+    crowdBehind(sim);
+    for (let f = 0; f < 120; f++) view.update(sim.world, sim.state, camera, 1 / 60, 0, W, H);
+    expect(view.strength).toBeGreaterThan(0.5);
+    expect(Number(glow.opacity)).toBeGreaterThan(0.5);
+    view.reset();
+    expect(view.strength).toBe(0);
+    expect(glow.opacity).toBe('0');
+    // The next run's empty bowl starts from nothing, not from the old strength.
+    sim.reset();
+    view.update(sim.world, sim.state, camera, 1 / 60, 0, W, H);
+    expect(view.strength).toBe(0);
+    expect(glow.opacity).toBe('0');
   });
 });

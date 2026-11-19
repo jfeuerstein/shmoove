@@ -180,6 +180,20 @@ export class FxView {
     return n;
   }
 
+  /** Drop everything still playing from the last run. */
+  reset(): void {
+    this.hitTint = 0;
+    this.popAge.fill(-1);
+    this.popNext = 0;
+    this.shardCount = 0;
+    this.rings.count = 0;
+    this.rings.visible = false;
+    this.discs.count = 0;
+    this.discs.visible = false;
+    this.shards.count = 0;
+    this.shards.visible = false;
+  }
+
   private rand(): number {
     let t = (this.seed = (this.seed + 0x6d2b79f5) >>> 0);
     t = Math.imul(t ^ (t >>> 15), t | 1);

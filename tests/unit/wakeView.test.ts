@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { RIBBON_POINTS, WAKE_LIFT, WakeView, writeWakeRibbon } from '../../src/render/wakeView';
+import { HEAD_CORE_ALPHA, HEAD_EDGE_ALPHA, RIBBON_POINTS, WAKE_CORE, WAKE_LIFT, WakeView, writeWakeRibbon } from '../../src/render/wakeView';
 import { FEEL } from '../../src/sim/constants';
 import { makeWake, WAKE_STEP, type Wake } from '../../src/sim/wake';
 
@@ -17,7 +17,7 @@ function trail(points: [number, number][]): Wake {
 const ground = (): number => 2;
 
 function buffers(): { pos: Float32Array; col: Float32Array } {
-  return { pos: new Float32Array(RIBBON_POINTS * 6), col: new Float32Array(RIBBON_POINTS * 8) };
+  return { pos: new Float32Array(RIBBON_POINTS * 12), col: new Float32Array(RIBBON_POINTS * 16) };
 }
 
 describe('writeWakeRibbon', () => {
@@ -29,14 +29,18 @@ describe('writeWakeRibbon', () => {
     const n = writeWakeRibbon(k, false, 0, 0, 1.1, ground, pos, col);
     expect(n).toBe(5);
     for (let j = 0; j < n; j++) {
-      const lx = pos[j * 6], ly = pos[j * 6 + 1], lz = pos[j * 6 + 2];
-      const rx = pos[j * 6 + 3], ry = pos[j * 6 + 4], rz = pos[j * 6 + 5];
-      expect(Math.hypot(lx - rx, lz - rz)).toBeCloseTo(2.2, 5);
-      // The trail runs along +z: the edges differ only across it, and straddle it evenly.
-      expect(lz).toBeCloseTo(rz, 5);
-      expect((lx + rx) / 2).toBeCloseTo(0, 5);
-      expect(ly).toBeCloseTo(2 + WAKE_LIFT, 5);
-      expect(ry).toBeCloseTo(2 + WAKE_LIFT, 5);
+      const o = j * 12;
+      // Outer edges: the full burn width, straddling the trail evenly.
+      expect(Math.hypot(pos[o] - pos[o + 9], pos[o + 2] - pos[o + 11])).toBeCloseTo(2.2, 5);
+      expect((pos[o] + pos[o + 9]) / 2).toBeCloseTo(0, 5);
+      // Core edges: the middle WAKE_CORE of it.
+      expect(Math.hypot(pos[o + 3] - pos[o + 6], pos[o + 5] - pos[o + 8])).toBeCloseTo(2.2 * WAKE_CORE, 5);
+      expect((pos[o + 3] + pos[o + 6]) / 2).toBeCloseTo(0, 5);
+      // The trail runs along +z: all four differ only across it, and sit on the ground.
+      for (let v = 0; v < 4; v++) {
+        expect(pos[o + v * 3 + 2]).toBeCloseTo(j * WAKE_STEP, 5);
+        expect(pos[o + v * 3 + 1]).toBeCloseTo(2 + WAKE_LIFT, 5);
+      }
     }
   });
 
@@ -45,8 +49,11 @@ describe('writeWakeRibbon', () => {
     const { pos, col } = buffers();
     const n = writeWakeRibbon(k, false, 0, 0, 1, ground, pos, col);
     for (let j = 0; j < n; j++) {
-      expect(pos[j * 6 + 2]).toBeCloseTo(j * WAKE_STEP, 5);
-      expect(pos[j * 6]).toBeGreaterThan(pos[j * 6 + 3]);
+      const o = j * 12;
+      expect(pos[o + 2]).toBeCloseTo(j * WAKE_STEP, 5);
+      expect(pos[o]).toBeGreaterThan(pos[o + 3]);
+      expect(pos[o + 3]).toBeGreaterThan(pos[o + 6]);
+      expect(pos[o + 6]).toBeGreaterThan(pos[o + 9]);
     }
   });
 
@@ -55,21 +62,26 @@ describe('writeWakeRibbon', () => {
     const k = trail([[0, 0], [1, 0], [2, 0]]);
     const { pos, col } = buffers();
     writeWakeRibbon(k, false, 0, 0, 1, ground, pos, col);
-    expect(pos[6 + 2]).toBeCloseTo(-1, 5);
-    expect(pos[6 + 5]).toBeCloseTo(1, 5);
-    expect(pos[6]).toBeCloseTo(1, 5);
+    expect(pos[12 + 2]).toBeCloseTo(-1, 5);
+    expect(pos[12 + 11]).toBeCloseTo(1, 5);
+    expect(pos[12]).toBeCloseTo(1, 5);
   });
 
-  it('fades from nothing at the tail to full at the head', () => {
+  it('fades from nothing at the tail to a bright core and faint edges at the head', () => {
     const k = trail(straight);
     const { pos, col } = buffers();
-    const n = writeWakeRibbon(k, false, 0, 0, 1, ground, pos, col, 0.8);
-    expect(col[3]).toBe(0);
-    expect(col[7]).toBe(0);
-    expect(col[(n - 1) * 8 + 3]).toBeCloseTo(0.8, 6);
+    const n = writeWakeRibbon(k, false, 0, 0, 1, ground, pos, col, 0.5, 0.15);
+    const alpha = (j: number, v: number): number => col[j * 16 + v * 4 + 3];
+    for (let v = 0; v < 4; v++) expect(alpha(0, v)).toBe(0);
+    expect(alpha(n - 1, 0)).toBeCloseTo(0.15, 6);
+    expect(alpha(n - 1, 1)).toBeCloseTo(0.5, 6);
+    expect(alpha(n - 1, 2)).toBeCloseTo(0.5, 6);
+    expect(alpha(n - 1, 3)).toBeCloseTo(0.15, 6);
     for (let j = 1; j < n; j++) {
-      expect(col[j * 8 + 3]).toBeGreaterThan(col[(j - 1) * 8 + 3]);
-      expect(col[j * 8 + 7]).toBe(col[j * 8 + 3]);
+      for (let v = 0; v < 4; v++) expect(alpha(j, v)).toBeGreaterThan(alpha(j - 1, v));
+      // The core is always brighter than the edges it sits between.
+      expect(alpha(j, 1)).toBeGreaterThan(alpha(j, 0));
+      expect(alpha(j, 2)).toBeGreaterThan(alpha(j, 3));
     }
   });
 
@@ -78,8 +90,8 @@ describe('writeWakeRibbon', () => {
     const { pos, col } = buffers();
     const n = writeWakeRibbon(k, true, 0, 5.8, 1, ground, pos, col);
     expect(n).toBe(6);
-    expect(pos[5 * 6 + 2]).toBeCloseTo(5.8, 5);
-    expect(col[5 * 8 + 3]).toBe(1);
+    expect(pos[5 * 12 + 2]).toBeCloseTo(5.8, 5);
+    expect(col[5 * 16 + 7]).toBe(1);
     // ...and adds nothing when the mover is standing on it.
     expect(writeWakeRibbon(k, true, 0, 4 * WAKE_STEP, 1, ground, pos, col)).toBe(5);
   });
@@ -103,14 +115,19 @@ describe('WakeView', () => {
     view.update(k, 0, 3 * WAKE_STEP + 1, ground);
     expect(view.mesh.visible).toBe(true);
     expect(view.points).toBe(5);
-    expect(view.mesh.geometry.drawRange.count).toBe(4 * 6);
+    // Four segments, three quads each (left edge, core, right edge).
+    expect(view.mesh.geometry.drawRange.count).toBe(4 * 3 * 6);
     // As wide as FEEL.wakeWidth on either side.
     const p = view.mesh.geometry.getAttribute('position');
-    expect(Math.abs(p.getX(0) - p.getX(1))).toBeCloseTo(2 * FEEL.wakeWidth, 5);
-    // Bright at the mover, none at the tail.
+    expect(Math.abs(p.getX(0) - p.getX(3))).toBeCloseTo(2 * FEEL.wakeWidth, 5);
+    // Bright core at the mover, never above the head alpha, fainter edges, none at the tail.
     const c = view.mesh.geometry.getAttribute('color');
     expect(c.getW(0)).toBe(0);
-    expect(c.getW(9)).toBeGreaterThan(0.5);
+    expect(c.getW(1)).toBe(0);
+    expect(c.getW(16 + 0)).toBeCloseTo(HEAD_EDGE_ALPHA, 6);
+    expect(c.getW(16 + 1)).toBeCloseTo(HEAD_CORE_ALPHA, 6);
+    expect(HEAD_CORE_ALPHA).toBeLessThanOrEqual(0.5);
+    expect(HEAD_EDGE_ALPHA).toBeLessThanOrEqual(0.15);
   });
 
   it('holds the longest trail the sim can lay', () => {
@@ -119,6 +136,6 @@ describe('WakeView', () => {
     const view = new WakeView();
     view.update(trail(pts), 0, RIBBON_POINTS * WAKE_STEP, ground);
     expect(view.points).toBe(RIBBON_POINTS);
-    expect(view.mesh.geometry.drawRange.count).toBe((RIBBON_POINTS - 1) * 6);
+    expect(view.mesh.geometry.drawRange.count).toBe((RIBBON_POINTS - 1) * 3 * 6);
   });
 });
