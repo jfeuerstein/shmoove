@@ -61,14 +61,18 @@ describe('WeaponsView', () => {
     expect(view.discs.visible).toBe(false);
   });
 
-  it('draws the Lance as a beam straight ahead as long as lanceLength, only while it is on', () => {
+  it('draws the Lance as a beam straight ahead as long as lanceLength, whenever it is carried', () => {
     const w = makeWorld(1);
-    arm(w, W_LANCE, 3);
     const view = new WeaponsView();
-    const off = state(0, 1, 0, 0, 3, false);
-    view.update(w, off, off, 1, 0);
+    const on = state(0, 1, 0, Math.PI / 2, 1, false);
+    view.update(w, on, on, 1, 0);
     expect(view.lanceBeams).toBe(0);
-    const on = state(0, 1, 0, Math.PI / 2, 3, true);
+    expect(view.beams.visible).toBe(false);
+    arm(w, W_LANCE, 3);
+    // Slow and untucked, or fast and tucked: the same beam.
+    const fast = state(0, 1, 0, Math.PI / 2, 4, true);
+    view.update(w, fast, fast, 1, 0);
+    expect(view.lanceBeams).toBe(2);
     const len = lanceLength(w, on);
     expect(len).toBeGreaterThan(5);
     view.update(w, on, on, 1, 0);
@@ -89,16 +93,16 @@ describe('WeaponsView', () => {
     expect(c.getZ(1)).toBeCloseTo(want.b, 5);
   });
 
-  it('draws faint streaks in the Slipstream cone behind the mover only while the draft is up', () => {
+  it('draws faint streaks in the Slipstream cone behind the mover whenever it is carried', () => {
     const w = makeWorld(1);
-    arm(w, W_SLIPSTREAM, 2);
     const view = new WeaponsView();
-    const slow = state(0, 0, 0, 0, 1);
-    view.update(w, slow, slow, 1, 0);
+    const fast = state(0, 0, 0, 0, 1);
+    view.update(w, fast, fast, 1, 0);
     expect(view.streakBeams).toBe(0);
     expect(view.beams.visible).toBe(false);
-    const fast = state(0, 0, 0, 0, 3);
+    arm(w, W_SLIPSTREAM, 2);
     const len = slipstreamLength(w, fast, 2);
+    expect(len).toBeGreaterThan(5);
     view.update(w, fast, fast, 1, 0.37);
     expect(view.streakBeams).toBe(STREAKS);
     const fade = view.beams.geometry.getAttribute('aFade') as InstancedBufferAttribute;

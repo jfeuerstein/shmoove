@@ -9,7 +9,8 @@
  * The arsenal fixture (`?arsenal`): every weapon at `ARSENAL_LEVEL`, one of each kind of map thing in
  * a row from `ROW_NEAR` to `ROW_FAR` ahead of the spawn, `ROW_SIDE` to one side of the way ahead, and
  * one of each kind of zone as far to the other side, so every view is on screen at once and the
- * mover can ride between them without anything coming between it and the camera.
+ * mover can ride between them without anything coming between it and the camera. The map's own
+ * things (placed from the bowl's sites by the `Sim`) stay where they are; the row is added to them.
  *
  * A fixture is a stage to look at and measure, not a run to lose: the player's health is raised
  * so that walking through the crowd for the length of a measurement cannot end it.
@@ -20,6 +21,7 @@ import { makeElite } from '../sim/director';
 import { HAZARDS } from '../sim/hazards';
 import { Rng, hashString } from '../sim/rng';
 import type { Sim } from '../sim/sim';
+import { addThing } from '../sim/things';
 import { CRUMBS } from '../sim/weapons/crumbs';
 import {
   addZone,
@@ -31,7 +33,6 @@ import {
   KINDS,
   MAX_ENEMIES,
   MAX_SPARKS,
-  MAX_THINGS,
   SPAWN_TICKS,
   spawnEnemy,
   THING_CRATE,
@@ -175,26 +176,10 @@ export function applyFixture(sim: Sim, enemies: number, sparks: number): void {
   if (ne > 0 || ns > 0) stage(w);
 }
 
-/** Add a thing to the world as the map would. Returns its index, or -1 if full. */
-function placeThing(w: World, kind: number, x: number, y: number, z: number, yaw: number, group: number): number {
-  const t = w.things;
-  if (t.count >= MAX_THINGS) return -1;
-  const i = t.count++;
-  t.kind[i] = kind;
-  t.x[i] = x;
-  t.y[i] = y;
-  t.z[i] = z;
-  t.yaw[i] = yaw;
-  t.state[i] = 0;
-  t.progress[i] = 0;
-  t.timer[i] = 0;
-  t.group[i] = group;
-  return i;
-}
-
 /**
  * Every weapon at `ARSENAL_LEVEL` (written straight into the levels: the four slots show the first
- * four), one of each map thing in a row ahead of the spawn and one of each zone beside it.
+ * four), one of each map thing in a row ahead of the spawn and one of each zone beside it. The row
+ * is added to the things the map already placed, after them.
  */
 export function applyArsenal(sim: Sim): void {
   const w = sim.world;
@@ -218,7 +203,7 @@ export function applyArsenal(sim: Sim): void {
     const kind = ROW_KINDS[k];
     const ground = t.heightAt(x, z);
     const y = kind === THING_HOOP ? ground + HOOP_HEIGHT : ground;
-    placeThing(w, kind, x, y, z, yaw, kind === THING_GATE ? ROW_GATE_GROUP : 0);
+    addThing(w, kind, x, y, z, yaw, kind === THING_GATE ? ROW_GATE_GROUP : 0);
   }
   for (let k = 0; k < ZONE_KINDS.length; k++) {
     const d = ZONE_AHEAD[k];

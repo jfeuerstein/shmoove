@@ -161,8 +161,11 @@ describe('the crowd fixture', () => {
 });
 
 describe('the arsenal fixture', () => {
+  /** How many things the map itself places, before the fixture adds its row. */
+  const mapThings = new Map<number, number>();
   function arsenal(seed: number, enemies = 0): Sim {
     const sim = new Sim(makeBowl(seed), { seed, horde: true, autoPick: true });
+    mapThings.set(seed, sim.world.things.count);
     if (enemies > 0) applyFixture(sim, enemies, 0);
     applyArsenal(sim);
     return sim;
@@ -176,16 +179,19 @@ describe('the arsenal fixture', () => {
     expect(w.player.hp).toBe(FIXTURE_HP);
   });
 
-  it('puts one of each thing in a row 12 to 40 m ahead of the spawn, off to one side, the gate and hoop facing along it', () => {
+  it('adds one of each thing in a row 12 to 40 m ahead of the spawn, off to one side, the gate and hoop facing along it', () => {
     const sim = arsenal(4);
     const t = sim.terrain;
     const th = sim.world.things;
-    expect(th.count).toBe(ROW_KINDS.length);
-    expect(Array.from(th.kind.subarray(0, th.count)).sort()).toEqual([0, 1, 2, 3, 4, 5]);
+    const first = mapThings.get(4) ?? 0;
+    // The map's own things are kept; the row comes after them.
+    expect(first).toBeGreaterThan(0);
+    expect(th.count).toBe(first + ROW_KINDS.length);
+    expect(Array.from(th.kind.subarray(first, th.count)).sort()).toEqual([0, 1, 2, 3, 4, 5]);
     const fx = Math.sin(t.spawnYaw);
     const fz = Math.cos(t.spawnYaw);
     let last = 0;
-    for (let i = 0; i < th.count; i++) {
+    for (let i = first; i < th.count; i++) {
       const dx = th.x[i] - t.spawnX;
       const dz = th.z[i] - t.spawnZ;
       const ahead = dx * fx + dz * fz;
@@ -229,7 +235,7 @@ describe('the arsenal fixture', () => {
     sim.reset();
     applyFixture(sim, 120, 0);
     applyArsenal(sim);
-    expect(sim.world.things.count).toBe(ROW_KINDS.length);
+    expect(sim.world.things.count).toBe((mapThings.get(7) ?? 0) + ROW_KINDS.length);
     expect(sim.world.zones.count).toBe(ZONE_KINDS.length);
     expect(sim.world.player.loadout.weaponLevel[WEAPON_COUNT - 1]).toBe(ARSENAL_LEVEL);
   });
