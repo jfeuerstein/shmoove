@@ -58,6 +58,8 @@ export interface EnemyKind {
   xp: number;
   /** Below its plow gear it grabs hold of the mover instead of hurting (see STATE_LATCHED). */
   latches?: boolean;
+  /** A boss: one at a time, never thrown, never recycled, cannot be hopped over. See `World.boss`. */
+  boss?: boolean;
 }
 
 /** `Horde.state` of an enemy holding on to the mover. Set by contact; the horde's step does the rest. */
@@ -180,6 +182,11 @@ export interface Zones {
 export const ZONE_MINE = 0;
 export const ZONE_TAR = 1;
 export const ZONE_LOB = 2;
+/**
+ * A ring spreading over the ground from a centre: `r` is where its front is now, `power` the
+ * damage. It hurts a mover on the ground as the front crosses it; an ollie clears it.
+ */
+export const ZONE_RING = 3;
 
 /**
  * Things on the map the player rides through: crates, shrines, gates, hoops, totems. Placed from
@@ -241,6 +248,8 @@ export const FX_CARD = 14; // a card was taken, a = its type
 export const FX_THING = 15; // something on the map was used, a = its kind
 export const FX_TOKEN = 16; // a = tokens gained
 export const FX_STONE = 17; // a skipping stone left the player
+export const FX_BOSS_IN = 18; // a boss has arrived, a = its kind
+export const FX_BOSS_DOWN = 19; // a boss has fallen, a = its kind
 
 /** Things that happened this tick, for drawing and sound. Overflow is dropped. */
 export interface Fx {
@@ -310,6 +319,17 @@ export interface Player {
   bestPop: number;
 }
 
+/** Written every tick by whoever steps the boss; nothing else may write it. */
+export interface BossState {
+  kind: number;
+  hp: number;
+  maxHp: number;
+  x: number;
+  z: number;
+  /** How many bosses have fallen this run. */
+  felled: number;
+}
+
 export const PHASE_PLAY = 0;
 export const PHASE_DEAD = 1;
 export const PHASE_WON = 2;
@@ -363,6 +383,8 @@ export interface World {
   mem: Float64Array;
   /** Metres travelled toward the next volley of seekers. */
   seekerMeter: number;
+  /** The boss on the field, for the HUD and the camera. `kind` is -1 when there is none. */
+  boss: BossState;
   /** Places a totem has asked for an elite pack, waiting for the director: [0, packs). */
   packs: number;
   packX: Float32Array;
@@ -492,6 +514,7 @@ export function makeWorld(seed: number): World {
     pool: new Uint8Array(WEAPON_COUNT).fill(1),
     mem: new Float64Array(WEAPON_COUNT * WEAPON_MEM),
     seekerMeter: 0,
+    boss: { kind: -1, hp: 0, maxHp: 0, x: 0, z: 0, felled: 0 },
     packs: 0,
     packX: new Float32Array(4),
     packZ: new Float32Array(4),
@@ -530,6 +553,10 @@ export function resetWorld(w: World): void {
   w.offerQueued = 0;
   w.mem.fill(0);
   w.packs = 0;
+  w.boss.kind = -1;
+  w.boss.hp = 0;
+  w.boss.maxHp = 0;
+  w.boss.felled = 0;
   w.run.ticks = 0;
   w.run.phase = PHASE_PLAY;
   w.wake.count = 0;
@@ -770,6 +797,9 @@ export function hashWorld(w: World): number {
     mix(w.things.progress[i]);
   }
   mix(w.offerQueued);
+  mix(w.boss.kind);
+  mix(w.boss.hp);
+  mix(w.boss.felled);
   mix(p.tokens);
   mix(p.pops);
   mix(w.run.ticks);

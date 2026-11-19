@@ -178,3 +178,15 @@ Things decided without the owner, newest last. Overrule any of them.
    reaches the bar. `x0, z0` is the high end. The heightfield, sites and pads are unchanged.
 54. **A boardslide.** On a rail the board lies across the bar and the rider faces along it, arms
    out, with sparks. Grind sparks glow; other shards do not.
+55. **What "ready for a full playtest" is taken to mean.** The owner said to continue until the
+   game is ready for a full playtest. Taken as: the whole ten-minute run with bosses and an
+   ending, sound, hit feedback, a bot-checked balance, and an independent verification. Not
+   included: riders, unlocks, feats, the daily bowl, a second map, Overtime after a win, and
+   saving a run when the browser is closed (leaving the tab pauses it; closing it loses it).
+56. **New bosses for the new rules.** The first pitch's bosses were about speed (ram it in gear
+   4; lasso it three times). The three now are about the board: the Bruiser charges in a straight
+   line after a tell (turn), the Mortar lays a line of rings across your path (change line), the
+   Standstill slows you near it and sends rings along the ground (ollie). The run is won when the
+   last one falls, not on a clock.
+57. **The three-minute balance bands and their bots are deleted** with the three-minute run. A
+   balance task follows the M4 run and writes new ones.

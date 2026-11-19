@@ -30,6 +30,9 @@ export const PALETTE = {
   arc: 0xb8f4ff,
   lance: 0xfff1b0,
   stone: 0xd8d2c4,
+  /** Bosses, in the order they arrive. */
+  bosses: [0xff6a3d, 0x4ad9f0, 0xf4f0ff],
+  ring: 0xff3355,
   rail: 0xe8e4f4,
   railPost: 0x6a62a8,
   grindSpark: 0xffe37a,

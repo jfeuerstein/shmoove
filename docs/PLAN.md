@@ -3,11 +3,18 @@
 How the game in `PITCH.md` gets built. Status lives here and is updated in the same commit that
 changes it.
 
-**Now: the design changed.** The owner played the M3 build and asked for "a pretty standard
-survivor-like but with fun movement", not movement tied to health and damage. `PITCH.md` is
-rewritten for that (a survivor on a skateboard) and the core rules already follow it: touching
-hurts at any speed, weapons hit the same in every gear, nothing heals with speed, a run starts
-with the Seekers. What is left of the change is listed under "M3, second pass" below.
+**Now: building to a full playtest.** The owner asked for development to continue until the game
+is ready for one. That is taken to mean: a whole ten-minute run with two mini-bosses and a final
+boss (M4), sound and hit feedback (the part of M5 a player notices first), balanced with bots,
+and independently verified. Riders, unlocks and the rest of the meta (M6) wait until after it.
+
+The design changed once already: after a first play the owner asked for "a pretty standard
+survivor-like but with fun movement", and chose a skateboard for the movement. `PITCH.md` is the
+second pitch; touching hurts at any speed, weapons fire on timers, nothing reads how fast the
+player is going.
+
+In progress now: the whole run (`docs/briefs/m4-run.md`), sound (`m5-audio.md`), and hit feedback
+(`m5-juice.md`). After them: balance for the ten-minute run, then verification.
 
 Milestones M0 to M2 stand as built (toolchain, the mover and the bowl, the horde, sparks and
 levels). M3's content (cards, ten weapons, eleven passives, seven enemies, elites, map objects)

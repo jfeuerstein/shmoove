@@ -80,8 +80,8 @@ export function stepContact(w: World, s: SimState): void {
     const touch = kind.radius + PLAYER_RADIUS;
     const d2 = dx * dx + dz * dz;
     if (d2 > touch * touch) continue;
-    // In the air and clear of its head: over it.
-    if (!m.grounded && m.y - h.y[i] > kind.height * CLEAR) continue;
+    // In the air and clear of its head: over it. (Nothing clears a boss.)
+    if (kind.boss !== true && !m.grounded && m.y - h.y[i] > kind.height * CLEAR) continue;
 
     if (kind.latches === true) {
       // It grabs on instead of hurting, if there is room; the horde's step carries it from here.
