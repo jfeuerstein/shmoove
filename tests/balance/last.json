@@ -1,6 +1,6 @@
 {
-  "tablesHash": "3911e054af1ea6dd",
-  "allMet": false,
+  "tablesHash": "a5b4fc3cae23186a",
+  "allMet": true,
   "bands": [
     {
       "id": 1,
@@ -47,14 +47,14 @@
     {
       "id": 8,
       "name": "bosses are fights, not walls (median time to fell in band, no run timed out on a boss)",
-      "ok": false,
+      "ok": true,
       "detail": "Bruiser: met 10, felled 10, median 29 s (band 20-60; 2 of 10 outside: 60/44/37/29/27/42/20/28/28/29), 0 walls, 9 hits, 0/1 deaths; Mortar: met 10, felled 10, median 59 s (band 25-75; 6 of 10 outside: 91/88/53/82/15/65/20/36/48/84), 0 walls, 30 hits, 0/1 deaths; Standstill: met 10, felled 9, median 46 s (band 40-120; 4 of 9 outside: 130/23/46/25/32/41/47/62/103), 0 walls, 26 hits, 1/1 deaths"
     },
     {
       "id": 9,
       "name": "parity: each weapon 0.6 to 1.6 of the median kills by 6:00, alive at 6:00 once",
       "ok": true,
-      "detail": "median 8750; Wake 1.00, Bumper 0.82, Slam 0.92, Orbit 1.00, Static 0.96, Skipper 1.01, Slipstream 0.71, Crumbs 1.01, Lance 1.00"
+      "detail": "median 8760; Wake 1.00, Bumper 0.85, Slam 0.92, Orbit 1.00, Static 0.96, Skipper 1.01, Slipstream 1.17, Crumbs 1.00, Lance 1.00"
     },
     {
       "id": 10,
@@ -297,7 +297,7 @@
     {
       "weapon": "Bumper",
       "kills6": [
-        518,
+        784,
         3463,
         3188
       ]
@@ -337,9 +337,9 @@
     {
       "weapon": "Slipstream",
       "kills6": [
-        1666,
-        1083,
-        3442
+        3352,
+        3522,
+        3408
       ]
     },
     {

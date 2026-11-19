@@ -33,7 +33,7 @@ what to return. The verifier gets the same file.
 | `m4-run.md` | M4 | opus | merged |
 | `m5-audio.md` | M5 (the part a playtest needs) | opus | merged |
 | `m5-juice.md` | M5 (the part a playtest needs) | sonnet | merged |
-| `m4-balance.md` | M4 | opus | out |
+| `m4-balance.md` | M4 | opus | merged; all bands met after the lead's weapon fixes |
 | `playtest-verify.md` | before the first full playtest | opus (verifier) | done: works end to end; bosses unseen, no pause |
 | `playtest-fixes.md` | before the first full playtest | opus | merged |
 | `playtest-report.md` | playtest | sonnet | merged |

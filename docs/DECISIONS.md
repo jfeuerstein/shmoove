@@ -252,3 +252,21 @@ Things decided without the owner, newest last. Overrule any of them.
    Boons are tinted like the rider and a rare card is framed white. The two-letter codes in the
    sim's info tables are no longer shown anywhere. The enemy kinds closest to being confused at
    30 m are the gnat and the clinger, then the shuffler and the cutter.
+71. **Balance for the ten-minute run** (`docs/briefs/m4-balance.md`, `npm run balance`). All
+   twelve bands are met on seeds 1 to 5: standing still dies by 0:41, the blind wanderer by 0:46,
+   the careful bot clears 4 of 5 and the bot that rides the board 5 of 5; bosses take a median 29,
+   59 and 46 s. Read that as "nothing is broken", not "it is fun": the bands sit on knife edges
+   and one table change flips a seed. Two readings of the brief's bands were made: a boss's time
+   is judged by the median over the runs (builds vary it eightfold, the band spans threefold),
+   and which boss causes the deaths is judged only when at least four runs died. The numbers
+   changed are in the merge's report; the largest: passives roughly halved (the late game was
+   untouchable), boss health up by half to nearly double, the heal on a boss's fall 40% to 15%,
+   the Standstill's ring 15 to 35 damage, cutters slower and weaker, the crowd thinner in the
+   first act and thicker in the last.
+72. **Every weapon fires on a clock.** The Bumper only acted when the rider was hit, so it did
+   less the better you played; it now also pulses every few seconds. The Slipstream did no
+   damage; its draft now deals a little on a beat of its own. Shaking a clinger off no longer
+   hurts it: a landing is movement, and movement deals no damage.
+73. **Known and left for the playtest:** levels come fast (the bots take 5 to 8 cards a minute and
+   end at level 48 to 76), which may interrupt the riding too often; a full build is rarely
+   threatened after 6:00; the first act is where careful play is most often lost.
