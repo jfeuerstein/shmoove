@@ -99,9 +99,10 @@ function boot(): void {
 
   const terrain = makeTerrain(params);
   const sim = new Sim(terrain, { seed: params.seed, horde: !params.flat && !params.solo });
-  // Off unless the owner switched it on in the panel: the cards are the game.
+  // Off unless the owner switched it on in the panel: the cards are the game. A measured (`?perf`)
+  // run has nobody to choose, and the world would hold at the first level.
   const applyAutoPick = (): void => {
-    sim.picker = settings.autoPick ? autoPickCard : null;
+    sim.picker = settings.autoPick || params.perf ? autoPickCard : null;
   };
   applyAutoPick();
   const picks = new PickBox();
