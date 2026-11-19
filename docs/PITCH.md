@@ -116,11 +116,14 @@ twelve rails.
 | Thing | How you use it | Reward |
 | --- | --- | --- |
 | **Crate** | Ride into it. | A card, a heal, a magnet or a bomb |
-| **Shrine** | Three laps round it inside ten seconds. | Pick one of three boons |
-| **Slalom** | Clear a line of five gates in time. | Sparks and tokens |
-| **Hoop** | A ring in the air over a kicker. | Tokens; a streak bonus |
+| **Shrine** | Ride into its ring. | Pick one of three boons |
+| **Slalom** | Ride between five gates in order, the next one lit. No clock: the gates taken are kept. | XP and tokens |
+| **Hoop** | A big ring on top of a kicker: ride or ollie straight through it. | Tokens; a streak bonus |
 | **Totem** | Ride into it to call an elite pack on purpose. | A rare card when its elite falls |
 | **Rail** | Ollie onto it. The rail steers; you pick up speed. Ollie off, or ride off the end. | Speed, and a lane above the small enemies' reach |
+
+Near enough to use, each one wears a small label saying what it is and what to do (`SHRINE · ride
+in`, `GATES 2/5`); from afar, all but the plain crates show a beacon.
 
 To come: more of the park (see `PLAN.md`).
 
