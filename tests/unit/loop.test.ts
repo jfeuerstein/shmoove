@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { FixedStepper, FrameStats, MAX_STEPS_PER_FRAME, RafDriver } from '../../src/app/loop';
+import { FixedStepper, FrameStats, MAX_STEPS_PER_FRAME, RafDriver, RAMP_SECONDS, RAMP_START, TimeRamp } from '../../src/app/loop';
 import { DT } from '../../src/sim/constants';
 
 function counter(): { n: number; step: () => void } {
@@ -194,5 +194,83 @@ describe('FrameStats', () => {
     expect(s.summary()).toEqual({ drawCalls: 0, triangles: 0, frameMs: 0, stepMs: 0 });
     s.record(3, 30, 2, 0, 0);
     expect(s.summary().stepMs).toBe(0);
+  });
+});
+
+describe('FixedStepper time scale', () => {
+  /** Real seconds of 1/120 s frames until `steps` steps have run. */
+  function realSecondsFor(scale: number, steps: number): number {
+    const st = new FixedStepper(DT);
+    st.scale = scale;
+    let ran = 0;
+    let real = 0;
+    while (ran < steps) {
+      st.advance(DT / 2, () => ran++);
+      real += DT / 2;
+    }
+    return real;
+  }
+
+  it('at half speed takes twice as long for the same number of steps', () => {
+    const full = realSecondsFor(1, 60);
+    const half = realSecondsFor(0.5, 60);
+    expect(half).toBeCloseTo(full * 2, 6);
+  });
+
+  it('keeps every step exactly one step long and counts scaled time', () => {
+    const st = new FixedStepper(DT);
+    st.scale = 0.25;
+    let ran = 0;
+    // 4 real steps' worth of time is one scaled step.
+    st.advance(DT * 3.9, () => ran++);
+    expect(ran).toBe(0);
+    st.advance(DT * 0.1, () => ran++);
+    expect(ran).toBe(1);
+  });
+
+  it('interpolates by scaled time', () => {
+    const st = new FixedStepper(DT);
+    st.scale = 0.5;
+    expect(st.advance(DT, () => undefined)).toBeCloseTo(0.5, 6);
+  });
+});
+
+describe('TimeRamp', () => {
+  it('is at full speed until begun', () => {
+    expect(new TimeRamp().scale).toBe(1);
+  });
+
+  it('starts at 0.3 and reaches full speed after 0.5 s of real time', () => {
+    const r = new TimeRamp();
+    r.begin();
+    expect(r.scale).toBeCloseTo(RAMP_START, 9);
+    expect(RAMP_START).toBe(0.3);
+    expect(RAMP_SECONDS).toBe(0.5);
+    let t = 0;
+    let last = r.scale;
+    while (t < 0.5 - 1e-9) {
+      r.update(DT);
+      t += DT;
+      expect(r.scale).toBeGreaterThanOrEqual(last);
+      last = r.scale;
+    }
+    expect(r.scale).toBeCloseTo(1, 6);
+    r.update(1);
+    expect(r.scale).toBe(1);
+  });
+
+  it('stretches the first half second of play when driving a stepper', () => {
+    const r = new TimeRamp();
+    const st = new FixedStepper(DT);
+    r.begin();
+    let ran = 0;
+    for (let i = 0; i < 30; i++) {
+      r.update(DT);
+      st.scale = r.scale;
+      st.advance(DT, () => ran++);
+    }
+    // Half a second of real time at 30..100 per cent speed: about 19 steps, not 30.
+    expect(ran).toBeGreaterThan(15);
+    expect(ran).toBeLessThan(25);
   });
 });

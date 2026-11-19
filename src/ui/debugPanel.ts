@@ -65,12 +65,14 @@ export class DebugPanel {
   private readonly copyBox: HTMLElement;
   private readonly copyText: HTMLTextAreaElement;
   private readonly copyBtn: HTMLButtonElement;
+  private readonly autoPickBtn: HTMLButtonElement;
   private open = false;
 
   constructor(
     root: HTMLElement,
     private readonly settings: Settings,
     private readonly onScheme: (s: Scheme) => void,
+    private readonly onAutoPick: (on: boolean) => void = () => undefined,
   ) {
     const wrap = el('div', 'dbg');
     wrap.style.setProperty('--dbg-accent', cssHex(PALETTE.accent));
@@ -92,6 +94,16 @@ export class DebugPanel {
     this.sheet.addEventListener('keyup', (e) => e.stopPropagation());
     // The page blocks every touchmove (src/app/platform.ts) so nothing scrolls; the sheet must.
     this.sheet.addEventListener('touchmove', (e) => e.stopPropagation(), { passive: true });
+
+    // First thing in the sheet: whether the sim answers card offers itself.
+    this.autoPickBtn = el('button', 'dbg-autopick', 'Auto-pick cards');
+    this.autoPickBtn.type = 'button';
+    this.autoPickBtn.addEventListener('click', () => {
+      this.settings.chooseAutoPick(!this.settings.autoPick);
+      this.onAutoPick(this.settings.autoPick);
+      this.syncAutoPick();
+    });
+    this.sheet.appendChild(this.autoPickBtn);
 
     const head = el('div', 'dbg-head');
     const resetAll = el('button', 'dbg-btn', 'Reset all');
@@ -157,6 +169,7 @@ export class DebugPanel {
     root.appendChild(wrap);
     this.element = wrap;
     this.syncScheme();
+    this.syncAutoPick();
     this.sync();
   }
 
@@ -259,6 +272,13 @@ export class DebugPanel {
       b.classList.toggle('on', on);
       b.setAttribute('aria-pressed', String(on));
     }
+  }
+
+  private syncAutoPick(): void {
+    const on = this.settings.autoPick;
+    this.autoPickBtn.classList.toggle('on', on);
+    this.autoPickBtn.setAttribute('aria-pressed', String(on));
+    this.autoPickBtn.textContent = on ? 'Auto-pick cards: ON' : 'Auto-pick cards: off';
   }
 
   private async copy(): Promise<void> {

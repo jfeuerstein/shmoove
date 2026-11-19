@@ -18,6 +18,11 @@ export class FixedStepper {
   readonly dt: number;
   readonly maxSteps: number;
   private acc = 0;
+  /**
+   * How fast scaled time runs against real time: 1 is real time, 0.5 half speed. Steps are still
+   * exactly `dt` long; only how much time accumulates per real second changes.
+   */
+  scale = 1;
 
   constructor(dt = DT, maxSteps = MAX_STEPS_PER_FRAME) {
     this.dt = dt;
@@ -29,7 +34,7 @@ export class FixedStepper {
    * Returns the share of the next step already elapsed, 0..1: the interpolation alpha.
    */
   advance(elapsed: number, step: () => void): number {
-    if (elapsed > 0 && Number.isFinite(elapsed)) this.acc += elapsed;
+    if (elapsed > 0 && Number.isFinite(elapsed)) this.acc += elapsed * this.scale;
     else if (elapsed === Infinity) this.acc += this.dt * (this.maxSteps + 1);
     const dt = this.dt;
     let n = 0;
@@ -55,6 +60,35 @@ export class FixedStepper {
   /** Forget any partial step (after a pause, so the next frame starts clean). */
   reset(): void {
     this.acc = 0;
+  }
+}
+
+/** The game speed just after the last card is taken, as a share of full speed. */
+export const RAMP_START = 0.3;
+/** Real seconds it takes to climb back to full speed. */
+export const RAMP_SECONDS = 0.5;
+
+/**
+ * The slow start after a card is chosen: `begin()` when the last offer closes, `update(dt)` with
+ * each frame's real seconds, and feed `scale` to the stepper. Rises in a straight line.
+ */
+export class TimeRamp {
+  private t = RAMP_SECONDS;
+
+  begin(): void {
+    this.t = 0;
+  }
+
+  update(dt: number): void {
+    if (dt > 0 && this.t < RAMP_SECONDS) this.t = Math.min(RAMP_SECONDS, this.t + dt);
+  }
+
+  get scale(): number {
+    return RAMP_START + (1 - RAMP_START) * (this.t / RAMP_SECONDS);
+  }
+
+  reset(): void {
+    this.t = RAMP_SECONDS;
   }
 }
 

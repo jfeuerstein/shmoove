@@ -1,0 +1,156 @@
+.cards {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  box-sizing: border-box;
+  padding: 0 calc(env(safe-area-inset-right, 0px) + 12px) calc(env(safe-area-inset-bottom, 0px) + 24px)
+    calc(env(safe-area-inset-left, 0px) + 12px);
+  background: rgba(27, 22, 48, 0.62);
+  color: #fff;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  text-shadow: none;
+  line-height: 1.15;
+  z-index: 25;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  transition: opacity 0.15s ease-out, visibility 0s linear 0.15s;
+}
+
+.cards-show {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transition: opacity 0.15s ease-out, visibility 0s;
+}
+
+.cards-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cards-head {
+  font-size: 15px;
+  font-weight: 900;
+  letter-spacing: 0.22em;
+  text-align: center;
+  margin-bottom: 2px;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.55);
+}
+
+.card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 88px;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  margin: 0;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  background: rgba(42, 37, 72, 0.96);
+  border: 2px solid rgba(255, 255, 255, 0.16);
+  border-radius: 16px;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.card[hidden] {
+  display: none;
+}
+
+.card:active {
+  filter: brightness(1.25);
+}
+
+.card-rare {
+  border-color: var(--card-rare);
+  box-shadow: 0 0 14px rgba(255, 210, 63, 0.45);
+}
+
+.card-tile {
+  flex: 0 0 auto;
+  width: 54px;
+  height: 54px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  font-size: 22px;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  color: #1b1630;
+  background: var(--card-weapon);
+}
+
+.card-passive .card-tile {
+  background: var(--card-passive);
+}
+
+.card-boon .card-tile {
+  background: var(--card-boon);
+}
+
+.card-body {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.card-top {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.card-name {
+  font-size: 19px;
+  font-weight: 800;
+}
+
+.card-tag {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  font-variant-numeric: tabular-nums;
+  white-space: pre;
+  color: var(--card-passive);
+}
+
+.card-bonus {
+  margin-left: auto;
+  padding: 1px 7px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 900;
+  color: #1b1630;
+  background: var(--card-rare);
+}
+
+.card-bonus[hidden],
+.card-fed[hidden] {
+  display: none;
+}
+
+.card-blurb {
+  font-size: 14px;
+  font-weight: 500;
+  opacity: 0.92;
+}
+
+.card-fed {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  opacity: 0.6;
+}

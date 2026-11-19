@@ -50,6 +50,25 @@
   display: none;
 }
 
+.dbg-autopick {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  margin-bottom: 6px;
+  padding: 0 8px;
+  border: 1px solid var(--dbg-line);
+  border-radius: 8px;
+  background: var(--dbg-card);
+  color: #fff;
+  font: 700 13px/1.1 system-ui, sans-serif;
+  touch-action: manipulation;
+}
+
+.dbg-autopick.on {
+  background: var(--dbg-accent);
+  border-color: var(--dbg-accent);
+}
+
 .dbg-head {
   display: flex;
   gap: 6px;

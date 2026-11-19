@@ -134,4 +134,20 @@ describe('settings', () => {
     feel.grip = 20;
     expect(overridesText(feel, 'lift')).toBe('scheme = lift\nrunSpeed = 7.5\ngrip = 20');
   });
+
+  it('keeps auto-pick off unless it was switched on, and remembers it', () => {
+    const store = memoryStorage();
+    const feel = defaults();
+    const a = new Settings(store, '', 'tuck', feel);
+    expect(a.autoPick).toBe(false);
+    a.chooseAutoPick(true);
+    expect(new Settings(store, '', 'tuck', defaults()).autoPick).toBe(true);
+    // A feel save does not lose it.
+    feel.grip = 20;
+    a.saveFeel();
+    expect(new Settings(store, '', 'tuck', defaults()).autoPick).toBe(true);
+    a.chooseAutoPick(false);
+    expect(new Settings(store, '', 'tuck', defaults()).autoPick).toBe(false);
+    expect(parseStored(JSON.stringify({ v: 1, feel: {}, autoPick: 'yes' })).autoPick).toBe(false);
+  });
 });

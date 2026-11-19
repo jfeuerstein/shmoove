@@ -21,14 +21,18 @@ import { DT } from '../sim/constants';
 import { Sim } from '../sim/sim';
 import { BOWL_RADIUS, makeBowl } from '../sim/bowl';
 import { flatTerrain, type Terrain } from '../sim/terrain';
+import { PHASE_CHOOSE } from '../sim/world';
 import { makeInputFrame } from '../sim/types';
+import { BuildBar } from '../ui/buildBar';
+import { autoPickCard, Cards } from '../ui/cards';
 import { DebugPanel } from '../ui/debugPanel';
 import { EndScreen } from '../ui/endScreen';
 import { Hud } from '../ui/hud';
+import { Numbers } from '../ui/numbers';
 import { StickView } from '../ui/stickView';
 import { ThreatView } from '../ui/threat';
 import { applyFixture } from './fixtures';
-import { FixedStepper, FrameStats, RafDriver } from './loop';
+import { FixedStepper, FrameStats, RafDriver, TimeRamp } from './loop';
 import { parseParams, type Params } from './params';
 import { setupPlatform } from './platform';
 import { registerPwa } from './pwa';
@@ -40,13 +44,38 @@ function makeTerrain(params: Params): Terrain {
   return params.flat ? flatTerrain(BOWL_RADIUS) : makeBowl(params.seed);
 }
 
-/** The one place the input source is made: the thumb, with the test hook's script laid over it. */
-function makeInput(scheme: Scheme, surface: HTMLElement, hookInput: HookInput): { source: InputSource; touch: TouchInput } {
+/** The card the player chose, waiting to go to the sim on the next tick. */
+class PickBox {
+  private pending = -1;
+
+  set(index: number): void {
+    this.pending = index;
+  }
+
+  /** The pending pick, once; -1 afterwards. */
+  take(): number {
+    const p = this.pending;
+    this.pending = -1;
+    return p;
+  }
+}
+
+/**
+ * The one place the input source is made: the thumb, with the test hook's script laid over it, and
+ * the chosen card carried on exactly one frame.
+ */
+function makeInput(
+  scheme: Scheme,
+  surface: HTMLElement,
+  hookInput: HookInput,
+  picks: PickBox,
+): { source: InputSource; touch: TouchInput } {
   const touch = new TouchInput(surface, scheme);
   const source: InputSource = {
     sample(out) {
       touch.sample(out);
       hookInput.overlay(out);
+      out.pick = picks.take();
     },
   };
   return { source, touch };
@@ -69,7 +98,13 @@ function boot(): void {
   settings.applySaved();
 
   const terrain = makeTerrain(params);
-  const sim = new Sim(terrain, { seed: params.seed, horde: !params.flat && !params.solo, autoPick: true });
+  const sim = new Sim(terrain, { seed: params.seed, horde: !params.flat && !params.solo });
+  // Off unless the owner switched it on in the panel: the cards are the game.
+  const applyAutoPick = (): void => {
+    sim.picker = settings.autoPick ? autoPickCard : null;
+  };
+  applyAutoPick();
+  const picks = new PickBox();
   if (params.horde > 0 || params.sparks > 0) applyFixture(sim, params.horde, params.sparks);
   const hookInput = new HookInput();
   const frameInput = makeInputFrame();
@@ -77,7 +112,7 @@ function boot(): void {
   const canvas = document.createElement('canvas');
   canvas.className = 'game';
   document.body.appendChild(canvas);
-  const { source: input, touch } = makeInput(settings.scheme, canvas, hookInput);
+  const { source: input, touch } = makeInput(settings.scheme, canvas, hookInput, picks);
   const view = new GameScene(canvas);
   view.scene.add(makeTerrainView(terrain));
   const mover = new MoverView();
@@ -95,9 +130,17 @@ function boot(): void {
   const hud = new Hud(hudRoot, { run: sim.horde, debug: params.debug });
   const stick = new StickView(hudRoot, touch.gestures);
   const threat = new ThreatView(hudRoot);
-  const panel = params.debug ? new DebugPanel(hudRoot, settings, (s) => touch.setScheme(s)) : null;
+  const numbers = sim.horde ? new Numbers(hudRoot) : null;
+  const buildBar = sim.horde ? new BuildBar(hudRoot) : null;
+  const cards = sim.horde ? new Cards(hudRoot, (i) => picks.set(i)) : null;
+  const panel = params.debug
+    ? new DebugPanel(hudRoot, settings, (s) => touch.setScheme(s), () => applyAutoPick())
+    : null;
 
   const stepper = new FixedStepper(DT);
+  // After the last card is taken the game starts slow and climbs back to full speed.
+  const ramp = new TimeRamp();
+  let choosing = false;
   const restart = (): void => {
     sim.reset();
     if (params.horde > 0 || params.sparks > 0) applyFixture(sim, params.horde, params.sparks);
@@ -105,6 +148,11 @@ function boot(): void {
     threat.reset();
     chase.reset();
     endScreen.reset();
+    numbers?.reset();
+    picks.take();
+    ramp.reset();
+    stepper.scale = 1;
+    choosing = false;
     stepper.reset();
   };
   const endScreen = new EndScreen(hudRoot, restart);
@@ -119,6 +167,10 @@ function boot(): void {
     input.sample(frameInput);
     sim.step(frameInput);
     fx.ingest(sim.world);
+    numbers?.ingest(sim.world);
+    const nowChoosing = sim.world.run.phase === PHASE_CHOOSE;
+    if (choosing && !nowChoosing) ramp.begin();
+    choosing = nowChoosing;
     stepMs += performance.now() - t0;
     steps++;
   };
@@ -139,6 +191,9 @@ function boot(): void {
     fx.update(dt);
     threat.update(w, sim.state, view.camera, dt, fx.hitTint, window.innerWidth, window.innerHeight);
     hud.update(sim);
+    numbers?.updateCamera(dt, view.camera, window.innerWidth, window.innerHeight);
+    buildBar?.update(w.player.loadout);
+    cards?.update(w, dt);
     if (sim.horde) endScreen.update(sim.world, dt);
     stick.update();
     if (panel) panel.update();
@@ -154,6 +209,8 @@ function boot(): void {
     const t0 = performance.now();
     stepMs = 0;
     steps = 0;
+    ramp.update(dt);
+    stepper.scale = ramp.scale;
     const alpha = stepper.advance(dt, tick);
     draw(alpha, dt);
     finishFrame(t0);
@@ -181,6 +238,7 @@ function boot(): void {
       },
       restart,
       stats: () => stats.summary(),
+      pick: (index) => picks.set(index),
     });
   }
 
