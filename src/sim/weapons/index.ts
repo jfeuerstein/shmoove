@@ -12,6 +12,7 @@ import {
   W_SEEKERS,
   W_SKIPPER,
   W_SLAM,
+  W_SLIPSTREAM,
   W_STATIC,
   W_WAKE,
   WEAPON_COUNT,
@@ -24,6 +25,7 @@ import type { World } from '../world';
 import { stepOrbit } from './orbit';
 import { stepSkipper } from './skipper';
 import { stepSlam } from './slam';
+import { stepSlipstream } from './slipstream';
 import { stepStatic } from './static';
 
 export interface Weapon {
@@ -45,6 +47,7 @@ registerWeapon({ id: W_SLAM, step: stepSlam });
 registerWeapon({ id: W_ORBIT, step: stepOrbit });
 registerWeapon({ id: W_STATIC, step: stepStatic });
 registerWeapon({ id: W_SKIPPER, step: stepSkipper });
+registerWeapon({ id: W_SLIPSTREAM, step: stepSlipstream });
 
 /** Mark in `pool` the weapons that exist. */
 export function builtWeapons(pool: Uint8Array): void {
