@@ -200,3 +200,15 @@ Things decided without the owner, newest last. Overrule any of them.
 60. **The gate's perf stage is sensitive to what else the machine is doing.** It failed once
    during a merge while another agent's tests were running, and passed alone on the same commit
    (7.98 ms against 9.5). Run the gate on a quiet machine before trusting a perf failure.
+61. **The run and the bosses, as built.** Bosses arrive 45 m ahead along the rider's travel, even
+   with the director switched off; one that is due while another is up waits and arrives the tick
+   the other falls. The Bruiser fixes its aim when its tell starts, at where the rider will be if
+   it keeps its line. The Mortar's and the Standstill's contact damage (15 and 25) and the
+   Mortar's ring (1.2 m, 12 damage) were the task's numbers. The Standstill's rare card is queued
+   but never opens because the run ends with it. Director tables: rate 2.5 a second rising to
+   19 by 8:00, cap 50 rising to 400; 0.6 of the rate and no new bollards while a boss is up.
+62. **A shield elite does not shield a boss**, and only enemies whose kind latches are treated as
+   holding on (a boss uses the same state number for something else). Both found by the run task
+   in lead-owned code.
+63. **Boss arrivals and falls have no effect of their own yet** beyond sound, shake and the name
+   on screen; a boss's death burst is drawn in the shuffler's colour.

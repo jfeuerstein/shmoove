@@ -13,8 +13,9 @@ survivor-like but with fun movement", and chose a skateboard for the movement. `
 second pitch; touching hurts at any speed, weapons fire on timers, nothing reads how fast the
 player is going.
 
-In progress now: the whole run (`docs/briefs/m4-run.md`), sound (`m5-audio.md`), and hit feedback
-(`m5-juice.md`). After them: balance for the ten-minute run, then verification.
+Done: the whole run with its three bosses, sound, and hit feedback. In progress: balance for the
+ten-minute run (`docs/briefs/m4-balance.md`) and an independent verification of everything since
+M2. After them: fixes, a last gate, and the playtest.
 
 Milestones M0 to M2 stand as built (toolchain, the mover and the bowl, the horde, sparks and
 levels). M3's content (cards, ten weapons, eleven passives, seven enemies, elites, map objects)
