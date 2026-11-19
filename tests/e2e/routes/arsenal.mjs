@@ -5,13 +5,14 @@
 // stay within the draw-call and triangle budgets, draw more than the empty bowl, and log nothing.
 // Last, the same stage in a second page at a high pixel density, cropped close round the rider so
 // the board and the pose can be judged (arsenal-rider.png).
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { newPhoneContext, ROOT, waitForHook, watchProblems } from '../run.mjs';
 
-/** tests/perf/budgets.json `hordeDrawCalls`: the budget with everything M3 draws on screen. */
-const DRAW_CALL_BUDGET = 32;
-/** tests/perf/budgets.json `hordeTriangles`. */
-const TRIANGLE_BUDGET = 120000;
+// The budgets with everything on screen are the perf runner's: one place to change them.
+const BUDGETS = JSON.parse(readFileSync(join(ROOT, 'tests', 'perf', 'budgets.json'), 'utf8'));
+const DRAW_CALL_BUDGET = BUDGETS.hordeDrawCalls;
+const TRIANGLE_BUDGET = BUDGETS.hordeTriangles;
 /** The empty bowl draws about 46 000 triangles; the crowd, things and weapons add well over this. */
 const MIN_EXTRA_TRIANGLES = 6000;
 const FORWARD = { steerX: 0, steerY: 1, carve: true };

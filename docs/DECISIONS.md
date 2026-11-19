@@ -244,3 +244,11 @@ Things decided without the owner, newest last. Overrule any of them.
    palette. The default look draws straight to the screen as before and costs nothing; the
    others draw through one extra full-screen pass. Additive effects were designed for a dark
    ground and are weaker on POOL DAY's light one; that is a known cost of that look.
+70. **Art pass, decided by its tasks.** Beacons over live points of interest and the far rim
+   dressing (lamps, floodlights, billboards, skyline) ignore fog, or they could not be seen from
+   the floor of the bowl; the near fence and bleachers are fogged. Pad chevrons point down the
+   slope: a pad boosts along the rider's own heading, so it has no direction of its own. Cards
+   put the icon at the left, not on top, to keep three cards in the lower half of the screen.
+   Boons are tinted like the rider and a rare card is framed white. The two-letter codes in the
+   sim's info tables are no longer shown anywhere. The enemy kinds closest to being confused at
+   30 m are the gnat and the clinger, then the shuffler and the cutter.
