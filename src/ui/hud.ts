@@ -1,12 +1,14 @@
 /**
  * The HUD: small and top centre, the speed in m/s (tinted by the gear, so it warms up as the rider
- * goes faster) and the ollie chain while there is one. With a run there is also the clock (top left), kills (top right), a thin
- * health bar along the top edge and a thin XP bar with the level along the bottom edge. Nothing sits
- * over the middle of the screen. Each element is written only when the value it shows changes.
+ * goes faster) and the ollie chain while there is one. With a run there is also the clock counting
+ * up (top left), kills (top right), a thin health bar along the top edge, a thin XP bar with the
+ * level along the bottom edge, and while a boss is on the field its bar under the clock (see
+ * `BossBar`). Nothing sits over the middle of the screen. Each element is written only when the
+ * value it shows changes.
  */
 import { gearCss, PALETTE } from '../render/look';
-import { RUN_TICKS } from '../sim/balance';
 import type { Sim } from '../sim/sim';
+import { BossBar } from './bossBar';
 import './hud.css';
 
 /** Bars are redrawn only when they move by at least 1/BAR_STEPS of their length (about 2 px). */
@@ -28,14 +30,14 @@ export function formatTime(totalSeconds: number): string {
   return `${Math.floor(s / 60)}:${r < 10 ? '0' : ''}${r}`;
 }
 
-/** The run clock: time left, rounded up so it reads 3:00 at the start and 0:00 only at the end. */
+/** The run clock: time played, counting up from 0:00. Past the final boss it keeps counting. */
 export function clockText(ticksPlayed: number): string {
-  return formatTime(secondsLeft(ticksPlayed));
+  return formatTime(secondsPlayed(ticksPlayed));
 }
 
-/** Whole seconds left on the run clock, rounded up. */
-function secondsLeft(ticksPlayed: number): number {
-  return Math.ceil(Math.max(0, RUN_TICKS - ticksPlayed) / 60);
+/** Whole seconds played. */
+function secondsPlayed(ticksPlayed: number): number {
+  return Math.floor(Math.max(0, ticksPlayed) / 60);
 }
 
 /** Fill colour of the health bar for a share of full health (0..1). */
@@ -51,6 +53,7 @@ interface RunParts {
   xp: HTMLElement;
   xpFill: HTMLElement;
   level: HTMLElement;
+  boss: BossBar;
 }
 
 export class Hud {
@@ -91,7 +94,8 @@ export class Hud {
       const xpFill = part(doc, track, 'hud-fill');
       hpFill.style.backgroundColor = cssHex(PALETTE.hp);
       xpFill.style.backgroundColor = cssHex(PALETTE.spark);
-      this.run = { clock, kills, hp, hpFill, xp, xpFill, level };
+      const boss = new BossBar(doc, el);
+      this.run = { clock, kills, hp, hpFill, xp, xpFill, level, boss };
     } else {
       this.run = null;
     }
@@ -122,11 +126,12 @@ export class Hud {
     const w = sim.world;
     const p = w.player;
 
-    const left = secondsLeft(w.run.ticks);
-    if (left !== this.clockSeconds) {
-      this.clockSeconds = left;
-      r.clock.textContent = formatTime(left);
+    const played = secondsPlayed(w.run.ticks);
+    if (played !== this.clockSeconds) {
+      this.clockSeconds = played;
+      r.clock.textContent = formatTime(played);
     }
+    r.boss.update(w, sim.state.tick);
     if (p.kills !== this.kills) {
       this.kills = p.kills;
       r.kills.textContent = `${p.kills} kills`;

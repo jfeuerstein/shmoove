@@ -7,8 +7,10 @@
 import type { InputSource } from '../input/source';
 import { setPassiveLevel, setWeaponLevel } from '../sim/build';
 import { hurtPlayer } from '../sim/contact';
+import { findBoss } from '../sim/bosses';
+import { TICK_HZ } from '../sim/constants';
 import { copySimState, type Sim } from '../sim/sim';
-import type { World } from '../sim/world';
+import { damageEnemy, type World } from '../sim/world';
 import type { InputFrame } from '../sim/types';
 import type { FrameStatsSummary } from './loop';
 
@@ -44,6 +46,10 @@ export interface HookState {
   weapons: HookItem[];
   passives: HookItem[];
   tokens: number;
+  /** The boss on the field (`kind` -1 when none) and how many have fallen. */
+  boss: { kind: number; hp: number; maxHp: number; x: number; z: number; felled: number };
+  /** Offers waiting behind the open one. */
+  offersQueued: number;
 }
 
 /** A rail on the map: its two ends, in world space. */
@@ -97,6 +103,10 @@ export interface TestHook {
   rails(): HookRail[];
   /** Put the rider on the ground at (x, z), heading `yaw`, moving at `speed` m/s, the view behind it. */
   place(x: number, z: number, yaw: number, speed: number): void;
+  /** Set the run clock to `seconds`: the director and the bosses go by it from the next step. */
+  setClock(seconds: number): void;
+  /** Take the boss on the field down to no health: it falls on the next step. False if there is none. */
+  killBoss(): boolean;
 }
 
 declare global {
@@ -212,6 +222,8 @@ export function installTestHook(host: HookHost): TestHook {
         weapons: items(w.player.loadout.weapons, w.player.loadout.weaponLevel),
         passives: items(w.player.loadout.passives, w.player.loadout.passiveLevel),
         tokens: w.player.tokens,
+        boss: { ...w.boss },
+        offersQueued: w.offerQueued,
       };
     },
     hold(frame) {
@@ -284,6 +296,17 @@ export function installTestHook(host: HookHost): TestHook {
       s.viewYaw = yaw;
       // No streak from where it was.
       copySimState(sim.prev, s);
+    },
+    setClock(seconds) {
+      if (!Number.isFinite(seconds) || seconds < 0) return;
+      host.sim.world.run.ticks = Math.round(seconds * TICK_HZ);
+    },
+    killBoss() {
+      const w = host.sim.world;
+      const i = findBoss(w);
+      if (i < 0) return false;
+      damageEnemy(w, i, w.horde.hp[i] + 1);
+      return true;
     },
   };
   window.__shmoove = hook;
