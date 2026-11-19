@@ -18,6 +18,7 @@
     "e2e": "node tests/e2e/run.mjs",
     "e2e:pwa": "node tests/e2e/pwa.mjs",
     "perf": "node tests/perf/run.mjs",
+    "balance": "vitest run --config tests/balance/vitest.config.ts",
     "gate": "node scripts/gate.mjs"
   },
   "dependencies": {
