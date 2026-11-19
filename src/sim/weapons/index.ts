@@ -1,8 +1,10 @@
 /**
  * The weapons, by id. A weapon is a step function run once a tick for as long as the player
- * carries it, after contact and before the dead are reaped: indices are stable, the grid is fresh,
- * and `s.events` holds what the mover did this tick. A weapon with no step works through the
- * player's stats instead (the Bumper).
+ * carries it, after contact and before the dead are reaped: indices are stable and the grid is
+ * fresh. A weapon with no step works through the player's stats instead (the Bumper).
+ *
+ * Every weapon but the Wake fires on its own clock (`./timer`): how the mover moves (its speed,
+ * gear, hops, landings, tuck) never changes when, how hard or how far a weapon hits.
  *
  * A weapon that is not in this table yet is never offered.
  */

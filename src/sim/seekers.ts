@@ -1,8 +1,10 @@
 /**
- * Seekers: darts that fire themselves every few metres travelled. Standing still fires nothing;
- * speed is the fire rate, and the gear at the moment of firing is the damage.
+ * Seekers: a volley of homing darts every second or so, at the nearest enemies in range. With
+ * nothing in range the volley waits, and goes the moment something comes in. Riding or standing,
+ * the rate and the damage are the same.
  */
 import { powerOf } from './stats';
+import { afterShot, isReady, waitOf } from './weapons/timer';
 import { DT } from './constants';
 import { dcos, dsin } from './math';
 import type { Terrain } from './terrain';
@@ -23,8 +25,8 @@ import {
 
 /** By weapon level 1..5. */
 export const SEEKERS = {
-  /** Metres travelled between volleys. */
-  interval: [12, 10, 9, 8, 7],
+  /** Seconds between volleys, before Haste. */
+  wait: [1.2, 1.05, 0.9, 0.8, 0.7],
   /** Darts per volley. */
   darts: [1, 2, 2, 3, 4],
   /** Damage per dart before gear power. */
@@ -197,18 +199,19 @@ function steer(w: World, i: number, dx: number, dy: number, dz: number): void {
   sh.vz[i] = (nz / nl) * DART_SPEED;
 }
 
-/** Fill the meter from distance, fire volleys, and fly the darts already out. */
+/**
+ * Wait out the volley's time (seconds waited, in `w.seekerMeter`), fire when it is up, and fly the
+ * darts already out.
+ */
 export function stepSeekers(w: World, s: SimState, terrain: Terrain, level: number): void {
-  const m = s.mover;
-
   if (level <= 0) {
     w.seekerMeter = 0;
   } else {
-    const interval = SEEKERS.interval[level - 1];
-    w.seekerMeter += Math.sqrt(m.vx * m.vx + m.vz * m.vz) * DT;
-    if (w.seekerMeter >= interval) {
-      if (fire(w, s, level)) w.seekerMeter -= interval;
-      else w.seekerMeter = interval;
+    const wait = waitOf(SEEKERS.wait[level - 1], w.player.stats);
+    w.seekerMeter += DT;
+    if (isReady(w.seekerMeter, wait)) {
+      // With nothing in range the volley stays ready, and goes the moment something comes in.
+      w.seekerMeter = fire(w, s, level) ? afterShot(w.seekerMeter, wait) : wait;
     }
   }
 

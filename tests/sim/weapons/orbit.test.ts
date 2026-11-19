@@ -1,4 +1,4 @@
-/** What a player would notice about the Orbit: discs circle you as fast as you move, and cut what they pass. */
+/** What a player would notice about the Orbit: discs circle you at a steady turn, moving or not, and cut what they pass. */
 import { describe, expect, it } from 'vitest';
 import { P_WIDE_LOAD, W_ORBIT } from '../../../src/sim/arsenal';
 import { gearPower } from '../../../src/sim/balance';
@@ -10,7 +10,7 @@ import { ORBIT, orbitDisc, stepOrbit } from '../../../src/sim/weapons/orbit';
 import { KIND_SHUFFLER, KINDS, rebuildGrid, WEAPON_MEM } from '../../../src/sim/world';
 import { FORWARD, TUCK } from '../fixtures';
 import { place } from '../world-fixtures';
-import { placeRising, rig, tick } from './rig';
+import { haste, placeRising, rig, tick, ticksIn } from './rig';
 
 const SPEED = 10;
 const v: Vec3 = { x: 0, y: 0, z: 0 };
@@ -78,30 +78,32 @@ describe('the discs', () => {
     expect(Math.hypot(d[0].x - m.x, d[0].z - m.z)).toBeCloseTo(ORBIT.radius * sim.world.player.stats.area, 5);
   });
 
-  it('turn half a radian per metre travelled', () => {
-    const sim = rig(W_ORBIT, 2);
-    tick(sim, FORWARD, { speed: SPEED });
-    const a0 = angleOf(sim);
-    const d0 = sim.state.distance;
-    for (let t = 0; t < 30; t++) tick(sim, FORWARD, { speed: SPEED });
-    const turned = (((angleOf(sim) - a0) % TAU) + TAU) % TAU;
-    const metres = sim.state.distance - d0;
-    expect(metres).toBeGreaterThan(4);
-    expect(turned).toBeCloseTo((metres * ORBIT.turnPerMetre) % TAU, 2);
+  it('turn at 2.2 rad/s, riding or standing', () => {
+    for (const [input, speed] of [
+      [FORWARD, SPEED],
+      [TUCK, 0],
+      [FORWARD, 30],
+    ] as const) {
+      const sim = rig(W_ORBIT, 2);
+      tick(sim, input, { speed });
+      const a0 = angleOf(sim);
+      for (let t = 0; t < 30; t++) tick(sim, input, { speed });
+      const turned = (((angleOf(sim) - a0) % TAU) + TAU) % TAU;
+      expect(turned).toBeCloseTo(ORBIT.turnRate * 0.5, 4);
+    }
   });
 
-  it('stand still when the mover stands still, and hit nothing', () => {
+  it('cut what they pass standing still', () => {
     const sim = rig(W_ORBIT, 5);
-    tick(sim, TUCK);
-    const a0 = angleOf(sim);
     const m = sim.state.mover;
-    // An enemy right on a disc.
-    orbitDisc(sim.world, sim.state, 0, v);
-    const e = place(sim, KIND_SHUFFLER, v.x, v.z);
+    // An enemy a quarter turn ahead of the first disc, on the circle.
+    tick(sim, TUCK);
+    const a = angleOf(sim) + Math.PI / 4;
+    const e = place(sim, KIND_SHUFFLER, m.x + Math.sin(a) * ORBIT.radius, m.z + Math.cos(a) * ORBIT.radius);
+    sim.world.horde.hp[e] = 1000;
     for (let t = 0; t < 300; t++) tick(sim, TUCK);
     expect(Math.hypot(m.vx, m.vz)).toBe(0);
-    expect(angleOf(sim)).toBe(a0);
-    expect(sim.world.horde.hp[e]).toBe(KINDS[KIND_SHUFFLER].hp);
+    expect(sim.world.horde.hp[e]).toBeLessThan(1000);
   });
 });
 
@@ -128,16 +130,16 @@ describe('what they hit', () => {
     expect(outside).toBe(0);
   });
 
-  it('each disc strikes at most once every 12 ticks, the discs taking turns', () => {
-    const sim = rig(W_ORBIT, 5);
-    const n = ORBIT.discs[4];
-    // A ring of enemies all round the circle, so every disc always has something to strike.
+  /**
+   * Ticks on which some disc struck, over `ticks` among a ring of enemies all round the circle (so
+   * every disc always has something to strike), standing still or riding.
+   */
+  function strikesOnRing(sim: Sim, ticks: number, speed: number): number {
     const ring: [number, number][] = [];
     for (let k = 0; k < 18; k++) ring.push([Math.sin((k / 18) * TAU) * r, Math.cos((k / 18) * TAU) * r]);
     const h = sim.world.horde;
     const ids = ring.map(() => place(sim, KIND_SHUFFLER, 0, 0));
     let strikeTicks = 0;
-    const ticks = 600;
     for (let t = 0; t < ticks; t++) {
       const m = sim.state.mover;
       ring.forEach(([dx, dz], j) => {
@@ -145,15 +147,35 @@ describe('what they hit', () => {
         h.z[ids[j]] = m.z + dz;
         h.hp[ids[j]] = 1e6;
       });
-      tick(sim, FORWARD, { speed: SPEED });
+      tick(sim, speed > 0 ? FORWARD : TUCK, { speed });
       let struck = false;
       for (const i of ids) if (h.hp[i] < 1e6) struck = true;
       if (struck) strikeTicks++;
     }
-    // At most one disc a tick, each at most once in 12: n strikes per 12 ticks at the most...
-    expect(strikeTicks).toBeLessThanOrEqual(Math.ceil((ticks * n) / ORBIT.cooldown) + n);
-    // ...and with something always in reach, close to that.
-    expect(strikeTicks).toBeGreaterThan(((ticks * n) / ORBIT.cooldown) * 0.9);
+    return strikeTicks;
+  }
+
+  it('each disc strikes at most once every 0.2 s, the discs taking turns, riding or standing', () => {
+    const n = ORBIT.discs[4];
+    const ticks = 600;
+    const most = (ticks * n) / ticksIn(ORBIT.wait);
+    for (const speed of [0, SPEED]) {
+      const strikeTicks = strikesOnRing(rig(W_ORBIT, 5), ticks, speed);
+      // At most one disc a tick, each at most once in its wait: n strikes per wait at the most...
+      expect(strikeTicks).toBeLessThanOrEqual(Math.ceil(most) + n);
+      // ...and with something always in reach, close to that.
+      expect(strikeTicks).toBeGreaterThan(most * 0.9);
+    }
+  });
+
+  it('Haste shortens each disc\'s wait in proportion', () => {
+    const ticks = 1200;
+    const plain = strikesOnRing(rig(W_ORBIT, 3), ticks, 0);
+    const sim = rig(W_ORBIT, 3);
+    const k = haste(sim, 5);
+    const quick = strikesOnRing(sim, ticks, 0);
+    expect(plain).toBeGreaterThan(100);
+    expect(quick / plain).toBeCloseTo(1 / k, 1);
   });
 
   it('never touches an enemy that is still rising', () => {
@@ -167,8 +189,8 @@ describe('what they hit', () => {
     const w = sim.world;
     const s = sim.state;
     const h = w.horde;
-    // Moving, so the discs strike; one disc stands on a dead enemy, the other on nothing.
-    tick(sim, FORWARD, { speed: SPEED });
+    // Past the first wait, so the discs are ready; one disc stands on a dead enemy, the other on nothing.
+    for (let t = 0; t < ticksIn(ORBIT.wait) + 1; t++) tick(sim, FORWARD, { speed: SPEED });
     orbitDisc(w, s, 0, v);
     const dead = place(sim, KIND_SHUFFLER, v.x, v.z);
     h.hp[dead] = 0;

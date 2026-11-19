@@ -1,7 +1,7 @@
 /**
- * Slipstream: from gear 2 up, a draft trails the mover. Sparks caught in it fly to the player, and
- * small enemies in it are dragged in toward the line straight behind the mover, which is where the
- * Wake burns. It does no damage of its own: it feeds the trail.
+ * Slipstream: a draft always trails the mover, straight back from its heading. Sparks caught in it
+ * fly to the player, and small enemies in it are dragged in toward the line straight behind the
+ * mover, which is where the Wake burns. It does no damage of its own: it feeds the trail.
  */
 import { DT } from '../constants';
 import { dcos, dsin, PI } from '../math';
@@ -17,17 +17,15 @@ export const SLIPSTREAM = {
   draw: [2, 2.5, 3, 3.5, 4],
   /** Half the cone's opening, degrees. */
   halfAngleDegrees: 25,
-  /** The lowest gear with a draft. */
-  minGear: 2,
 } as const;
 
 const HALF_ANGLE = (SLIPSTREAM.halfAngleDegrees * PI) / 180;
 const TAN_HALF = dsin(HALF_ANGLE) / dcos(HALF_ANGLE);
 
-/** The draft's length now, m: 0 when there is none. For the renderer and tests. */
-export function slipstreamLength(w: World, s: SimState, level: number): number {
-  if (level <= 0 || s.mover.gear < SLIPSTREAM.minGear) return 0;
-  return SLIPSTREAM.length[level - 1] * w.player.stats.area;
+/** The draft's length at `level`, m: 0 when the player does not carry it. For the renderer and tests. */
+export function slipstreamLength(w: World, _s: SimState, level: number): number {
+  if (level <= 0) return 0;
+  return SLIPSTREAM.length[(level > 5 ? 5 : level) - 1] * w.player.stats.area;
 }
 
 export function stepSlipstream(w: World, s: SimState, terrain: Terrain, level: number): void {

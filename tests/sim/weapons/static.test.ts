@@ -1,19 +1,19 @@
-/** What a player would notice about Static: travel charges it, and a full charge arcs through a chain. */
+/** What a player would notice about Static: every few seconds a bolt arcs through a chain, moving or not. */
 import { describe, expect, it } from 'vitest';
 import { W_STATIC } from '../../../src/sim/arsenal';
-import { gearPower } from '../../../src/sim/balance';
 import type { Sim } from '../../../src/sim/sim';
 import { STATIC, staticCharge, stepStatic } from '../../../src/sim/weapons/static';
 import { FX_ARC, KIND_BOLLARD, KIND_SHUFFLER, KINDS, MAX_FX, rebuildGrid, WEAPON_MEM } from '../../../src/sim/world';
 import { FORWARD, TUCK } from '../fixtures';
 import { place } from '../world-fixtures';
-import { placeRising, pointAt, rig, tick } from './rig';
+import { haste, placeRising, pointAt, rig, tick, ticksIn } from './rig';
 
 const SPEED = 10;
 
-/** Fill the charge so the next step discharges if it can. */
+/** Wait out the wait, so the next step discharges if it can. */
 function charge(sim: Sim): void {
-  sim.world.mem[W_STATIC * WEAPON_MEM] = STATIC.interval[sim.world.player.loadout.weaponLevel[W_STATIC] - 1];
+  const level = sim.world.player.loadout.weaponLevel[W_STATIC];
+  sim.world.mem[W_STATIC * WEAPON_MEM] = STATIC.wait[level - 1] * sim.world.player.stats.haste;
 }
 
 interface Arc {
@@ -39,64 +39,66 @@ function line(sim: Sim, count: number, first: number, gap: number): number[] {
   return ids;
 }
 
-describe('the charge', () => {
-  it('builds with distance and discharges once every interval', () => {
+describe('the wait', () => {
+  it('discharges once every wait, the first after a full wait, standing or riding', () => {
     for (const level of [1, 5]) {
-      const sim = rig(W_STATIC, level);
-      const h = sim.world.horde;
-      const e = place(sim, KIND_BOLLARD, 0, 0);
-      let discharges = 0;
-      for (let t = 0; t < 60 * 20; t++) {
-        // A tough target keeping pace just ahead, so there is always something in reach.
-        const p = pointAt(sim, 6);
-        h.x[e] = p.x;
-        h.z[e] = p.z;
-        h.hp[e] = 1e6;
-        tick(sim, FORWARD, { speed: SPEED });
-        discharges += arcs(sim).filter((a) => a.a === 0).length;
+      for (const speed of [0, SPEED]) {
+        const sim = rig(W_STATIC, level);
+        const h = sim.world.horde;
+        const e = place(sim, KIND_BOLLARD, 0, 0);
+        const wait = ticksIn(STATIC.wait[level - 1]);
+        const at: number[] = [];
+        for (let t = 1; t <= 60 * 20; t++) {
+          // A tough target keeping pace just ahead, so there is always something in reach.
+          const p = pointAt(sim, 6);
+          h.x[e] = p.x;
+          h.z[e] = p.z;
+          h.hp[e] = 1e6;
+          tick(sim, speed > 0 ? FORWARD : TUCK, { speed });
+          if (arcs(sim).some((a) => a.a === 0)) at.push(t);
+        }
+        expect(at.length).toBe(Math.floor((60 * 20) / wait));
+        expect(at[0]).toBe(wait);
       }
-      const metres = sim.state.distance;
-      expect(discharges).toBe(Math.floor(metres / STATIC.interval[level - 1]));
-      expect(discharges).toBeGreaterThan(5);
     }
   });
 
-  it('builds nothing standing still, and nothing at level 0', () => {
-    const still = rig(W_STATIC, 5);
-    const p = pointAt(still, 4);
-    const a = place(still, KIND_BOLLARD, p.x, p.z);
-    let seen = 0;
-    for (let t = 0; t < 600; t++) seen += tick(still, TUCK, {}, FX_ARC);
-    expect(staticCharge(still.world)).toBe(0);
-    expect(seen).toBe(0);
-    expect(still.world.horde.hp[a]).toBe(KINDS[KIND_BOLLARD].hp);
-
-    const off = rig(W_STATIC, 0);
-    const b = place(off, KIND_BOLLARD, 0, 0);
-    seen = 0;
-    for (let t = 0; t < 600; t++) {
-      const q = pointAt(off, 5);
-      off.world.horde.x[b] = q.x;
-      off.world.horde.z[b] = q.z;
-      seen += tick(off, FORWARD, { speed: SPEED }, FX_ARC);
+  it('Haste shortens the wait in proportion', () => {
+    const sim = rig(W_STATIC, 2);
+    const k = haste(sim, 4);
+    const e = place(sim, KIND_BOLLARD, 0, 5);
+    let discharges = 0;
+    for (let t = 0; t < 60 * 40; t++) {
+      sim.world.horde.hp[e] = 1e6;
+      tick(sim, TUCK);
+      discharges += arcs(sim).filter((a) => a.a === 0).length;
     }
+    expect(Math.abs(discharges - 40 / (STATIC.wait[1] * k))).toBeLessThanOrEqual(1);
+  });
+
+  it('nothing at level 0', () => {
+    const off = rig(W_STATIC, 0);
+    const b = place(off, KIND_BOLLARD, 0, 5);
+    let seen = 0;
+    for (let t = 0; t < 600; t++) seen += tick(off, TUCK, {}, FX_ARC);
     expect(seen).toBe(0);
     expect(staticCharge(off.world)).toBe(0);
+    expect(off.world.horde.hp[b]).toBe(KINDS[KIND_BOLLARD].hp);
   });
 
-  it('waits, full, with nothing in reach, and goes off the moment something comes close', () => {
+  it('waits, ready, with nothing in reach, and goes off the moment something comes close', () => {
     const sim = rig(W_STATIC, 1);
     let seen = 0;
-    for (let t = 0; t < 60 * 6; t++) seen += tick(sim, FORWARD, { speed: SPEED }, FX_ARC);
+    for (let t = 0; t < 60 * 6; t++) seen += tick(sim, TUCK, {}, FX_ARC);
     expect(seen).toBe(0);
-    expect(staticCharge(sim.world)).toBe(STATIC.interval[0]);
+    expect(staticCharge(sim.world)).toBe(STATIC.wait[0]);
     const far = pointAt(sim, STATIC.reach + KINDS[KIND_SHUFFLER].radius + 2, Math.PI);
     place(sim, KIND_SHUFFLER, far.x, far.z);
     expect(tick(sim, TUCK, {}, FX_ARC)).toBe(0);
     const near = pointAt(sim, STATIC.reach - 1);
     place(sim, KIND_SHUFFLER, near.x, near.z);
     expect(tick(sim, TUCK, {}, FX_ARC)).toBe(1);
-    expect(staticCharge(sim.world)).toBeLessThan(STATIC.interval[0]);
+    expect(staticCharge(sim.world)).toBeLessThan(STATIC.wait[0]);
   });
 });
 
@@ -117,7 +119,7 @@ describe('the chain', () => {
       expect(a.x).toBeCloseTo(pos[k].x, 4);
       expect(a.z).toBeCloseTo(pos[k].z, 4);
     });
-    const dmg = STATIC.damage[1] * gearPower(sim.state.mover.gear);
+    const dmg = STATIC.damage[1] * sim.world.player.stats.might;
     ids.forEach((i, k) => {
       if (k < want) expect(KINDS[KIND_BOLLARD].hp - h.hp[i]).toBeCloseTo(dmg, 4);
       else expect(h.hp[i]).toBe(KINDS[KIND_BOLLARD].hp);

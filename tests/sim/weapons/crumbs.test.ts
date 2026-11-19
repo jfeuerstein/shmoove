@@ -1,7 +1,6 @@
-/** What a player would notice about Crumbs: mines dropped along your path go off under whoever follows. */
+/** What a player would notice about Crumbs: a mine at your feet every second or so goes off under whoever comes near. */
 import { describe, expect, it } from 'vitest';
 import { P_WIDE_LOAD, W_CRUMBS } from '../../../src/sim/arsenal';
-import { gearPower } from '../../../src/sim/balance';
 import { setPassiveLevel } from '../../../src/sim/build';
 import type { Sim } from '../../../src/sim/sim';
 import { CRUMBS, stepCrumbs } from '../../../src/sim/weapons/crumbs';
@@ -17,7 +16,7 @@ import {
   ZONE_TAR } from '../../../src/sim/world';
 import { FORWARD, TUCK } from '../fixtures';
 import { place } from '../world-fixtures';
-import { placeRising, rig, tick } from './rig';
+import { haste, placeRising, rig, tick, ticksIn } from './rig';
 
 const SPEED = 10;
 
@@ -39,34 +38,48 @@ function dropOne(sim: Sim): { x: number; z: number } {
 }
 
 describe('laying', () => {
-  it('drops a mine on the ground every interval metres along the path', () => {
+  it('drops a mine on the ground at the mover\'s feet every wait, the first after a full wait, standing or riding', () => {
     for (const level of [1, 5]) {
-      const sim = rig(W_CRUMBS, level);
-      const laid: { x: number; z: number; d: number }[] = [];
-      let seen = 0;
-      for (let t = 0; t < 300; t++) {
-        tick(sim, FORWARD, { speed: SPEED });
-        const ms = mines(sim);
-        if (ms.length > seen) {
-          const i = ms[ms.length - 1];
-          const zn = sim.world.zones;
-          expect(zn.y[i]).toBeCloseTo(sim.terrain.heightAt(zn.x[i], zn.z[i]), 5);
-          laid.push({ x: zn.x[i], z: zn.z[i], d: sim.state.distance });
+      for (const speed of [0, SPEED]) {
+        const sim = rig(W_CRUMBS, level);
+        const at: number[] = [];
+        let seen = 0;
+        for (let t = 1; t <= 600; t++) {
+          tick(sim, speed > 0 ? FORWARD : TUCK, { speed });
+          const ms = mines(sim);
+          if (ms.length > seen) {
+            const i = ms[ms.length - 1];
+            const zn = sim.world.zones;
+            const m = sim.state.mover;
+            expect(zn.y[i]).toBeCloseTo(sim.terrain.heightAt(zn.x[i], zn.z[i]), 5);
+            expect(zn.x[i]).toBeCloseTo(m.x, 5);
+            expect(zn.z[i]).toBeCloseTo(m.z, 5);
+            at.push(t);
+          }
+          seen = ms.length;
         }
-        seen = ms.length;
-      }
-      const interval = CRUMBS.interval[level - 1];
-      expect(laid.length).toBe(Math.floor(sim.state.distance / interval));
-      for (let k = 1; k < laid.length; k++) {
-        expect(Math.hypot(laid[k].x - laid[k - 1].x, laid[k].z - laid[k - 1].z)).toBeCloseTo(interval, 0);
+        const wait = ticksIn(CRUMBS.wait[level - 1]);
+        expect(at.length).toBe(Math.floor(600 / wait));
+        expect(at[0]).toBe(wait);
       }
     }
   });
 
-  it('drops nothing standing still, and nothing at level 0', () => {
-    const still = rig(W_CRUMBS, 5);
-    for (let t = 0; t < 600; t++) tick(still, TUCK);
-    expect(mines(still).length).toBe(0);
+  it('Haste drops them more often, in proportion', () => {
+    const sim = rig(W_CRUMBS, 2);
+    const k = haste(sim, 5);
+    let laid = 0;
+    let seen = 0;
+    for (let t = 0; t < ticksIn(30); t++) {
+      tick(sim, FORWARD, { speed: SPEED });
+      const n = mines(sim).length;
+      if (n > seen) laid++;
+      seen = n;
+    }
+    expect(Math.abs(laid - 30 / (CRUMBS.wait[1] * k))).toBeLessThanOrEqual(1);
+  });
+
+  it('drops nothing at level 0', () => {
     const off = rig(W_CRUMBS, 0);
     for (let t = 0; t < 600; t++) tick(off, FORWARD, { speed: SPEED });
     expect(mines(off).length).toBe(0);
@@ -74,10 +87,11 @@ describe('laying', () => {
 
   it('keeps at most 12 down: a new one takes the oldest one\'s place', () => {
     const sim = rig(W_CRUMBS, 5);
+    haste(sim, 5);
     let first: { x: number; z: number } | null = null;
     let peak = 0;
-    for (let t = 0; t < 600; t++) {
-      tick(sim, FORWARD, { speed: 30 });
+    for (let t = 0; t < 900; t++) {
+      tick(sim, FORWARD, { speed: SPEED });
       const ms = mines(sim);
       if (!first && ms.length === 1) first = { x: sim.world.zones.x[ms[0]], z: sim.world.zones.z[ms[0]] };
       peak = Math.max(peak, ms.length);
@@ -91,11 +105,16 @@ describe('laying', () => {
 
   it('a mine nobody steps near is gone after 600 ticks', () => {
     const sim = rig(W_CRUMBS, 1);
-    dropOne(sim);
-    for (let t = 0; t < CRUMBS.lifeTicks - 2; t++) tick(sim, TUCK);
-    expect(mines(sim).length).toBe(1);
-    for (let t = 0; t < 3; t++) tick(sim, TUCK);
-    expect(mines(sim).length).toBe(0);
+    const at = dropOne(sim);
+    const there = (): boolean => {
+      const zn = sim.world.zones;
+      return mines(sim).some((i) => zn.x[i] === at.x && zn.z[i] === at.z);
+    };
+    // Riding on, so the mines laid since are elsewhere.
+    for (let t = 0; t < CRUMBS.lifeTicks - 2; t++) tick(sim, FORWARD, { speed: SPEED });
+    expect(there()).toBe(true);
+    for (let t = 0; t < 3; t++) tick(sim, FORWARD, { speed: SPEED });
+    expect(there()).toBe(false);
   });
 
   it('leaves zones that are not mines alone, and never overflows a nearly full pool', () => {
@@ -153,7 +172,6 @@ describe('going off', () => {
     const trip = place(sim, KIND_BOLLARD, at.x, at.z + 0.5);
     const edge = place(sim, KIND_BOLLARD, at.x + R + br - 0.2, at.z);
     const beyond = place(sim, KIND_BOLLARD, at.x - (R + br + 0.3), at.z);
-    const gear = sim.state.mover.gear;
     let radius = -1;
     let blasts = 0;
     for (let t = 0; t < 30; t++) {
@@ -168,7 +186,7 @@ describe('going off', () => {
     expect(blasts).toBe(1);
     expect(radius).toBeCloseTo(R, 5);
     const h = sim.world.horde;
-    const dmg = CRUMBS.damage[1] * gearPower(gear);
+    const dmg = CRUMBS.damage[1] * sim.world.player.stats.might;
     expect(KINDS[KIND_BOLLARD].hp - h.hp[trip]).toBeCloseTo(dmg, 4);
     expect(KINDS[KIND_BOLLARD].hp - h.hp[edge]).toBeCloseTo(dmg, 4);
     expect(h.hp[beyond]).toBe(KINDS[KIND_BOLLARD].hp);

@@ -1,4 +1,4 @@
-/** What a player would notice about the Slipstream: from gear 2 your draft pulls sparks and small fry into your line. */
+/** What a player would notice about the Slipstream: your draft always pulls sparks and small fry into your line. */
 import { describe, expect, it } from 'vitest';
 import { P_WIDE_LOAD, W_SLIPSTREAM } from '../../../src/sim/arsenal';
 import { setPassiveLevel } from '../../../src/sim/build';
@@ -41,18 +41,16 @@ function addSpark(sim: Sim, x: number, z: number): number {
   return i;
 }
 
-/** Standing still, held in `gear` (speed has nothing to do with the draft; the gear does). */
+/** Standing still, held in `gear` (neither speed nor gear has anything to do with the draft). */
 function stand(sim: Sim, ticks: number, gear: number): void {
   for (let t = 0; t < ticks; t++) tick(sim, TUCK, { gear });
 }
 
 describe('the draft', () => {
-  it('is there from gear 2 up, as long as the level says, times area', () => {
+  it('is there in every gear, as long as the level says, times area', () => {
     for (let level = 1; level <= 5; level++) {
       const sim = rig(W_SLIPSTREAM, level);
-      stand(sim, 1, 1);
-      expect(slipstreamLength(sim.world, sim.state, level)).toBe(0);
-      for (let gear = 2; gear <= 5; gear++) {
+      for (let gear = 1; gear <= 5; gear++) {
         stand(sim, 1, gear);
         expect(slipstreamLength(sim.world, sim.state, level)).toBe(SLIPSTREAM.length[level - 1]);
       }
@@ -76,7 +74,7 @@ describe('the draft', () => {
     const wide = at(6, 6 * tan + 0.4);
     const beyond = at(len + 0.5, 0);
     const ahead = at(-6, 0);
-    stand(sim, 1, 2);
+    stand(sim, 1, 1);
     const s = sim.world.sparks;
     expect(s.pull[inCone]).toBe(1);
     expect(s.pull[wide]).toBe(0);
@@ -84,20 +82,22 @@ describe('the draft', () => {
     expect(s.pull[ahead]).toBe(0);
   });
 
-  it('does nothing in gear 1 or at level 0', () => {
-    for (const [level, gear] of [
-      [3, 1],
-      [0, 3],
-    ]) {
+  it('works standing still in gear 1, and does nothing at level 0', () => {
+    for (const level of [3, 0]) {
       const sim = rig(W_SLIPSTREAM, level);
       const p = behind(sim, 6, 0);
       const spark = addSpark(sim, p.x, p.z);
       const q = behind(sim, 5, 1.5);
       const e = place(sim, KIND_SHUFFLER, q.x, q.z);
       const before = offset(sim, e);
-      stand(sim, 60, gear);
-      expect(sim.world.sparks.pull[spark]).toBe(0);
-      expect(offset(sim, e).side).toBeCloseTo(before.side, 5);
+      stand(sim, 60, 1);
+      if (level > 0) {
+        expect(sim.world.sparks.pull[spark]).toBe(1);
+        expect(offset(sim, e).side).toBeLessThan(before.side - 1);
+      } else {
+        expect(sim.world.sparks.pull[spark]).toBe(0);
+        expect(offset(sim, e).side).toBeCloseTo(before.side, 5);
+      }
     }
   });
 });
