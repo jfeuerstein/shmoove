@@ -1,0 +1,55 @@
+.threat {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 5;
+  /* --threat-rgb is set from PALETTE.threat by threat.ts. */
+}
+
+/* Bottom edge and the lower half of both sides; the top, where the HUD is, stays clear. */
+.threat-glow {
+  position: absolute;
+  inset: 0;
+  will-change: opacity;
+  background:
+    linear-gradient(to top, rgba(var(--threat-rgb), 0.6) 0, rgba(var(--threat-rgb), 0) 18%),
+    linear-gradient(to right, rgba(var(--threat-rgb), 0.45) 0, rgba(var(--threat-rgb), 0) 8%),
+    linear-gradient(to left, rgba(var(--threat-rgb), 0.45) 0, rgba(var(--threat-rgb), 0) 8%);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 35%, #000 75%);
+  mask-image: linear-gradient(to bottom, transparent 35%, #000 75%);
+}
+
+.threat-hit {
+  position: absolute;
+  inset: 0;
+  will-change: opacity;
+  background: radial-gradient(ellipse at center, rgba(var(--threat-rgb), 0.15) 30%, rgba(var(--threat-rgb), 0.85) 100%);
+}
+
+/* Moved by transform only: translate to the edge point, then turn to point at the bollard. */
+.threat-marker {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  will-change: transform;
+}
+
+.threat-marker::before {
+  content: '';
+  position: absolute;
+  left: -11px;
+  top: -10px;
+  width: 22px;
+  height: 18px;
+  opacity: 0.9;
+  background: rgb(var(--threat-rgb));
+  clip-path: polygon(50% 0, 100% 100%, 50% 72%, 0 100%);
+  filter: drop-shadow(0 0 4px rgba(0, 0, 0, 0.6));
+}
+
+.threat-marker[hidden] {
+  display: none;
+}
