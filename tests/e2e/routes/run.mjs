@@ -70,6 +70,7 @@ export default {
     check((await cardShown(page)) === true, 'the card appears');
     const title = await text(page, '.end-title');
     check(title === 'STOPPED', 'the card says STOPPED', title);
+    check((await text(page, '.hud-speed')) === '0 m/s', 'the end card shows a speed of 0 m/s', await text(page, '.hud-speed'));
     await hook.step(30);
     const still = await hook.state();
     check(dist(dead, still) < 0.001, 'the mover has stopped', { dead, still });
