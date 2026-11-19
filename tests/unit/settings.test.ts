@@ -168,6 +168,29 @@ describe('settings', () => {
     expect(parseStored(JSON.stringify({ v: 1, feel: {}, lessonDone: 'yes' })).lessonDone).toBe(false);
   });
 
+  it('has haptics on by default, remembers a change, and keeps it through other saves', () => {
+    const store = memoryStorage();
+    const a = new Settings(store, '', 'tuck', defaults());
+    expect(a.haptics).toBe(true);
+    a.chooseHaptics(false);
+    a.chooseAutoPick(true);
+    expect(new Settings(store, '', 'tuck', defaults()).haptics).toBe(false);
+    a.chooseHaptics(true);
+    expect(new Settings(store, '', 'tuck', defaults()).haptics).toBe(true);
+    expect(parseStored(JSON.stringify({ v: 1, feel: {}, haptics: 'no' })).haptics).toBe(true);
+  });
+
+  it('has reduced motion off unless the browser asks, then the saved choice wins', () => {
+    const store = memoryStorage();
+    expect(new Settings(store, '', 'tuck', defaults()).reducedMotion).toBe(false);
+    const b = new Settings(store, '', 'tuck', defaults(), true);
+    expect(b.reducedMotion).toBe(true);
+    b.chooseReducedMotion(false);
+    expect(new Settings(store, '', 'tuck', defaults(), true).reducedMotion).toBe(false);
+    b.chooseReducedMotion(true);
+    expect(new Settings(store, '', 'tuck', defaults(), false).reducedMotion).toBe(true);
+  });
+
   it('runs without storage: the lesson is simply not remembered', () => {
     const s = new Settings(null, '', 'tuck', defaults());
     s.chooseLessonDone(true);
