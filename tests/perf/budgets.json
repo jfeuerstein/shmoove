@@ -1,11 +1,11 @@
 {
   "frameMs": 8,
   "stepMs": 1,
-  "drawCalls": 30,
-  "triangles": 120000,
+  "drawCalls": 34,
+  "triangles": 150000,
   "jsGzipKb": 400,
-  "hordeFrameMs": 9.5,
+  "hordeFrameMs": 12,
   "hordeStepMs": 2,
-  "hordeDrawCalls": 32,
-  "hordeTriangles": 120000
+  "hordeDrawCalls": 40,
+  "hordeTriangles": 200000
 }

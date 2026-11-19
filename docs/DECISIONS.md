@@ -224,3 +224,14 @@ Things decided without the owner, newest last. Overrule any of them.
    or the window loses focus, and stays paused and silent until RESUME. No pause button during
    the lesson (its SKIP button is in that corner; leaving the page still pauses) or on the end
    card. Pausing with cards up comes back to the cards.
+67. **The art pass** (owner: "continue developing... particularly graphics for the characters,
+   weapons, abilities, points of interest; pick graphical styles and prototype a few looks").
+   One model style for everything, chunky low-poly toys (`docs/briefs/art-common.md`), built to
+   the palette, so that the looks the lead prototypes (palette, light, fog, outlines, pixel
+   size) apply to all of it. Perf budgets raised for it: 40 draw calls and 200,000 triangles
+   with the horde, 12 ms a frame in the headless measure. That measure rasterises on the CPU
+   and punishes triangles far more than a phone's GPU does; the run report (below) records real
+   frame times on the owner's phone, which is the number that counts.
+68. **The game measures the playtest itself.** A tally in the sim of damage dealt by weapon and
+   hits taken by cause, and a run report on the end card with a COPY REPORT button
+   (`docs/briefs/playtest-report.md`), so the owner sends numbers back.

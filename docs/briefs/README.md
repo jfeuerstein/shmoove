@@ -36,6 +36,12 @@ what to return. The verifier gets the same file.
 | `m4-balance.md` | M4 | opus | out |
 | `playtest-verify.md` | before the first full playtest | opus (verifier) | done: works end to end; bosses unseen, no pause |
 | `playtest-fixes.md` | before the first full playtest | opus | merged |
+| `playtest-report.md` | playtest | sonnet | out |
+| `art-common.md` | art pass | - | shared rules for the four below |
+| `art-figures.md` | art pass | opus | out |
+| `art-weapons.md` | art pass | opus | out |
+| `art-park.md` | art pass | opus | out |
+| `art-icons.md` | art pass | opus | out |
 
 Verification: one opus verifier checked the five merged M0/M1 briefs together; its findings became
 `m1-verifier-fixes.md`. A second checked the four M2 briefs and the lead's M2 core; the core's
