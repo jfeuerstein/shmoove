@@ -1,9 +1,7 @@
-/** What a player would notice about Seekers: distance travelled fires darts, and darts find enemies. */
-import { setWeaponLevel } from '../../src/sim/build';
-import { W_SEEKERS } from '../../src/sim/arsenal';
+/** What a player would notice about Seekers: a volley every second or so, moving or not, and darts find enemies. */
+import { setPassiveLevel, setWeaponLevel } from '../../src/sim/build';
+import { P_HASTE, W_SEEKERS } from '../../src/sim/arsenal';
 import { describe, expect, it } from 'vitest';
-import { gearPower } from '../../src/sim/balance';
-import { DT } from '../../src/sim/constants';
 import { DART_LIFE_TICKS, SEEKERS } from '../../src/sim/seekers';
 import type { Sim } from '../../src/sim/sim';
 import { hashWorld, KIND_BOLLARD, KIND_SHUFFLER, KINDS, MAX_SHOTS, removeEnemy, spawnEnemy, FX_SHOT } from '../../src/sim/world';
@@ -17,13 +15,18 @@ function pointAt(sim: Sim, d: number, bearing = 0): { x: number; z: number } {
   return { x: m.x + Math.sin(a) * d, z: m.z + Math.cos(a) * d };
 }
 
-/** Force the next step to fire if it can. */
-function charge(sim: Sim): void {
-  sim.world.seekerMeter = SEEKERS.interval[sim.world.player.loadout.weaponLevel[W_SEEKERS] - 1];
+/** The wait between volleys now, s. */
+function waitNow(sim: Sim): number {
+  return SEEKERS.wait[sim.world.player.loadout.weaponLevel[W_SEEKERS] - 1] * sim.world.player.stats.haste;
 }
 
-describe('the meter', () => {
-  it('fires nothing at level 0, however far you ride', () => {
+/** Force the next step to fire if it can. */
+function charge(sim: Sim): void {
+  sim.world.seekerMeter = waitNow(sim);
+}
+
+describe('the wait', () => {
+  it('fires nothing at level 0', () => {
     const sim = arena();
     setWeaponLevel(sim.world, W_SEEKERS, 0);
     const at = pointAt(sim, 15);
@@ -37,44 +40,55 @@ describe('the meter', () => {
     expect(sim.world.seekerMeter).toBe(0);
   });
 
-  it('fires nothing while standing still', () => {
-    const sim = arena();
-    setWeaponLevel(sim.world, W_SEEKERS, 3);
-    const at = pointAt(sim, 10);
-    place(sim, KIND_BOLLARD, at.x, at.z);
-    const counts = new Map<number, number>();
-    for (let t = 0; t < 600; t++) {
+  /** Volleys over `ticks` with a tough target always in range, and the tick of the first. */
+  function volleys(sim: Sim, input: typeof FORWARD, ticks: number): { count: number; first: number; darts: number } {
+    const e = place(sim, KIND_BOLLARD, 0, 0);
+    const h = sim.world.horde;
+    let count = 0;
+    let first = -1;
+    let darts = 0;
+    for (let t = 1; t <= ticks; t++) {
+      // A tough target that keeps pace ahead of the mover so there is always something in range.
+      const a = pointAt(sim, 12);
+      h.x[e] = a.x;
+      h.z[e] = a.z;
+      h.hp[e] = 1000;
       root(sim.world);
-      stepCounting(sim, TUCK, 1, counts);
+      const counts = new Map<number, number>();
+      stepCounting(sim, input, 1, counts);
+      const n = counts.get(FX_SHOT) ?? 0;
+      if (n > 0) {
+        count++;
+        darts += n;
+        if (first < 0) first = t;
+      }
     }
-    expect(counts.get(FX_SHOT) ?? 0).toBe(0);
-    expect(sim.world.seekerMeter).toBe(0);
-  });
+    return { count, first, darts };
+  }
 
   for (let level = 1; level <= 5; level++) {
-    it(`level ${level}: volleys over a known distance match the interval`, () => {
-      const sim = arena();
-      setWeaponLevel(sim.world, W_SEEKERS, level);
-      const e = place(sim, KIND_BOLLARD, 0, 0);
-      const h = sim.world.horde;
-      const counts = new Map<number, number>();
-      let travelled = 0;
-      for (let t = 0; t < 60 * 20; t++) {
-        // A tough target that keeps pace ahead of the mover so there is always something in range.
-        const a = pointAt(sim, 12);
-        h.x[e] = a.x;
-        h.z[e] = a.z;
-        h.hp[e] = 1000;
-        root(sim.world);
-        stepCounting(sim, FORWARD, 1, counts);
-        const m = sim.state.mover;
-        travelled += Math.sqrt(m.vx * m.vx + m.vz * m.vz) * DT;
+    it(`level ${level}: a volley every wait, the first after a full wait, standing or riding`, () => {
+      for (const input of [TUCK, FORWARD]) {
+        const sim = arena();
+        setWeaponLevel(sim.world, W_SEEKERS, level);
+        const wait = Math.round(SEEKERS.wait[level - 1] * 60);
+        const got = volleys(sim, input, 60 * 20);
+        expect(got.first).toBe(wait);
+        expect(got.count).toBe(Math.floor((60 * 20) / wait));
+        expect(got.darts).toBe(got.count * SEEKERS.darts[level - 1]);
       }
-      const volleys = Math.floor(travelled / SEEKERS.interval[level - 1]);
-      expect(volleys).toBeGreaterThan(3);
-      expect(counts.get(FX_SHOT)).toBe(volleys * SEEKERS.darts[level - 1]);
     });
   }
+
+  it('Haste shortens the wait in proportion', () => {
+    const sim = arena();
+    setWeaponLevel(sim.world, W_SEEKERS, 2);
+    setPassiveLevel(sim.world, P_HASTE, 5);
+    const k = sim.world.player.stats.haste;
+    expect(k).toBeLessThan(0.75);
+    const got = volleys(sim, TUCK, 60 * 30);
+    expect(Math.abs(got.count - 30 / (SEEKERS.wait[1] * k))).toBeLessThanOrEqual(1);
+  });
 });
 
 describe('a volley', () => {
@@ -126,7 +140,7 @@ describe('a volley', () => {
     setWeaponLevel(sim.world, W_SEEKERS, 1);
     const at = pointAt(sim, 20);
     const e = place(sim, KIND_SHUFFLER, at.x, at.z);
-    const hit = SEEKERS.damage[0] * gearPower(sim.state.mover.gear);
+    const hit = SEEKERS.damage[0] * sim.world.player.stats.might;
     const hits = Math.ceil(KINDS[KIND_SHUFFLER].hp / hit);
     expect(hits).toBeGreaterThanOrEqual(2);
 
@@ -158,7 +172,7 @@ describe('a volley', () => {
     charge(sim);
     sim.step(TUCK);
     expect(sim.world.shots.count).toBe(0);
-    expect(sim.world.seekerMeter).toBe(SEEKERS.interval[0]);
+    expect(sim.world.seekerMeter).toBe(waitNow(sim));
   });
 
   it('waits with nothing in range and fires the moment something comes in', () => {
@@ -166,14 +180,14 @@ describe('a volley', () => {
     setWeaponLevel(sim.world, W_SEEKERS, 1);
     run(sim, FORWARD, 60 * 6);
     expect(sim.world.shots.count).toBe(0);
-    expect(sim.world.seekerMeter).toBe(SEEKERS.interval[0]);
+    expect(sim.world.seekerMeter).toBe(waitNow(sim));
 
     const at = pointAt(sim, 20);
     place(sim, KIND_BOLLARD, at.x, at.z);
     const counts = new Map<number, number>();
     stepCounting(sim, FORWARD, 1, counts);
     expect(counts.get(FX_SHOT)).toBe(1);
-    expect(sim.world.seekerMeter).toBeLessThan(SEEKERS.interval[0]);
+    expect(sim.world.seekerMeter).toBeLessThan(waitNow(sim));
   });
 });
 
