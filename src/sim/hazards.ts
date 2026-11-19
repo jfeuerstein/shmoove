@@ -16,7 +16,6 @@ import type { Terrain } from './terrain';
 import { EV_CLEAN_HOP, EV_LAND, type SimState } from './types';
 import {
   addZone,
-  damageEnemy,
   KINDS,
   PHASE_PLAY,
   removeZone,
@@ -63,10 +62,8 @@ export const HAZARDS = {
   shakeImpact: 5,
   /** A clinger shaken off is thrown this fast, m/s, ... */
   shakeSpeed: 10,
-  /** ... is harmless for this many ticks ... */
+  /** ... and is harmless for this many ticks. It is not hurt: nothing the board does deals damage. */
   shakeStun: 60,
-  /** ... and takes this much damage. */
-  shakeDamage: 6,
 } as const;
 
 /** Lob a shot that lands at (x, z) after `ticks` (a lobber's `HAZARDS.lobTicks` by default). */
@@ -90,7 +87,7 @@ export function dropTar(w: World, x: number, y: number, z: number): void {
   addZone(w, ZONE_TAR, x, y, z, H.tarRadius, H.tarTicks, H.tarDrag);
 }
 
-/** Throw clinger i clear of the mover: let go, stunned, hurt. */
+/** Throw clinger i clear of the mover: let go and stunned. */
 function shake(w: World, s: SimState, i: number): void {
   const h = w.horde;
   const m = s.mover;
@@ -103,7 +100,6 @@ function shake(w: World, s: SimState, i: number): void {
     dz = dcos(a);
   }
   shoveEnemy(w, i, dx, dz, HAZARDS.shakeSpeed, HAZARDS.shakeStun);
-  damageEnemy(w, i, HAZARDS.shakeDamage);
 }
 
 /** Shake clingers off, land lobs, age tar, and work out the drag on the mover. */

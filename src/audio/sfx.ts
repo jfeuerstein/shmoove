@@ -9,6 +9,7 @@
 import {
   FX_ARC,
   FX_BLAST,
+  FX_BUMP,
   FX_BONK,
   FX_BOSS_DOWN,
   FX_BOSS_IN,
@@ -301,6 +302,10 @@ export class SfxMapper {
           if (a === 0) this.weapon(out, SND_ARC, t, 0);
           break;
         case FX_SLAM:
+          this.weapon(out, SND_SLAM, t, 0);
+          break;
+        case FX_BUMP:
+          // The same kind of thing as the Slam, so the same thump.
           this.weapon(out, SND_SLAM, t, 0);
           break;
         case FX_BLAST:

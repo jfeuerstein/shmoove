@@ -67,9 +67,22 @@ export function copyMoverMods(dst: MoverMods, src: MoverMods): void {
 
 export const BASE_HP = 100;
 
-/** Bumper, by level 1..5: damage to everything the player's hit throws back. */
+/**
+ * Bumper, by level 1..5. On its own clock it pulses: everything within reach is hurt and the light
+ * ones are thrown back. And whenever the player is hit, everything the hit throws back is hurt.
+ */
 export const BUMPER = {
+  /** Damage to everything the player's hit throws back, before might. */
   thorns: [10, 15, 21, 28, 36],
+  /** Seconds between pulses, before Haste. */
+  pulseWait: [3.2, 3, 2.8, 2.6, 2.4],
+  /** The pulse's reach, m, times area. */
+  pulseReach: [3.2, 3.4, 3.6, 3.8, 4],
+  /** Damage to everything in the pulse, before might. */
+  pulseDamage: [6, 8, 11, 14, 18],
+  /** How hard light enemies are thrown out of the pulse, m/s, and how long they stay harmless, ticks. */
+  pulseThrow: 12,
+  pulseStun: 36,
 } as const;
 
 export function makeStats(): Stats {

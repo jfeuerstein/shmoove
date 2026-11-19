@@ -269,6 +269,7 @@ export const FX_TOKEN = 16; // a = tokens gained
 export const FX_STONE = 17; // a skipping stone left the player
 export const FX_BOSS_IN = 18; // a boss has arrived, a = its kind
 export const FX_BOSS_DOWN = 19; // a boss has fallen, a = its kind
+export const FX_BUMP = 20; // the Bumper pulsed, a = its reach
 
 /** Things that happened this tick, for drawing and sound. Overflow is dropped. */
 export interface Fx {

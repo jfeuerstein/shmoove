@@ -426,17 +426,17 @@ describe('clinger', () => {
     }
     expect(landedHard).toBe(false);
     expect(seen.slice(0, 3)).toEqual([3, 2, 1]);
-    // What let go was thrown clear, stunned, and hurt.
+    // What let go was thrown clear and stunned, not hurt: nothing the board does deals damage.
     let thrown = 0;
     for (let i = 0; i < h.count; i++) {
       if (h.state[i] === STATE_LATCHED) continue;
       thrown++;
-      expect(h.hp[i]).toBeLessThanOrEqual(KINDS[KIND_CLINGER].hp - HAZARDS.shakeDamage);
+      expect(h.hp[i]).toBe(KINDS[KIND_CLINGER].hp);
     }
     expect(thrown).toBe(3);
   });
 
-  it('is shaken off all at once by a hard landing: thrown clear, stunned 60 ticks, 6 damage', () => {
+  it('is shaken off all at once by a hard landing: thrown clear and stunned 60 ticks, unhurt', () => {
     const sim = held(4);
     sim.step(HOP);
     let landed = false;
@@ -452,7 +452,7 @@ describe('clinger', () => {
     for (let i = 0; i < h.count; i++) {
       expect(h.state[i]).toBe(0);
       expect(h.stun[i]).toBe(HAZARDS.shakeStun);
-      expect(h.hp[i]).toBe(KINDS[KIND_CLINGER].hp - HAZARDS.shakeDamage);
+      expect(h.hp[i]).toBe(KINDS[KIND_CLINGER].hp);
     }
     run(sim, TUCK, 30);
     for (let i = 0; i < h.count; i++) expect(dist(sim, i)).toBeGreaterThan(2);

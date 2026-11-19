@@ -190,11 +190,7 @@ describe('the same field takes the same damage however the mover moves', () => {
   for (const id of ALL) {
     it(`${name(id)}: standing in gear 1 is the same as riding, flying and any gear`, () => {
       const still = hold(id, 3, 'stand', 1, 12);
-      if (id === W_SLIPSTREAM) {
-        expect(still.damage).toBe(0);
-      } else {
-        expect(still.damage).toBeGreaterThan(0);
-      }
+      expect(still.damage).toBeGreaterThan(0);
       for (const p of POSES) {
         const moving = hold(id, 3, p.pose, p.gear, 12);
         expect(moving.kills, p.says).toBe(still.kills);

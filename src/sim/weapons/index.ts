@@ -1,7 +1,7 @@
 /**
  * The weapons, by id. A weapon is a step function run once a tick for as long as the player
  * carries it, after contact and before the dead are reaped: indices are stable and the grid is
- * fresh. A weapon with no step works through the player's stats instead (the Bumper).
+ * fresh.
  *
  * Every weapon but the Wake fires on its own clock (`./timer`): how the mover moves (its speed,
  * gear, hops, landings, tuck) never changes when, how hard or how far a weapon hits.
@@ -26,6 +26,7 @@ import type { Terrain } from '../terrain';
 import type { SimState } from '../types';
 import { stepWake } from '../wake';
 import { SRC_OTHER, type World } from '../world';
+import { stepBumper } from './bumper';
 import { stepCrumbs } from './crumbs';
 import { stepLance } from './lance';
 import { stepOrbit } from './orbit';
@@ -48,7 +49,7 @@ export function registerWeapon(weapon: Weapon): void {
 
 registerWeapon({ id: W_WAKE, step: (w, s) => stepWake(w, s) });
 registerWeapon({ id: W_SEEKERS, step: stepSeekers });
-registerWeapon({ id: W_BUMPER });
+registerWeapon({ id: W_BUMPER, step: stepBumper });
 registerWeapon({ id: W_SLAM, step: stepSlam });
 registerWeapon({ id: W_ORBIT, step: stepOrbit });
 registerWeapon({ id: W_STATIC, step: stepStatic });

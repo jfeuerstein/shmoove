@@ -239,6 +239,9 @@ export function judge(res: Results): Band[] {
   // 8
   const fought = [...kit, ...rid];
   const bossHits = [0, 0, 0];
+  // With one or two deaths among ten runs, whatever caused them is "most of the deaths": the share
+  // only means something once enough runs have died.
+  const MIN_DEATHS_TO_JUDGE = 4;
   const deathsBy = [0, 0, 0];
   let deaths = 0;
   for (const r of fought) {
@@ -262,7 +265,7 @@ export function judge(res: Results): Band[] {
     const [lo, hi] = BOSS_BANDS[k];
     const mid = times.length > 0 ? median(times) : NaN;
     const outside = times.filter((x) => x < lo || x > hi).length;
-    if (!(mid >= lo && mid <= hi) || walls > 0 || bossHits[k] < 1 || deathsBy[k] * 2 > deaths) ok8 = false;
+    if (!(mid >= lo && mid <= hi) || walls > 0 || bossHits[k] < 1 || (deaths >= MIN_DEATHS_TO_JUDGE && deathsBy[k] * 2 > deaths)) ok8 = false;
     parts8.push(
       `${BOSS_NAMES[k]}: met ${met}, felled ${times.length}, median ${Number.isNaN(mid) ? '-' : mid.toFixed(0)} s (band ${lo}-${hi}; ${outside} of ${times.length} outside: ${times.map((x) => x.toFixed(0)).join('/') || '-'}), ${walls} walls, ${bossHits[k]} hits, ${deathsBy[k]}/${deaths} deaths`,
     );

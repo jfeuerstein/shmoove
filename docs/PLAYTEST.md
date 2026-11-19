@@ -1,22 +1,93 @@
-# Playtest: what only a thumb can judge
+# Playtest: what to do, what to measure, what only a thumb can judge
 
-The bots check what a machine can (see `npm run balance` and `tests/balance/last.json`): standing
-still dies inside the first minute, holding the stick blind dies inside the first act, a careful
-bot that keeps away from the crowd and fights each boss its own way reaches the final boss on most
-seeds and usually clears, and a bot that also rides the board does at least as well. Every run
-replays exactly. What they cannot tell is whether any of it is fun, fair or readable. That is this
-list.
+The game measures the playtest itself. Every run ends with a **COPY REPORT** button on the end
+card, and the last ten runs are kept under **REPORTS** on the pause sheet (**COPY ALL** there copies
+the lot). A report is about twenty lines you can read followed by one line of data. Paste them
+back and most of the questions below are answered with numbers.
+
+The bots check what a machine can (`npm run balance`, results in `tests/balance/last.json`):
+standing still dies inside the first minute, holding the stick blind dies inside the first act, a
+careful bot reaches the final boss on most seeds and usually clears, and a bot that also rides the
+board does at least as well. What they cannot tell is whether any of it is fun, fair or readable.
 
 ## How to start
 
-Open the game link. It starts a ten-minute run on the **tuck** scheme: thumb down and drag to
-steer, lift the thumb to coast, a quick tap to ollie. Weapons fire by themselves; touching an enemy
-hurts; how fast you go never changes how hard you hit or how much a hit hurts.
+Open the game link on the phone, upright, sound on. It starts a ten-minute run on the **tuck**
+scheme: thumb down and drag to steer, lift the thumb to coast, a quick tap to ollie. Weapons fire by
+themselves; touching an enemy hurts; how fast you go never changes how hard you hit or how much a
+hit hurts. The pause button is top right; the game also pauses itself if you leave the page.
 
 Useful link endings: `?debug` (the feel panel: a round button at the top right; changes stick
 between visits, **Reset all** undoes them), `?seed=2` (any whole number: another bowl and run),
 `?nolesson` (skip the first-run lesson), `?scheme=lift` or `?scheme=swipe` (the other two
-schemes), `?mute`.
+schemes), `?mute`, `?look=night`, `?look=pool`, `?look=tape`, `?look=riso` (the four looks; the
+pause sheet has a button that steps through them too).
+
+## The session: about 45 minutes
+
+| Step | What to do | Why |
+| --- | --- | --- |
+| 1 | **Run 1, cold.** Read nothing. Do the lesson, play until the run ends. | Is it understood with no help? |
+| 2 | **Runs 2 to 4.** Play to survive. Same look (NIGHT BOWL), any seed. | The learning curve and the balance. |
+| 3 | **Run 5, the board run.** Go for rails, pads, kickers, hoops, slaloms, crates and a shrine on purpose. | Is the map worth using? |
+| 4 | **Two minutes in each other look** (pause, LOOK button; it restarts the run). | Which look, and what each costs in frames. |
+| 5 | Pause, **REPORTS**, **COPY ALL**, paste it back with the ratings at the end of this page. | The numbers. |
+
+If the first run is over in under a minute, that is a result, not a mistake: carry on.
+
+## What the reports measure, and what counts as right
+
+Each row names the part of the report it reads. "Target" is what the design is aiming at; a miss
+is something to fix or to argue with, not a failed test.
+
+### Does it run
+
+| Measure | In the report | Target | A miss means |
+| --- | --- | --- | --- |
+| Average frame | `frames.avgMs` | 17 ms or less (60 a second) | Performance first, before any other change |
+| Slow frames | `frames.p95Ms`, `frames.p99Ms` | 22 ms and 34 ms or less | Stutter you can feel in steering |
+| Hitches | `frames.over50` | 5 or fewer in a run | Something stalls: note when it happened |
+| Under a big crowd | `frames.avgMsBigHorde` | 20 ms or less | The horde is too heavy for this phone |
+| Each look | `frames.avgMs` by `look` | within 3 ms of NIGHT BOWL | That look's screen pass costs too much |
+
+### Is it learnable
+
+| Measure | In the report | Target | A miss means |
+| --- | --- | --- | --- |
+| The lesson | `lesson` (seconds per step) | every step under 20 s, all of it under 90 s | That step's words or its trigger are unclear |
+| First run | `seconds` of run 1 | between 1:30 and 5:00 | Shorter: the start is too hard or the controls did not land. Longer: too easy |
+| Getting better | `seconds` over runs 1 to 5 | later runs last longer; the Bruiser (3:00) is met by run 4 and felled once | Skill is not paying |
+| Thumb on the screen | `movement.holdingShare` | 0.6 to 0.9 | Lower: coasting is too good. Higher: letting go is never right |
+| Standing still | `movement.stillSeconds` | under 5% of the run | You stopped to read something the game should have made clear |
+| Reading a card | `cards.perOffer` (seconds each) | most between 2 and 6 s | Slower: cards are unclear. Under 1 s: they are not being read |
+| Cards a minute | `build.cards` against `seconds` | 3 to 5 a minute | More: levelling interrupts the riding (the bots get 5 to 8) |
+
+### Is it fair
+
+| Measure | In the report | Target | A miss means |
+| --- | --- | --- | --- |
+| Hits a minute | `taken.hits` against `seconds` | 2 to 6 in a run over three minutes | Fewer: too safe. More: dangers cannot be read in time |
+| What hurts | `taken.byCause` | no one cause over half the hits | That enemy is unfair or cannot be seen |
+| Seeing death coming | `taken.secondsLow` on a run that died | 5 s or more under 30% health | Deaths come from nowhere |
+| Weapon shares | `damage.bySource` | with three or more weapons, none over 60% and none carried since before 3:00 under 5% | A weapon is the only answer, or a wasted card |
+| The Bruiser | `bosses[0].lived`, `.hitsWhileUp` | 20 to 60 s; 1 to 6 hits | A wall or a pushover |
+| The Mortar | `bosses[1]` | 25 to 75 s; 1 to 6 hits | The same |
+| The Standstill | `bosses[2]` | 40 to 120 s; 1 to 6 hits | The same |
+| The crowd | `horde.peak` on a run past 8:00 | 250 or more | The late game is thin |
+
+### Is the board the fun part
+
+| Measure | In the report | Target | A miss means |
+| --- | --- | --- | --- |
+| Ollies | `movement.ollies` against `seconds` | 4 a minute or more | The ollie is not worth tapping |
+| Clean ollies | `movement.cleanOllies` over `ollies` | a quarter or more by run 3 | The landing window is too tight, or nobody knows it is there |
+| Longest chain | `movement.longestChain` | 3 or more by run 3 | Chains are not discoverable |
+| Time in the air | `movement.airSeconds` | 5% of the run or more | The bowl's ramps are not being used |
+| Top speed | `movement.topSpeed` | 18 m/s or more | Hills and pads are not found |
+| Fast riding | `movement.gearShare` (last two) | a fifth of the run or more | Speed is not worth having |
+| Rails | `movement.railSeconds` | more than 0 from run 2; 10 s or more in the board run | Rails are missed or not worth it |
+| Pads | `movement.padsHit` | 2 or more a run | Pads are not seen |
+| The map | `map` | by run 3: three crates and one of shrine, slalom, hoop or totem in a run | Points of interest are not noticed or not worth the trip |
 
 ## Your first run: what to do, what to notice
 
@@ -44,14 +115,29 @@ schemes), `?mute`.
    from its run-up), crates (a card, a heal, a magnet or a bomb), slaloms and hoops. Notice: does
    using the map feel worth the detour, or is it safer to ignore it?
 
-## What to report back
+## Ratings to send with the reports
+
+One number each, 1 (bad) to 5 (good), and a sentence where it is under 4.
+
+1. Steering: does the board go where the thumb means?
+2. The ollie: is the tap reliable, and is landing a clean one learnable?
+3. The camera: can you see what you need to?
+4. Sound: the mix, and whether the music is something you would leave on.
+5. Hits: do the shake, the flash and the buzz tell you what happened without being too much?
+6. Telling enemies apart at a glance.
+7. Seeing dangers in time: lob rings, tar, the Bruiser's lane, the Standstill's rings, the edge markers.
+8. The cards and icons: clear with one thumb?
+9. Each boss, one number each: a fight you understood?
+10. The four looks, ranked best to worst, with the one you would ship.
+
+## What to report back in words
 
 - When you died: what did it, and did it feel like your mistake or the game's?
 - Which minute felt too easy, and which too hard? The bots say the first act is where careful
   players are most often lost, and that a strong build is rarely threatened after 6:00.
-- Any weapon you would never take again, or always take. The Bumper (hurts what a hit throws back)
-  and the Slipstream (drags sparks and small enemies) do no damage of their own: are they ever
-  worth a slot?
+- Any weapon you would never take again, or always take. The Bumper (a short pulse every few
+  seconds, and it hurts what a hit throws back) and the Slipstream (drags sparks and small
+  enemies in behind you and wears down what is in its draft) are the two most in doubt.
 - Each boss: was it a fight, too quick, or a slog? Did you know what it wanted you to do?
 - Anything you could not read on the phone: a tell, a ring, tar, a card.
 - From the feel panel, **Copy changes** and paste them in with a sentence on why.

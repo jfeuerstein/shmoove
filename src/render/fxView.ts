@@ -61,6 +61,7 @@ import {
   FX_ARC,
   FX_BLAST,
   FX_BOSS_DOWN,
+  FX_BUMP,
   FX_BOSS_IN,
   FX_ENEMY_DIE,
   FX_ENEMY_HIT,
@@ -896,7 +897,9 @@ export class FxView {
       } else if (type === FX_PLAYER_HIT) {
         const s = HIT_MIN + (HIT_MAX - HIT_MIN) * Math.min(1, a / HIT_REF);
         if (s > this.hitTint) this.hitTint = s;
-        if (w.player.loadout.weaponLevel[W_BUMPER] > 0) this.bumper(x, y, z);
+        if (w.player.loadout.weaponLevel[W_BUMPER] > 0) this.bumper(x, y, z, FEEL.hitShoveRadius);
+      } else if (type === FX_BUMP) {
+        this.bumper(x, y, z, a);
       }
     }
     this.boltOpen = -1;
@@ -1001,10 +1004,10 @@ export class FxView {
     this.spray(SPARK_COLOR, x, y + 0.8, z, LEVEL_GLINTS, 0.6, 0, 0, 2.5, 10, 0.8, 1, 0.5, false, 0.6);
   }
 
-  /** The Bumper went off: its ring thrown out at hip height to the shove radius, and a flash. */
-  private bumper(x: number, y: number, z: number): void {
+  /** The Bumper went off: its ring thrown out at hip height to `reach`, and a flash. */
+  private bumper(x: number, y: number, z: number, reach: number): void {
     this.up();
-    this.glow(false, GLOW_RING, x, y + BUMPER_HIP, z, FEEL.hitShoveRadius, BUMPER_RING_LIFE, 1, 0.86, this.bumperColor);
+    this.glow(false, GLOW_RING, x, y + BUMPER_HIP, z, reach, BUMPER_RING_LIFE, 1, 0.86, this.bumperColor);
     this.ground(x, z);
     this.glow(false, GLOW_FLASH, x, y, z, 1.8, 0.2, 0.7, 0, this.bumperColor);
     this.spray(BUMPER_COLOR, x, y + BUMPER_HIP, z, 8, 0.7, 0, 0, 9, 3, 0.3, 0.9, 0.5, false, 0.3);

@@ -5,7 +5,7 @@ import { setPassiveLevel } from '../../../src/sim/build';
 import { DT } from '../../../src/sim/constants';
 import type { Sim } from '../../../src/sim/sim';
 import { SLIPSTREAM, slipstreamLength, stepSlipstream } from '../../../src/sim/weapons/slipstream';
-import { KIND_BOLLARD, KIND_SHUFFLER, MAX_ENEMIES, MAX_SPARKS, rebuildGrid } from '../../../src/sim/world';
+import { KIND_BOLLARD, KIND_SHUFFLER, KINDS, MAX_ENEMIES, MAX_SPARKS, rebuildGrid } from '../../../src/sim/world';
 import { FORWARD, TUCK } from '../fixtures';
 import { place } from '../world-fixtures';
 import { placeRising, pointAt, rig, tick } from './rig';
@@ -187,6 +187,20 @@ describe('what it drags', () => {
       expect(sim.world.horde.count).toBeLessThanOrEqual(MAX_ENEMIES);
       expect(sim.world.sparks.count).toBeLessThanOrEqual(MAX_SPARKS);
     }
-    expect(sim.world.horde.count).toBe(400);
+    // The gusts wore some of them down, and what they dropped fitted in the pool.
+    expect(sim.world.horde.count).toBeLessThan(400);
+  });
+
+  it('a gust scours what is in the draft and nothing beside it, on a clock of its own', () => {
+    const sim = rig(W_SLIPSTREAM, 3);
+    const inDraft = behind(sim, 5, 0);
+    const beside = behind(sim, 5, 9);
+    const a = place(sim, KIND_BOLLARD, inDraft.x, inDraft.z);
+    const b = place(sim, KIND_BOLLARD, beside.x, beside.z);
+    const hp = KINDS[KIND_BOLLARD].hp;
+    const gusts = 4;
+    for (let t = 0; t < Math.round(SLIPSTREAM.gustWait * 60) * gusts; t++) tick(sim, TUCK, { speed: 0, gear: 1 });
+    expect(sim.world.horde.hp[a]).toBeCloseTo(hp - gusts * SLIPSTREAM.gustDamage[2], 6);
+    expect(sim.world.horde.hp[b]).toBe(hp);
   });
 });
