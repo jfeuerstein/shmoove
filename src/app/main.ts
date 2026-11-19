@@ -373,7 +373,7 @@ function boot(): void {
   };
 
   const draw = (alpha: number, dt: number): void => {
-    mover.update(sim.prev, sim.state, alpha, terrain, dt);
+    mover.update(sim.prev, sim.state, alpha, terrain, dt, sim.world);
     chase.update(sim.prev, sim.state, alpha, dt, terrain);
     shake.update(dt);
     shake.apply(view.camera);
