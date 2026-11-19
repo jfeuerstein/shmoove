@@ -1,6 +1,6 @@
 // lesson: the first-run lesson and the how-to sheet. With ?lesson the first line shows and the horde
 // is held back; each step is driven through the hook (steer, ollie, a hill, three kills, sparks, a
-// real touch on a card, the end) and the line changes every time. SKIP starts a normal run at 3:00;
+// real touch on a card, the end) and the line changes every time. SKIP starts a normal run at 0:00;
 // after a reload the lesson is gone; with ?nolesson it never shows. The how-to sheet opens from the
 // end card, fits without scrolling, and REPLAY THE LESSON brings the lesson back.
 // Screenshots: step 3 (lesson.png) and the how-to sheet (lesson-howto.png).
@@ -72,7 +72,7 @@ export default {
     let s = await hook.state();
     check(s.enemies === 0, 'nothing has spawned after ten seconds of standing still', s);
     check(s.seconds === 0, 'the run clock is not counting', s);
-    check((await text('.hud-clock')) === '3:00', 'the HUD clock reads 3:00', await text('.hud-clock'));
+    check((await text('.hud-clock')) === '0:00', 'the HUD clock reads 0:00', await text('.hud-clock'));
     check(s.phase === 0, 'still playing', s);
     check((await line()) === LINES[0], 'standing still does not finish step 1', await line());
     check((await dots()).length === 7, 'seven progress dots', await dots());
@@ -175,7 +175,7 @@ export default {
     check((await lessonShown()) === false, 'then the lesson is gone');
     s = await hook.state();
     check(s.tick < 120 && s.seconds < 2 && s.kills === 0 && s.hp === 100 && s.phase === 0, 'and a new run has begun', s);
-    check((await text('.hud-clock')) === '3:00' || (await text('.hud-clock')) === '2:59', 'with the clock at 3:00', await text('.hud-clock'));
+    check((await text('.hud-clock')) === '0:00' || (await text('.hud-clock')) === '0:01', 'with the clock at 0:00', await text('.hud-clock'));
     await hook.hold(FORWARD);
     await hook.step(120);
     s = await hook.state();
@@ -197,7 +197,7 @@ export default {
     await hook.step(2);
     check((await lessonShown()) === true, '?lesson shows it again');
 
-    // ---- SKIP ends it and a normal run begins with the clock at 3:00 ----
+    // ---- SKIP ends it and a normal run begins with the clock at 0:00 ----
     await freshStorage();
     await open('?hook&lesson');
     await hook.hold(FORWARD);
@@ -210,7 +210,7 @@ export default {
     check((await lessonShown()) === false, 'SKIP ends the lesson');
     s = await hook.state();
     check(s.seconds < 0.1 && s.tick < 5, 'a normal run begins', s);
-    check((await text('.hud-clock')) === '3:00', 'with the clock at 3:00', await text('.hud-clock'));
+    check((await text('.hud-clock')) === '0:00', 'with the clock at 0:00', await text('.hud-clock'));
     await open('?hook');
     await hook.step(2);
     check((await lessonShown()) === false, 'a skipped lesson stays skipped after a reload');

@@ -1,9 +1,13 @@
 import type { InstancedBufferAttribute, InstancedMesh } from 'three';
 import { describe, expect, it } from 'vitest';
-import { LOB_INNER, lobFill, MINE_BLINK_TICKS, MINE_IDLE, MINE_OFF, MINE_ON, MINE_SIZE, mineStrength, ZonesView } from '../../src/render/zonesView';
+import { Color } from 'three';
+import { LOB_INNER, lobFill, MINE_BLINK_TICKS, MINE_IDLE, MINE_OFF, MINE_ON, MINE_SIZE, mineStrength, RING_BAND, ZonesView } from '../../src/render/zonesView';
+import { PALETTE } from '../../src/render/look';
+import { BOSS } from '../../src/sim/bosses';
+import { DT } from '../../src/sim/constants';
 import { terrainFromHeight } from '../../src/sim/terrain';
 import { CRUMBS } from '../../src/sim/weapons/crumbs';
-import { addZone, makeWorld, removeZone, ZONE_LOB, ZONE_MINE, ZONE_TAR } from '../../src/sim/world';
+import { addZone, makeWorld, removeZone, ZONE_LOB, ZONE_MINE, ZONE_RING, ZONE_TAR } from '../../src/sim/world';
 
 function matrix(mesh: InstancedMesh, n: number): number[] {
   return Array.from(mesh.instanceMatrix.array.slice(n * 16, n * 16 + 16));
@@ -131,5 +135,65 @@ describe('ZonesView', () => {
     view.update(w);
     expect(view.mines.visible || view.tar.visible || view.lobs.visible).toBe(false);
     for (const mesh of [view.mines, view.tar, view.lobs]) expect(mesh.frustumCulled).toBe(false);
+  });
+});
+
+describe("the Standstill's ring", () => {
+  /** Distances from (cx, cz) of every point of ring slot 0, inner and outer edges apart. */
+  function radii(view: ZonesView, cx: number, cz: number): { inner: number[]; outer: number[]; ys: number[] } {
+    const r = view.rings;
+    const inner: number[] = [];
+    const outer: number[] = [];
+    const ys: number[] = [];
+    for (let v = 0; v < (r.segments + 1) * 2; v++) {
+      const d = Math.hypot(r.positions[v * 3] - cx, r.positions[v * 3 + 2] - cz);
+      (v % 2 === 0 ? inner : outer).push(d);
+      ys.push(r.positions[v * 3 + 1]);
+    }
+    return { inner, outer, ys };
+  }
+
+  it('is a bright band on the ground at the front, in the ring colour', () => {
+    const w = makeWorld(1);
+    addZone(w, ZONE_RING, 3, 0, -2, 12, 200, 15);
+    const view = new ZonesView();
+    view.update(w);
+    expect(view.rings.count).toBe(1);
+    expect(view.rings.mesh.visible).toBe(true);
+    const { inner, outer } = radii(view, 3, -2);
+    for (const d of outer) expect(d).toBeCloseTo(12, 4);
+    for (const d of inner) expect(d).toBeCloseTo(12 - RING_BAND, 4);
+    const c = new Color(PALETTE.ring);
+    expect(view.rings.colors[0]).toBeCloseTo(c.r, 4);
+    expect(view.rings.colors[1]).toBeCloseTo(c.g, 4);
+    expect(view.rings.colors[2]).toBeCloseTo(c.b, 4);
+    // At full strength: the brightest thing on the ground.
+    expect(Math.min(...view.rings.fades.slice(0, (view.rings.segments + 1) * 2))).toBe(1);
+  });
+
+  it('is drawn where the front is at the frame, between ticks', () => {
+    const w = makeWorld(1);
+    addZone(w, ZONE_RING, 0, 0, 0, 20, 200, 15);
+    const view = new ZonesView();
+    view.update(w, 0.5);
+    const { outer } = radii(view, 0, 0);
+    expect(outer[0]).toBeCloseTo(20 - BOSS.standstill.ringSpeed * 0.5 * DT, 4);
+  });
+
+  it('follows the ground it spreads over, and goes when the zone does', () => {
+    const terrain = terrainFromHeight((x) => x * 0.25, 500);
+    const w = makeWorld(1);
+    addZone(w, ZONE_RING, 0, 0, 0, 16, 200, 15);
+    const view = new ZonesView(terrain);
+    view.update(w);
+    const r = view.rings;
+    for (let v = 0; v < (r.segments + 1) * 2; v++) {
+      expect(r.positions[v * 3 + 1]).toBeGreaterThan(r.positions[v * 3] * 0.25);
+      expect(r.positions[v * 3 + 1]).toBeLessThan(r.positions[v * 3] * 0.25 + 0.5);
+    }
+    removeZone(w, 0);
+    view.update(w);
+    expect(view.rings.count).toBe(0);
+    expect(view.rings.mesh.visible).toBe(false);
   });
 });

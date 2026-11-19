@@ -5,6 +5,7 @@
  * it never reach the game; they are also stopped here.
  */
 import { PALETTE } from '../render/look';
+import { BOSS_TIMES } from '../sim/balance';
 import { PHASE_DEAD, PHASE_PLAY, PHASE_WON, type World } from '../sim/world';
 import { formatTime } from './hud';
 import './endScreen.css';
@@ -20,6 +21,8 @@ export interface EndCard {
   level: number;
   pops: number;
   bestPop: number;
+  /** Bosses brought down this run. */
+  bosses: number;
 }
 
 /** The card to show `elapsed` seconds after the run ended, or null while it is playing or paused. */
@@ -29,12 +32,14 @@ export function endCard(w: World, elapsed: number): EndCard | null {
   if (phase !== PHASE_DEAD && phase !== PHASE_WON) return null;
   const p = w.player;
   return {
-    title: phase === PHASE_DEAD ? 'STOPPED' : 'STILL MOVING',
+    // Won means the final boss fell.
+    title: phase === PHASE_DEAD ? 'STOPPED' : 'CLEARED',
     time: formatTime(w.run.ticks / 60),
     kills: p.kills,
     level: p.level,
     pops: p.pops,
     bestPop: p.bestPop,
+    bosses: w.boss.felled,
   };
 }
 
@@ -62,7 +67,7 @@ export class EndScreen {
     this.titleEl = doc.createElement('div');
     this.titleEl.className = 'end-title';
     el.appendChild(this.titleEl);
-    for (const cls of ['end-time', 'end-kills', 'end-level', 'end-pops']) {
+    for (const cls of ['end-time', 'end-kills', 'end-level', 'end-bosses', 'end-pops']) {
       const row = doc.createElement('div');
       row.className = `end-row ${cls}`;
       el.appendChild(row);
@@ -111,9 +116,10 @@ export class EndScreen {
     this.rows[0].textContent = `Time  ${card.time}`;
     this.rows[1].textContent = `Kills  ${card.kills}`;
     this.rows[2].textContent = `Level  ${card.level}`;
+    this.rows[3].textContent = `Bosses  ${card.bosses} / ${BOSS_TIMES.length}`;
     // Loops only mean something to a player who carried the Wake and closed one.
-    this.rows[3].textContent = card.pops > 0 ? `Loops  ${card.pops}  (best ${card.bestPop})` : '';
-    this.rows[3].hidden = card.pops === 0;
+    this.rows[4].textContent = card.pops > 0 ? `Loops  ${card.pops}  (best ${card.bestPop})` : '';
+    this.rows[4].hidden = card.pops === 0;
     this.element.className = 'end end-show';
   }
 

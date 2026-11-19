@@ -12,7 +12,11 @@
  *
  * Seven silhouettes that cannot be mistaken for each other at 30 m: the chunky shuffler, the gnat's
  * shard, the fat bollard, the cutter leaning on its blade, the squat lobber with its ball held up,
- * the wide low sludge and the small spiky clinger. An elite (`MARK_ELITE`, or any aura) is drawn
+ * the wide low sludge and the small spiky clinger. Then the three bosses, each in its own colour
+ * from `PALETTE.bosses` and far bigger than anything else: the Bruiser broad and low with its head
+ * down and horns forward (it faces where it will charge during its tell, since it leans that way),
+ * the Mortar a squat drum with a tube pointing up, the Standstill a tall monolith that does not
+ * wobble at all. An elite (`MARK_ELITE`, or any aura) is drawn
  * `ELITE_SCALE` larger with a white sheen, and its aura is a ring on the ground at the aura's reach in `AURA_COLORS`. A clinger
  * holding on (`STATE_LATCHED`) is drawn on the mover's back, not where the sim keeps it.
  */
@@ -37,13 +41,15 @@ import {
   ELITE_NONE,
   ELITE_SHIELD,
   KIND_BOLLARD,
+  KIND_BRUISER,
   KIND_CLINGER,
-  KIND_COUNT,
   KIND_CUTTER,
   KIND_GNAT,
   KIND_LOBBER,
+  KIND_MORTAR,
   KIND_SHUFFLER,
   KIND_SLUDGE,
+  KIND_STANDSTILL,
   KINDS,
   MARK_ELITE,
   MAX_ENEMIES,
@@ -119,6 +125,12 @@ const WOBBLE: readonly Wobble[] = [
   { hop: 0.03, rate: 0.9, sway: 0.12, idle: 0.5 },
   // Clinger: never still.
   { hop: 0.14, rate: 9, sway: 0.3, idle: 1 },
+  // Bruiser: a heavy stomp.
+  { hop: 0.12, rate: 1.4, sway: 0.03, idle: 0.1 },
+  // Mortar: a slow settle, as if each shot rocks it.
+  { hop: 0.04, rate: 0.7, sway: 0.015, idle: 0.4 },
+  // Standstill: does not move at all, which is the unsettling part.
+  { hop: 0, rate: 0, sway: 0, idle: 0 },
 ];
 
 // ---- geometry -------------------------------------------------------------------------------
@@ -285,6 +297,70 @@ export function clingerGeometry(): BufferGeometry {
   return toGeometry(p);
 }
 
+/**
+ * The Bruiser, 2.6 m and nearly 4 m across: a wide stance, a torso hunched forward under a hump,
+ * and its head held low in front with two horns pointing the way it faces. 56 triangles.
+ */
+export function bruiserGeometry(): BufferGeometry {
+  const p: number[] = [];
+  block(p, 0, 0.9, 1.5, 0.9, 1.4, 0.8);
+  block(p, 0.85, 2.2, 1.9, 1.2, 1.6, 0.9, 0.5);
+  block(p, 2.0, 2.6, 1.3, 0.8, 0.9, 0.5, 0.2, -0.2);
+  // The head, down and forward, ready to charge.
+  block(p, 0.7, 1.5, 0.6, 0.5, 0.5, 0.4, 0.1, 1.5);
+  for (const side of [-1, 1]) {
+    const x0 = side * 0.25;
+    const x1 = side * 0.55;
+    pyramid(p, [x0, 1.15, 1.75, x1, 1.15, 1.75, x1, 1.4, 1.75, x0, 1.4, 1.75], side * 1.1, 1.75, 2.6);
+  }
+  return toGeometry(p);
+}
+
+/**
+ * A ring of `n` quads from radius r0 at y0 to r1 at y1, with a fan cap at the bottom and/or top.
+ * Every face points away from the prism's own middle.
+ */
+function prism(out: number[], n: number, r0: number, r1: number, y0: number, y1: number, bottom: boolean, top: boolean): void {
+  const cy = (y0 + y1) / 2;
+  for (let k = 0; k < n; k++) {
+    const a0 = (k / n) * Math.PI * 2;
+    const a1 = ((k + 1) / n) * Math.PI * 2;
+    const s0 = Math.sin(a0);
+    const c0 = Math.cos(a0);
+    const s1 = Math.sin(a1);
+    const c1 = Math.cos(a1);
+    const q = [s0 * r0, y0, c0 * r0, s1 * r0, y0, c1 * r0, s1 * r1, y1, c1 * r1, s0 * r1, y1, c0 * r1, 0, y0, 0, 0, y1, 0];
+    tri(out, q, 0, 1, 2, 0, cy, 0);
+    tri(out, q, 0, 2, 3, 0, cy, 0);
+    if (bottom) tri(out, q, 0, 1, 4, 0, cy, 0);
+    if (top) tri(out, q, 3, 2, 5, 0, cy, 0);
+  }
+}
+
+/**
+ * The Mortar, 2.8 m: a squat drum as wide as it is, a tube standing up out of it and a flared muzzle
+ * at the top. 72 triangles.
+ */
+export function mortarGeometry(): BufferGeometry {
+  const p: number[] = [];
+  prism(p, 8, 1.8, 1.55, 0, 1.0, false, true);
+  prism(p, 8, 0.75, 0.7, 1.0, 2.5, false, false);
+  prism(p, 8, 0.82, 1.0, 2.5, 2.8, true, true);
+  return toGeometry(p);
+}
+
+/**
+ * The Standstill, 7 m: a low plinth as wide as its body, a tall slab narrowing as it rises, and a
+ * point on top. 28 triangles.
+ */
+export function standstillGeometry(): BufferGeometry {
+  const p: number[] = [];
+  block(p, 0, 0.5, 2.9, 2.9, 2.7, 2.7);
+  block(p, 0.5, 6.2, 1.7, 0.9, 1.3, 0.7);
+  pyramid(p, [-1.2, 6.2, -0.65, 1.2, 6.2, -0.65, 1.2, 6.2, 0.65, -1.2, 6.2, 0.65], 0, 7, 0);
+  return toGeometry(p);
+}
+
 /** The shape of each kind, by KIND_*. */
 export function geometryFor(kind: number): BufferGeometry {
   if (kind === KIND_SHUFFLER) return shufflerGeometry();
@@ -294,6 +370,9 @@ export function geometryFor(kind: number): BufferGeometry {
   if (kind === KIND_LOBBER) return lobberGeometry();
   if (kind === KIND_SLUDGE) return sludgeGeometry();
   if (kind === KIND_CLINGER) return clingerGeometry();
+  if (kind === KIND_BRUISER) return bruiserGeometry();
+  if (kind === KIND_MORTAR) return mortarGeometry();
+  if (kind === KIND_STANDSTILL) return standstillGeometry();
   throw new Error(`no shape for enemy kind ${kind}`);
 }
 
@@ -305,7 +384,7 @@ function wobbleFor(kind: number): Wobble {
 
 /** The flat material, with the wobble in the vertex shader and the hit flash in the fragment shader. */
 function enemyMaterial(kind: number, time: { value: number }): MeshLambertMaterial {
-  const color = PALETTE.enemies[kind];
+  const color = kind < PALETTE.enemies.length ? PALETTE.enemies[kind] : PALETTE.bosses[kind - KIND_BRUISER];
   const m = flatMaterial(color);
   m.emissive.setHex(color);
   m.emissiveIntensity = ENEMY_GLOW;
@@ -351,7 +430,7 @@ function enemyMaterial(kind: number, time: { value: number }): MeshLambertMateri
 
 export class HordeView {
   readonly object = new Group();
-  /** One per kind, indexed by `KIND_*`. */
+  /** One per kind, bosses included, indexed by `KIND_*`. */
   readonly meshes: InstancedMesh[] = [];
   readonly shadows: InstancedMesh;
   /** The elites' auras: a ring on the ground at the aura's reach, in the aura's colour. */
@@ -359,7 +438,7 @@ export class HordeView {
   /** Seconds, for the wobble; shared by every enemy material. */
   private readonly time = { value: 0 };
   private readonly anim: InstancedBufferAttribute[] = [];
-  private readonly counts = new Int32Array(KIND_COUNT);
+  private readonly counts = new Int32Array(KINDS.length);
   /** Linear RGB per aura, by ELITE_*. */
   private readonly auraRgb = new Float32Array(AURA_COLORS.length * 3);
 
@@ -381,7 +460,7 @@ export class HordeView {
     this.shadows.renderOrder = 1;
     this.object.add(this.shadows);
 
-    for (let k = 0; k < KIND_COUNT; k++) {
+    for (let k = 0; k < KINDS.length; k++) {
       const geo = geometryFor(k);
       const anim = new InstancedBufferAttribute(new Float32Array(MAX_ENEMIES * 3), 3);
       anim.setUsage(DynamicDrawUsage);
@@ -511,7 +590,7 @@ export class HordeView {
       }
     }
 
-    for (let k = 0; k < KIND_COUNT; k++) {
+    for (let k = 0; k < KINDS.length; k++) {
       const mesh = this.meshes[k];
       mesh.count = counts[k];
       mesh.visible = counts[k] > 0;

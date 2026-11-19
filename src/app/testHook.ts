@@ -8,8 +8,10 @@ import type { SoundReport } from '../audio/audio';
 import type { InputSource } from '../input/source';
 import { setPassiveLevel, setWeaponLevel } from '../sim/build';
 import { hurtPlayer } from '../sim/contact';
+import { findBoss } from '../sim/bosses';
+import { TICK_HZ } from '../sim/constants';
 import { copySimState, type Sim } from '../sim/sim';
-import type { World } from '../sim/world';
+import { damageEnemy, ZONE_RING, type World } from '../sim/world';
 import type { InputFrame } from '../sim/types';
 import type { FrameStatsSummary } from './loop';
 
@@ -45,6 +47,12 @@ export interface HookState {
   weapons: HookItem[];
   passives: HookItem[];
   tokens: number;
+  /** The boss on the field (`kind` -1 when none) and how many have fallen. */
+  boss: { kind: number; hp: number; maxHp: number; x: number; z: number; felled: number };
+  /** Offers waiting behind the open one. */
+  offersQueued: number;
+  /** The Standstill's rings on the ground: centre and the front's radius, m. */
+  rings: { x: number; z: number; r: number }[];
 }
 
 /** A rail on the map: its two ends, in world space. */
@@ -100,6 +108,10 @@ export interface TestHook {
   place(x: number, z: number, yaw: number, speed: number): void;
   /** The audio context's state and how many notes and effects have been scheduled. */
   sound(): SoundReport | null;
+  /** Set the run clock to `seconds`: the director and the bosses go by it from the next step. */
+  setClock(seconds: number): void;
+  /** Take the boss on the field down to no health: it falls on the next step. False if there is none. */
+  killBoss(): boolean;
 }
 
 declare global {
@@ -174,6 +186,13 @@ function items(slots: Int8Array, levels: Uint8Array): HookItem[] {
   return out;
 }
 
+function ringsOf(w: World): HookState['rings'] {
+  const zn = w.zones;
+  const out: HookState['rings'] = [];
+  for (let i = 0; i < zn.count; i++) if (zn.kind[i] === ZONE_RING) out.push({ x: zn.x[i], z: zn.z[i], r: zn.r[i] });
+  return out;
+}
+
 function offerOf(w: World): HookOffer | null {
   const o = w.offer;
   if (!o.open) return null;
@@ -216,6 +235,9 @@ export function installTestHook(host: HookHost): TestHook {
         weapons: items(w.player.loadout.weapons, w.player.loadout.weaponLevel),
         passives: items(w.player.loadout.passives, w.player.loadout.passiveLevel),
         tokens: w.player.tokens,
+        boss: { ...w.boss },
+        offersQueued: w.offerQueued,
+        rings: ringsOf(w),
       };
     },
     hold(frame) {
@@ -291,6 +313,18 @@ export function installTestHook(host: HookHost): TestHook {
     },
     sound() {
       return host.sound ? host.sound() : null;
+    },
+    setClock(seconds) {
+      if (!Number.isFinite(seconds) || seconds < 0) return;
+      host.sim.world.run.ticks = Math.round(seconds * TICK_HZ);
+    },
+    killBoss() {
+      const w = host.sim.world;
+      const i = findBoss(w);
+      if (i < 0) return false;
+      // Twice over: a shield elite's aura halves damage to whatever stands in it.
+      damageEnemy(w, i, 2 * w.horde.hp[i] + 1);
+      return true;
     },
   };
   window.__shmoove = hook;

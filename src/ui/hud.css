@@ -128,3 +128,57 @@
   0% { filter: brightness(2.2); }
   100% { filter: brightness(1); }
 }
+
+/* ---- the boss: a bar under the clock, and its name across the upper screen when it arrives ---- */
+
+.hud-boss {
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + 50px);
+  left: calc(env(safe-area-inset-left, 0px) + 14px);
+  right: calc(env(safe-area-inset-right, 0px) + 14px);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* The debug button and the kills sit at the top right: the bar keeps clear of them. */
+.hud-debug .hud-boss {
+  right: calc(env(safe-area-inset-right, 0px) + 72px);
+}
+
+.hud-boss[hidden],
+.hud-boss-banner[hidden] {
+  display: none;
+}
+
+.hud-boss-name {
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+}
+
+.hud-boss-track {
+  height: 8px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.16);
+  overflow: hidden;
+}
+
+.hud-boss-banner {
+  position: fixed;
+  top: 20%;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 36px;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-shadow: 0 3px 14px rgba(0, 0, 0, 0.7);
+  animation: hud-boss-in 0.3s ease-out both;
+}
+
+/* It slams in; the HUD takes it away after two seconds of play. */
+@keyframes hud-boss-in {
+  0% { opacity: 0; transform: scale(1.4); }
+  100% { opacity: 1; transform: scale(1); }
+}

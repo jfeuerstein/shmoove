@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { gearCss, PALETTE } from '../../src/render/look';
-import { RUN_TICKS } from '../../src/sim/balance';
 import { Sim } from '../../src/sim/sim';
 import { flatTerrain } from '../../src/sim/terrain';
+import { BANNER_SECONDS, bossName } from '../../src/ui/bossBar';
 import { clockText, formatTime, Hud } from '../../src/ui/hud';
+import { KIND_BRUISER, KIND_MORTAR, KIND_STANDSTILL, KINDS } from '../../src/sim/world';
 
 /** An element that counts the writes the HUD makes to it. */
 class FakeEl {
@@ -95,7 +96,7 @@ describe('Hud', () => {
 
   it('has none of the run parts without a run', () => {
     const { parts } = build(false);
-    for (const k of ['hud-clock', 'hud-kills', 'hud-hp', 'hud-xp', 'hud-level']) expect(parts.has(k)).toBe(false);
+    for (const k of ['hud-clock', 'hud-kills', 'hud-hp', 'hud-xp', 'hud-level', 'hud-boss', 'hud-boss-banner']) expect(parts.has(k)).toBe(false);
   });
 
   it('writes only when a shown value changes', () => {
@@ -151,7 +152,7 @@ describe('Hud', () => {
     hud.update(sim);
     hud.update(sim);
     expect(writesOf(all)).toBe(base + 1);
-    expect(parts.get('hud-clock')?.textContent).toBe('2:59');
+    expect(parts.get('hud-clock')?.textContent).toBe('0:01');
 
     // A kill writes the kills text once.
     w.player.kills = 4;
@@ -214,12 +215,81 @@ describe('the run clock', () => {
     expect(formatTime(180)).toBe('3:00');
   });
 
-  it('counts down from the full run, rounding up', () => {
-    expect(clockText(0)).toBe('3:00');
-    expect(clockText(1)).toBe('3:00');
-    expect(clockText(60)).toBe('2:59');
-    expect(clockText(RUN_TICKS - 61)).toBe('0:02');
-    expect(clockText(RUN_TICKS - 1)).toBe('0:01');
-    expect(clockText(RUN_TICKS)).toBe('0:00');
+  it('counts up from 0:00 in whole seconds, and keeps counting past the final boss', () => {
+    expect(clockText(0)).toBe('0:00');
+    expect(clockText(59)).toBe('0:00');
+    expect(clockText(60)).toBe('0:01');
+    expect(clockText(180 * 60)).toBe('3:00');
+    expect(clockText(540 * 60 - 1)).toBe('8:59');
+    expect(clockText(540 * 60)).toBe('9:00');
+    expect(clockText(725 * 60)).toBe('12:05');
+  });
+});
+
+describe('the boss bar', () => {
+  /** Put a boss of `kind` on the HUD's view of the world, at `hp`. */
+  function setBoss(sim: Sim, kind: number, hp: number): void {
+    const b = sim.world.boss;
+    b.kind = kind;
+    b.hp = hp;
+    b.maxHp = kind >= 0 ? KINDS[kind].hp : 0;
+  }
+
+  it('is hidden with no boss, and shows the name and the health while one is up', () => {
+    const { hud, parts, sim } = build(true);
+    hud.update(sim);
+    const bar = parts.get('hud-boss');
+    const name = parts.get('hud-boss-name');
+    const fill = parts.get('hud-boss-track')?.children[0];
+    expect(bar?.hidden).toBe(true);
+    setBoss(sim, KIND_BRUISER, KINDS[KIND_BRUISER].hp);
+    hud.update(sim);
+    expect(bar?.hidden).toBe(false);
+    expect(name?.textContent).toBe('THE BRUISER');
+    expect(fill?.style.transform).toBe('scaleX(1)');
+    setBoss(sim, KIND_BRUISER, KINDS[KIND_BRUISER].hp / 4);
+    hud.update(sim);
+    expect(fill?.style.transform).toBe('scaleX(0.25)');
+    setBoss(sim, -1, 0);
+    hud.update(sim);
+    expect(bar?.hidden).toBe(true);
+  });
+
+  it('names each boss', () => {
+    expect([KIND_BRUISER, KIND_MORTAR, KIND_STANDSTILL].map(bossName)).toEqual(['THE BRUISER', 'THE MORTAR', 'THE STANDSTILL']);
+  });
+
+  it('shows the name across the screen for two seconds of play when a boss arrives', () => {
+    const { hud, parts, sim } = build(true);
+    const banner = parts.get('hud-boss-banner');
+    hud.update(sim);
+    expect(banner?.hidden).toBe(true);
+    setBoss(sim, KIND_MORTAR, KINDS[KIND_MORTAR].hp);
+    hud.update(sim);
+    expect(banner?.hidden).toBe(false);
+    expect(banner?.textContent).toBe('THE MORTAR');
+    sim.state.tick += BANNER_SECONDS * 60 - 1;
+    hud.update(sim);
+    expect(banner?.hidden).toBe(false);
+    sim.state.tick += 1;
+    hud.update(sim);
+    expect(banner?.hidden).toBe(true);
+    // The bar stays.
+    expect(parts.get('hud-boss')?.hidden).toBe(false);
+  });
+
+  it('writes only when the boss or its bar step changes', () => {
+    const { hud, all, sim } = build(true);
+    setBoss(sim, KIND_STANDSTILL, KINDS[KIND_STANDSTILL].hp);
+    hud.update(sim);
+    const base = writesOf(all);
+    sim.world.boss.hp -= 1;
+    hud.update(sim);
+    hud.update(sim);
+    expect(writesOf(all)).toBe(base);
+    sim.world.boss.hp = KINDS[KIND_STANDSTILL].hp / 2;
+    hud.update(sim);
+    hud.update(sim);
+    expect(writesOf(all)).toBe(base + 1);
   });
 });

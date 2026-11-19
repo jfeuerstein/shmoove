@@ -2,9 +2,9 @@
 import { describe, expect, it } from 'vitest';
 import { W_WAKE } from '../../src/sim/arsenal';
 import { setWeaponLevel } from '../../src/sim/build';
-import { dropTar, HAZARDS } from '../../src/sim/hazards';
+import { dropTar, HAZARDS, lob, stepHazards } from '../../src/sim/hazards';
 import type { Sim } from '../../src/sim/sim';
-import { addZone, KIND_CLINGER, STATE_LATCHED, ZONE_LOB, ZONE_MINE, ZONE_TAR } from '../../src/sim/world';
+import { addZone, FX_PLAYER_HIT, KIND_CLINGER, STATE_LATCHED, ZONE_LOB, ZONE_MINE, ZONE_RING, ZONE_TAR } from '../../src/sim/world';
 import { run, TUCK } from './fixtures';
 import { arena, place } from './world-fixtures';
 
@@ -61,6 +61,28 @@ describe('zones', () => {
     addZone(sim.world, ZONE_LOB, HAZARDS.lobRadius + 0.2, 0, 0, HAZARDS.lobRadius, 2, HAZARDS.lobDamage);
     run(sim, TUCK, 3);
     expect(sim.world.player.hp).toBe(sim.world.player.maxHp);
+  });
+
+  it("a lob lands after the flight it was given: a lobber's by default, longer when asked (the Mortar's)", () => {
+    for (const [ticks, given] of [[HAZARDS.lobTicks, undefined], [72, 72]] as const) {
+      const sim = quiet();
+      lob(sim.world, sim.terrain, 0, 0, given);
+      expect(sim.world.zones.life[0]).toBe(ticks);
+      let hitAt = -1;
+      for (let t = 1; t <= ticks + 2 && hitAt < 0; t++) {
+        sim.step(TUCK);
+        for (let k = 0; k < sim.world.fx.count; k++) if (sim.world.fx.type[k] === FX_PLAYER_HIT) hitAt = t;
+      }
+      expect(hitAt).toBe(ticks);
+    }
+  });
+
+  it("leaves the Standstill's rings to the bosses", () => {
+    const sim = quiet();
+    addZone(sim.world, ZONE_RING, 30, 0, 0, 0, 100, 15);
+    stepHazards(sim.world, sim.state, sim.terrain);
+    expect(sim.world.zones.life[0]).toBe(100);
+    expect(sim.world.zones.r[0]).toBe(0);
   });
 
   it('leaves other kinds of zone alone', () => {

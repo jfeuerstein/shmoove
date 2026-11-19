@@ -5,7 +5,10 @@
  * - tar (`ZONE_TAR`): a dark patch as wide as it drags, spreading when it is laid and shrinking
  *   away at the end of its life;
  * - a lob ring (`ZONE_LOB`): an outline where the shot will land, filling in from the middle as its
- *   time runs out, so the moment it lands is the moment it is full.
+ *   time runs out, so the moment it lands is the moment it is full;
+ * - the Standstill's ring (`ZONE_RING`): a bright band on the ground in `PALETTE.ring` at the front's
+ *   radius, following the ground, drawn where the front will be at the frame (it spreads steadily),
+ *   so the moment to ollie can be read off it.
  *
  * Also `GroundRings`: wide rings drawn as one strip that follows the ground (elites' auras, shrines'
  * orbits), for the views that need one.
@@ -23,8 +26,10 @@ import {
 } from 'three';
 import type { Terrain } from '../sim/terrain';
 import type { Vec3 } from '../sim/types';
+import { BOSS } from '../sim/bosses';
+import { DT } from '../sim/constants';
 import { CRUMBS } from '../sim/weapons/crumbs';
-import { MAX_ZONES, ZONE_LOB, ZONE_MINE, ZONE_TAR, type World } from '../sim/world';
+import { MAX_ZONES, ZONE_LOB, ZONE_MINE, ZONE_RING, ZONE_TAR, type World } from '../sim/world';
 import { PALETTE, flatMaterial } from './look';
 import { addInstanceColor, addInstanceFloat, discMaterial, fadeMaterial, makeInstanced, rgbInto, writeMatrix } from './fxView';
 
@@ -47,6 +52,12 @@ const TAR_SHRINK = 30;
 const MINE_LIFT = 0.08;
 const TAR_LIFT = 0.04;
 const LOB_LIFT = 0.12;
+const RING_LIFT = 0.18;
+/** The Standstill's ring: how wide its band is, m (behind the front), its strength, and how many at once. */
+export const RING_BAND = 0.7;
+const RING_FADE = 1;
+const RING_SEGMENTS = 96;
+export const MAX_RINGS = 4;
 
 /** Columns of a disc of radius r lying on ground of unit normal n, into slot i. */
 function groundDisc(m: { [i: number]: number }, i: number, n: Vec3, r: number, x: number, y: number, z: number): void {
@@ -84,6 +95,9 @@ export class ZonesView {
   readonly mines: InstancedMesh;
   readonly tar: InstancedMesh;
   readonly lobs: InstancedMesh;
+  /** The Standstill's rings. */
+  readonly rings: GroundRings;
+  private readonly ringRgb = new Float32Array(3);
   private readonly terrain: Terrain | null;
   private readonly mineDisc: InstancedBufferAttribute;
   private readonly lobDisc: InstancedBufferAttribute;
@@ -116,10 +130,13 @@ export class ZonesView {
     const lobCol = addInstanceColor(this.lobs, MAX_ZONES);
     for (let i = 0; i < MAX_ZONES; i++) rgbInto(lobCol, i * 3, PALETTE.zones[ZONE_LOB]);
 
+    this.rings = new GroundRings(MAX_RINGS, RING_SEGMENTS, 'zones-rings', terrain, RING_LIFT);
+    rgbInto(this.ringRgb, 0, PALETTE.ring);
+
     this.tar.renderOrder = 1;
     this.mines.renderOrder = 2;
     this.lobs.renderOrder = 2;
-    this.object.add(this.tar, this.mines, this.lobs);
+    this.object.add(this.tar, this.mines, this.lobs, this.rings.mesh);
   }
 
   private groundNormal(x: number, z: number): Vec3 {
@@ -133,8 +150,10 @@ export class ZonesView {
     return n;
   }
 
-  update(w: World): void {
+  /** `alpha` (0..1) is how far the frame is from the previous tick to the latest. */
+  update(w: World, alpha = 1): void {
     const zn = w.zones;
+    this.rings.begin();
     const mm = this.mines.instanceMatrix.array;
     const tm = this.tar.instanceMatrix.array;
     const lm = this.lobs.instanceMatrix.array;
@@ -169,8 +188,13 @@ export class ZonesView {
         ld[lobs * 3 + 1] = LOB_INNER * lobFill(age, life);
         ld[lobs * 3 + 2] = LOB_FADE;
         lobs++;
+      } else if (kind === ZONE_RING) {
+        // The front as it stands at the frame: back from the latest tick by what it spreads in the rest of one.
+        const r = Math.max(0, zn.r[i] - BOSS.standstill.ringSpeed * (1 - alpha) * DT);
+        this.rings.add(x, y, z, Math.max(0, r - RING_BAND), r, this.ringRgb, 0, RING_FADE);
       }
     }
+    this.rings.end();
     this.finish(this.mines, mines, this.mineDisc);
     this.finish(this.tar, tar, null);
     this.finish(this.lobs, lobs, this.lobDisc);

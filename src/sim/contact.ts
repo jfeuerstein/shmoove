@@ -73,8 +73,10 @@ export function stepContact(w: World, s: SimState): void {
   const n = queryEnemies(w, m.x, m.z, REACH, w.nearA);
   for (let q = 0; q < n; q++) {
     const i = w.nearA[q];
-    if (h.hp[i] <= 0 || h.age[i] < SPAWN_TICKS || h.stun[i] > 0 || h.state[i] === STATE_LATCHED) continue;
+    if (h.hp[i] <= 0 || h.age[i] < SPAWN_TICKS || h.stun[i] > 0) continue;
     const kind = KINDS[h.kind[i]];
+    // Holding on already. (Only for kinds that latch: `state` is each kind's own to use.)
+    if (kind.latches === true && h.state[i] === STATE_LATCHED) continue;
     const dx = h.x[i] - m.x;
     const dz = h.z[i] - m.z;
     const touch = kind.radius + PLAYER_RADIUS;

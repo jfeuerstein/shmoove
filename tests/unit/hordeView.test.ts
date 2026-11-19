@@ -3,15 +3,19 @@ import { describe, expect, it } from 'vitest';
 import {
   AURA_COLORS,
   bollardGeometry,
+  bruiserGeometry,
   clingerGeometry,
   cutterGeometry,
   ELITE_SCALE,
   gnatGeometry,
   HordeView,
   lobberGeometry,
+  mortarGeometry,
   shufflerGeometry,
   sludgeGeometry,
+  standstillGeometry,
 } from '../../src/render/hordeView';
+import { PALETTE } from '../../src/render/look';
 import { DT } from '../../src/sim/constants';
 import { HORDE } from '../../src/sim/horde';
 import {
@@ -19,13 +23,16 @@ import {
   ELITE_JAM,
   ELITE_SHIELD,
   KIND_BOLLARD,
+  KIND_BRUISER,
   KIND_CLINGER,
   KIND_COUNT,
   KIND_CUTTER,
   KIND_GNAT,
   KIND_LOBBER,
+  KIND_MORTAR,
   KIND_SHUFFLER,
   KIND_SLUDGE,
+  KIND_STANDSTILL,
   KINDS,
   makeWorld,
   MARK_ELITE,
@@ -90,7 +97,18 @@ describe('enemy geometry', () => {
   });
 
   it('has every face pointing outward from the part it belongs to', () => {
-    const shapes = { shufflerGeometry, gnatGeometry, bollardGeometry, cutterGeometry, lobberGeometry, sludgeGeometry, clingerGeometry };
+    const shapes = {
+      shufflerGeometry,
+      gnatGeometry,
+      bollardGeometry,
+      cutterGeometry,
+      lobberGeometry,
+      sludgeGeometry,
+      clingerGeometry,
+      bruiserGeometry,
+      mortarGeometry,
+      standstillGeometry,
+    };
     for (const [name, make] of Object.entries(shapes)) {
       const p = make().getAttribute('position');
       const tris = p.count / 3;
@@ -210,7 +228,7 @@ describe('HordeView', () => {
     for (let k = 0; k < KIND_COUNT; k++) add(w, k, k * 3, 0.25, -2, 0, 1);
     const view = new HordeView();
     view.update(w, 1, 0, 0, 0);
-    expect(view.meshes.length).toBe(KIND_COUNT);
+    expect(view.meshes.length).toBe(KINDS.length);
     for (const k of [KIND_CUTTER, KIND_LOBBER, KIND_SLUDGE, KIND_CLINGER]) {
       const mesh = view.meshes[k];
       expect(mesh.count).toBe(1);
@@ -322,11 +340,11 @@ describe('HordeView', () => {
     for (let n = 0; n < 30; n++) add(w, n % 3, n, 0, -n);
     const view = new HordeView();
     view.update(w, 1, 0, 0, 0);
-    expect(view.meshes.map((m) => m.count)).toEqual([10, 10, 10, 0, 0, 0, 0]);
+    expect(view.meshes.map((m) => m.count)).toEqual([10, 10, 10, 0, 0, 0, 0, 0, 0, 0]);
     // Take out every gnat; the last enemies move into the gaps.
     for (let i = w.horde.count - 1; i >= 0; i--) if (w.horde.kind[i] === KIND_GNAT) removeEnemy(w, i);
     view.update(w, 1, 0, 0, 0);
-    expect(view.meshes.map((m) => m.count)).toEqual([10, 0, 10, 0, 0, 0, 0]);
+    expect(view.meshes.map((m) => m.count)).toEqual([10, 0, 10, 0, 0, 0, 0, 0, 0, 0]);
     expect(view.meshes[KIND_GNAT].visible).toBe(false);
     expect(view.shadows.count).toBe(20);
     w.horde.count = 0;
@@ -353,5 +371,77 @@ describe('HordeView', () => {
   it('never lets the meshes be culled by a stale bounding sphere', () => {
     const view = new HordeView();
     for (const m of [...view.meshes, view.shadows]) expect(m.frustumCulled).toBe(false);
+  });
+});
+
+describe('the bosses', () => {
+  const shapes = [
+    { kind: KIND_BRUISER, g: bruiserGeometry() },
+    { kind: KIND_MORTAR, g: mortarGeometry() },
+    { kind: KIND_STANDSTILL, g: standstillGeometry() },
+  ];
+
+  it('stay inside 80 triangles each, stand as tall as their kind, and fill their body', () => {
+    for (const { kind, g } of shapes) {
+      expect(g.getAttribute('position').count / 3, KINDS[kind].name).toBeLessThanOrEqual(80);
+      const box = boxOf(g);
+      expect(box.min.y).toBeCloseTo(0, 5);
+      expect(box.max.y).toBeCloseTo(KINDS[kind].height, 5);
+      // As wide as the body that touches you, give or take.
+      const across = box.max.x - box.min.x;
+      expect(across, KINDS[kind].name).toBeGreaterThan(KINDS[kind].radius * 1.6);
+      expect(across, KINDS[kind].name).toBeLessThan(KINDS[kind].radius * 2.1);
+    }
+  });
+
+  it('are far bigger than anything in the horde, and each its own shape', () => {
+    const biggest = Math.max(...[shufflerGeometry(), bollardGeometry(), lobberGeometry(), sludgeGeometry()].map((g) => {
+      const b = boxOf(g);
+      return (b.max.x - b.min.x) * (b.max.y - b.min.y) * (b.max.z - b.min.z);
+    }));
+    for (const { g } of shapes) {
+      const b = boxOf(g);
+      expect((b.max.x - b.min.x) * (b.max.y - b.min.y) * (b.max.z - b.min.z)).toBeGreaterThan(biggest * 2);
+    }
+    const bruiser = boxOf(bruiserGeometry());
+    const mortar = boxOf(mortarGeometry());
+    const standstill = boxOf(standstillGeometry());
+    // The Bruiser is broad and low, with its head and horns forward of its body.
+    expect((bruiser.max.x - bruiser.min.x) / bruiser.max.y).toBeGreaterThan(1.4);
+    expect(bruiser.max.z).toBeGreaterThan(-bruiser.min.z + 1);
+    // The Mortar is squat and round: its tube stands up from the middle and does not lean.
+    expect(mortar.max.z).toBeCloseTo(-mortar.min.z, 1);
+    expect(mortar.max.y / (mortar.max.x - mortar.min.x)).toBeLessThan(1);
+    // The Standstill is a tall monolith: taller than it is wide, and more than twice the Bruiser's height.
+    expect(standstill.max.y / (standstill.max.x - standstill.min.x)).toBeGreaterThan(1.15);
+    expect(standstill.max.y).toBeGreaterThan(2 * bruiser.max.y);
+  });
+
+  it('draws each in its own mesh in its own colour from the palette', () => {
+    const w = makeWorld(3);
+    for (const { kind } of shapes) add(w, kind, kind * 10, 0, 5, 0, 1);
+    const view = new HordeView();
+    view.update(w, 1, 0, 0, 0);
+    for (const [n, { kind }] of shapes.entries()) {
+      const mesh = view.meshes[kind];
+      expect(mesh.count).toBe(1);
+      expect(mesh.visible).toBe(true);
+      const m = matrix(mesh, 0);
+      expect([m[12], m[13], m[14]]).toEqual([kind * 10, 0, 5]);
+      const mat = mesh.material as unknown as { color: Color };
+      expect(mat.color.getHex()).toBe(new Color(PALETTE.bosses[n]).getHex());
+    }
+  });
+
+  it('faces the way the Bruiser leans during its tell, not the mover', () => {
+    const w = makeWorld(3);
+    // Standing almost still, leaning along +x; the mover is off along +z.
+    const i = add(w, KIND_BRUISER, 0, 0, 0, 0.15, 0);
+    w.horde.state[i] = 2;
+    const view = new HordeView();
+    view.update(w, 1, 0, 0, 30);
+    const f = facing(matrix(view.meshes[KIND_BRUISER], 0));
+    expect(f[0]).toBeCloseTo(1, 5);
+    expect(f[2]).toBeCloseTo(0, 5);
   });
 });

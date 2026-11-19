@@ -327,7 +327,7 @@ function boot(): void {
     horde.update(w, alpha, now, mx, mz, my, heading);
     sparks.update(w, now);
     shots.update(w, alpha, now);
-    zones.update(w);
+    zones.update(w, alpha);
     things.update(w, now);
     weapons.update(w, sim.prev, sim.state, alpha, now);
     wake.update(w.wake, mx, mz, groundAt);

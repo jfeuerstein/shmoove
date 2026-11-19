@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { RUN_TICKS } from '../../src/sim/balance';
 import { makeWorld, PHASE_DEAD, PHASE_PLAY, PHASE_WON, type World } from '../../src/sim/world';
 import { END_PAUSE_SEC, EndScreen, endCard } from '../../src/ui/endScreen';
 
@@ -82,11 +81,15 @@ describe('endCard', () => {
     w.player.pops = 3;
     w.player.bestPop = 12;
     expect(endCard(w, END_PAUSE_SEC - 0.01)).toBeNull();
-    expect(endCard(w, END_PAUSE_SEC)).toEqual({ title: 'STOPPED', time: '1:15', kills: 41, level: 4, pops: 3, bestPop: 12 });
+    w.boss.felled = 1;
+    expect(endCard(w, END_PAUSE_SEC)).toEqual({ title: 'STOPPED', time: '1:15', kills: 41, level: 4, pops: 3, bestPop: 12, bosses: 1 });
+    // Won only when the final boss falls, whenever that is: the clock does not end a run.
     w.run.phase = PHASE_WON;
-    w.run.ticks = RUN_TICKS;
-    expect(endCard(w, 1)?.title).toBe('STILL MOVING');
-    expect(endCard(w, 1)?.time).toBe('3:00');
+    w.run.ticks = 9 * 3600 + 47 * 60;
+    w.boss.felled = 3;
+    expect(endCard(w, 1)?.title).toBe('CLEARED');
+    expect(endCard(w, 1)?.time).toBe('9:47');
+    expect(endCard(w, 1)?.bosses).toBe(3);
   });
 });
 
@@ -108,6 +111,7 @@ describe('EndScreen', () => {
     w.player.level = 3;
     w.player.pops = 2;
     w.player.bestPop = 9;
+    w.boss.felled = 0;
     screen.update(w, 0.4);
     screen.update(w, 0.3);
     expect(shown(el)).toBe(true);
@@ -116,6 +120,7 @@ describe('EndScreen', () => {
     expect(t).toContain('Time  1:01');
     expect(t).toContain('Kills  17');
     expect(t).toContain('Level  3');
+    expect(t).toContain('Bosses  0 / 3');
     expect(t).toContain('Loops  2  (best 9)');
     expect(t).toContain('AGAIN');
   });
@@ -123,13 +128,15 @@ describe('EndScreen', () => {
   it('shows the card with the numbers for a win', () => {
     const { screen, el, w } = build();
     w.run.phase = PHASE_WON;
-    w.run.ticks = RUN_TICKS;
+    w.run.ticks = 10 * 3600 + 5 * 60;
     w.player.kills = 300;
+    w.boss.felled = 3;
     screen.update(w, 1);
     expect(shown(el)).toBe(true);
-    expect(texts(el)).toContain('STILL MOVING');
-    expect(texts(el)).toContain('Time  3:00');
+    expect(texts(el)).toContain('CLEARED');
+    expect(texts(el)).toContain('Time  10:05');
     expect(texts(el)).toContain('Kills  300');
+    expect(texts(el)).toContain('Bosses  3 / 3');
   });
 
   it('goes again on a tap, hides, and keeps touches off the game', () => {
