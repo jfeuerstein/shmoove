@@ -10,6 +10,7 @@ import {
   W_BUMPER,
   W_ORBIT,
   W_SEEKERS,
+  W_SKIPPER,
   W_SLAM,
   W_STATIC,
   W_WAKE,
@@ -21,6 +22,7 @@ import type { SimState } from '../types';
 import { stepWake } from '../wake';
 import type { World } from '../world';
 import { stepOrbit } from './orbit';
+import { stepSkipper } from './skipper';
 import { stepSlam } from './slam';
 import { stepStatic } from './static';
 
@@ -42,6 +44,7 @@ registerWeapon({ id: W_BUMPER });
 registerWeapon({ id: W_SLAM, step: stepSlam });
 registerWeapon({ id: W_ORBIT, step: stepOrbit });
 registerWeapon({ id: W_STATIC, step: stepStatic });
+registerWeapon({ id: W_SKIPPER, step: stepSkipper });
 
 /** Mark in `pool` the weapons that exist. */
 export function builtWeapons(pool: Uint8Array): void {
