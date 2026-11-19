@@ -133,7 +133,17 @@ function geometryFor(kind: number): BufferGeometry {
   if (kind === KIND_SHUFFLER) return shufflerGeometry();
   if (kind === KIND_GNAT) return gnatGeometry();
   if (kind === KIND_BOLLARD) return bollardGeometry();
-  throw new Error(`no geometry for enemy kind ${kind}`);
+  // A kind with no shape of its own yet stands in as the shuffler's block, sized to its body.
+  const base = KINDS[KIND_SHUFFLER];
+  const def = KINDS[kind];
+  const g = shufflerGeometry();
+  g.scale(def.radius / base.radius, def.height / base.height, def.radius / base.radius);
+  g.computeBoundingSphere();
+  return g;
+}
+
+function wobbleFor(kind: number): Wobble {
+  return kind < WOBBLE.length ? WOBBLE[kind] : WOBBLE[KIND_SHUFFLER];
 }
 
 // ---- material -------------------------------------------------------------------------------
@@ -144,7 +154,7 @@ function enemyMaterial(kind: number, time: { value: number }): MeshLambertMateri
   const m = flatMaterial(color);
   m.emissive.setHex(color);
   m.emissiveIntensity = ENEMY_GLOW;
-  const w = WOBBLE[kind];
+  const w = wobbleFor(kind);
   const wobble = { value: new Vector4(w.hop, w.rate, w.sway, w.idle) };
   const flash = { value: new Color(PALETTE.enemyFlash) };
   m.onBeforeCompile = (shader) => {

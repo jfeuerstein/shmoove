@@ -3,6 +3,7 @@ import { applyBuildToMover, openOffer, pickCard } from './build';
 import { stepContact } from './contact';
 import { stepDirector } from './director';
 import { stepGear } from './flow';
+import { stepHazards } from './hazards';
 import { stepHorde } from './horde';
 import { makeMover, stepMover } from './mover';
 import { copyMoverMods, makeMoverMods } from './stats';
@@ -102,7 +103,7 @@ function stepWorld(w: World, s: SimState, terrain: Terrain): void {
     reapHorde(w);
     return;
   }
-  // [hazards] lobbed shots landing, tar, enemies holding on: sets w.player.cling
+  stepHazards(w, s, terrain);
   stepWeapons(w, s, terrain);
   reapHorde(w);
   stepSparks(w, s, terrain);

@@ -2,7 +2,7 @@ import type { InstancedMesh } from 'three';
 import { describe, expect, it } from 'vitest';
 import { bollardGeometry, gnatGeometry, HordeView, shufflerGeometry } from '../../src/render/hordeView';
 import { DT } from '../../src/sim/constants';
-import { KIND_BOLLARD, KIND_GNAT, KIND_SHUFFLER, KINDS, makeWorld, removeEnemy, SPAWN_TICKS, spawnEnemy, type World } from '../../src/sim/world';
+import { KIND_BOLLARD, KIND_CLINGER, KIND_COUNT, KIND_GNAT, KIND_SHUFFLER, KIND_SLUDGE, KINDS, makeWorld, removeEnemy, SPAWN_TICKS, spawnEnemy, type World } from '../../src/sim/world';
 
 /** Column-major instance matrix `n` of a mesh. */
 function matrix(mesh: InstancedMesh, n: number): number[] {
@@ -144,16 +144,41 @@ describe('HordeView', () => {
     expect(scales[4]).toBeCloseTo(1, 5);
   });
 
+  it('draws a kind with no shape of its own as the block, sized to its body', () => {
+    const w = makeWorld(3);
+    for (let k = 0; k < KIND_COUNT; k++) add(w, k, k * 3, 0, 0);
+    const view = new HordeView();
+    view.update(w, 1, 0, 0, 0);
+    expect(view.meshes.length).toBe(KIND_COUNT);
+    for (let k = 0; k < KIND_COUNT; k++) {
+      expect(view.meshes[k].count).toBe(1);
+      expect(view.meshes[k].visible).toBe(true);
+    }
+    for (const k of [KIND_SLUDGE, KIND_CLINGER]) {
+      const g = view.meshes[k].geometry;
+      g.computeBoundingBox();
+      const box = g.boundingBox;
+      if (!box) throw new Error('no bounding box');
+      expect(box.max.y).toBeCloseTo(KINDS[k].height, 5);
+      const block = shufflerGeometry();
+      block.computeBoundingBox();
+      const full = block.boundingBox;
+      if (!full) throw new Error('no bounding box');
+      const wide = (box.max.x - box.min.x) / (full.max.x - full.min.x);
+      expect(wide).toBeCloseTo(KINDS[k].radius / KINDS[KIND_SHUFFLER].radius, 5);
+    }
+  });
+
   it('follows the horde as it shrinks and grows: count is always the living enemies of each kind', () => {
     const w = makeWorld(3);
     for (let n = 0; n < 30; n++) add(w, n % 3, n, 0, -n);
     const view = new HordeView();
     view.update(w, 1, 0, 0, 0);
-    expect(view.meshes.map((m) => m.count)).toEqual([10, 10, 10]);
+    expect(view.meshes.map((m) => m.count)).toEqual([10, 10, 10, 0, 0, 0, 0]);
     // Take out every gnat; the last enemies move into the gaps.
     for (let i = w.horde.count - 1; i >= 0; i--) if (w.horde.kind[i] === KIND_GNAT) removeEnemy(w, i);
     view.update(w, 1, 0, 0, 0);
-    expect(view.meshes.map((m) => m.count)).toEqual([10, 0, 10]);
+    expect(view.meshes.map((m) => m.count)).toEqual([10, 0, 10, 0, 0, 0, 0]);
     expect(view.meshes[KIND_GNAT].visible).toBe(false);
     expect(view.shadows.count).toBe(20);
     w.horde.count = 0;

@@ -26,7 +26,15 @@ export const WEAPON_MEM = 8;
 export const KIND_SHUFFLER = 0;
 export const KIND_GNAT = 1;
 export const KIND_BOLLARD = 2;
-export const KIND_COUNT = 3;
+/** Fast; runs for where the mover will be. */
+export const KIND_CUTTER = 3;
+/** Keeps its distance and lobs shots onto the mover's path. */
+export const KIND_LOBBER = 4;
+/** Slow; leaves tar behind it. */
+export const KIND_SLUDGE = 5;
+/** Small and fast; latches on and drags. */
+export const KIND_CLINGER = 6;
+export const KIND_COUNT = 7;
 
 export const WEIGHT_LIGHT = 0;
 export const WEIGHT_MEDIUM = 1;
@@ -61,6 +69,10 @@ export const KINDS: readonly EnemyKind[] = [
   { name: 'shuffler', radius: 0.6, height: 1.7, speed: 4, accel: 10, hp: 10, damage: 8, weight: WEIGHT_LIGHT, xp: 1 },
   { name: 'gnat', radius: 0.35, height: 0.6, speed: 8.5, accel: 18, hp: 2, damage: 3, weight: WEIGHT_LIGHT, xp: 0.5 },
   { name: 'bollard', radius: 1.3, height: 2.4, speed: 1.6, accel: 3, hp: 120, damage: 15, weight: WEIGHT_HEAVY, xp: 12 },
+  { name: 'cutter', radius: 0.5, height: 1.5, speed: 10.5, accel: 16, hp: 26, damage: 10, weight: WEIGHT_MEDIUM, xp: 3 },
+  { name: 'lobber', radius: 0.7, height: 1.9, speed: 3.2, accel: 6, hp: 18, damage: 8, weight: WEIGHT_MEDIUM, xp: 3 },
+  { name: 'sludge', radius: 0.9, height: 1.1, speed: 3, accel: 4, hp: 40, damage: 10, weight: WEIGHT_MEDIUM, xp: 4 },
+  { name: 'clinger', radius: 0.3, height: 0.7, speed: 9, accel: 20, hp: 8, damage: 0, weight: WEIGHT_LIGHT, xp: 1, latches: true },
 ];
 
 /** The widest enemy, m. Every query that must reach an enemy's edge pads by this. */

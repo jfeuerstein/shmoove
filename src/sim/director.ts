@@ -16,7 +16,23 @@ import { DT } from './constants';
 import { clamp, datan2, dcos, dsin, HALF_PI, PI, TAU } from './math';
 import type { Terrain } from './terrain';
 import type { MoverState, SimState, Vec3 } from './types';
-import { KIND_BOLLARD, KIND_GNAT, KIND_SHUFFLER, removeEnemy, spawnEnemy, type World } from './world';
+import {
+  ELITE_HASTE,
+  ELITE_JAM,
+  ELITE_NONE,
+  KIND_BOLLARD,
+  KIND_CLINGER,
+  KIND_CUTTER,
+  KIND_GNAT,
+  KIND_LOBBER,
+  KIND_SHUFFLER,
+  KIND_SLUDGE,
+  KINDS,
+  MARK_PACK,
+  removeEnemy,
+  spawnEnemy,
+  type World,
+} from './world';
 
 const DEG = PI / 180;
 
@@ -51,6 +67,32 @@ export const DIRECTOR = {
   bollardFull: 175,
   /** At least this long between two bollards, s. */
   bollardGap: 8,
+
+  /** Cutters arrive from this run time, as this share of the horde. */
+  cutterFrom: 60,
+  cutterShare: 0.08,
+  /** Lobbers arrive from this run time, one at a time at least lobberGap s apart, at most lobberMax alive. */
+  lobberFrom: 75,
+  lobberMax: 8,
+  lobberGap: 2.5,
+  /** Sludges likewise. */
+  sludgeFrom: 100,
+  sludgeMax: 5,
+  sludgeGap: 4,
+  /** Clingers arrive from this run time, as this share of the horde. */
+  clingerFrom: 120,
+  clingerShare: 0.06,
+
+  /** From this run time, about every eliteEvery s, the next shuffler or cutter to come up is an elite. */
+  eliteFrom: 90,
+  eliteEvery: 25,
+  /** An elite has this many times its kind's health. */
+  eliteHp: 6,
+
+  /** A totem's pack: one elite and packSize shufflers in a ring this far from it, m. */
+  packSize: 10,
+  packNear: 18,
+  packFar: 24,
 
   /** Spawns land this far from the mover, m. */
   nearest: 38,
@@ -88,6 +130,10 @@ interface DirectorState {
   cloudZ: number;
   /** Run tick from which the next bollard may come. */
   nextBollard: number;
+  /** Run ticks from which the next lobber, sludge and elite may come. */
+  nextLobber: number;
+  nextSludge: number;
+  nextElite: number;
   /** Spawns paid for and not yet made. */
   budget: number;
 }
@@ -97,10 +143,83 @@ const states = new WeakMap<World, DirectorState>();
 function stateOf(w: World): DirectorState {
   let st = states.get(w);
   if (st === undefined) {
-    st = { cloudLeft: 0, cloudX: 0, cloudZ: 0, nextBollard: 0, budget: 0 };
+    st = { cloudLeft: 0, cloudX: 0, cloudZ: 0, nextBollard: 0, nextLobber: 0, nextSludge: 0, nextElite: 0, budget: 0 };
     states.set(w, st);
   }
   return st;
+}
+
+/** Make enemy i an elite with `aura` (ELITE_*): more health; its aura is the horde's business. */
+export function makeElite(w: World, i: number, aura: number): void {
+  const h = w.horde;
+  h.elite[i] = aura;
+  h.hp[i] = KINDS[h.kind[i]].hp * DIRECTOR.eliteHp;
+}
+
+/** One of the three auras, at random. */
+function randomAura(w: World): number {
+  const a = ELITE_HASTE + Math.floor(w.rng.next() * 3);
+  return a > ELITE_JAM ? ELITE_JAM : a;
+}
+
+/** Share of the horde that should be cutters at `seconds`. */
+export function cutterShare(seconds: number): number {
+  return seconds < DIRECTOR.cutterFrom ? 0 : DIRECTOR.cutterShare;
+}
+
+/** Share of the horde that should be clingers at `seconds`. */
+export function clingerShare(seconds: number): number {
+  return seconds < DIRECTOR.clingerFrom ? 0 : DIRECTOR.clingerShare;
+}
+
+/** How many lobbers may be alive at `seconds`. */
+export function lobberCap(seconds: number): number {
+  return seconds < DIRECTOR.lobberFrom ? 0 : DIRECTOR.lobberMax;
+}
+
+/** How many sludges may be alive at `seconds`. */
+export function sludgeCap(seconds: number): number {
+  return seconds < DIRECTOR.sludgeFrom ? 0 : DIRECTOR.sludgeMax;
+}
+
+/** (x, z) pulled in to lie inside the spawn region, written to `spot`. */
+function inRegion(terrain: Terrain, x: number, z: number): void {
+  const rMax = DIRECTOR.region * terrain.radius;
+  const r2 = x * x + z * z;
+  if (r2 > rMax * rMax) {
+    const k = rMax / Math.sqrt(r2);
+    x *= k;
+    z *= k;
+  }
+  spot.x = x;
+  spot.z = z;
+}
+
+/**
+ * Answer the totems: for each place asked for, an elite with a random aura (marked as the pack's)
+ * and a ring of shufflers around it, outside the budget and the cap. Then the requests are cleared.
+ */
+function servePacks(w: World, terrain: Terrain): void {
+  const D = DIRECTOR;
+  const n = w.packs < w.packX.length ? w.packs : w.packX.length;
+  for (let p = 0; p < n; p++) {
+    inRegion(terrain, w.packX[p], w.packZ[p]);
+    const cx = spot.x;
+    const cz = spot.z;
+    const kind = w.rng.next() < 0.5 ? KIND_SHUFFLER : KIND_CUTTER;
+    const e = spawnEnemy(w, kind, cx, terrain.heightAt(cx, cz), cz);
+    if (e < 0) break;
+    makeElite(w, e, randomAura(w));
+    w.horde.mark[e] |= MARK_PACK;
+    const turn = w.rng.next() * TAU;
+    for (let k = 0; k < D.packSize; k++) {
+      const a = turn + (k / D.packSize) * TAU;
+      const r = D.packNear + w.rng.next() * (D.packFar - D.packNear);
+      inRegion(terrain, cx + dsin(a) * r, cz + dcos(a) * r);
+      if (!spawnAt(w, terrain, KIND_SHUFFLER, spot.x, spot.z)) break;
+    }
+  }
+  w.packs = 0;
 }
 
 /** One of the DIRECTOR schedules (rate, floor, cap) at `seconds` into the run. */
@@ -256,14 +375,17 @@ function spawnCloudGnat(w: World, s: SimState, terrain: Terrain, st: DirectorSta
   return false;
 }
 
-/** Take away what is too far from the mover, or far enough and left behind a fast one. */
+/**
+ * Take away what is too far from the mover, or far enough and left behind a fast one. Elites stay:
+ * one is something to hunt (a pack's is a totem's reward), and it would not come back as itself.
+ */
 function recycle(w: World, s: SimState): number {
   const h = w.horde;
   const m = s.mover;
   const behind = behindLimit(m.vx, m.vz);
   let taken = 0;
   for (let i = h.count - 1; i >= 0; i--) {
-    if (leftBehind(m, h.x[i] - m.x, h.z[i] - m.z, behind)) {
+    if (h.elite[i] === ELITE_NONE && leftBehind(m, h.x[i] - m.x, h.z[i] - m.z, behind)) {
       removeEnemy(w, i);
       taken++;
     }
@@ -271,8 +393,26 @@ function recycle(w: World, s: SimState): number {
   return taken;
 }
 
-/** Spawn and recycle for one tick. Does nothing unless `w.spawning`. */
+/**
+ * One ordinary enemy of `kind` at `spot`. When an elite is due, a shuffler or cutter coming up is
+ * it. False if the horde is full.
+ */
+function spawnKind(w: World, terrain: Terrain, st: DirectorState, kind: number, tick: number): boolean {
+  const i = spawnEnemy(w, kind, spot.x, terrain.heightAt(spot.x, spot.z), spot.z);
+  if (i < 0) return false;
+  if ((kind === KIND_SHUFFLER || kind === KIND_CUTTER) && tick >= st.nextElite) {
+    makeElite(w, i, randomAura(w));
+    st.nextElite = tick + Math.round(DIRECTOR.eliteEvery / DT);
+  }
+  return true;
+}
+
+/**
+ * Spawn and recycle for one tick. Packs a totem asked for come whatever; nothing else does unless
+ * `w.spawning`.
+ */
 export function stepDirector(w: World, s: SimState, terrain: Terrain): void {
+  if (w.packs > 0) servePacks(w, terrain);
   if (!w.spawning) return;
   const D = DIRECTOR;
   const st = stateOf(w);
@@ -281,6 +421,9 @@ export function stepDirector(w: World, s: SimState, terrain: Terrain): void {
     // A fresh run (or a reset one): nothing carried over.
     st.cloudLeft = 0;
     st.nextBollard = 0;
+    st.nextLobber = Math.round(D.lobberFrom / DT);
+    st.nextSludge = Math.round(D.sludgeFrom / DT);
+    st.nextElite = Math.round(D.eliteFrom / DT);
     st.budget = 0;
   }
 
@@ -302,12 +445,26 @@ export function stepDirector(w: World, s: SimState, terrain: Terrain): void {
 
   let gnats = 0;
   let bollards = 0;
+  let cutters = 0;
+  let lobbers = 0;
+  let sludges = 0;
+  let clingers = 0;
   for (let i = 0; i < h.count; i++) {
-    if (h.kind[i] === KIND_GNAT) gnats++;
-    else if (h.kind[i] === KIND_BOLLARD) bollards++;
+    const k = h.kind[i];
+    if (k === KIND_GNAT) gnats++;
+    else if (k === KIND_BOLLARD) bollards++;
+    else if (k === KIND_CUTTER) cutters++;
+    else if (k === KIND_LOBBER) lobbers++;
+    else if (k === KIND_SLUDGE) sludges++;
+    else if (k === KIND_CLINGER) clingers++;
   }
-  const gnatWanted = gnatShare(seconds) * (h.count > floor ? h.count : floor);
+  const crowd = h.count > floor ? h.count : floor;
+  const gnatWanted = gnatShare(seconds) * crowd;
+  const cutterWanted = cutterShare(seconds) * crowd;
+  const clingerWanted = clingerShare(seconds) * crowd;
   const bollardsAllowed = bollardCap(seconds);
+  const lobbersAllowed = lobberCap(seconds);
+  const sludgesAllowed = sludgeCap(seconds);
 
   for (let n = 0; n < D.perTick; n++) {
     if (st.cloudLeft > 0) {
@@ -340,8 +497,27 @@ export function stepDirector(w: World, s: SimState, terrain: Terrain): void {
       if (spawnCloudGnat(w, s, terrain, st)) gnats++;
       continue;
     }
+    // The rest come one at a time: the capped kinds when their gap allows, the shared kinds while
+    // short of their share, and shufflers otherwise.
+    let kind = KIND_SHUFFLER;
+    if (lobbers < lobbersAllowed && tick >= st.nextLobber) {
+      kind = KIND_LOBBER;
+      st.nextLobber = tick + Math.round(D.lobberGap / DT);
+    } else if (sludges < sludgesAllowed && tick >= st.nextSludge) {
+      kind = KIND_SLUDGE;
+      st.nextSludge = tick + Math.round(D.sludgeGap / DT);
+    } else if (cutters + 1 <= cutterWanted) {
+      kind = KIND_CUTTER;
+    } else if (clingers + 1 <= clingerWanted) {
+      kind = KIND_CLINGER;
+    }
     if (!findSpot(w, s, terrain, 0)) break;
-    if (spawnAt(w, terrain, KIND_SHUFFLER, spot.x, spot.z) && !free) st.budget -= 1;
+    if (!spawnKind(w, terrain, st, kind, tick)) break;
+    if (!free) st.budget -= 1;
+    if (kind === KIND_LOBBER) lobbers++;
+    else if (kind === KIND_SLUDGE) sludges++;
+    else if (kind === KIND_CUTTER) cutters++;
+    else if (kind === KIND_CLINGER) clingers++;
   }
   // Refunds do not bank past the room under the cap: at the cap the budget holds only `hold`.
   const room = cap - h.count > 0 ? cap - h.count : 0;
