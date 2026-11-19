@@ -59,3 +59,10 @@ Things decided without the owner, newest last. Overrule any of them.
    above it passes under you: gnats yes, shufflers and bollards no.
 19. **In gear 5 a bollard shatters outright** (the ram takes all its health) at a cost of 2 m/s,
    rather than taking ordinary ram damage, which would not kill it.
+20. **Enemies behind a fast mover are recycled sooner.** The brief said 55 m behind; the horde
+   agent measured that at 20 m/s only 39% of the nearby horde was ahead, because an enemy passed
+   head-on stays within 55 m behind for longer than it was ever ahead. The distance now shrinks
+   from 55 m at 7 m/s to 30 m at 18 m/s, which puts about 69% ahead. A slow circling mover keeps the
+   full 55 m so its horde still arrives.
+21. **Gnat clouds come up whole**, finishing even if that puts the horde a few over its target,
+   rather than trickling in over seconds.
