@@ -1,0 +1,27 @@
+.look-switch {
+  margin-top: 12px;
+  width: 100%;
+}
+
+.look-switch-button {
+  width: 100%;
+  min-height: 48px;
+  padding: 0 14px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  touch-action: manipulation;
+}
+
+.look-switch-note {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.35;
+  opacity: 0.7;
+  text-align: center;
+}

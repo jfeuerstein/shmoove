@@ -9,14 +9,14 @@
  */
 import { BufferGeometry, Color, Float32BufferAttribute, Group, Mesh, type Object3D } from 'three';
 import type { Terrain } from '../sim/terrain';
-import { PALETTE, flatMaterial } from './look';
+import { PALETTE, STYLE, flatMaterial } from './look';
 
 /** Grid spacing, m. */
 export const TERRAIN_CELL = 2;
 /** Side of a checker square, m. */
-export const CHECKER = 4;
-/** Every this many metres a grid line is drawn in `PALETTE.groundLine`. */
-export const LINE_EVERY = 16;
+export const CHECKER = STYLE.checker;
+/** Every this many metres a grid line is drawn in `PALETTE.groundLine` (0: no lines). */
+export const LINE_EVERY = STYLE.lineEvery;
 /**
  * Most ground triangles one view may hold. Up to a radius of about 270 m the grid is 2 m; beyond
  * that the cell doubles until the disc fits, so a huge test terrain still draws.
@@ -26,7 +26,7 @@ export const MAX_GROUND_TRIANGLES = 100_000;
 const RIM_START = 8;
 const RIM_FULL = 30;
 /** How far the rim tint goes toward `PALETTE.rim`, 0..1. */
-const RIM_MIX = 0.85;
+const RIM_MIX = STYLE.rimMix;
 /** How far boost pads sit above the ground, m. */
 const PAD_LIFT = 0.06;
 const PAD_SEGMENTS = 24;
@@ -110,7 +110,7 @@ function buildGround(terrain: Terrain): Mesh {
 
   const pos: number[] = [];
   const col: number[] = [];
-  const lineCells = Math.max(1, Math.round(LINE_EVERY / cell));
+  const lineCells = LINE_EVERY > 0 ? Math.max(1, Math.round(LINE_EVERY / cell)) : 0;
   const push = (k: number): void => {
     pos.push(gx[k], gy[k], gz[k]);
     col.push(tmp.r, tmp.g, tmp.b);
@@ -133,7 +133,7 @@ function buildGround(terrain: Terrain): Mesh {
       if (!(inside[k00] | inside[k10] | inside[k01] | inside[k11])) continue;
       const x0 = (i - n) * cell;
       const z0 = (j - n) * cell;
-      const onLine = (i - n) % lineCells === 0 || (j - n) % lineCells === 0;
+      const onLine = lineCells > 0 && ((i - n) % lineCells === 0 || (j - n) % lineCells === 0);
       if (onLine) tmp.copy(cLine);
       else tmp.copy((fdiv(x0, CHECKER) + fdiv(z0, CHECKER)) % 2 === 0 ? cA : cB);
       const h = (gy[k00] + gy[k10] + gy[k01] + gy[k11]) * 0.25 - floor;

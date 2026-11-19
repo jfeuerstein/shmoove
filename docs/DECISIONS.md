@@ -235,3 +235,12 @@ Things decided without the owner, newest last. Overrule any of them.
 68. **The game measures the playtest itself.** A tally in the sim of damage dealt by weapon and
    hits taken by cause, and a run report on the end card with a COPY REPORT button
    (`docs/briefs/playtest-report.md`), so the owner sends numbers back.
+69. **Looks.** Four prototypes the owner can switch between (`?look=`, and a button in the game):
+   NIGHT BOWL (the look it was built in), POOL DAY (a drained pool at noon, ink outlines), RENTAL
+   TAPE (fat pixels, banded colour, fog up close) and RISO ZINE (four inks, chalk outlines,
+   halftone, grain). A look is a palette, the light and fog, the ground's pattern and one pass
+   over the finished frame; it never touches a model or a material, so all of the art follows
+   it. Changing the look reloads the page and so ends the run: views are built once to a
+   palette. The default look draws straight to the screen as before and costs nothing; the
+   others draw through one extra full-screen pass. Additive effects were designed for a dark
+   ground and are weaker on POOL DAY's light one; that is a known cost of that look.
