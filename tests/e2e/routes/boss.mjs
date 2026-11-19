@@ -3,9 +3,14 @@
 // across the upper screen; a screenshot; then it is brought down through the hook, which heals the
 // player and opens a rare card (taken with a real touch). After the third, the CLEARED card.
 // The rider waits at the spawn, still, looking into the bowl, so each boss comes up in view.
-// Screenshots: boss-bruiser.png (the Bruiser in its tell, facing where it will charge), boss-mortar.png
-// (the Mortar just after it lays its line of rings), boss.png (the Standstill with its first ring
-// about 15 m out), boss-end.png (the CLEARED card).
+// Seeing the boss: with the Bruiser behind the rider, the edge marker points at it; its charge lane is
+// on the ground through its tell; the Standstill's slow is a disc under it. The big name is timed by
+// real time and fits a 360 px screen.
+// Screenshots: boss-in.png (the Bruiser's arrival), boss-bruiser.png (the Bruiser in its tell, facing
+// where it will charge, its lane coming at the rider), boss-lane.png (the same tell from the side, the
+// lane crossing the frame), boss-mortar.png (the Mortar just after it lays its line of rings),
+// boss-aura.png (the Standstill's disc with its first ring on it), boss.png (the Standstill with its
+// first ring about 15 m out), boss-end.png (the CLEARED card).
 import { join } from 'node:path';
 import { ROOT } from '../run.mjs';
 
@@ -15,10 +20,12 @@ import { ROOT } from '../run.mjs';
  * Standstill sends its first ring at 210 and the front spreads 0.15 m a tick.
  */
 const BOSSES = [
-  { kind: 7, at: 180, name: 'THE BRUISER', shot: 'boss-bruiser', wait: 36 + 240 + 24 },
+  { kind: 7, at: 180, name: 'THE BRUISER', shot: 'boss-bruiser', wait: 36 + 240 + 20 },
   { kind: 8, at: 360, name: 'THE MORTAR', shot: 'boss-mortar', wait: 36 + 240 + 30 },
   { kind: 9, at: 540, name: 'THE STANDSTILL', shot: null, wait: 36 + 210 + 100 },
 ];
+/** Ticks after the Standstill's arrival when its first ring is about 6 m out, inside its 12 m disc. */
+const AURA_WAIT = 36 + 210 + 40;
 /** OFFER_BOSS: the rare card a fallen boss gives. */
 const OFFER_BOSS = 4;
 
@@ -32,6 +39,14 @@ const shown = (page, sel) =>
   }, sel);
 const text = (page, sel) => page.evaluate((s) => document.querySelector(s)?.textContent ?? null, sel);
 const cardsUp = (page) => page.evaluate(() => document.querySelector('.cards')?.classList.contains('cards-show') === true);
+/** Is a zero-size marker (drawn by its ::before) up, and where on the screen is it? */
+const marker = (page, sel) =>
+  page.evaluate((s) => {
+    const e = document.querySelector(s);
+    if (!e || e.hidden || getComputedStyle(e).display === 'none') return null;
+    const r = e.getBoundingClientRect();
+    return { x: r.x, y: r.y };
+  }, sel);
 const endUp = (page) => page.evaluate(() => document.querySelector('.end')?.classList.contains('end-show') === true);
 const picture = async (page, name) => {
   await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r(undefined)))));
@@ -94,7 +109,10 @@ export default {
         await play(page, hook, 5, home);
         s = await hook.state();
       }
+      const arrivedAt = Date.now();
+      const arrivedTick = s.tick;
       check(s.boss.kind === b.kind, `${b.name} is on the field at ${b.at} s`, { seconds: s.seconds, boss: s.boss });
+      if (b.kind === 7) await picture(page, 'boss-in');
       check(s.seconds >= b.at && s.seconds < b.at + 0.3, 'on time', s.seconds);
       check(s.boss.hp === s.boss.maxHp && s.boss.maxHp > 0, 'at full health', s.boss);
       check(Math.hypot(s.boss.x - s.x, s.boss.z - s.z) > 40, 'well ahead of the mover', { boss: s.boss, x: s.x, z: s.z });
@@ -106,15 +124,80 @@ export default {
       const bar = await page.evaluate(() => document.querySelector('.hud-boss')?.getBoundingClientRect().top ?? -1);
       const clock = await page.evaluate(() => document.querySelector('.hud-clock')?.getBoundingClientRect().bottom ?? -1);
       check(bar >= clock && bar < 120, 'the bar is at the top, under the clock', { bar, clock });
+      const pauseBtn = await page.evaluate(() => document.querySelector('.pause-btn')?.getBoundingClientRect().bottom ?? -1);
+      check(bar >= pauseBtn, 'and under the pause button', { bar, pauseBtn });
+      check(s.boss.kind !== 7 || (await marker(page, '.threat-boss')) === null, 'no edge marker while the boss is in view');
 
-      // Its name leaves the screen after two seconds of play; the bar stays.
-      await play(page, hook, 130, home);
+      if (b.kind === 9) {
+        // The name fits a 360 px screen with 16 px or more either side.
+        await page.setViewportSize({ width: 360, height: 780 });
+        const span = await page.evaluate(() => {
+          const e = document.querySelector('.hud-boss-banner');
+          // As it rests once it has slammed in, not part way through that.
+          e.style.animation = 'none';
+          const range = document.createRange();
+          range.selectNodeContents(e);
+          const r = range.getBoundingClientRect();
+          e.style.animation = '';
+          return { left: r.left, right: r.right };
+        });
+        check(span.left >= 16 && span.right <= 360 - 16, 'THE STANDSTILL fits 360 px with 16 px either side', span);
+        await page.setViewportSize({ width: 390, height: 844 });
+        await hook.step(1);
+      }
+
+      if (b.kind === 7) {
+        // Turned away from it, the Bruiser is behind the rider: the edge marker points at it.
+        const away = spawn.viewYaw + Math.PI;
+        for (let n = 0; n < 4; n++) {
+          await call(page, 'place', spawn.x, spawn.z, away, 0);
+          await hook.step(5);
+        }
+        const at = await marker(page, '.threat-boss');
+        check(at !== null, 'with the Bruiser behind, its marker is up', at);
+        check(at !== null && at.y > 844 * 0.75, 'on the lower edge: behind', at);
+        const colour = await page.evaluate(() => getComputedStyle(document.querySelector('.threat-boss'), '::before').backgroundColor);
+        check(colour === 'rgb(255, 106, 61)', 'in the Bruiser colour', colour);
+        await home();
+        await hook.step(1);
+      }
+
+      // Its name leaves the screen two real seconds after it came; the bar stays.
+      const left = 2100 - (Date.now() - arrivedAt);
+      if (left > 0) await page.waitForTimeout(left);
+      await hook.step(1);
       check((await shown(page, '.hud-boss-banner')) === false, 'the name leaves the screen after two seconds');
       check((await shown(page, '.hud-boss')) === true, 'the bar stays');
-      await play(page, hook, b.wait - 130, home);
+
+      if (b.kind === 9) {
+        await play(page, hook, arrivedTick + AURA_WAIT - (await hook.state()).tick, home);
+        s = await hook.state();
+        const ring = s.rings[0];
+        check(s.rings.length === 1 && ring.r > 3 && ring.r < 11, 'a ring is spreading over the disc', s.rings);
+        await picture(page, 'boss-aura');
+      }
+
+      await play(page, hook, arrivedTick + b.wait - (await hook.state()).tick, home);
       s = await hook.state();
       check(s.boss.kind === b.kind, 'still up for the picture', s.boss);
-      if (b.kind === 9) {
+      if (b.kind === 7) {
+        await picture(page, b.shot);
+        // The same tell from the side: the rider beside the lane, looking across it.
+        check(await page.evaluate(() => document.querySelector('.threat-boss')?.hidden === true), 'no marker with the Bruiser in view');
+        const { x: bx, z: bz, aimX, aimZ } = s.boss;
+        const mx = bx + aimX * 18;
+        const mz = bz + aimZ * 18;
+        // To the lane's right, facing back across it.
+        const px = aimZ;
+        const pz = -aimX;
+        const yaw = Math.atan2(-px, -pz);
+        await call(page, 'place', mx + px * 15, mz + pz * 15, yaw, 0);
+        // One long frame, so the camera has caught up with the move; still inside the 48-tick tell.
+        await hook.step(16);
+        s = await hook.state();
+        check(s.boss.kind === 7, 'the Bruiser is still telling', s.boss);
+        await picture(page, 'boss-lane');
+      } else if (b.kind === 9) {
         const ring = s.rings[0];
         check(s.rings.length === 1 && ring.r > 10 && ring.r < 20, 'its first ring is spreading over the ground', s.rings);
         await t.shot();

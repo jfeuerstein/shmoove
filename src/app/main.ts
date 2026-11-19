@@ -7,6 +7,7 @@
  */
 import { GameAudio } from '../audio/audio';
 import { ChaseCamera } from '../render/camera';
+import { BossView } from '../render/bossView';
 import { FxView } from '../render/fxView';
 import { HordeView } from '../render/hordeView';
 import { PALETTE } from '../render/look';
@@ -39,6 +40,7 @@ import { HowTo } from '../ui/howTo';
 import { LowHealthView } from '../ui/lowHealth';
 import { LessonView } from '../ui/lessonView';
 import { Numbers } from '../ui/numbers';
+import { bindAutoPause, PauseView } from '../ui/pause';
 import { StickView } from '../ui/stickView';
 import { ThreatView } from '../ui/threat';
 import { applyArsenal, applyFixture } from './fixtures';
@@ -144,10 +146,11 @@ function boot(): void {
   const wake = new WakeView();
   const fx = new FxView(terrain);
   const zones = new ZonesView(terrain);
+  const bosses = new BossView(terrain);
   const things = new ThingsView(terrain);
   const weapons = new WeaponsView();
   const groundAt = (x: number, z: number): number => terrain.heightAt(x, z);
-  view.scene.add(zones.object, wake.mesh, things.object, horde.object, sparks.mesh, shots.mesh, weapons.object, fx.object);
+  view.scene.add(bosses.object, zones.object, wake.mesh, things.object, horde.object, sparks.mesh, shots.mesh, weapons.object, fx.object);
   const chase = new ChaseCamera(view.camera);
   const hudRoot = document.getElementById('hud') ?? document.body;
   const hud = new Hud(hudRoot, { run: sim.horde, debug: params.debug });
@@ -247,10 +250,13 @@ function boot(): void {
   };
 
   const stepper = new FixedStepper(DT);
+  let pauseView: PauseView | null = null;
   // After the last card is taken the game starts slow and climbs back to full speed.
   const ramp = new TimeRamp();
   let choosing = false;
   const restart = (intoLesson = false): void => {
+    // A new run (REPLAY THE LESSON from the pause sheet's HOW TO PLAY) is not a paused one.
+    pauseView?.resume();
     sim.reset();
     lesson = null;
     lessonView?.hide();
@@ -327,6 +333,7 @@ function boot(): void {
     horde.update(w, alpha, now, mx, mz, my, heading);
     sparks.update(w, now);
     shots.update(w, alpha, now);
+    bosses.update(w, alpha);
     zones.update(w, alpha);
     things.update(w, now);
     weapons.update(w, sim.prev, sim.state, alpha, now);
@@ -340,6 +347,7 @@ function boot(): void {
     cards?.update(w, dt);
     if (lesson) lessonView?.update(lesson);
     if (sim.horde) endScreen.update(sim.world, dt);
+    pauseView?.update(w.run.phase, lesson !== null);
     stick.update();
     if (panel) panel.update();
     view.render();
@@ -351,6 +359,8 @@ function boot(): void {
   };
 
   const frame = (dt: number): void => {
+    // Paused, nothing moves; the last frame drawn stays on the canvas under the overlay.
+    if (pauseView?.paused === true) return;
     const t0 = performance.now();
     stepMs = 0;
     steps = 0;
@@ -369,17 +379,55 @@ function boot(): void {
   };
 
   const driver = new RafDriver(frame);
+  /** The test hook holds the real-time clock (its `pause(true)`): the game's own resume leaves it stopped. */
+  let hookHeld = false;
+
+  // Pause: the button, the overlay, and pausing itself when the page goes away. Only with a run:
+  // the bare bowl (`?solo`, `?flat`) has nothing to lose.
+  pauseView = sim.horde
+    ? new PauseView(
+        hudRoot,
+        {
+          onPause() {
+            driver.pause();
+            stepper.reset();
+            audio.setPaused(true);
+          },
+          onResume() {
+            // No catch-up: the clock starts from nothing, the rider where it was.
+            stepper.reset();
+            audio.setPaused(false);
+            if (!hookHeld) driver.start();
+          },
+          onHowTo: () => howTo.open(),
+        },
+        { debug: params.debug },
+      )
+    : null;
+  if (pauseView) {
+    const pv = pauseView;
+    bindAutoPause(window, document, () => pv.pause());
+    // A resize clears the canvas: while paused, draw the held frame again once it has settled.
+    window.addEventListener('resize', () => {
+      if (!pv.paused) return;
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        if (pv.paused) draw(stepper.alpha, 0);
+      }));
+    });
+  }
 
   if (params.hook) {
     hook = installTestHook({
       sim,
       input: hookInput,
       pause(on) {
+        hookHeld = on;
         if (on) {
           driver.pause();
           stepper.reset();
-        } else driver.start();
+        } else if (pauseView?.paused !== true) driver.start();
       },
+      paused: () => pauseView?.paused === true,
       stepNow(n) {
         const t0 = performance.now();
         stepMs = 0;
