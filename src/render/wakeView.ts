@@ -2,9 +2,12 @@
  * The Wake: a ribbon along the trail points, as wide as it burns (`2 * FEEL.wakeWidth`), laid just
  * above the ground in `PALETTE.wake`, bright at the mover and fading to nothing at the tail.
  *
- * One mesh, one draw call, one preallocated buffer: two vertices per point (left and right of the
- * trail), RGBA vertex colours carrying the fade, and a fixed index buffer of quads between
- * neighbouring points. The newest stretch, from the last trail point to the mover, is drawn too, so
+ * It is a bright core down the middle `WAKE_CORE` of the width with faint edges out to the full
+ * width, so close to the camera it reads as a stripe, not a slab.
+ *
+ * One mesh, one draw call, one preallocated buffer: four vertices per point (outer left, core left,
+ * core right, outer right), RGBA vertex colours carrying the fade, and a fixed index buffer of
+ * quads between neighbouring points. The newest stretch, from the last trail point to the mover, is drawn too, so
  * the ribbon always reaches the feet.
  */
 import { BufferAttribute, BufferGeometry, DoubleSide, DynamicDrawUsage, Mesh } from 'three';
@@ -19,8 +22,15 @@ export const WAKE_LIFT = 0.07;
 /** The mover is drawn as an extra point only if it is at least this far past the last one, m. */
 const HEAD_MIN = 0.05;
 const WAKE_GLOW = 0.45;
-/** Alpha at the head: the trail stays under the mover, never brighter than it. */
-const HEAD_ALPHA = 0.7;
+/** Share of the full width taken by the bright core, centred on the trail. */
+export const WAKE_CORE = 0.4;
+/** Alpha at the head, in the core and at the outer edges: the trail stays under the mover. */
+export const HEAD_CORE_ALPHA = 0.5;
+export const HEAD_EDGE_ALPHA = 0.15;
+/** Vertices per ribbon point. */
+const ACROSS = 4;
+/** Quads between neighbouring points: left edge, core, right edge. */
+const QUADS = ACROSS - 1;
 
 /**
  * Fill `pos` (xyz per vertex) and `col` (rgba per vertex) with the ribbon for the trail, plus the
@@ -38,7 +48,8 @@ export function writeWakeRibbon(
   heightAt: (x: number, z: number) => number,
   pos: Float32Array,
   col: Float32Array,
-  alphaMax = 1,
+  coreAlpha = 1,
+  edgeAlpha = coreAlpha,
 ): number {
   let n = k.count;
   if (withHead && n > 0) {
@@ -72,23 +83,30 @@ export function writeWakeRibbon(
     const lx = tz * halfWidth;
     const lz = -tx * halfWidth;
     const y = heightAt(px, pz) + WAKE_LIFT;
-    const o = j * 6;
+    const o = j * ACROSS * 3;
+    const cx = lx * WAKE_CORE;
+    const cz = lz * WAKE_CORE;
     pos[o] = px + lx;
     pos[o + 1] = y;
     pos[o + 2] = pz + lz;
-    pos[o + 3] = px - lx;
+    pos[o + 3] = px + cx;
     pos[o + 4] = y;
-    pos[o + 5] = pz - lz;
-    const t = (j / last) * alphaMax;
-    const c = j * 8;
-    col[c] = 1;
-    col[c + 1] = 1;
-    col[c + 2] = 1;
-    col[c + 3] = t;
-    col[c + 4] = 1;
-    col[c + 5] = 1;
-    col[c + 6] = 1;
-    col[c + 7] = t;
+    pos[o + 5] = pz + cz;
+    pos[o + 6] = px - cx;
+    pos[o + 7] = y;
+    pos[o + 8] = pz - cz;
+    pos[o + 9] = px - lx;
+    pos[o + 10] = y;
+    pos[o + 11] = pz - lz;
+    const fade = j / last;
+    const c = j * ACROSS * 4;
+    for (let v = 0; v < ACROSS; v++) {
+      const q = c + v * 4;
+      col[q] = 1;
+      col[q + 1] = 1;
+      col[q + 2] = 1;
+      col[q + 3] = fade * (v === 1 || v === 2 ? coreAlpha : edgeAlpha);
+    }
   }
   return n;
 }
@@ -102,21 +120,23 @@ export class WakeView {
   points = 0;
 
   constructor() {
-    this.pos = new BufferAttribute(new Float32Array(RIBBON_POINTS * 2 * 3), 3);
-    this.col = new BufferAttribute(new Float32Array(RIBBON_POINTS * 2 * 4), 4);
+    this.pos = new BufferAttribute(new Float32Array(RIBBON_POINTS * ACROSS * 3), 3);
+    this.col = new BufferAttribute(new Float32Array(RIBBON_POINTS * ACROSS * 4), 4);
     this.pos.setUsage(DynamicDrawUsage);
     this.col.setUsage(DynamicDrawUsage);
-    const index = new Uint16Array((RIBBON_POINTS - 1) * 6);
+    const index = new Uint16Array((RIBBON_POINTS - 1) * QUADS * 6);
     for (let j = 0; j < RIBBON_POINTS - 1; j++) {
-      const v = j * 2;
-      const o = j * 6;
-      // Wound to face up.
-      index[o] = v;
-      index[o + 1] = v + 1;
-      index[o + 2] = v + 2;
-      index[o + 3] = v + 1;
-      index[o + 4] = v + 3;
-      index[o + 5] = v + 2;
+      for (let q = 0; q < QUADS; q++) {
+        const v = j * ACROSS + q;
+        const o = (j * QUADS + q) * 6;
+        // Wound to face up.
+        index[o] = v;
+        index[o + 1] = v + 1;
+        index[o + 2] = v + ACROSS;
+        index[o + 3] = v + 1;
+        index[o + 4] = v + ACROSS + 1;
+        index[o + 5] = v + ACROSS;
+      }
     }
     this.geometry.setIndex(new BufferAttribute(index, 1));
     this.geometry.setAttribute('position', this.pos);
@@ -141,10 +161,10 @@ export class WakeView {
 
   /** (hx, hz): where the mover is drawn this frame. */
   update(k: Wake, hx: number, hz: number, heightAt: (x: number, z: number) => number): void {
-    const n = writeWakeRibbon(k, true, hx, hz, FEEL.wakeWidth, heightAt, this.pos.array as Float32Array, this.col.array as Float32Array, HEAD_ALPHA);
+    const n = writeWakeRibbon(k, true, hx, hz, FEEL.wakeWidth, heightAt, this.pos.array as Float32Array, this.col.array as Float32Array, HEAD_CORE_ALPHA, HEAD_EDGE_ALPHA);
     this.points = n;
     this.mesh.visible = n >= 2;
-    this.geometry.setDrawRange(0, n >= 2 ? (n - 1) * 6 : 0);
+    this.geometry.setDrawRange(0, n >= 2 ? (n - 1) * QUADS * 6 : 0);
     if (n >= 2) {
       this.pos.needsUpdate = true;
       this.col.needsUpdate = true;
