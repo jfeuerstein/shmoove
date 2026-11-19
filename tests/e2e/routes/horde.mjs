@@ -2,8 +2,8 @@
 // left for 120 ticks, laying Wake; the frame must stay within the draw-call budget, actually draw
 // the crowd, and log nothing. Screenshot at the end.
 
-/** tests/perf/budgets.json `hordeDrawCalls`: the budget for the full 400-enemy crowd. */
-const DRAW_CALL_BUDGET = 20;
+/** tests/perf/budgets.json `hordeDrawCalls`: the budget for the full 400-enemy crowd with the arsenal. */
+const DRAW_CALL_BUDGET = 32;
 /** The empty bowl draws about 46 000 triangles; 200 enemies and their shadows add well over this. */
 const MIN_EXTRA_TRIANGLES = 6000;
 

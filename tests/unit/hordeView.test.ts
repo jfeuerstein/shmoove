@@ -1,8 +1,40 @@
-import type { InstancedMesh } from 'three';
+import { Color, type BufferGeometry, type InstancedMesh } from 'three';
 import { describe, expect, it } from 'vitest';
-import { bollardGeometry, gnatGeometry, HordeView, shufflerGeometry } from '../../src/render/hordeView';
+import {
+  AURA_COLORS,
+  bollardGeometry,
+  clingerGeometry,
+  cutterGeometry,
+  ELITE_SCALE,
+  gnatGeometry,
+  HordeView,
+  lobberGeometry,
+  shufflerGeometry,
+  sludgeGeometry,
+} from '../../src/render/hordeView';
 import { DT } from '../../src/sim/constants';
-import { KIND_BOLLARD, KIND_CLINGER, KIND_COUNT, KIND_GNAT, KIND_SHUFFLER, KIND_SLUDGE, KINDS, makeWorld, removeEnemy, SPAWN_TICKS, spawnEnemy, type World } from '../../src/sim/world';
+import { HORDE } from '../../src/sim/horde';
+import {
+  ELITE_HASTE,
+  ELITE_JAM,
+  ELITE_SHIELD,
+  KIND_BOLLARD,
+  KIND_CLINGER,
+  KIND_COUNT,
+  KIND_CUTTER,
+  KIND_GNAT,
+  KIND_LOBBER,
+  KIND_SHUFFLER,
+  KIND_SLUDGE,
+  KINDS,
+  makeWorld,
+  MARK_ELITE,
+  removeEnemy,
+  SPAWN_TICKS,
+  spawnEnemy,
+  STATE_LATCHED,
+  type World,
+} from '../../src/sim/world';
 
 /** Column-major instance matrix `n` of a mesh. */
 function matrix(mesh: InstancedMesh, n: number): number[] {
@@ -27,12 +59,22 @@ function add(w: World, kind: number, x: number, y: number, z: number, vx = 0, vz
   return i;
 }
 
+function boxOf(g: BufferGeometry): { min: { x: number; y: number; z: number }; max: { x: number; y: number; z: number } } {
+  g.computeBoundingBox();
+  const box = g.boundingBox;
+  if (!box) throw new Error('no bounding box');
+  return box;
+}
+
 describe('enemy geometry', () => {
   it('stays inside the triangle budgets and stands as tall as the brief says', () => {
     const cases = [
       { g: shufflerGeometry(), max: 40, height: 1.7 },
       { g: gnatGeometry(), max: 12, height: null },
       { g: bollardGeometry(), max: 40, height: 2.4 },
+      { g: cutterGeometry(), max: 40, height: KINDS[KIND_CUTTER].height },
+      { g: lobberGeometry(), max: 40, height: KINDS[KIND_LOBBER].height },
+      { g: sludgeGeometry(), max: 40, height: KINDS[KIND_SLUDGE].height },
     ];
     for (const c of cases) {
       const tris = c.g.getAttribute('position').count / 3;
@@ -47,26 +89,45 @@ describe('enemy geometry', () => {
     }
   });
 
-  it('has every face pointing outward', () => {
-    for (const g of [shufflerGeometry(), gnatGeometry(), bollardGeometry()]) {
-      g.computeBoundingBox();
-      const p = g.getAttribute('position');
-      const box = g.boundingBox;
-      if (!box) throw new Error('no bounding box');
-      const cy = (box.min.y + box.max.y) / 2;
-      let outward = 0;
-      for (let t = 0; t < p.count; t += 3) {
-        const ax = p.getX(t), ay = p.getY(t), az = p.getZ(t);
-        const ux = p.getX(t + 1) - ax, uy = p.getY(t + 1) - ay, uz = p.getZ(t + 1) - az;
-        const vx = p.getX(t + 2) - ax, vy = p.getY(t + 2) - ay, vz = p.getZ(t + 2) - az;
-        const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
-        const mx = (ax + p.getX(t + 1) + p.getX(t + 2)) / 3;
-        const my = (ay + p.getY(t + 1) + p.getY(t + 2)) / 3 - cy;
-        const mz = (az + p.getZ(t + 1) + p.getZ(t + 2)) / 3;
-        if (nx * mx + ny * my + nz * mz > 0) outward++;
+  it('has every face pointing outward from the part it belongs to', () => {
+    const shapes = { shufflerGeometry, gnatGeometry, bollardGeometry, cutterGeometry, lobberGeometry, sludgeGeometry, clingerGeometry };
+    for (const [name, make] of Object.entries(shapes)) {
+      const p = make().getAttribute('position');
+      const tris = p.count / 3;
+      // Parts are the sets of triangles joined by shared corners: union them.
+      const parent = Array.from({ length: tris }, (_, i) => i);
+      const find = (i: number): number => (parent[i] === i ? i : (parent[i] = find(parent[i])));
+      const owner = new Map<string, number>();
+      for (let v = 0; v < p.count; v++) {
+        const key = `${p.getX(v).toFixed(5)},${p.getY(v).toFixed(5)},${p.getZ(v).toFixed(5)}`;
+        const t = Math.floor(v / 3);
+        const o = owner.get(key);
+        if (o === undefined) owner.set(key, t);
+        else parent[find(t)] = find(o);
       }
-      // Faces of stacked blocks are tested against the figure's centre, so allow the odd one.
-      expect(outward / (p.count / 3)).toBeGreaterThan(0.85);
+      const sum = new Map<number, { x: number; y: number; z: number; n: number }>();
+      for (let v = 0; v < p.count; v++) {
+        const r = find(Math.floor(v / 3));
+        const c = sum.get(r) ?? { x: 0, y: 0, z: 0, n: 0 };
+        c.x += p.getX(v);
+        c.y += p.getY(v);
+        c.z += p.getZ(v);
+        c.n++;
+        sum.set(r, c);
+      }
+      for (let t = 0; t < tris; t++) {
+        const c = sum.get(find(t));
+        if (!c) throw new Error('no part');
+        const v = t * 3;
+        const ax = p.getX(v), ay = p.getY(v), az = p.getZ(v);
+        const ux = p.getX(v + 1) - ax, uy = p.getY(v + 1) - ay, uz = p.getZ(v + 1) - az;
+        const vx = p.getX(v + 2) - ax, vy = p.getY(v + 2) - ay, vz = p.getZ(v + 2) - az;
+        const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
+        const mx = (ax + p.getX(v + 1) + p.getX(v + 2)) / 3 - c.x / c.n;
+        const my = (ay + p.getY(v + 1) + p.getY(v + 2)) / 3 - c.y / c.n;
+        const mz = (az + p.getZ(v + 1) + p.getZ(v + 2)) / 3 - c.z / c.n;
+        expect(nx * mx + ny * my + nz * mz, `${name}, triangle ${t}`).toBeGreaterThan(0);
+      }
     }
   });
 });
@@ -144,29 +205,116 @@ describe('HordeView', () => {
     expect(scales[4]).toBeCloseTo(1, 5);
   });
 
-  it('draws a kind with no shape of its own as the block, sized to its body', () => {
+  it('draws every kind in its own mesh, the new four included, at its place and facing', () => {
     const w = makeWorld(3);
-    for (let k = 0; k < KIND_COUNT; k++) add(w, k, k * 3, 0, 0);
+    for (let k = 0; k < KIND_COUNT; k++) add(w, k, k * 3, 0.25, -2, 0, 1);
     const view = new HordeView();
     view.update(w, 1, 0, 0, 0);
     expect(view.meshes.length).toBe(KIND_COUNT);
-    for (let k = 0; k < KIND_COUNT; k++) {
-      expect(view.meshes[k].count).toBe(1);
-      expect(view.meshes[k].visible).toBe(true);
+    for (const k of [KIND_CUTTER, KIND_LOBBER, KIND_SLUDGE, KIND_CLINGER]) {
+      const mesh = view.meshes[k];
+      expect(mesh.count).toBe(1);
+      expect(mesh.visible).toBe(true);
+      const m = matrix(mesh, 0);
+      expect([m[12], m[13], m[14]]).toEqual([k * 3, 0.25, -2]);
+      expect(facing(m)[2]).toBeCloseTo(1, 5);
+      expect(len(m[4], m[5], m[6])).toBeCloseTo(1, 5);
     }
-    for (const k of [KIND_SLUDGE, KIND_CLINGER]) {
-      const g = view.meshes[k].geometry;
-      g.computeBoundingBox();
-      const box = g.boundingBox;
-      if (!box) throw new Error('no bounding box');
-      expect(box.max.y).toBeCloseTo(KINDS[k].height, 5);
-      const block = shufflerGeometry();
-      block.computeBoundingBox();
-      const full = block.boundingBox;
-      if (!full) throw new Error('no bounding box');
-      const wide = (box.max.x - box.min.x) / (full.max.x - full.min.x);
-      expect(wide).toBeCloseTo(KINDS[k].radius / KINDS[KIND_SHUFFLER].radius, 5);
+  });
+
+  it('gives the new four silhouettes nobody would confuse', () => {
+    const cutter = boxOf(cutterGeometry());
+    const lobber = boxOf(lobberGeometry());
+    const sludge = boxOf(sludgeGeometry());
+    const clinger = boxOf(clingerGeometry());
+    // The cutter is lean and points forward: its blade reaches well past its narrow body.
+    expect(cutter.max.z).toBeGreaterThan(0.8);
+    expect(cutter.max.x - cutter.min.x).toBeLessThan(0.5);
+    // The lobber is squat and wide, with the ball held up above its body.
+    expect(lobber.max.x - lobber.min.x).toBeGreaterThan(1.1);
+    expect(lobber.max.y).toBeCloseTo(KINDS[KIND_LOBBER].height, 5);
+    // The sludge is wide and low.
+    expect((sludge.max.x - sludge.min.x) / (sludge.max.y - sludge.min.y)).toBeGreaterThan(1.6);
+    // The clinger is small and spiky: knee high, standing on a point, as wide as it is tall.
+    expect(clinger.min.y).toBeCloseTo(0, 5);
+    expect(clinger.max.y).toBeCloseTo(KINDS[KIND_CLINGER].height, 1);
+    expect(clinger.max.x - clinger.min.x).toBeCloseTo(clinger.max.y - clinger.min.y, 1);
+    const tris = clingerGeometry().getAttribute('position').count / 3;
+    expect(tris).toBeLessThanOrEqual(40);
+  });
+
+  it('draws an elite larger, with its aura as a ring on the ground at the aura\'s reach in its colour', () => {
+    const w = makeWorld(3);
+    add(w, KIND_SHUFFLER, 0, 0, 0);
+    const e = add(w, KIND_SHUFFLER, 20, 1, 5);
+    w.horde.elite[e] = ELITE_SHIELD;
+    const view = new HordeView();
+    view.update(w, 1, 0, 0, -30);
+    const plain = matrix(view.meshes[KIND_SHUFFLER], 0);
+    const big = matrix(view.meshes[KIND_SHUFFLER], 1);
+    expect(len(plain[4], plain[5], plain[6])).toBeCloseTo(1, 5);
+    expect(len(big[4], big[5], big[6])).toBeCloseTo(ELITE_SCALE, 5);
+    expect(len(big[8], big[9], big[10])).toBeCloseTo(ELITE_SCALE, 5);
+    const shadow = matrix(view.shadows, 1);
+    expect(shadow[0]).toBeCloseTo(KINDS[KIND_SHUFFLER].radius * 1.25 * ELITE_SCALE, 5);
+
+    const rings = view.auras;
+    expect(rings.count).toBe(1);
+    expect(rings.mesh.visible).toBe(true);
+    // Every outer vertex of the ring sits at the aura's reach from the elite.
+    const verts = (rings.segments + 1) * 2;
+    const want = new Color(AURA_COLORS[ELITE_SHIELD]);
+    for (let v = 1; v < verts; v += 2) {
+      const d = Math.hypot(rings.positions[v * 3] - 20, rings.positions[v * 3 + 2] - 5);
+      expect(d).toBeCloseTo(HORDE.auraReach, 4);
+      expect(rings.colors[v * 3]).toBeCloseTo(want.r, 5);
+      expect(rings.colors[v * 3 + 1]).toBeCloseTo(want.g, 5);
+      expect(rings.colors[v * 3 + 2]).toBeCloseTo(want.b, 5);
     }
+    // The three auras are three different colours, none of them the elite's own white.
+    const auras = [ELITE_HASTE, ELITE_SHIELD, ELITE_JAM].map((a) => AURA_COLORS[a]);
+    expect(new Set(auras).size).toBe(3);
+    // No elites, no rings.
+    w.horde.elite[e] = 0;
+    view.update(w, 1, 0, 0, -30);
+    expect(view.auras.count).toBe(0);
+    expect(view.auras.mesh.visible).toBe(false);
+    const back = matrix(view.meshes[KIND_SHUFFLER], 1);
+    expect(len(back[4], back[5], back[6])).toBeCloseTo(1, 5);
+    // Marked an elite with no aura of its own: still big, still no ring.
+    w.horde.mark[e] |= MARK_ELITE;
+    view.update(w, 1, 0, 0, -30);
+    const marked = matrix(view.meshes[KIND_SHUFFLER], 1);
+    expect(len(marked[4], marked[5], marked[6])).toBeCloseTo(ELITE_SCALE, 5);
+    expect(view.auras.count).toBe(0);
+  });
+
+  it('draws a latched clinger on the mover\'s back, following it, not where it stands', () => {
+    const w = makeWorld(3);
+    const i = add(w, KIND_CLINGER, 50, 0, 50);
+    w.horde.state[i] = STATE_LATCHED;
+    const view = new HordeView();
+    const at = (mx: number, my: number, mz: number, heading: number): number[] => {
+      view.update(w, 1, 0, mx, mz, my, heading);
+      return matrix(view.meshes[KIND_CLINGER], 0);
+    };
+    const a = at(10, 2, 5, 0);
+    expect(Math.hypot(a[12] - 10, a[14] - 5)).toBeLessThan(0.7);
+    // Behind (the mover faces +z), and up off the ground against its body.
+    expect(a[14]).toBeLessThan(5);
+    expect(a[13]).toBeGreaterThan(2);
+    expect(a[13]).toBeLessThan(2 + 1.7);
+    // It moves with the mover and turns with it.
+    const b = at(-4, 7, 30, Math.PI / 2);
+    expect(Math.hypot(b[12] + 4, b[14] - 30)).toBeLessThan(0.7);
+    expect(b[12]).toBeLessThan(-4);
+    expect(b[13]).toBeGreaterThan(7);
+    // It casts no shadow of its own.
+    expect(matrix(view.shadows, 0)[0]).toBe(0);
+    // Let go, it is drawn where it is.
+    w.horde.state[i] = 0;
+    const c = at(-4, 7, 30, 0);
+    expect([c[12], c[13], c[14]]).toEqual([50, 0, 50]);
   });
 
   it('follows the horde as it shrinks and grows: count is always the living enemies of each kind', () => {
