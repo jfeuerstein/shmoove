@@ -72,7 +72,8 @@ describe('the crowd fixture', () => {
     expect(sim.world.spawning).toBe(false);
     const input = makeInputFrame();
     for (let t = 0; t < 600; t++) sim.step(input);
-    expect(sim.world.horde.count).toBe(100);
+    // Some of the crowd may die in ten seconds; none may arrive.
+    expect(sim.world.horde.count + sim.world.player.kills).toBe(100);
   });
 
   it('makes the player hard to kill, so a measurement is not cut short', () => {

@@ -73,6 +73,8 @@ export default {
     await hook.step(30);
     const still = await hook.state();
     check(dist(dead, still) < 0.001, 'the mover has stopped', { dead, still });
+    const speed = await text(page, '.hud-speed');
+    check(speed === '0 m/s', 'the HUD shows a speed of 0 m/s over the card', speed);
     // Let the card finish rising before the picture.
     await page.waitForTimeout(600);
     const file = join(ROOT, 'artifacts', 'screens', 'run-end.png');
