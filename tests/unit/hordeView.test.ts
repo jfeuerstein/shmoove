@@ -5,8 +5,11 @@ import {
   bollardGeometry,
   bruiserGeometry,
   clingerGeometry,
+  crowdFlash,
   cutterGeometry,
   ELITE_SCALE,
+  FLASH_CROWD,
+  FLASH_FLOOR,
   gnatGeometry,
   HordeView,
   lobberGeometry,
@@ -16,6 +19,8 @@ import {
   PART_CROWN,
   PART_INTACT,
   PART_SCAR,
+  SHADOW_OPACITY,
+  SHADOW_SCALE,
   shufflerGeometry,
   sludgeGeometry,
   standstillGeometry,
@@ -296,7 +301,7 @@ describe('HordeView', () => {
     expect(len(big[4], big[5], big[6])).toBeCloseTo(ELITE_SCALE, 5);
     expect(len(big[8], big[9], big[10])).toBeCloseTo(ELITE_SCALE, 5);
     const shadow = matrix(view.shadows, 1);
-    expect(shadow[0]).toBeCloseTo(KINDS[KIND_SHUFFLER].radius * 1.25 * ELITE_SCALE, 5);
+    expect(shadow[0]).toBeCloseTo(KINDS[KIND_SHUFFLER].radius * SHADOW_SCALE * ELITE_SCALE, 5);
 
     const rings = view.auras;
     expect(rings.count).toBe(1);
@@ -388,6 +393,41 @@ describe('HordeView', () => {
     w.horde.flash[i] = 0;
     view.update(w, 1, 0, 0, 0);
     expect(anim.getZ(0)).toBe(0);
+  });
+
+  it('flashes one enemy hit fully, but a crowd hit at once only in part, never all white', () => {
+    const w = makeWorld(3);
+    for (let k = 0; k < 40; k++) add(w, KIND_SHUFFLER, (k % 8) * 2, 0, Math.floor(k / 8) * 2);
+    const view = new HordeView();
+    const anim = view.meshes[KIND_SHUFFLER].geometry.getAttribute('aAnim');
+    // One hit: full.
+    w.horde.flash[0] = 6;
+    view.update(w, 1, 0, 0, -30);
+    expect(anim.getZ(0)).toBe(1);
+    // A few at once: still full.
+    for (let k = 0; k < FLASH_CROWD; k++) w.horde.flash[k] = 6;
+    view.update(w, 1, 0, 0, -30);
+    expect(anim.getZ(FLASH_CROWD - 1)).toBe(1);
+    // The whole crowd at once (an area hit): each only partly, so the crowd keeps its colours.
+    for (let k = 0; k < 40; k++) w.horde.flash[k] = 6;
+    view.update(w, 1, 0, 0, -30);
+    let total = 0;
+    for (let k = 0; k < 40; k++) {
+      expect(anim.getZ(k)).toBeLessThan(0.5);
+      expect(anim.getZ(k)).toBeGreaterThanOrEqual(FLASH_FLOOR);
+      total += anim.getZ(k);
+    }
+    expect(total).toBeLessThan(40 * 0.5);
+    expect(crowdFlash(w.horde.flash, 0)).toBe(1);
+  });
+
+  it('casts a dark shadow under every enemy in every look, never a light one', () => {
+    const view = new HordeView();
+    const mat = view.shadows.material as unknown as { color: Color; opacity: number; transparent: boolean };
+    expect(mat.color.r + mat.color.g + mat.color.b).toBe(0);
+    expect(mat.transparent).toBe(true);
+    expect(mat.opacity).toBe(SHADOW_OPACITY);
+    expect(SHADOW_OPACITY).toBeGreaterThanOrEqual(0.5);
   });
 
   it('never lets the meshes be culled by a stale bounding sphere', () => {

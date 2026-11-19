@@ -5,9 +5,11 @@ import {
   type MeshLambertMaterial,
 } from "three";
 import { describe, expect, it } from "vitest";
-import { PALETTE } from "../../src/render/look";
+import { PALETTE, tone } from "../../src/render/look";
 import {
   GLOW_REACH,
+  LIGHT_DIM,
+  LIGHT_GLOW,
   NO_RAIL,
   PAD_CHEVRONS,
   ParkView,
@@ -134,21 +136,23 @@ describe("ParkView", () => {
       ),
     ).toBe(true);
     // Its lights and far silhouettes are not fogged, so they read from across the bowl; the rest is
-    // fogged. Most of what is not fogged glows.
+    // fogged. Many of what is not fogged are lights, but dim ones: a little glow, never a lamp.
     const glow = view.unfogged.geometry.getAttribute(
       "aGlow",
     ) as InstancedBufferAttribute;
-    let glowing = 0;
-    for (let i = 0; i < view.unfogged.count; i++)
-      if (glow.getX(i) >= 0.5) glowing++;
-    expect(glowing).toBeGreaterThan(150);
-    expect(glowing).toBeGreaterThan(view.unfoggedCount / 2);
+    let lit = 0;
+    for (let i = 0; i < view.unfogged.count; i++) {
+      const g = glow.getX(i);
+      if (g > 0) lit++;
+      expect(g).toBeLessThanOrEqual(LIGHT_GLOW + 1e-6);
+    }
+    expect(lit).toBeGreaterThan(150);
     expect((view.unfogged.material as MeshLambertMaterial).fog).toBe(false);
     expect((view.dressing.material as MeshLambertMaterial).fog).toBe(true);
-    // Floodlights in the sun's colour.
+    // Floodlights in a dark tone of the sun's colour.
     const c = view.unfogged.instanceColor;
     if (!c) throw new Error("no colours");
-    const sun = new Color(PALETTE.sun);
+    const sun = new Color(tone(PALETTE.sun, LIGHT_DIM));
     let heads = 0;
     for (let i = 0; i < view.unfogged.count; i++)
       if (
@@ -159,6 +163,19 @@ describe("ParkView", () => {
       )
         heads++;
     expect(heads).toBeGreaterThanOrEqual(6);
+  });
+
+  it("keeps the scenery's lights dimmer than anything in the bowl", () => {
+    const view = new ParkView(makeBowl(1), 1);
+    const c = view.unfogged.instanceColor;
+    if (!c) throw new Error("no colours");
+    const glow = view.unfogged.geometry.getAttribute("aGlow") as InstancedBufferAttribute;
+    // The brightest an enemy is drawn: its colour with its own glow (ENEMY_GLOW 0.38) over the light.
+    const enemy = Math.max(...PALETTE.enemies.map((e) => { const k = new Color(e); return Math.max(k.r, k.g, k.b); }));
+    for (let i = 0; i < view.unfogged.count; i++) {
+      const own = Math.max(c.getX(i), c.getY(i), c.getZ(i)) * glow.getX(i);
+      expect(own).toBeLessThan(enemy * 0.38);
+    }
   });
 
   it("is three draw calls and a modest number of triangles", () => {
