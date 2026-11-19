@@ -31,7 +31,12 @@ export function formatTime(totalSeconds: number): string {
 
 /** The run clock: time left, rounded up so it reads 3:00 at the start and 0:00 only at the end. */
 export function clockText(ticksPlayed: number): string {
-  return formatTime(Math.ceil(Math.max(0, RUN_TICKS - ticksPlayed) / 60));
+  return formatTime(secondsLeft(ticksPlayed));
+}
+
+/** Whole seconds left on the run clock, rounded up. */
+function secondsLeft(ticksPlayed: number): number {
+  return Math.ceil(Math.max(0, RUN_TICKS - ticksPlayed) / 60);
 }
 
 /** Fill colour of the health bar for a share of full health (0..1). */
@@ -59,7 +64,7 @@ export class Hud {
   private gear = -1;
   private speed = -1;
   private chain = -1;
-  private clock = '';
+  private clockSeconds = -1;
   private kills = -1;
   private hpStep = -1;
   private hpLow = false;
@@ -126,10 +131,10 @@ export class Hud {
     const w = sim.world;
     const p = w.player;
 
-    const clock = clockText(w.run.ticks);
-    if (clock !== this.clock) {
-      this.clock = clock;
-      r.clock.textContent = clock;
+    const left = secondsLeft(w.run.ticks);
+    if (left !== this.clockSeconds) {
+      this.clockSeconds = left;
+      r.clock.textContent = formatTime(left);
     }
     if (p.kills !== this.kills) {
       this.kills = p.kills;
