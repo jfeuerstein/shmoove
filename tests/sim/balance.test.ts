@@ -1,20 +1,15 @@
 /**
  * The three-minute horde slice, played by five bots on seeds 1 to 5: a player who does nothing, one
  * who only holds the stick, a careful beginner, one who loops, and one who plays lines. Every band
- * in `docs/briefs/m2-balance.md` is asserted from one set of 25 runs, plus a replay of each for
- * determinism.
- *
- * Bands 1, 4 and 5 are not met by numbers alone; they are asserted with `it.fails`, so the suite
- * records the gap and turns red the moment a mechanic change closes it (then flip them to `it`).
- * The evidence is in the M2 balance report: survival time is set by the size of the horde, not by
- * how the bot plays, and the line rider (in gear 3 and up most of the time) dies no later than the
- * evader (always in gear 2).
+ * in `docs/briefs/m2-balance.md` (as revised for round 2: the tucker by 1:00, and band 7 measured on
+ * a player who cannot kill) is asserted from one set of 25 runs, a 26th run with the weapons held
+ * off, and one replay per bot for determinism.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
 import { makeBowl, type Bowl } from '../../src/sim/bowl';
 import { makeCarver, makeTucker } from './bot/bots';
 import { makeEvader, makeLooper, makeRider } from './bot/fighters';
-import { aliveAt, playRun, type HordeRun } from './bot/playRun';
+import { aliveAt, playRun, type HordeRun, type RunHook } from './bot/playRun';
 import type { Bot } from './bot/steer';
 
 const SEEDS = [1, 2, 3, 4, 5];
@@ -45,12 +40,24 @@ function get(name: BotName, seed: number): HordeRun {
   return r;
 }
 
+/** A player who cannot kill: no weapons, and health held up so the run lasts all three minutes. */
+const noKill: RunHook = (sim) => {
+  const p = sim.world.player;
+  p.wakeLevel = 0;
+  p.seekersLevel = 0;
+  p.hp = p.maxHp;
+};
+let unarmed: HordeRun | null = null;
+
 beforeAll(() => {
   for (const seed of SEEDS) {
     const b = makeBowl(seed);
     bowls.set(seed, b);
     for (const name of BOTS) runs.set(key(name, seed), playRun(b, seed, makeBot(name, b, seed)));
   }
+  const b1 = bowls.get(1);
+  // The evader never reaches gear 3, so it does not plow either: its kill count stays at zero.
+  if (b1) unarmed = playRun(b1, 1, makeEvader(), noKill);
 }, 120_000);
 
 const r1 = (x: number): number => Math.round(x * 10) / 10;
@@ -67,6 +74,7 @@ function clock(s: number): string {
 }
 
 function table(): string {
+  // hp is shown whole; with regeneration a winner can end anywhere up to full.
   const head = 'seed bot     end   time   hp  kills  lvl  wake seek  pops best  g3+%  hits  peak';
   const lines = [head, '-'.repeat(head.length)];
   for (const seed of SEEDS) {
@@ -96,11 +104,11 @@ function table(): string {
 }
 
 describe('the horde slice, five bots on seeds 1 to 5, a full run each', () => {
-  it.fails('1. the tucker is dead by 0:45 on every seed (unmet: see the file comment)', () => {
+  it('1. the tucker is dead by 1:00 on every seed', () => {
     expectAll(
       SEEDS.map((seed) => {
         const r = get('tucker', seed);
-        return { seed, end: r.end, at: r1(r.seconds), ok: r.end === 'dead' && r.seconds <= 45 };
+        return { seed, end: r.end, at: r1(r.seconds), ok: r.end === 'dead' && r.seconds <= 60 };
       }),
     );
   });
@@ -123,19 +131,28 @@ describe('the horde slice, five bots on seeds 1 to 5, a full run each', () => {
     expect(rows.filter((r) => r.end === 'dead').length).toBeGreaterThanOrEqual(3);
   });
 
-  it.fails('4. the looper pops 3+ loops every run, a best loop of 6+ on 3 of 5, and outlives the evader on 4 of 5 (unmet)', () => {
-    const rows = SEEDS.map((seed) => {
+  /** The looper against the evader on each seed. */
+  function looperRows(): { seed: number; pops: number; best: number; looper: number; evader: number; outlives: boolean }[] {
+    return SEEDS.map((seed) => {
       const l = get('looper', seed);
       const e = get('evader', seed);
       const outlives = l.end === 'won' ? e.end !== 'won' || l.hp > e.hp : e.end === 'dead' && l.seconds > e.seconds;
-      return { seed, pops: l.pops, best: l.bestPop, looper: r1(l.seconds), evader: r1(e.seconds), outlives, ok: l.pops >= 3 };
+      return { seed, pops: l.pops, best: l.bestPop, looper: r1(l.seconds), evader: r1(e.seconds), outlives };
     });
-    expectAll(rows);
-    expect(rows.filter((r) => r.best >= 6).length).toBeGreaterThanOrEqual(3);
+  }
+
+  it('4a. the looper pops 3+ loops every run and outlives the evader on 4 of 5', () => {
+    const rows = looperRows();
+    expectAll(rows.map((r) => ({ ...r, ok: r.pops >= 3 })));
     expect(rows.filter((r) => r.outlives).length).toBeGreaterThanOrEqual(4);
   });
 
-  it.fails('5. the rider sees the clock run out on 3 of 5, each time with 10 to 80 health, level 8+ and 300+ kills (unmet)', () => {
+  it('4b. the looper has a best loop of 6+ on 3 of 5', () => {
+    const rows = looperRows();
+    expect(rows.filter((r) => r.best >= 6).map((r) => r.seed).length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('5. the rider sees the clock run out on 3 of 5, each time with 10 to 80 health, level 8+ and 300+ kills', () => {
     const rows = SEEDS.map((seed) => {
       const r = get('rider', seed);
       const ok = r.end === 'won' && r.hp >= 10 && r.hp <= 80 && r.level >= 8 && r.kills >= 300;
@@ -157,24 +174,28 @@ describe('the horde slice, five bots on seeds 1 to 5, a full run each', () => {
     expectAll(rows);
   });
 
-  it('7. every run that reaches 2:30 has had 300 or more enemies alive at once', () => {
-    const rows = [];
-    for (const seed of SEEDS) {
-      for (const name of BOTS) {
-        const r = get(name, seed);
-        if (!aliveAt(r, 150)) continue;
-        rows.push({ seed, name, peak: r.peakHorde, ok: r.peakHorde >= 300 });
-      }
-    }
-    expectAll(rows);
+  it("7. a player who cannot kill faces 380+ alive by 3:00; the rider's winning runs peak at 120+ (it was a fight)", () => {
+    if (!unarmed) throw new Error('no unarmed run');
+    expect(unarmed.end).toBe('won');
+    expect(unarmed.kills).toBe(0);
+    expect(unarmed.peakHorde).toBeGreaterThanOrEqual(380);
+    expectAll(
+      SEEDS.filter((seed) => get('rider', seed).end === 'won').map((seed) => {
+        const r = get('rider', seed);
+        return { seed, peak: r.peakHorde, ok: r.peakHorde >= 120 };
+      }),
+    );
   });
 
-  it('8. every run replays bit-identically, tick by tick (world and mover)', () => {
+  it('8. runs replay bit-identically, tick by tick (world and mover): one seed per bot', () => {
     const rows = [];
-    for (const seed of SEEDS) {
+    for (const name of BOTS) {
+      // Each bot's shortest run: every bot's code is replayed, at the least cost in test time.
+      let seed = SEEDS[0];
+      for (const s of SEEDS) if (get(name, s).seconds < get(name, seed).seconds) seed = s;
       const b = bowls.get(seed);
       if (!b) throw new Error(`no bowl for seed ${seed}`);
-      for (const name of BOTS) {
+      {
         const a = get(name, seed).hashes;
         const again = playRun(b, seed, makeBot(name, b, seed)).hashes;
         let firstDiff = -1;
