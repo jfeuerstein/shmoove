@@ -6,6 +6,6 @@
   "jsGzipKb": 400,
   "hordeFrameMs": 8,
   "hordeStepMs": 2,
-  "hordeDrawCalls": 20,
-  "hordeTriangles": 110000
+  "hordeDrawCalls": 32,
+  "hordeTriangles": 120000
 }

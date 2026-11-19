@@ -1,83 +1,85 @@
 /**
- * Shots: one instanced mesh of short bright streaks in `PALETTE.shot`, each aligned to its velocity
- * and drawn where it is between the last two ticks (extrapolated back from the latest by its
- * velocity, as the world is not interpolated).
+ * Shots: one instanced mesh for every kind, each drawn where it is between the last two ticks
+ * (extrapolated back from the latest by its velocity, as the world is not interpolated).
+ *
+ * - a dart (`SHOT_DART`, the Seekers): a short bright streak in `PALETTE.shot`, aligned to its
+ *   velocity;
+ * - a stone (`SHOT_STONE`, the Skipper): a flat, wide, spinning pebble in `PALETTE.stone`, so a
+ *   stream of stones never reads as darts.
  */
-import { BoxGeometry, DynamicDrawUsage, InstancedMesh } from 'three';
+import { BoxGeometry, type InstancedBufferAttribute, type InstancedMesh } from 'three';
 import { DT } from '../sim/constants';
-import { MAX_SHOTS, type World } from '../sim/world';
-import { PALETTE, glowMaterial } from './look';
+import { MAX_SHOTS, SHOT_STONE, type World } from '../sim/world';
+import { PALETTE } from './look';
+import { addInstanceColor, addInstanceFloat, makeInstanced, rgbInto, segmentMatrix, tintMaterial, writeMatrix } from './fxView';
 
-/** Length and thickness of a streak, m. */
-const STREAK_LENGTH = 1.1;
-const STREAK_WIDTH = 0.12;
-const SHOT_GLOW = 0.9;
+/** Length and thickness of a dart's streak, m. */
+export const STREAK_LENGTH = 1.1;
+export const STREAK_WIDTH = 0.12;
+/** A stone: how wide across and how thick, m, and how fast it spins, turns a second. */
+export const STONE_WIDTH = 0.42;
+export const STONE_THICK = 0.14;
+const STONE_SPIN = 3;
+const DART_GLOW = 0.9;
+const STONE_GLOW = 0.5;
 
 export class ShotsView {
   readonly mesh: InstancedMesh;
+  private readonly glow: InstancedBufferAttribute;
+  private readonly rgb: Float32Array;
+  private readonly dartRgb = new Float32Array(3);
+  private readonly stoneRgb = new Float32Array(3);
 
   constructor() {
-    // A unit-long box along +z, centred, scaled per instance by the basis below.
+    // A unit box, centred, shaped per instance by its matrix.
     const geo = new BoxGeometry(1, 1, 1);
-    this.mesh = new InstancedMesh(geo, glowMaterial(PALETTE.shot, SHOT_GLOW), MAX_SHOTS);
-    this.mesh.name = 'shots';
-    this.mesh.instanceMatrix.setUsage(DynamicDrawUsage);
-    this.mesh.frustumCulled = false;
-    this.mesh.count = 0;
-    this.mesh.visible = false;
+    this.glow = addInstanceFloat(geo, 'aGlow', MAX_SHOTS);
+    this.mesh = makeInstanced(geo, tintMaterial(), MAX_SHOTS, 'shots');
+    this.rgb = addInstanceColor(this.mesh, MAX_SHOTS);
+    rgbInto(this.dartRgb, 0, PALETTE.shot);
+    rgbInto(this.stoneRgb, 0, PALETTE.stone);
   }
 
-  update(w: World, alpha: number): void {
+  /** `time` in seconds, for the stones' spin. */
+  update(w: World, alpha: number, time = 0): void {
     const s = w.shots;
     const back = (1 - alpha) * DT;
     const m = this.mesh.instanceMatrix.array;
+    const glow = this.glow.array as Float32Array;
+    const rgb = this.rgb;
     for (let i = 0; i < s.count; i++) {
       const vx = s.vx[i];
       const vy = s.vy[i];
       const vz = s.vz[i];
-      const l = Math.sqrt(vx * vx + vy * vy + vz * vz);
-      // Forward f, right r = up x f, up u = f x r.
-      let fx = 0;
-      let fy = 0;
-      let fz = 1;
-      if (l > 1e-6) {
-        fx = vx / l;
-        fy = vy / l;
-        fz = vz / l;
-      }
-      let rx = fz;
-      let rz = -fx;
-      const rl = Math.sqrt(rx * rx + rz * rz);
-      if (rl > 1e-4) {
-        rx /= rl;
-        rz /= rl;
+      const x = s.x[i] - vx * back;
+      const y = s.y[i] - vy * back;
+      const z = s.z[i] - vz * back;
+      let col = this.dartRgb;
+      if (s.kind[i] === SHOT_STONE) {
+        // Flat and spinning about the up axis, each at its own angle.
+        const a = time * STONE_SPIN * Math.PI * 2 + i * 1.7;
+        const c = Math.cos(a) * STONE_WIDTH;
+        const sn = Math.sin(a) * STONE_WIDTH;
+        writeMatrix(m, i, c, 0, -sn, 0, STONE_THICK, 0, sn, 0, c, x, y, z);
+        glow[i] = STONE_GLOW;
+        col = this.stoneRgb;
       } else {
-        rx = 1;
-        rz = 0;
+        const l = Math.sqrt(vx * vx + vy * vy + vz * vz);
+        const h = l > 1e-6 ? (STREAK_LENGTH * 0.5) / l : 0;
+        if (h > 0) segmentMatrix(m, i, x - vx * h, y - vy * h, z - vz * h, x + vx * h, y + vy * h, z + vz * h, STREAK_WIDTH, STREAK_WIDTH);
+        else writeMatrix(m, i, STREAK_WIDTH, 0, 0, 0, STREAK_WIDTH, 0, 0, 0, STREAK_LENGTH, x, y, z);
+        glow[i] = DART_GLOW;
       }
-      const ux = fy * rz;
-      const uy = fz * rx - fx * rz;
-      const uz = -fy * rx;
-      const o = i * 16;
-      m[o] = rx * STREAK_WIDTH;
-      m[o + 1] = 0;
-      m[o + 2] = rz * STREAK_WIDTH;
-      m[o + 3] = 0;
-      m[o + 4] = ux * STREAK_WIDTH;
-      m[o + 5] = uy * STREAK_WIDTH;
-      m[o + 6] = uz * STREAK_WIDTH;
-      m[o + 7] = 0;
-      m[o + 8] = fx * STREAK_LENGTH;
-      m[o + 9] = fy * STREAK_LENGTH;
-      m[o + 10] = fz * STREAK_LENGTH;
-      m[o + 11] = 0;
-      m[o + 12] = s.x[i] - vx * back;
-      m[o + 13] = s.y[i] - vy * back;
-      m[o + 14] = s.z[i] - vz * back;
-      m[o + 15] = 1;
+      rgb[i * 3] = col[0];
+      rgb[i * 3 + 1] = col[1];
+      rgb[i * 3 + 2] = col[2];
     }
     this.mesh.count = s.count;
     this.mesh.visible = s.count > 0;
     this.mesh.instanceMatrix.needsUpdate = true;
+    if (s.count > 0) {
+      this.glow.needsUpdate = true;
+      if (this.mesh.instanceColor) this.mesh.instanceColor.needsUpdate = true;
+    }
   }
 }

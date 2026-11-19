@@ -9,6 +9,12 @@
  * shader turns it into a hop-wobble and the fragment shader into the hit flash, so animation costs
  * the CPU nothing. Every surface is the flat, lit, fogged material from `look.ts`, extended through
  * `onBeforeCompile`.
+ *
+ * Seven silhouettes that cannot be mistaken for each other at 30 m: the chunky shuffler, the gnat's
+ * shard, the fat bollard, the cutter leaning on its blade, the squat lobber with its ball held up,
+ * the wide low sludge and the small spiky clinger. An elite is drawn `ELITE_SCALE` larger with a
+ * white sheen, and its aura is a ring on the ground at the aura's reach in `AURA_COLORS`. A clinger
+ * holding on (`STATE_LATCHED`) is drawn on the mover's back, not where the sim keeps it.
  */
 import {
   BufferGeometry,
@@ -23,8 +29,30 @@ import {
   Vector4,
 } from 'three';
 import { DT } from '../sim/constants';
-import { KIND_BOLLARD, KIND_COUNT, KIND_GNAT, KIND_SHUFFLER, KINDS, MAX_ENEMIES, SPAWN_TICKS, type World } from '../sim/world';
+import { HORDE } from '../sim/horde';
+import type { Terrain } from '../sim/terrain';
+import {
+  ELITE_HASTE,
+  ELITE_JAM,
+  ELITE_NONE,
+  ELITE_SHIELD,
+  KIND_BOLLARD,
+  KIND_CLINGER,
+  KIND_COUNT,
+  KIND_CUTTER,
+  KIND_GNAT,
+  KIND_LOBBER,
+  KIND_SHUFFLER,
+  KIND_SLUDGE,
+  KINDS,
+  MAX_ENEMIES,
+  SPAWN_TICKS,
+  STATE_LATCHED,
+  type World,
+} from '../sim/world';
+import { rgbInto } from './fxView';
 import { PALETTE, flatMaterial } from './look';
+import { GroundRings } from './zonesView';
 
 /** Share of an enemy's own colour it shows as glow, so its unlit side still reads as that colour. */
 const ENEMY_GLOW = 0.38;
@@ -37,6 +65,34 @@ const SHADOW_OPACITY = 0.5;
 const SHADOW_SEGMENTS = 8;
 /** Below this speed an enemy counts as standing and turns to face the mover, m/s. */
 const STILL_SPEED = 0.05;
+/** An elite is drawn this much larger than its kind. */
+export const ELITE_SCALE = 1.4;
+/** An elite always shows this much of the flash colour (white), so it reads as special. */
+const ELITE_SHEEN = 0.22;
+/**
+ * The colour of each aura's ring on the ground, by ELITE_*: haste orange (the Wake's fire), shield
+ * blue (the second gear), jam magenta (the accent). Index 0 is unused.
+ */
+export const AURA_COLORS: readonly number[] = [PALETTE.elite, PALETTE.wake, PALETTE.gears[1], PALETTE.accent];
+/** Width of an aura's ring at the edge of its reach, m, and its strength. */
+const AURA_BAND = 0.4;
+const AURA_FADE = 0.55;
+const AURA_SEGMENTS = 48;
+const AURA_LIFT = 0.15;
+/** Most aura rings drawn at once. */
+export const MAX_AURA_RINGS = 32;
+/**
+ * A latched clinger rides on the mover's back: this far behind its middle, spread this far across
+ * by its phase, and between these heights above its feet, m.
+ */
+const RIDE_BACK = 0.3;
+const RIDE_SPREAD = 0.6;
+const RIDE_LOW = 0.45;
+const RIDE_HIGH = 1.05;
+/** How far a clinger's spikes reach from its middle, m. */
+const CLINGER_SPIKE = 0.6;
+/** The clinger's middle above its feet: it stands on its lowest spike, m. */
+const CLINGER_MID = CLINGER_SPIKE / Math.sqrt(3);
 
 /**
  * Per kind: the hop-wobble. `hop` is how high it bounces at full speed (m), `rate` how many bounces
@@ -54,6 +110,14 @@ const WOBBLE: readonly Wobble[] = [
   { hop: 0.14, rate: 2.4, sway: 0.06, idle: 0.2 },
   { hop: 0.12, rate: 7.5, sway: 0.25, idle: 1 },
   { hop: 0.05, rate: 1.1, sway: 0.025, idle: 0.15 },
+  // Cutter: a quick, low sprint.
+  { hop: 0.06, rate: 4.6, sway: 0.04, idle: 0.15 },
+  // Lobber: a heavy rock from foot to foot.
+  { hop: 0.08, rate: 1.7, sway: 0.07, idle: 0.35 },
+  // Sludge: a slow ooze.
+  { hop: 0.03, rate: 0.9, sway: 0.12, idle: 0.5 },
+  // Clinger: never still.
+  { hop: 0.14, rate: 9, sway: 0.3, idle: 1 },
 ];
 
 // ---- geometry -------------------------------------------------------------------------------
@@ -129,17 +193,107 @@ export function bollardGeometry(): BufferGeometry {
   return toGeometry(p);
 }
 
-function geometryFor(kind: number): BufferGeometry {
+/** A pyramid from the quad (corners, in order) to an apex. Four triangles. */
+function pyramid(out: number[], quad: readonly number[], ax: number, ay: number, az: number): void {
+  const p = [...quad, ax, ay, az];
+  let cx = ax;
+  let cy = ay;
+  let cz = az;
+  for (let k = 0; k < 4; k++) {
+    cx += quad[k * 3];
+    cy += quad[k * 3 + 1];
+    cz += quad[k * 3 + 2];
+  }
+  cx /= 5;
+  cy /= 5;
+  cz /= 5;
+  for (let k = 0; k < 4; k++) tri(out, p, k, (k + 1) % 4, 4, cx, cy, cz);
+}
+
+/**
+ * Lean and pointed forward, 1.5 m: thin legs, a torso pitched hard toward the mover and a blade
+ * jutting from the chest. 28 triangles.
+ */
+export function cutterGeometry(): BufferGeometry {
+  const p: number[] = [];
+  block(p, 0, 0.62, 0.17, 0.13, 0.15, 0.12);
+  block(p, 0.58, 1.5, 0.22, 0.16, 0.14, 0.12, 0.42);
+  // The blade: a long point forward from the front of the chest.
+  const y0 = 0.86;
+  const y1 = 1.22;
+  const zf = 0.2;
+  pyramid(p, [-0.16, y0, zf, 0.16, y0, zf, 0.1, y1, zf + 0.22, -0.1, y1, zf + 0.22], 0, 1.02, 0.95);
+  return toGeometry(p);
+}
+
+/**
+ * Squat with something raised to throw, 1.9 m: a wide low body, one arm up over its head and the
+ * ball held at the top. 32 triangles.
+ */
+export function lobberGeometry(): BufferGeometry {
+  const p: number[] = [];
+  block(p, 0, 1.0, 0.6, 0.5, 0.42, 0.36);
+  // The arm, up and a little back.
+  block(p, 0.95, 1.6, 0.11, 0.11, 0.09, 0.09, -0.1, -0.05);
+  // The ball: a diamond at the top of the reach.
+  const c = 1.72;
+  const r = 0.18;
+  const bz = -0.15;
+  const v = [0, c + r, bz, 0, c - r, bz, r, c, bz, -r, c, bz, 0, c, bz + r, 0, c, bz - r];
+  const faces = [0, 2, 4, 0, 4, 3, 0, 3, 5, 0, 5, 2, 1, 4, 2, 1, 3, 4, 1, 5, 3, 1, 2, 5];
+  for (let f = 0; f < faces.length; f += 3) tri(p, v, faces[f], faces[f + 1], faces[f + 2], 0, c, bz);
+  return toGeometry(p);
+}
+
+/** Wide and low, 1.1 m: a broad mound with a lumpy crown. 24 triangles. */
+export function sludgeGeometry(): BufferGeometry {
+  const p: number[] = [];
+  block(p, 0, 0.5, 0.95, 0.95, 0.85, 0.8);
+  block(p, 0.48, 1.1, 0.8, 0.75, 0.35, 0.3, 0.12);
+  return toGeometry(p);
+}
+
+/**
+ * Small and spiky, 0.7 m: an octahedron with every face pulled out to a point, standing on its
+ * lowest spike. 24 triangles.
+ */
+export function clingerGeometry(): BufferGeometry {
+  const c = CLINGER_MID;
+  const r = 0.22;
+  const v = [0, c + r, 0, 0, c - r, 0, r, c, 0, -r, c, 0, 0, c, r, 0, c, -r];
+  const faces = [0, 2, 4, 0, 4, 3, 0, 3, 5, 0, 5, 2, 1, 4, 2, 1, 3, 4, 1, 5, 3, 1, 2, 5];
+  const p: number[] = [];
+  const spike = CLINGER_SPIKE;
+  for (let f = 0; f < faces.length; f += 3) {
+    const a = faces[f];
+    const b = faces[f + 1];
+    const d = faces[f + 2];
+    // The face's middle pushed out from the centre to the spike's reach.
+    let mx = (v[a * 3] + v[b * 3] + v[d * 3]) / 3;
+    let my = (v[a * 3 + 1] + v[b * 3 + 1] + v[d * 3 + 1]) / 3 - c;
+    let mz = (v[a * 3 + 2] + v[b * 3 + 2] + v[d * 3 + 2]) / 3;
+    const l = Math.sqrt(mx * mx + my * my + mz * mz);
+    mx = (mx / l) * spike;
+    my = (my / l) * spike;
+    mz = (mz / l) * spike;
+    const q = [v[a * 3], v[a * 3 + 1], v[a * 3 + 2], v[b * 3], v[b * 3 + 1], v[b * 3 + 2], v[d * 3], v[d * 3 + 1], v[d * 3 + 2], mx, c + my, mz];
+    tri(p, q, 0, 1, 3, 0, c, 0);
+    tri(p, q, 1, 2, 3, 0, c, 0);
+    tri(p, q, 2, 0, 3, 0, c, 0);
+  }
+  return toGeometry(p);
+}
+
+/** The shape of each kind, by KIND_*. */
+export function geometryFor(kind: number): BufferGeometry {
   if (kind === KIND_SHUFFLER) return shufflerGeometry();
   if (kind === KIND_GNAT) return gnatGeometry();
   if (kind === KIND_BOLLARD) return bollardGeometry();
-  // A kind with no shape of its own yet stands in as the shuffler's block, sized to its body.
-  const base = KINDS[KIND_SHUFFLER];
-  const def = KINDS[kind];
-  const g = shufflerGeometry();
-  g.scale(def.radius / base.radius, def.height / base.height, def.radius / base.radius);
-  g.computeBoundingSphere();
-  return g;
+  if (kind === KIND_CUTTER) return cutterGeometry();
+  if (kind === KIND_LOBBER) return lobberGeometry();
+  if (kind === KIND_SLUDGE) return sludgeGeometry();
+  if (kind === KIND_CLINGER) return clingerGeometry();
+  throw new Error(`no shape for enemy kind ${kind}`);
 }
 
 function wobbleFor(kind: number): Wobble {
@@ -199,12 +353,17 @@ export class HordeView {
   /** One per kind, indexed by `KIND_*`. */
   readonly meshes: InstancedMesh[] = [];
   readonly shadows: InstancedMesh;
+  /** The elites' auras: a ring on the ground at the aura's reach, in the aura's colour. */
+  readonly auras: GroundRings;
   /** Seconds, for the wobble; shared by every enemy material. */
   private readonly time = { value: 0 };
   private readonly anim: InstancedBufferAttribute[] = [];
   private readonly counts = new Int32Array(KIND_COUNT);
+  /** Linear RGB per aura, by ELITE_*. */
+  private readonly auraRgb = new Float32Array(AURA_COLORS.length * 3);
 
-  constructor() {
+  /** With a terrain, the aura rings follow the ground; without, they lie level at the elite's feet. */
+  constructor(terrain: Terrain | null = null) {
     this.object.name = 'horde';
     const shadowMat = flatMaterial(PALETTE.sky);
     shadowMat.transparent = true;
@@ -233,6 +392,10 @@ export class HordeView {
       this.anim.push(anim);
       this.object.add(mesh);
     }
+
+    for (let a = 0; a < AURA_COLORS.length; a++) rgbInto(this.auraRgb, a * 3, AURA_COLORS[a]);
+    this.auras = new GroundRings(MAX_AURA_RINGS, AURA_SEGMENTS, 'horde-auras', terrain, AURA_LIFT);
+    this.object.add(this.auras.mesh);
   }
 
   private prepare(mesh: InstancedMesh): void {
@@ -244,15 +407,19 @@ export class HordeView {
 
   /**
    * Draw the horde as it stands `alpha` (0..1) of the way from the previous tick to the latest.
-   * `time` is in seconds; (mx, mz) is the mover, which standing enemies turn to face.
+   * `time` is in seconds; (mx, my, mz) is the mover as drawn, which standing enemies turn to face and
+   * latched clingers ride, and `heading` the way it faces.
    */
-  update(w: World, alpha: number, time: number, mx: number, mz: number): void {
+  update(w: World, alpha: number, time: number, mx: number, mz: number, my = 0, heading = 0): void {
     const h = w.horde;
     const back = (1 - alpha) * DT;
     const counts = this.counts;
     counts.fill(0);
     const shadow = this.shadows.instanceMatrix.array;
     this.time.value = time;
+    this.auras.begin();
+    const hs = Math.sin(heading);
+    const hc = Math.cos(heading);
 
     for (let i = 0; i < h.count; i++) {
       const k = h.kind[i];
@@ -260,15 +427,27 @@ export class HordeView {
       const n = counts[k]++;
       const vx = h.vx[i];
       const vz = h.vz[i];
-      const x = h.x[i] - vx * back;
-      const y = h.y[i];
-      const z = h.z[i] - vz * back;
+      let x = h.x[i] - vx * back;
+      let y = h.y[i];
+      let z = h.z[i] - vz * back;
 
       // Facing: +z of the model turned to (sin, cos) = the velocity, or toward the mover.
       let speed = Math.sqrt(vx * vx + vz * vz);
       let s = 0;
       let c = 1;
-      if (speed > STILL_SPEED) {
+      const latched = h.state[i] === STATE_LATCHED && def.latches === true;
+      if (latched) {
+        // On the mover's back, facing out behind it, spread across and up by its phase.
+        const ph = h.phase[i];
+        const across = (ph - 0.5) * RIDE_SPREAD;
+        const up = RIDE_LOW + (RIDE_HIGH - RIDE_LOW) * ((ph * 7.31) % 1);
+        x = mx - hs * RIDE_BACK + hc * across;
+        y = my + up - CLINGER_MID;
+        z = mz - hc * RIDE_BACK - hs * across;
+        s = -hs;
+        c = -hc;
+        speed = 0;
+      } else if (speed > STILL_SPEED) {
         s = vx / speed;
         c = vz / speed;
       } else {
@@ -283,20 +462,22 @@ export class HordeView {
       }
       const age = h.age[i];
       const rise = age >= SPAWN_TICKS ? 1 : age / SPAWN_TICKS;
+      const elite = h.elite[i];
+      const scale = elite !== ELITE_NONE ? rise * ELITE_SCALE : rise;
 
       const m = this.meshes[k].instanceMatrix.array;
       const o = n * 16;
-      m[o] = c * rise;
+      m[o] = c * scale;
       m[o + 1] = 0;
-      m[o + 2] = -s * rise;
+      m[o + 2] = -s * scale;
       m[o + 3] = 0;
       m[o + 4] = 0;
-      m[o + 5] = rise;
+      m[o + 5] = scale;
       m[o + 6] = 0;
       m[o + 7] = 0;
-      m[o + 8] = s * rise;
+      m[o + 8] = s * scale;
       m[o + 9] = 0;
-      m[o + 10] = c * rise;
+      m[o + 10] = c * scale;
       m[o + 11] = 0;
       m[o + 12] = x;
       m[o + 13] = y;
@@ -305,11 +486,14 @@ export class HordeView {
 
       const a = this.anim[k].array as Float32Array;
       const f = h.flash[i];
+      let flash = f >= FLASH_FULL_TICKS ? 1 : f / FLASH_FULL_TICKS;
+      if (elite !== ELITE_NONE && flash < ELITE_SHEEN) flash = ELITE_SHEEN;
       a[n * 3] = h.phase[i];
       a[n * 3 + 1] = speed / def.speed;
-      a[n * 3 + 2] = f >= FLASH_FULL_TICKS ? 1 : f / FLASH_FULL_TICKS;
+      a[n * 3 + 2] = flash;
 
-      const r = def.radius * SHADOW_SCALE * rise;
+      // A rider casts no shadow of its own: the mover's covers it.
+      const r = latched ? 0 : def.radius * SHADOW_SCALE * scale;
       const so = i * 16;
       shadow[so] = r;
       shadow[so + 1] = 0;
@@ -327,6 +511,11 @@ export class HordeView {
       shadow[so + 13] = y + SHADOW_LIFT;
       shadow[so + 14] = z;
       shadow[so + 15] = 1;
+
+      if (elite === ELITE_HASTE || elite === ELITE_SHIELD || elite === ELITE_JAM) {
+        const reach = HORDE.auraReach;
+        this.auras.add(x, y, z, reach - AURA_BAND, reach, this.auraRgb, elite * 3, AURA_FADE * rise);
+      }
     }
 
     for (let k = 0; k < KIND_COUNT; k++) {
@@ -339,5 +528,6 @@ export class HordeView {
     this.shadows.count = h.count;
     this.shadows.visible = h.count > 0;
     this.shadows.instanceMatrix.needsUpdate = true;
+    this.auras.end();
   }
 }

@@ -10,6 +10,8 @@
  * - `scheme` `tuck` | `lift` | `swipe`, default `tuck`: the control scheme.
  * - `horde`  integer >= 0, default 0: the crowd fixture's enemies (see `fixtures.ts`).
  * - `sparks` integer >= 0, default 0: the crowd fixture's sparks.
+ * - `arsenal` flag: every weapon at level 3 and one of each map thing and zone ahead of the spawn
+ *   (see `fixtures.ts`), with cards answered at once.
  */
 import { SCHEMES, type Scheme } from '../input/source';
 
@@ -23,6 +25,7 @@ export interface Params {
   scheme: Scheme;
   horde: number;
   sparks: number;
+  arsenal: boolean;
 }
 
 export const DEFAULT_SEED = 1;
@@ -65,5 +68,5 @@ function count(q: URLSearchParams, name: string): number {
 
 export function parseParams(search: string): Params {
   const q = new URLSearchParams(search);
-  return { debug: flag(q, 'debug'), hook: flag(q, 'hook'), perf: flag(q, 'perf'), flat: flag(q, 'flat'), solo: flag(q, 'solo'), seed: seed(q), scheme: scheme(q), horde: count(q, 'horde'), sparks: count(q, 'sparks') };
+  return { debug: flag(q, 'debug'), hook: flag(q, 'hook'), perf: flag(q, 'perf'), flat: flag(q, 'flat'), solo: flag(q, 'solo'), seed: seed(q), scheme: scheme(q), horde: count(q, 'horde'), sparks: count(q, 'sparks'), arsenal: flag(q, 'arsenal') };
 }
