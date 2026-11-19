@@ -111,7 +111,11 @@ export const STATS_WINDOW = 120;
 export interface FrameStatsSummary {
   drawCalls: number;
   triangles: number;
-  /** Mean work per frame (sim steps, views, render submission), ms. */
+  /**
+   * Mean work of a frame that runs exactly one sim step: views and render submission, plus one
+   * step. A slow display runs several steps in a frame to catch up; counting them all would make a
+   * slow test machine look like a slow game, so the steps are counted once.
+   */
   frameMs: number;
   /** Mean time of one sim step (input sample plus `Sim.step`), ms. */
   stepMs: number;
@@ -168,6 +172,7 @@ export class FrameStats {
       st += this.stepTime[i];
       sn += this.steps[i];
     }
-    return { drawCalls: d / n, triangles: t / n, frameMs: w / n, stepMs: sn > 0 ? st / sn : 0 };
+    const stepMs = sn > 0 ? st / sn : 0;
+    return { drawCalls: d / n, triangles: t / n, frameMs: (w - st) / n + stepMs, stepMs };
   }
 }

@@ -173,8 +173,20 @@ describe('FrameStats', () => {
     expect(s.frames).toBe(120);
     expect(r.drawCalls).toBe(10);
     expect(r.triangles).toBe(5000);
-    expect(r.frameMs).toBe(4);
+    // 3.5 ms of drawing plus one 0.25 ms step, though each frame ran two.
+    expect(r.frameMs).toBeCloseTo(3.75, 9);
     expect(r.stepMs).toBeCloseTo(0.25, 9);
+  });
+
+  it('reports the same frame work however many steps a frame had to catch up', () => {
+    const one = new FrameStats();
+    const five = new FrameStats();
+    for (let i = 0; i < 120; i++) {
+      one.record(10, 5000, 3 + 0.8, 0.8, 1);
+      five.record(10, 5000, 3 + 5 * 0.8, 5 * 0.8, 5);
+    }
+    expect(five.summary().frameMs).toBeCloseTo(one.summary().frameMs, 9);
+    expect(five.summary().stepMs).toBeCloseTo(0.8, 9);
   });
 
   it('reads zero before any frame and with no steps', () => {
