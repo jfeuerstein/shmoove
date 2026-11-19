@@ -1,6 +1,12 @@
 /**
- * The spawn director: keeps the right number of the right kinds arriving from where the player is
- * heading, and takes away what has been left far behind so it can come back ahead.
+ * The spawn director: brings the right kinds in from where the player is heading, at a rate, and
+ * takes away what has been left far behind so it can come back ahead.
+ *
+ * Enemies arrive at a rate that rises with run time, paid for from a budget: every second adds the
+ * rate, each enemy costs one (a gnat cloud costs its size). Killing faster than the rate thins the
+ * horde; killing slower lets it grow. Two bounds hold whatever the player does: below the floor the
+ * director spawns as fast as it can until the floor is met (the field is never empty), and it never
+ * lets more than the cap be alive. What it takes away is refunded, so it comes back promptly.
  *
  * Every number is in `DIRECTOR`. Pure and allocation-free after a world's first tick: the little
  * state it carries between ticks (a gnat cloud still coming up, when the next bollard may come)
@@ -15,10 +21,17 @@ import { KIND_BOLLARD, KIND_GNAT, KIND_SHUFFLER, removeEnemy, spawnEnemy, type W
 const DEG = PI / 180;
 
 export const DIRECTOR = {
-  /** The number of living enemies wanted, by run time: seconds and counts, linear between. */
-  targetAt: [0, 30, 60, 120, 180],
-  target: [20, 45, 100, 260, 400],
-  /** Most spawns in one tick while below the target. */
+  /** Run times (s) at which the rate, floor and cap below are given; linear between, flat after. */
+  at: [0, 30, 60, 120, 180],
+  /** Enemies arriving per second. */
+  rate: [2.5, 5, 8, 14, 20],
+  /** Fewer than this alive and the director spawns perTick a tick until there are this many. */
+  floor: [10, 15, 25, 40, 60],
+  /** Never more than this alive. */
+  cap: [50, 100, 200, 330, 400],
+  /** Seconds of rate the budget may hold beyond what the room under the cap could use. */
+  bank: 2,
+  /** Most spawns in one tick. */
   perTick: 4,
 
   /** Gnats arrive from this run time, as clouds. */
@@ -75,6 +88,8 @@ interface DirectorState {
   cloudZ: number;
   /** Run tick from which the next bollard may come. */
   nextBollard: number;
+  /** Spawns paid for and not yet made. */
+  budget: number;
 }
 
 const states = new WeakMap<World, DirectorState>();
@@ -82,21 +97,35 @@ const states = new WeakMap<World, DirectorState>();
 function stateOf(w: World): DirectorState {
   let st = states.get(w);
   if (st === undefined) {
-    st = { cloudLeft: 0, cloudX: 0, cloudZ: 0, nextBollard: 0 };
+    st = { cloudLeft: 0, cloudX: 0, cloudZ: 0, nextBollard: 0, budget: 0 };
     states.set(w, st);
   }
   return st;
 }
 
-/** The living enemies wanted at `seconds` into the run. */
-export function targetCount(seconds: number): number {
-  const at = DIRECTOR.targetAt;
-  const n = DIRECTOR.target;
-  if (seconds <= at[0]) return n[0];
+/** One of the DIRECTOR schedules (rate, floor, cap) at `seconds` into the run. */
+function schedule(values: readonly number[], seconds: number): number {
+  const at = DIRECTOR.at;
+  if (seconds <= at[0]) return values[0];
   for (let k = 1; k < at.length; k++) {
-    if (seconds < at[k]) return n[k - 1] + ((n[k] - n[k - 1]) * (seconds - at[k - 1])) / (at[k] - at[k - 1]);
+    if (seconds < at[k]) return values[k - 1] + ((values[k] - values[k - 1]) * (seconds - at[k - 1])) / (at[k] - at[k - 1]);
   }
-  return n[n.length - 1];
+  return values[values.length - 1];
+}
+
+/** Enemies arriving per second at `seconds` into the run. */
+export function spawnRate(seconds: number): number {
+  return schedule(DIRECTOR.rate, seconds);
+}
+
+/** The fewest alive the director allows at `seconds`. */
+export function floorCount(seconds: number): number {
+  return schedule(DIRECTOR.floor, seconds);
+}
+
+/** The most alive the director allows at `seconds`. */
+export function capCount(seconds: number): number {
+  return schedule(DIRECTOR.cap, seconds);
 }
 
 /** Share of the horde that should be gnats at `seconds`. */
@@ -228,13 +257,18 @@ function spawnCloudGnat(w: World, s: SimState, terrain: Terrain, st: DirectorSta
 }
 
 /** Take away what is too far from the mover, or far enough and left behind a fast one. */
-function recycle(w: World, s: SimState): void {
+function recycle(w: World, s: SimState): number {
   const h = w.horde;
   const m = s.mover;
   const behind = behindLimit(m.vx, m.vz);
+  let taken = 0;
   for (let i = h.count - 1; i >= 0; i--) {
-    if (leftBehind(m, h.x[i] - m.x, h.z[i] - m.z, behind)) removeEnemy(w, i);
+    if (leftBehind(m, h.x[i] - m.x, h.z[i] - m.z, behind)) {
+      removeEnemy(w, i);
+      taken++;
+    }
   }
+  return taken;
 }
 
 /** Spawn and recycle for one tick. Does nothing unless `w.spawning`. */
@@ -247,46 +281,69 @@ export function stepDirector(w: World, s: SimState, terrain: Terrain): void {
     // A fresh run (or a reset one): nothing carried over.
     st.cloudLeft = 0;
     st.nextBollard = 0;
+    st.budget = 0;
   }
 
-  recycle(w, s);
+  const taken = recycle(w, s);
 
   const seconds = tick * DT;
-  const target = targetCount(seconds);
   const h = w.horde;
+  const cap = Math.floor(capCount(seconds));
+  const floor = floorCount(seconds);
+  // Pay in this tick's share of the rate, holding no more than a couple of seconds of it (or a whole
+  // cloud) unspent; then refund what was just taken away, so it comes back at once.
+  const rate = spawnRate(seconds);
+  const hold = Math.max(rate * D.bank, D.cloudSize);
+  if (st.budget < hold) {
+    st.budget += rate * DT;
+    if (st.budget > hold) st.budget = hold;
+  }
+  st.budget += taken;
+
   let gnats = 0;
   let bollards = 0;
   for (let i = 0; i < h.count; i++) {
     if (h.kind[i] === KIND_GNAT) gnats++;
     else if (h.kind[i] === KIND_BOLLARD) bollards++;
   }
-  const gnatWanted = gnatShare(seconds) * target;
+  const gnatWanted = gnatShare(seconds) * (h.count > floor ? h.count : floor);
   const bollardsAllowed = bollardCap(seconds);
 
   for (let n = 0; n < D.perTick; n++) {
     if (st.cloudLeft > 0) {
-      // A cloud comes up whole, even if that takes the horde a few over the target.
+      // A cloud is paid for whole and comes up whole.
       if (spawnCloudGnat(w, s, terrain, st)) gnats++;
       continue;
     }
-    if (h.count >= target) return;
+    if (h.count >= cap) break;
+    // Below the floor spawns are free; above it each is paid from the budget.
+    const free = h.count < floor;
+    if (!free && st.budget < 1) break;
     if (bollards < bollardsAllowed && tick >= st.nextBollard) {
-      if (!findSpot(w, s, terrain, 0)) return;
-      if (spawnAt(w, terrain, KIND_BOLLARD, spot.x, spot.z)) bollards++;
+      if (!findSpot(w, s, terrain, 0)) break;
+      if (spawnAt(w, terrain, KIND_BOLLARD, spot.x, spot.z)) {
+        bollards++;
+        if (!free) st.budget -= 1;
+      }
       st.nextBollard = tick + Math.round(D.bollardGap / DT);
       continue;
     }
     if (gnats + D.cloudSize * 0.5 <= gnatWanted) {
-      // Keep the room for most of a cloud rather than fill it with shufflers.
-      if (target - h.count < D.cloudSize * 0.5) return;
-      if (!findSpot(w, s, terrain, D.cloudRadius)) return;
+      // Save up for a whole cloud rather than spend the budget on shufflers.
+      if (h.count + D.cloudSize > cap) break;
+      if (!free && st.budget < D.cloudSize) break;
+      if (!findSpot(w, s, terrain, D.cloudRadius)) break;
       st.cloudLeft = D.cloudSize;
       st.cloudX = spot.x;
       st.cloudZ = spot.z;
+      if (!free) st.budget -= D.cloudSize;
       if (spawnCloudGnat(w, s, terrain, st)) gnats++;
       continue;
     }
-    if (!findSpot(w, s, terrain, 0)) return;
-    spawnAt(w, terrain, KIND_SHUFFLER, spot.x, spot.z);
+    if (!findSpot(w, s, terrain, 0)) break;
+    if (spawnAt(w, terrain, KIND_SHUFFLER, spot.x, spot.z) && !free) st.budget -= 1;
   }
+  // Refunds do not bank past the room under the cap: at the cap the budget holds only `hold`.
+  const room = cap - h.count > 0 ? cap - h.count : 0;
+  if (st.budget > hold + room) st.budget = hold + room;
 }

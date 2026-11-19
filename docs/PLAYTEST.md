@@ -161,11 +161,13 @@ Play three runs, on the scheme you picked:
    length in gear 2 enough to circle a crowd without touching it?
 3. **Ride lines.** Tuck downhill, chain hops, use pads and pipes, plow through the small ones in
    gear 3. Notice above all **what happens when you drop out of gear 3 in the middle of a crowd**:
-   the bots say this is where line riders take most of their hits. Does gear 3 and up feel safe,
-   or does the run feel the same as the dodging one? Does a bollard ever stop you without warning?
+   for a moment (`plowGraceTicks`) you still go through, and in gear 3 and up health comes back.
+   Does gear 3 and up feel safe and worth chasing, or does the run feel the same as the dodging one?
+   Does a bollard ever stop you without warning?
 
-For every run: when you die, was it the horde getting bigger or something you did? A thumb's
-answer to that is the most useful thing this slice can tell us.
+For every run: when you die, was it the horde getting bigger or something you did? The horde now
+arrives at a rate, so killing fast thins it: does it feel that way? A thumb's answer to that is the
+most useful thing this slice can tell us.
 
 ### combat
 
@@ -176,6 +178,7 @@ answer to that is the most useful thing this slice can tell us.
 | `hitShoveSpeed` | 12 m/s | the shove is a nudge; the crowd closes again at once | enemies fly away like ragdolls |
 | `hitStunTicks` | 44 ticks | thrown enemies come straight back at you | after a hit the crowd stands about harmless for too long |
 | `plowSpeedCost` | 0.25 m/s | plowing a crowd costs nothing; gear 3 is armour | plowing a few drops you out of gear 3, into the crowd |
+| `plowGraceTicks` | 45 ticks (0.75 s) | dropping out of gear 3 in a crowd is a trap: the next touch hurts | you plow through crowds long after you slowed down; gear 3 stops mattering |
 | `plowShove` | 7 m/s | plowed enemies stay in your path | plowed enemies fly off; no sense of mass |
 | `bonkBounce` | 3 m/s | a bollard is glue | a bollard is a trampoline |
 
