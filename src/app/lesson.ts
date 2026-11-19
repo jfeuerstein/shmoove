@@ -1,39 +1,29 @@
 /**
  * The first-run lesson: what step it is on and whether the step is done, from what the sim did.
  * Pure: it reads a `LessonSample` (filled by `main.ts` once per tick from the sim) and nothing else.
- * What the lesson does to the world (the horde held back, twelve shufflers at step 5, health held
- * up, the run clock held at 0) is the app's job; this only decides.
+ * What the lesson does to the world (the director off, eight shufflers brought up at step 4, health
+ * held up, the run clock held at 0, the XP top-up) is the app's job; this only decides.
  *
- * Seven steps, in a fixed order. A finished step stays on screen for a moment (`SETTLE_TICKS`, the
- * view ticks it) before the next line replaces it. Nothing here allocates after construction.
+ * Seven steps, in a fixed order. A finished step stays on screen for a moment (`SETTLE_TICKS`)
+ * before the next line replaces it. Nothing here allocates after construction.
  */
-import { EV_CLEAN_HOP, EV_HOP, EV_LAND } from '../sim/types';
+import { EV_HOP } from '../sim/types';
 
 /** Every number the lesson judges by, in one place. */
 export const LESSON = {
-  /** Step 1: the thumb must have carved this long in total, s, and the mover gone this far, m. */
-  carveSeconds: 2,
-  carveMetres: 15,
-  /** Step 2: gear at which a tuck counts. */
-  tuckGear: 3,
-  /** Step 2: tucked and slower than this, m/s, on ground flatter than `flatNormalY`, is "stuck". */
-  slowSpeed: 6,
-  flatNormalY: 0.985,
-  /** Step 2: seconds stuck before the line changes. */
-  stuckSeconds: 3,
-  /** Step 4: hops that were not clean before the line adds a hint. */
-  missesForHint: 3,
-  /** Step 5: gear that plows, and hits taken before the lesson explains. */
-  plowGear: 3,
-  hitsToExplain: 2,
-  /** Step 5: ticks the explanation stays up before the next step. */
-  explainTicks: 180,
-  /** Step 5: how many come up, and how far ahead of the mover, m. */
-  crowd: 12,
+  /** Step 1: the thumb must have steered this long in total, s, and the rider gone this far, m. */
+  steerSeconds: 2,
+  steerMetres: 15,
+  /** Step 3: faster than this, m/s, is "fast"; after `dipSeconds` the line points at the dip. */
+  fastSpeed: 16,
+  dipSeconds: 12,
+  /** Step 4: how many come up, how far ahead of the rider, m, and how many must die. */
+  crowd: 8,
   crowdNear: 25,
   crowdFar: 35,
-  /** Step 6: gives up waiting for a pop after this long, s. */
-  popSeconds: 25,
+  kills: 3,
+  /** Step 5: after this long without a card offer the app gives the XP that is short, s. */
+  sparkSeconds: 10,
   /** Step 7: how long the last line stays, s. */
   endSeconds: 2,
   /** Health held at or above this while the lesson runs. */
@@ -49,45 +39,34 @@ export const STEP_COUNT = 7;
 /** The words the player reads, one per step (index 0 is step 1). */
 export const LINES: readonly string[] = [
   'Drag to steer.',
-  'Now let go on a downhill. Letting go is how you get fast.',
-  'Tap to hop.',
-  'Tap again the moment you land.',
-  'The big number is your gear. Under 3, everything hurts.',
-  'Your trail burns. Circle back onto it to pop everything inside.',
-  'That is the game. Stay fast.',
+  'Tap to ollie.',
+  'Hills make you fast. Find one.',
+  'Your weapons fire themselves. Stay out of reach.',
+  'Pick up the sparks. They are your levels.',
+  'Take a card.',
+  "That is the game. Don't get touched.",
 ];
 
-export const LINE_STUCK = 'Steer to a slope first, then let go.';
-export const LINE_EARLIER = 'Tap again the moment you land. A little earlier.';
-export const LINE_LATER = 'Tap again the moment you land. A little later.';
-export const LINE_EXPLAIN = 'That is why. Find a downhill, let go, and go through them in 3.';
+/** Step 3's line after `LESSON.dipSeconds` without going fast. */
+export const LINE_DIP = 'Head for the dip in the middle.';
 
 /** What the lesson reads each tick. The app owns one and refills it. */
 export interface LessonSample {
-  /** The thumb is carving this tick (the input frame's `carve`). */
+  /** The thumb is steering this tick (the input frame's `carve`). */
   carve: boolean;
-  /** A tap arrived this tick (the input frame's `hop`). */
-  tap: boolean;
   /** Metres travelled, `SimState.distance`. */
   distance: number;
-  tucked: boolean;
-  grounded: boolean;
-  gear: number;
   speed: number;
-  /** Ground normal's y: 1 on level ground. */
-  normalY: number;
   /** `SimState.events` of the step. */
   events: number;
-  /** The player was hurt this tick. */
-  hurt: boolean;
-  /** The mover plowed something this tick. */
-  plowed: boolean;
-  /** `Player.pops`. */
-  pops: number;
+  /** `Player.kills`. */
+  kills: number;
+  /** A card offer is open (the run is in `PHASE_CHOOSE`). */
+  offerOpen: boolean;
 }
 
 export function makeLessonSample(): LessonSample {
-  return { carve: false, tap: false, distance: 0, tucked: false, grounded: true, gear: 1, speed: 0, normalY: 1, events: 0, hurt: false, plowed: false, pops: 0 };
+  return { carve: false, distance: 0, speed: 0, events: 0, kills: 0, offerOpen: false };
 }
 
 export class Lesson {
@@ -104,15 +83,12 @@ export class Lesson {
 
   // Per-step state, reset when a step begins.
   private ticks = 0;
-  private carved = 0;
+  private steered = 0;
   private startDistance = NaN;
-  private stuck = 0;
-  private misses = 0;
-  private lastMissLate = false;
-  private tappedInFlight = false;
-  private hits = 0;
-  private startPops = NaN;
-  private explaining = false;
+  private startKills = NaN;
+  /** The app has been asked for the XP top-up and has not taken the request yet. */
+  private topUp = false;
+  private topUpAsked = false;
   /** Ticks left of a finished step's settle; 0 while the step is still being judged. */
   private settle = 0;
 
@@ -127,22 +103,31 @@ export class Lesson {
     this.ticks++;
     switch (this.step) {
       case 0:
-        this.stepSteer(s);
+        if (Number.isNaN(this.startDistance)) this.startDistance = s.distance;
+        if (s.carve) this.steered++;
+        if (this.steered >= LESSON.steerSeconds * TPS && s.distance - this.startDistance >= LESSON.steerMetres) this.finish();
         break;
       case 1:
-        this.stepTuck(s);
-        break;
-      case 2:
         if ((s.events & EV_HOP) !== 0) this.finish();
         break;
+      case 2:
+        if (s.speed > LESSON.fastSpeed) this.finish();
+        else if (this.ticks >= LESSON.dipSeconds * TPS) this.line = LINE_DIP;
+        break;
       case 3:
-        this.stepClean(s);
+        if (Number.isNaN(this.startKills)) this.startKills = s.kills;
+        if (s.kills - this.startKills >= LESSON.kills) this.finish();
         break;
       case 4:
-        this.stepGear(s);
+        if (s.offerOpen) this.finish();
+        else if (!this.topUpAsked && this.ticks >= LESSON.sparkSeconds * TPS) {
+          this.topUpAsked = true;
+          this.topUp = true;
+        }
         break;
       case 5:
-        this.stepLoop(s);
+        // The offer opened to end step 5; it is taken once it is no longer open.
+        if (!s.offerOpen) this.finish();
         break;
       default:
         if (this.ticks >= LESSON.endSeconds * TPS) this.ended = true;
@@ -150,77 +135,18 @@ export class Lesson {
     }
   }
 
+  /** True once, when the app should give the player the XP they are short of a level. */
+  takeTopUp(): boolean {
+    const t = this.topUp;
+    this.topUp = false;
+    return t;
+  }
+
   /** End the lesson now, from any step. */
   skip(): void {
     if (this.ended) return;
     this.ended = true;
     this.skipped = true;
-  }
-
-  private stepSteer(s: LessonSample): void {
-    if (Number.isNaN(this.startDistance)) this.startDistance = s.distance;
-    if (s.carve) this.carved++;
-    if (this.carved >= LESSON.carveSeconds * TPS && s.distance - this.startDistance >= LESSON.carveMetres) this.finish();
-  }
-
-  private stepTuck(s: LessonSample): void {
-    if (s.tucked && s.gear >= LESSON.tuckGear) {
-      this.finish();
-      return;
-    }
-    if (s.tucked && s.grounded && s.speed < LESSON.slowSpeed && s.normalY >= LESSON.flatNormalY) {
-      this.stuck++;
-    } else {
-      this.stuck = 0;
-    }
-    this.line = this.stuck >= LESSON.stuckSeconds * TPS ? LINE_STUCK : LINES[1];
-  }
-
-  private stepClean(s: LessonSample): void {
-    if ((s.events & EV_CLEAN_HOP) !== 0) {
-      this.finish();
-      return;
-    }
-    // A tap made in the air stays live only a few ticks: made earlier than that it is lost.
-    if (s.tap && !s.grounded) this.tappedInFlight = true;
-    let miss = false;
-    if ((s.events & EV_HOP) !== 0) {
-      // A hop that was not clean was made after the landing window closed: too late.
-      miss = true;
-      this.lastMissLate = true;
-    } else if ((s.events & EV_LAND) !== 0 && this.tappedInFlight) {
-      // Landed with a tap spent in the air and no hop: too early.
-      miss = true;
-      this.lastMissLate = false;
-    }
-    if ((s.events & EV_LAND) !== 0) this.tappedInFlight = false;
-    if (miss) {
-      this.misses++;
-      if (this.misses >= LESSON.missesForHint) this.line = this.lastMissLate ? LINE_EARLIER : LINE_LATER;
-    }
-  }
-
-  private stepGear(s: LessonSample): void {
-    if (s.gear >= LESSON.plowGear && s.plowed) {
-      this.finish();
-      return;
-    }
-    if (this.explaining) {
-      // Hurt twice: the lesson says why and moves on once it has been read.
-      if (this.ticks >= LESSON.explainTicks) this.finish();
-      return;
-    }
-    if (s.hurt) this.hits++;
-    if (this.hits >= LESSON.hitsToExplain) {
-      this.explaining = true;
-      this.ticks = 0;
-      this.line = LINE_EXPLAIN;
-    }
-  }
-
-  private stepLoop(s: LessonSample): void {
-    if (Number.isNaN(this.startPops)) this.startPops = s.pops;
-    if (s.pops > this.startPops || this.ticks >= LESSON.popSeconds * TPS) this.finish();
   }
 
   /** The step's condition is met: fill a dot and hold the line a moment. */
@@ -233,14 +159,9 @@ export class Lesson {
     this.step++;
     this.line = LINES[this.step];
     this.ticks = 0;
-    this.stuck = 0;
-    this.misses = 0;
-    this.tappedInFlight = false;
-    this.hits = 0;
-    this.explaining = false;
-    this.carved = 0;
+    this.steered = 0;
     this.startDistance = NaN;
-    this.startPops = NaN;
+    this.startKills = NaN;
   }
 }
 

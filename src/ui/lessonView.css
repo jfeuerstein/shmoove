@@ -6,17 +6,17 @@
   -webkit-user-select: none;
   font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   color: #fff;
-  z-index: 12;
+  z-index: 26;
 }
 
 .lesson[hidden] {
   display: none;
 }
 
-/* Under the gear block (numeral, name, speed), above the middle of the screen. */
+/* Under the speed readout and the SKIP button, above the middle of the screen. */
 .lesson-band {
   position: absolute;
-  top: calc(env(safe-area-inset-top, 0px) + 150px);
+  top: calc(env(safe-area-inset-top, 0px) + 96px);
   left: calc(env(safe-area-inset-left, 0px) + 16px);
   right: calc(env(safe-area-inset-right, 0px) + 16px);
   box-sizing: border-box;
@@ -96,6 +96,10 @@
 
 .lesson-skip:active {
   filter: brightness(1.3);
+}
+
+.lesson-debug .lesson-band {
+  top: calc(env(safe-area-inset-top, 0px) + 136px);
 }
 
 /* The debug button sits at the top right: the kills counter, and SKIP, go under it. */

@@ -1,12 +1,11 @@
 /**
- * The HUD: the gear as a very large numeral at the top centre, its name, the speed, and the clean-hop
- * chain while there is one. With a run there is also the clock (top left), kills (top right), a thin
+ * The HUD: small and top centre, the speed in m/s (tinted by the gear, so it warms up as the rider
+ * goes faster) and the ollie chain while there is one. With a run there is also the clock (top left), kills (top right), a thin
  * health bar along the top edge and a thin XP bar with the level along the bottom edge. Nothing sits
  * over the middle of the screen. Each element is written only when the value it shows changes.
  */
 import { gearCss, PALETTE } from '../render/look';
 import { RUN_TICKS } from '../sim/balance';
-import { GEAR_NAMES } from '../sim/constants';
 import type { Sim } from '../sim/sim';
 import './hud.css';
 
@@ -56,8 +55,6 @@ interface RunParts {
 
 export class Hud {
   readonly element: HTMLElement;
-  private readonly gearEl: HTMLElement;
-  private readonly nameEl: HTMLElement;
   private readonly speedEl: HTMLElement;
   private readonly chainEl: HTMLElement;
   private readonly run: RunParts | null;
@@ -79,8 +76,6 @@ export class Hud {
     const el = doc.createElement('div');
     el.className = options.debug === true ? 'hud hud-debug' : 'hud';
     el.setAttribute('aria-live', 'off');
-    this.gearEl = part(doc, el, 'hud-gear');
-    this.nameEl = part(doc, el, 'hud-name');
     this.speedEl = part(doc, el, 'hud-speed');
     this.chainEl = part(doc, el, 'hud-chain');
     this.chainEl.hidden = true;
@@ -108,11 +103,7 @@ export class Hud {
     const m = sim.state.mover;
     if (m.gear !== this.gear) {
       this.gear = m.gear;
-      const colour = gearCss(m.gear);
-      this.gearEl.textContent = String(m.gear);
-      this.gearEl.style.color = colour;
-      this.nameEl.textContent = GEAR_NAMES[Math.min(GEAR_NAMES.length, Math.max(1, m.gear)) - 1];
-      this.nameEl.style.color = colour;
+      this.speedEl.style.color = gearCss(m.gear);
     }
     const speed = Math.round(m.speed);
     if (speed !== this.speed) {
@@ -122,7 +113,7 @@ export class Hud {
     if (m.chain !== this.chain) {
       this.chain = m.chain;
       this.chainEl.hidden = m.chain <= 0;
-      if (m.chain > 0) this.chainEl.textContent = `CHAIN ×${m.chain}`;
+      if (m.chain > 0) this.chainEl.textContent = `OLLIE CHAIN ×${m.chain}`;
     }
     if (this.run && sim.horde) this.updateRun(this.run, sim);
   }

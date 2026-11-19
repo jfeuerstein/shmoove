@@ -1,10 +1,9 @@
 // lesson: the first-run lesson and the how-to sheet. With ?lesson the first line shows and the horde
-// is held back; each step is driven through the hook (carve, tuck down the slope, hop, hop on
-// landing, twelve come up and two hits explain the gear, the trail step, the end) and the line
-// changes every time. SKIP starts a normal run at 3:00; after a reload the lesson is gone; with
-// ?nolesson it never shows. The how-to sheet opens from the end card, fits without scrolling, and
-// REPLAY THE LESSON brings the lesson back.
-// Screenshots: step 2 (lesson.png) and the how-to sheet (lesson-howto.png).
+// is held back; each step is driven through the hook (steer, ollie, a hill, three kills, sparks, a
+// real touch on a card, the end) and the line changes every time. SKIP starts a normal run at 3:00;
+// after a reload the lesson is gone; with ?nolesson it never shows. The how-to sheet opens from the
+// end card, fits without scrolling, and REPLAY THE LESSON brings the lesson back.
+// Screenshots: step 3 (lesson.png) and the how-to sheet (lesson-howto.png).
 import { join } from 'node:path';
 import { ROOT, waitForHook } from '../run.mjs';
 
@@ -12,14 +11,14 @@ const FORWARD = { steerX: 0, steerY: 1, carve: true };
 
 const LINES = [
   'Drag to steer.',
-  'Now let go on a downhill. Letting go is how you get fast.',
-  'Tap to hop.',
-  'Tap again the moment you land.',
-  'The big number is your gear. Under 3, everything hurts.',
-  'Your trail burns. Circle back onto it to pop everything inside.',
-  'That is the game. Stay fast.',
+  'Tap to ollie.',
+  'Hills make you fast. Find one.',
+  'Your weapons fire themselves. Stay out of reach.',
+  'Pick up the sparks. They are your levels.',
+  'Take a card.',
+  "That is the game. Don't get touched.",
 ];
-const EXPLAIN = 'That is why. Find a downhill, let go, and go through them in 3.';
+const DIP = 'Head for the dip in the middle.';
 
 export default {
   name: 'lesson',
@@ -81,10 +80,15 @@ export default {
     // ---- step 1: drag to steer; step 2 line comes up ----
     await hook.hold(FORWARD);
     let l = await untilLineChanges(LINES[0], 900, 30);
-    check(l === LINES[1], 'carving 2 s and 15 m moves on to "let go"', l);
+    check(l === LINES[1], 'steering 2 s and 15 m moves on to "Tap to ollie."', l);
+    check((await dots())[0].includes('lesson-dot-done'), 'the first dot is filled', await dots());
 
-    // The screenshot of step 2, and where its parts sit.
-    await hook.step(20);
+    // ---- step 2: a hop ----
+    await hook.hop();
+    l = await untilLineChanges(LINES[1], 120, 1);
+    check(l === LINES[2], 'a hop moves on to "Hills make you fast. Find one."', l);
+
+    // The screenshot of step 3, and where its parts sit.
     await t.shot();
     const geo = await page.evaluate(() => {
       const r = (sel) => {
@@ -93,72 +97,84 @@ export default {
         const b = e.getBoundingClientRect();
         return { top: b.top, bottom: b.bottom, left: b.left, right: b.right, width: b.width, height: b.height };
       };
-      return { band: r('.lesson-band'), skip: r('.lesson-skip'), kills: r('.hud-kills'), text: r('.lesson-text'), h: window.innerHeight, w: window.innerWidth, font: getComputedStyle(document.querySelector('.lesson-text')).fontSize };
+      return { band: r('.lesson-band'), skip: r('.lesson-skip'), kills: r('.hud-kills'), speed: r('.hud-speed'), h: window.innerHeight, w: window.innerWidth, font: getComputedStyle(document.querySelector('.lesson-text')).fontSize };
     });
-    check(geo.band !== null && geo.band.top > 120, 'the band sits under the gear block', geo.band);
+    check(geo.band !== null && geo.speed !== null && geo.band.top >= geo.speed.bottom, 'the band sits under the speed readout', geo);
     check(geo.band !== null && geo.band.bottom < geo.h * 0.36, 'the band stays out of the middle of the screen and the thumb zone', geo.band);
     check(geo.band !== null && geo.band.left >= 0 && geo.band.right <= geo.w, 'the band fits the width', geo.band);
     check(geo.skip !== null && geo.skip.width >= 44 && geo.skip.height >= 44, 'SKIP is at least 44 px', geo.skip);
     check(geo.skip !== null && geo.kills !== null && geo.skip.top >= geo.kills.bottom, 'SKIP is under the kills counter', geo);
-    check(geo.skip !== null && geo.band !== null && (geo.skip.bottom <= geo.band.top || geo.skip.right <= geo.band.left), 'SKIP does not cover the band', geo);
+    check(geo.skip !== null && geo.band !== null && geo.skip.bottom <= geo.band.top, 'SKIP does not cover the band', geo);
     check(parseFloat(geo.font) >= 18, 'the line is large', geo.font);
-    check((await dots())[0] === 'lesson-dot-done'.replace('lesson-dot', '').trim(), 'the first dot is filled', await dots());
 
-    // ---- step 2: let go; the slope does the work ----
+    // ---- step 3: let go; the slope does the work. The alternate line comes up after 12 s if not. ----
     await hook.hold(null);
-    l = await untilLineChanges(LINES[1], 1800, 10);
-    check(l === LINES[2], 'a tuck in gear 3 moves on to "Tap to hop."', { l, s: await hook.state() });
-
-    // ---- step 3: hop ----
-    await hook.hop();
-    l = await untilLineChanges(LINES[2], 120, 1);
-    check(l === LINES[3], 'a hop moves on to "Tap again the moment you land."', l);
-
-    // ---- step 4: a clean hop. A tap every tick while airborne is always live at touchdown ----
+    let sawDip = false;
     l = await untilLineChanges(
-      LINES[3],
-      1500,
-      1,
+      LINES[2],
+      2400,
+      10,
       async () => {
-        const st = await hook.state();
-        if (!st.grounded) await hook.hop();
+        if ((await line()) === DIP) sawDip = true;
       },
     );
-    check(l === LINES[4], 'a hop as it lands moves on to the gear line', l);
+    if (l === DIP) {
+      sawDip = true;
+      l = await untilLineChanges(DIP, 2400, 10);
+    }
+    check(l === LINES[3], 'going faster than 16 m/s moves on to the weapons line', { l, sawDip, s: await hook.state() });
     s = await hook.state();
-    check(s.enemies >= 10 && s.enemies <= 12, 'twelve shufflers come up', s);
-    check(s.seconds === 0, 'the clock still has not counted', s);
+    check(s.enemies === 8, 'eight shufflers come up', s);
+    check(s.seconds === 0, 'the clock has not counted', s);
 
-    // ---- step 5: two hits explain it; health is held up ----
-    await call('hurt', 5);
-    await hook.step(2);
-    await call('hurt', 5);
-    await hook.step(2);
-    check((await line()) === EXPLAIN, 'two hits say why', await line());
-    s = await hook.state();
-    check(s.hp >= 30 && s.phase === 0, 'health is held at 30 or above', s);
-    await call('hurt', 500);
-    await hook.step(2);
-    s = await hook.state();
-    check(s.hp >= 30 && s.phase === 0, 'a killing blow does not kill in the lesson', s);
-    l = await untilLineChanges(EXPLAIN, 600, 30);
-    check(l === LINES[5], 'after the explanation, the trail step', l);
-
-    // ---- step 6: no pop, so it gives up after 25 s ----
+    // ---- step 4: they come to us; the weapons fire themselves; three die ----
     await hook.hold(null);
-    await hook.step(25 * 60 - 120);
-    check((await line()) === LINES[5], 'the trail step waits for the pop', await line());
-    l = await untilLineChanges(LINES[5], 400, 10);
-    check(l === LINES[6], 'after 25 s it moves on', l);
+    l = await untilLineChanges(LINES[3], 3600, 30);
+    s = await hook.state();
+    check(l === LINES[4], 'three dead moves on to "Pick up the sparks."', { l, s });
+    check(s.kills >= 3, 'with three kills', s);
+    check(s.hp >= 30 && s.phase !== 1, 'health is held at 30 or above', s);
+
+    // ---- step 5: sparks; an offer opens by itself or from the top-up within 10 s ----
+    l = await untilLineChanges(LINES[4], 1500, 10);
+    s = await hook.state();
+    check(l === LINES[5], 'an offer opening moves on to "Take a card."', { l, s });
+    check(s.phase === 3 && s.offer !== null, 'the cards are up', s);
+    check((await lessonShown()) === true, 'the lesson line is still on screen over the cards');
+
+    // ---- step 6: a real touch on a card; the line sits above the cards and is not covered ----
+    const over = await page.evaluate(() => {
+      const band = document.querySelector('.lesson-band')?.getBoundingClientRect();
+      const cards = [...document.querySelectorAll('.card')].filter((c) => !c.hidden).map((c) => c.getBoundingClientRect());
+      const hit = band ? document.elementFromPoint((band.left + band.right) / 2, (band.top + band.bottom) / 2) : null;
+      return { band: band ? { top: band.top, bottom: band.bottom } : null, cardTop: Math.min(...cards.map((c) => c.top)), cards: cards.length, inLesson: hit?.closest('.lesson') !== null && hit !== null, hasHit: hit !== null };
+    });
+    check(over.cards === 3 && over.band !== null && over.band.bottom < over.cardTop, 'the line sits above the cards', over);
+    await page.waitForTimeout(500);
+    await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r(undefined)))));
+    const card = await page.evaluate(() => {
+      const c = [...document.querySelectorAll('.card')].filter((e) => !e.hidden)[1];
+      const r = c.getBoundingClientRect();
+      return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+    });
+    await hook.step(30);
+    s = await hook.state();
+    check(s.phase === 3, 'a card offer is not auto-picked during the lesson', s);
+    await page.touchscreen.tap(card.x, card.y);
+    await hook.step(1);
+    s = await hook.state();
+    check(s.phase === 0 && s.offer === null, 'a touch on a card takes it', s);
+    l = await untilLineChanges(LINES[5], 120, 5);
+    check(l === LINES[6], 'then the last line', l);
 
     // ---- step 7: the end, then a normal run ----
-    check((await lessonShown()) === true, 'the last line is still on screen');
+    check((await lessonShown()) === true, 'the last line is on screen');
     await hook.step(60);
     check((await lessonShown()) === true, 'for 2 s');
     await hook.step(100);
     check((await lessonShown()) === false, 'then the lesson is gone');
     s = await hook.state();
-    check(s.tick < 120 && s.seconds < 2 && s.enemies === 0 && s.phase === 0, 'and a new run has begun', s);
+    check(s.tick < 120 && s.seconds < 2 && s.kills === 0 && s.hp === 100 && s.phase === 0, 'and a new run has begun', s);
     check((await text('.hud-clock')) === '3:00' || (await text('.hud-clock')) === '2:59', 'with the clock at 3:00', await text('.hud-clock'));
     await hook.hold(FORWARD);
     await hook.step(120);

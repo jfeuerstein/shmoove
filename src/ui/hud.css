@@ -19,32 +19,17 @@
   z-index: 10;
 }
 
-.hud-gear {
-  font-size: 92px;
-  font-weight: 900;
-  letter-spacing: -0.04em;
-  font-variant-numeric: tabular-nums;
-}
-
-.hud-name {
-  margin-top: 2px;
-  font-size: 15px;
-  font-weight: 800;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-}
-
 .hud-speed {
-  margin-top: 6px;
-  font-size: 13px;
-  font-weight: 600;
-  opacity: 0.8;
+  margin-top: 4px;
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
   font-variant-numeric: tabular-nums;
 }
 
 .hud-chain {
-  margin-top: 6px;
-  font-size: 18px;
+  margin-top: 4px;
+  font-size: 14px;
   font-weight: 900;
   letter-spacing: 0.08em;
 }

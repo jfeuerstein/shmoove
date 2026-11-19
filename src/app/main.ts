@@ -22,7 +22,7 @@ import { Rng, hashString } from '../sim/rng';
 import { Sim } from '../sim/sim';
 import { BOWL_RADIUS, makeBowl } from '../sim/bowl';
 import { flatTerrain, type Terrain } from '../sim/terrain';
-import { FX_PLAYER_HIT, FX_PLOW, KIND_SHUFFLER, PHASE_CHOOSE, spawnEnemy } from '../sim/world';
+import { KIND_SHUFFLER, PHASE_CHOOSE, spawnEnemy } from '../sim/world';
 import { makeInputFrame } from '../sim/types';
 import { BuildBar } from '../ui/buildBar';
 import { autoPickCard, Cards } from '../ui/cards';
@@ -161,9 +161,11 @@ function boot(): void {
     lesson = new Lesson();
     sim.world.spawning = false;
     sim.world.things.count = 0;
+    // Cards are never picked for the player during the lesson.
+    sim.picker = null;
   };
   if (sim.horde && lessonWanted(lessonGate)) startLesson();
-  /** Twelve shufflers come up 25 to 35 m ahead of the mover, inside the map. */
+  /** Eight shufflers come up 25 to 35 m ahead of the mover, inside the map. */
   const spawnLessonCrowd = (): void => {
     const w = sim.world;
     const m = sim.state.mover;
@@ -188,36 +190,26 @@ function boot(): void {
     const w = sim.world;
     const s = sim.state;
     const m = s.mover;
-    // The run is not on the clock, nobody dies, and no level-up opens cards.
+    // The run is not on the clock, nobody dies, and no card opens before the sparks step.
     w.run.ticks = 0;
-    w.player.xp = 0;
     if (w.player.hp < LESSON.minHp) w.player.hp = LESSON.minHp;
-    let hurt = false;
-    let plowed = false;
-    for (let i = 0; i < w.fx.count; i++) {
-      if (w.fx.type[i] === FX_PLAYER_HIT) hurt = true;
-      else if (w.fx.type[i] === FX_PLOW) plowed = true;
-    }
+    if (l.step < 4 && w.player.xp > w.player.xpNext - 1) w.player.xp = w.player.xpNext - 1;
     const q = lessonSample;
     q.carve = frameInput.carve;
-    q.tap = frameInput.hop;
     q.distance = s.distance;
-    q.tucked = m.tucked;
-    q.grounded = m.grounded;
-    q.gear = m.gear;
     q.speed = m.speed;
-    q.normalY = m.ny;
     q.events = s.events;
-    q.hurt = hurt;
-    q.plowed = plowed;
-    q.pops = w.player.pops;
+    q.kills = w.player.kills;
+    q.offerOpen = w.run.phase === PHASE_CHOOSE;
     const before = l.step;
     l.update(q);
     if (l.ended) {
       endLesson();
       return;
     }
-    if (l.step === 4 && (before !== 4 || (l.done === 4 && w.horde.count === 0))) spawnLessonCrowd();
+    if (l.takeTopUp()) w.player.xp = w.player.xpNext;
+    // Eight come up when the step begins; if they are somehow gone before three are dead, more do.
+    if (l.step === 3 && (before !== 3 || w.horde.count < LESSON.kills)) spawnLessonCrowd();
   };
   /** The lesson is over, finished or skipped: remember it and start the real run. */
   const endLesson = (): void => {
@@ -233,6 +225,7 @@ function boot(): void {
     sim.reset();
     lesson = null;
     lessonView?.hide();
+    applyAutoPick();
     sim.world.spawning = true;
     if (intoLesson && sim.horde) startLesson();
     if (params.horde > 0 || params.sparks > 0) applyFixture(sim, params.horde, params.sparks);

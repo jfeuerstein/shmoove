@@ -57,7 +57,8 @@ describe('HowTo', () => {
   it('has seven lines with the rules in them', () => {
     expect(HOW_TO_LINES).toHaveLength(7);
     const all = HOW_TO_LINES.map((l) => `${l.lead ?? ''} ${l.text}`).join(' ');
-    for (const word of ['steer', 'gear 2', 'tuck', 'hop', 'gear', 'trail', 'loop', 'gear 5']) expect(all).toContain(word);
+    for (const word of ['steer', 'coast', 'ollie', 'Hills', 'fire themselves', 'hurts', 'Sparks', 'card', 'crates', 'shrines', 'gates', 'hoops']) expect(all).toContain(word);
+    expect(all).not.toMatch(/gear|trail|loop/i);
   });
 
   it('is closed at first, shows its seven lines when opened, and closes on its button', () => {
@@ -69,8 +70,8 @@ describe('HowTo', () => {
     expect(sheet.isOpen).toBe(true);
     const lines = el.children.filter((c) => c.className === 'howto-line');
     expect(lines).toHaveLength(7);
-    expect(lines[0].text()).toBe('Drag: steer. The stick alone only reaches gear 2.');
-    expect(lines[6].text()).toBe('The fat ones stop you dead below gear 5. Go round.');
+    expect(lines[0].text()).toBe('Drag: steer. Let go: coast. Tap: ollie.');
+    expect(lines[6].text()).toBe('Ride into crates. Circle shrines. Thread the gates. Fly through hoops.');
     button(el, 'CLOSE').fire('click');
     expect(el.hidden).toBe(true);
     expect(sheet.isOpen).toBe(false);

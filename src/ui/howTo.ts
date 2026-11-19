@@ -14,13 +14,13 @@ export interface HowToLine {
 
 /** The seven lines, in the order read. */
 export const HOW_TO_LINES: readonly HowToLine[] = [
-  { lead: 'Drag', text: 'steer. The stick alone only reaches gear 2.' },
-  { lead: 'Let go', text: 'tuck. No steering, least drag. Downhill, this is where speed comes from.' },
-  { lead: 'Tap', text: 'hop. Tap again as you land to keep your speed and add a little.' },
-  { text: 'The big number is your gear. Everything you carry hits harder in a higher gear.' },
-  { text: 'Under gear 3 everything hurts and a hit costs a gear. In 3 and up you go through the small ones and your health comes back.' },
-  { text: 'Your trail burns what stands in it. Come back onto it to close a loop: the loop pops.' },
-  { text: 'The fat ones stop you dead below gear 5. Go round.' },
+  { lead: 'Drag', text: 'steer. Let go: coast. Tap: ollie.' },
+  { text: 'Tap again as you land and you keep your speed.' },
+  { text: 'Hills, half-pipes and the green pads make you fast.' },
+  { text: 'Your weapons fire themselves. You only have to move.' },
+  { text: 'Touching an enemy hurts. An ollie clears the small ones.' },
+  { text: 'Sparks are XP. A level is a card: a weapon, a level on one you carry, or a passive.' },
+  { text: 'Ride into crates. Circle shrines. Thread the gates. Fly through hoops.' },
 ];
 
 export class HowTo {

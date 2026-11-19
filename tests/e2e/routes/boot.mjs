@@ -1,4 +1,4 @@
-// boot: the game loads on a phone screen, the canvas covers the viewport, the HUD shows gear 1.
+// boot: the game loads on a phone screen, the canvas covers the viewport, the HUD shows the speed, small, at the top centre.
 import { VIEWPORT } from '../run.mjs';
 
 export default {
@@ -25,14 +25,23 @@ export default {
     }
 
     const hud = await page.evaluate(() => {
-      const g = document.querySelector('.hud-gear');
-      const n = document.querySelector('.hud-name');
-      const r = g ? g.getBoundingClientRect() : null;
-      return { gear: g?.textContent ?? null, name: n?.textContent ?? null, top: r ? r.top : -1, bottom: r ? r.bottom : -1 };
+      const sp = document.querySelector('.hud-speed');
+      const r = sp ? sp.getBoundingClientRect() : null;
+      return {
+        speed: sp?.textContent ?? null,
+        font: sp ? parseFloat(getComputedStyle(sp).fontSize) : 0,
+        mid: r ? (r.left + r.right) / 2 : -1,
+        top: r ? r.top : -1,
+        bottom: r ? r.bottom : -1,
+        gearEls: document.querySelectorAll('.hud-gear, .hud-name').length,
+      };
     });
-    check(hud.gear === '1', 'HUD shows gear 1', hud);
-    check(typeof hud.name === 'string' && hud.name.length > 0, 'HUD names the gear', hud);
-    check(hud.top >= 0 && hud.bottom < VIEWPORT.height * 0.2, 'the gear numeral sits at the top of the screen', hud);
+    const shown = await hook.state();
+    check(hud.speed === `${Math.round(shown.speed)} m/s`, 'HUD shows the speed in m/s', { hud, speed: shown.speed });
+    check(hud.gearEls === 0, 'there is no gear numeral or gear name', hud);
+    check(hud.font <= 20, 'the speed readout is small', hud);
+    check(Math.abs(hud.mid - VIEWPORT.width / 2) < 2, 'the speed sits at the top centre', hud);
+    check(hud.top >= 0 && hud.bottom < VIEWPORT.height * 0.08, 'and at the very top of the screen', hud);
 
     const s = await hook.state();
     check(s.tick === before.tick + 30 && s.grounded && s.gear === 1, 'stepping by hand advances the sim', { before, s });

@@ -1,5 +1,5 @@
 /**
- * The first-run lesson on screen: its current line in a band just under the HUD's gear block (clear
+ * The first-run lesson on screen: its current line in a band just under the top of the HUD (clear
  * of the middle of the screen and the thumb zone), a row of seven dots for progress, a short tick
  * when a step completes, and a SKIP button under the kills counter. DOM writes only when a value
  * changes. The button stops touches so they never reach the game.
