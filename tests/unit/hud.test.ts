@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { gearCss, PALETTE } from '../../src/render/look';
 import { Sim } from '../../src/sim/sim';
 import { flatTerrain } from '../../src/sim/terrain';
-import { BANNER_SECONDS, bossName } from '../../src/ui/bossBar';
+import { bossName } from '../../src/ui/bossBar';
 import { clockText, formatTime, Hud } from '../../src/ui/hud';
 import { KIND_BRUISER, KIND_MORTAR, KIND_STANDSTILL, KINDS } from '../../src/sim/world';
 
@@ -259,7 +259,7 @@ describe('the boss bar', () => {
     expect([KIND_BRUISER, KIND_MORTAR, KIND_STANDSTILL].map(bossName)).toEqual(['THE BRUISER', 'THE MORTAR', 'THE STANDSTILL']);
   });
 
-  it('shows the name across the screen for two seconds of play when a boss arrives', () => {
+  it('shows the name across the screen when a boss arrives (its timing: bossBar.test.ts)', () => {
     const { hud, parts, sim } = build(true);
     const banner = parts.get('hud-boss-banner');
     hud.update(sim);
@@ -268,14 +268,6 @@ describe('the boss bar', () => {
     hud.update(sim);
     expect(banner?.hidden).toBe(false);
     expect(banner?.textContent).toBe('THE MORTAR');
-    sim.state.tick += BANNER_SECONDS * 60 - 1;
-    hud.update(sim);
-    expect(banner?.hidden).toBe(false);
-    sim.state.tick += 1;
-    hud.update(sim);
-    expect(banner?.hidden).toBe(true);
-    // The bar stays.
-    expect(parts.get('hud-boss')?.hidden).toBe(false);
   });
 
   it('writes only when the boss or its bar step changes', () => {
