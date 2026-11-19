@@ -26,6 +26,7 @@ what to return. The verifier gets the same file.
 | `m3-cards-ui.md` | M3 | sonnet | merged |
 | `m3-render.md` | M3 | opus | out |
 | `m3-balance.md` | M3 | opus | out |
+| `m3-lesson.md` | M3 (pulled forward from M6) | sonnet | out |
 
 Verification: one opus verifier checked the five merged M0/M1 briefs together; its findings became
 `m1-verifier-fixes.md`. A second checked the four M2 briefs and the lead's M2 core; the core's
