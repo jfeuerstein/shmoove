@@ -32,6 +32,9 @@ export const MAGNET_PER_GEAR = 1;
 /** The M2 slice: three minutes, then you have won. */
 export const RUN_TICKS = 180 * 60;
 
+/** How many times an ordinary enemy's sparks an elite is worth. */
+export const ELITE_XP = 8;
+
 /** XP needed to go from `level` to the next. */
 export function xpForLevel(level: number): number {
   return 2 + level * 3;

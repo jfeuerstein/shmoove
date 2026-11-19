@@ -122,6 +122,8 @@ export const MARK_SWEPT = 1;
 export const MARK_SHIELDED = 2;
 /** The elite of a pack a totem called. Its death is the totem's reward. Never cleared. */
 export const MARK_PACK = 4;
+/** An elite. Its death is worth more sparks. Set with `Horde.elite`; never cleared. */
+export const MARK_ELITE = 8;
 
 // ---- sparks, shots --------------------------------------------------------------------------
 

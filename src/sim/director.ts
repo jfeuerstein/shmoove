@@ -28,6 +28,7 @@ import {
   KIND_SHUFFLER,
   KIND_SLUDGE,
   KINDS,
+  MARK_ELITE,
   MARK_PACK,
   removeEnemy,
   spawnEnemy,
@@ -153,6 +154,7 @@ function stateOf(w: World): DirectorState {
 export function makeElite(w: World, i: number, aura: number): void {
   const h = w.horde;
   h.elite[i] = aura;
+  h.mark[i] |= MARK_ELITE;
   h.hp[i] = KINDS[h.kind[i]].hp * DIRECTOR.eliteHp;
 }
 

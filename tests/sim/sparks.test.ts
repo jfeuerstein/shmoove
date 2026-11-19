@@ -1,10 +1,12 @@
 /** What a player would notice about sparks: the dead drop them, the magnet draws them, XP is levels. */
 import { describe, expect, it } from 'vitest';
-import { MAGNET_BASE, MAGNET_PER_GEAR, xpForLevel } from '../../src/sim/balance';
+import { ELITE_XP, MAGNET_BASE, MAGNET_PER_GEAR, xpForLevel } from '../../src/sim/balance';
+import { makeElite } from '../../src/sim/director';
 import { Sim } from '../../src/sim/sim';
 import { flatTerrain } from '../../src/sim/terrain';
 import { SPARK_CAP } from '../../src/sim/sparks';
 import {
+  ELITE_HASTE,
   FX_CARD,
   FX_LEVEL_UP,
   FX_SPARK,
@@ -59,6 +61,18 @@ describe('drops', () => {
     expect(s.y[0]).toBeCloseTo(0.5, 3);
     expect(s.value[0]).toBe(KINDS[KIND_SHUFFLER].xp);
     expect(s.pull[0]).toBe(0);
+  });
+
+  it('an elite leaves a spark worth eight of its kind', () => {
+    const sim = arena();
+    const at = pointAt(sim, 40);
+    const e = place(sim, KIND_SHUFFLER, at.x, at.z);
+    makeElite(sim.world, e, ELITE_HASTE);
+    kill(sim, e);
+    root(sim.world);
+    sim.step(TUCK);
+    expect(sim.world.sparks.count).toBe(1);
+    expect(sim.world.sparks.value[0]).toBe(KINDS[KIND_SHUFFLER].xp * ELITE_XP);
   });
 
   it('a spark out of magnet range stays put for ten seconds', () => {

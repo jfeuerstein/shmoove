@@ -2,14 +2,15 @@
  * Sparks: what the dead leave behind. They wait on the ground until the mover comes within magnet
  * range, then fly in and become XP; XP becomes levels, and levels raise the two weapons.
  */
-import { MAGNET_BASE, MAGNET_PER_GEAR, xpForLevel } from './balance';
+import { ELITE_XP, MAGNET_BASE, MAGNET_PER_GEAR, xpForLevel } from './balance';
 import { queueOffer } from './build';
 import { jammed } from './horde';
 import { OFFER_LEVEL } from './offer';
 import { DT } from './constants';
 import type { Terrain } from './terrain';
 import type { SimState } from './types';
-import { emitFx, FX_LEVEL_UP, FX_SPARK, KINDS, MARK_SWEPT, type World } from './world';
+import { emitFx, FX_LEVEL_UP, FX_SPARK, KINDS, MARK_ELITE,
+  MARK_SWEPT, type World } from './world';
 
 /** Living sparks never exceed this; further value merges into a neighbour. */
 export const SPARK_CAP = 600;
@@ -65,7 +66,7 @@ export function stepSparks(w: World, s: SimState, terrain: Terrain): void {
   const d = w.deaths;
   for (let k = 0; k < d.count; k++) {
     const swept = (d.mark[k] & MARK_SWEPT) !== 0 ? 1 : 0;
-    dropSpark(w, d.x[k], terrain.heightAt(d.x[k], d.z[k]) + REST_HEIGHT, d.z[k], KINDS[d.kind[k]].xp, swept);
+    dropSpark(w, d.x[k], terrain.heightAt(d.x[k], d.z[k]) + REST_HEIGHT, d.z[k], KINDS[d.kind[k]].xp * ((d.mark[k] & MARK_ELITE) !== 0 ? ELITE_XP : 1), swept);
   }
 
   const m = s.mover;
