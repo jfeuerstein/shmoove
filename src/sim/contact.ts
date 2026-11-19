@@ -20,10 +20,12 @@ import {
   FX_PLOW,
   KINDS,
   MAX_ENEMY_RADIUS,
+  MAX_LATCHED,
   PHASE_DEAD,
   queryEnemies,
   shoveEnemy,
   SPAWN_TICKS,
+  STATE_LATCHED,
   WEIGHT_HEAVY,
   type World,
 } from './world';
@@ -106,7 +108,7 @@ export function stepContact(w: World, s: SimState): void {
   const n = queryEnemies(w, m.x, m.z, REACH, w.nearA);
   for (let q = 0; q < n; q++) {
     const i = w.nearA[q];
-    if (h.hp[i] <= 0 || h.age[i] < SPAWN_TICKS || h.stun[i] > 0) continue;
+    if (h.hp[i] <= 0 || h.age[i] < SPAWN_TICKS || h.stun[i] > 0 || h.state[i] === STATE_LATCHED) continue;
     const kind = KINDS[h.kind[i]];
     const dx = h.x[i] - m.x;
     const dz = h.z[i] - m.z;
@@ -179,6 +181,15 @@ export function stepContact(w: World, s: SimState): void {
       }
       p.graceGear = m.gear;
       p.graceTicks = 0;
+      continue;
+    }
+
+    if (kind.latches === true) {
+      // It grabs on instead of hurting, if there is room; the horde's step carries it from here.
+      if (p.latched < MAX_LATCHED) {
+        h.state[i] = STATE_LATCHED;
+        p.latched++;
+      }
       continue;
     }
 

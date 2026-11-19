@@ -10,10 +10,18 @@ import {
 import {
   BOON_HEAL,
   BOON_HEAL_SHARE,
+  BOON_MIGHT,
+  BOON_MIGHT_SHARE,
+  BOON_REACH,
+  BOON_REACH_M,
   BOON_TOKEN_COUNT,
   BOON_TOKENS,
+  BOON_VIGOUR,
+  BOON_VIGOUR_HP,
   CARD_BOON,
+  OFFER_SHRINE,
   OFFER_TOTEM,
+  rollBoons,
   rollOffer,
   takeCard,
 } from './offer';
@@ -29,6 +37,10 @@ export function refreshBuild(w: World): void {
   const p = w.player;
   const before = p.stats.maxHp;
   recomputeStats(p.stats, p.loadout);
+  // What shrines gave this run sits on top of the build.
+  p.stats.might *= 1 + p.boonMight;
+  p.stats.maxHp += p.boonMaxHp;
+  p.stats.magnet += p.boonMagnet;
   p.maxHp = p.stats.maxHp;
   if (p.maxHp > before) p.hp += p.maxHp - before;
   if (p.hp > p.maxHp) p.hp = p.maxHp;
@@ -37,6 +49,7 @@ export function refreshBuild(w: World): void {
 /** Copy what the build does to movement into the state the mover reads. Call before the mover steps. */
 export function applyBuildToMover(w: World, s: SimState): void {
   modsFromStats(s.mods, w.player.stats);
+  s.mods.cling = w.player.cling;
 }
 
 function setLevel(slots: Int8Array, levels: Uint8Array, id: number, level: number): void {
@@ -84,7 +97,8 @@ export function openOffer(w: World): void {
   const source = w.offerQueue[0];
   w.offerQueue.copyWithin(0, 1, w.offerQueued);
   w.offerQueued--;
-  rollOffer(w.offer, w.player.loadout, w.pool, w.player.stats.luck, w.rng, source, source === OFFER_TOTEM);
+  if (source === OFFER_SHRINE) rollBoons(w.offer, w.rng);
+  else rollOffer(w.offer, w.player.loadout, w.pool, w.player.stats.luck, w.rng, source, source === OFFER_TOTEM);
   w.run.phase = PHASE_CHOOSE;
 }
 
@@ -109,6 +123,11 @@ export function pickCard(w: World, s: SimState, index: number): boolean {
     } else if (id === BOON_TOKENS) {
       p.tokens += BOON_TOKEN_COUNT;
       emitFx(w, FX_TOKEN, m.x, m.y, m.z, BOON_TOKEN_COUNT);
+    } else {
+      if (id === BOON_MIGHT) p.boonMight += BOON_MIGHT_SHARE;
+      else if (id === BOON_VIGOUR) p.boonMaxHp += BOON_VIGOUR_HP;
+      else if (id === BOON_REACH) p.boonMagnet += BOON_REACH_M;
+      refreshBuild(w);
     }
   } else {
     refreshBuild(w);

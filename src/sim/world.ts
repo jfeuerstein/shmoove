@@ -48,7 +48,14 @@ export interface EnemyKind {
   weight: number;
   /** Sparks' worth dropped on death. */
   xp: number;
+  /** Below its plow gear it grabs hold of the mover instead of hurting (see STATE_LATCHED). */
+  latches?: boolean;
 }
+
+/** `Horde.state` of an enemy holding on to the mover. Set by contact; the horde's step does the rest. */
+export const STATE_LATCHED = 1;
+/** Most that can hold on at once. */
+export const MAX_LATCHED = 4;
 
 export const KINDS: readonly EnemyKind[] = [
   { name: 'shuffler', radius: 0.6, height: 1.7, speed: 4, accel: 10, hp: 10, damage: 8, weight: WEIGHT_LIGHT, xp: 1 },
@@ -99,6 +106,10 @@ export const ELITE_JAM = 3;
 
 /** Caught inside a popped loop: if it dies this tick, its sparks fly straight to the player. */
 export const MARK_SWEPT = 1;
+/** Within a shield elite's aura this tick: damage to it is halved. Set and cleared by the horde's step. */
+export const MARK_SHIELDED = 2;
+/** The elite of a pack a totem called. Its death is the totem's reward. Never cleared. */
+export const MARK_PACK = 4;
 
 // ---- sparks, shots --------------------------------------------------------------------------
 
@@ -276,6 +287,14 @@ export interface Player {
   stats: Stats;
   /** Meta currency picked up this run. */
   tokens: number;
+  /** Extra drag on the mover from what is holding on to it and what it is standing in, 1/s. */
+  cling: number;
+  /** How many enemies are holding on. */
+  latched: number;
+  /** Shrine boons for this run: added to the stats after the build is worked out. */
+  boonMight: number;
+  boonMaxHp: number;
+  boonMagnet: number;
   /** Loops popped and the most enemies killed by one. */
   pops: number;
   bestPop: number;
@@ -334,6 +353,10 @@ export interface World {
   mem: Float64Array;
   /** Metres travelled toward the next volley of seekers. */
   seekerMeter: number;
+  /** Places a totem has asked for an elite pack, waiting for the director: [0, packs). */
+  packs: number;
+  packX: Float32Array;
+  packZ: Float32Array;
   grid: Grid;
   /** Two result buffers for `queryEnemies`, so a query can run inside a loop over another's result. */
   nearA: Int16Array;
@@ -360,6 +383,11 @@ function makePlayer(): Player {
     loadout: starterLoadout(),
     stats: makeStats(),
     tokens: 0,
+    cling: 0,
+    latched: 0,
+    boonMight: 0,
+    boonMaxHp: 0,
+    boonMagnet: 0,
     pops: 0,
     bestPop: 0,
   };
@@ -453,6 +481,9 @@ export function makeWorld(seed: number): World {
     pool: new Uint8Array(WEAPON_COUNT).fill(1),
     mem: new Float64Array(WEAPON_COUNT * WEAPON_MEM),
     seekerMeter: 0,
+    packs: 0,
+    packX: new Float32Array(4),
+    packZ: new Float32Array(4),
     grid: {
       start: new Int32Array(GRID_DIM * GRID_DIM + 1),
       items: new Int16Array(E),
@@ -487,6 +518,7 @@ export function resetWorld(w: World): void {
   w.offer.count = 0;
   w.offerQueued = 0;
   w.mem.fill(0);
+  w.packs = 0;
   w.run.ticks = 0;
   w.run.phase = PHASE_PLAY;
   w.wake.count = 0;
@@ -561,7 +593,7 @@ const FLASH_TICKS = 6;
 export function damageEnemy(w: World, i: number, amount: number, quiet = false): void {
   const h = w.horde;
   if (h.hp[i] <= 0) return;
-  h.hp[i] -= amount;
+  h.hp[i] -= (h.mark[i] & MARK_SHIELDED) !== 0 ? amount * 0.5 : amount;
   h.flash[i] = FLASH_TICKS;
   if (!quiet) emitFx(w, FX_ENEMY_HIT, h.x[i], h.y[i], h.z[i], amount);
 }
@@ -584,8 +616,8 @@ export function reapHorde(w: World): void {
   let i = 0;
   while (i < h.count) {
     if (h.hp[i] > 0) {
-      // Marks are for this tick only: a survivor of a sweep is not swept when it dies later.
-      h.mark[i] = 0;
+      // The sweep is for this tick only: a survivor of a pop is not swept when it dies later.
+      h.mark[i] &= ~MARK_SWEPT;
       i++;
       continue;
     }
@@ -734,4 +766,52 @@ export function hashWorld(w: World): number {
   mix(w.run.ticks);
   mix(w.run.phase);
   return a;
+}
+
+/** Take a shot out of the pool. Moves the last shot into slot i. */
+export function removeShot(w: World, i: number): void {
+  const sh = w.shots;
+  const j = --sh.count;
+  if (i === j) return;
+  sh.x[i] = sh.x[j];
+  sh.y[i] = sh.y[j];
+  sh.z[i] = sh.z[j];
+  sh.vx[i] = sh.vx[j];
+  sh.vy[i] = sh.vy[j];
+  sh.vz[i] = sh.vz[j];
+  sh.life[i] = sh.life[j];
+  sh.damage[i] = sh.damage[j];
+  sh.kind[i] = sh.kind[j];
+  sh.aux[i] = sh.aux[j];
+}
+
+/** Add a zone. Returns its index, or -1 if the pool is full. */
+export function addZone(w: World, kind: number, x: number, y: number, z: number, r: number, life: number, power: number): number {
+  const zn = w.zones;
+  if (zn.count >= MAX_ZONES) return -1;
+  const i = zn.count++;
+  zn.kind[i] = kind;
+  zn.x[i] = x;
+  zn.y[i] = y;
+  zn.z[i] = z;
+  zn.r[i] = r;
+  zn.life[i] = life;
+  zn.age[i] = 0;
+  zn.power[i] = power;
+  return i;
+}
+
+/** Take a zone out of the pool. Moves the last zone into slot i. */
+export function removeZone(w: World, i: number): void {
+  const zn = w.zones;
+  const j = --zn.count;
+  if (i === j) return;
+  zn.kind[i] = zn.kind[j];
+  zn.x[i] = zn.x[j];
+  zn.y[i] = zn.y[j];
+  zn.z[i] = zn.z[j];
+  zn.r[i] = zn.r[j];
+  zn.life[i] = zn.life[j];
+  zn.age[i] = zn.age[j];
+  zn.power[i] = zn.power[j];
 }

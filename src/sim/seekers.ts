@@ -15,6 +15,8 @@ import {
   MAX_ENEMY_RADIUS,
   MAX_SHOTS,
   queryEnemies,
+  removeShot,
+  SHOT_DART,
   SPAWN_TICKS,
   type World,
 } from './world';
@@ -117,23 +119,11 @@ function fire(w: World, s: SimState, level: number): boolean {
     sh.vz[i] = dz * DART_SPEED;
     sh.life[i] = DART_LIFE_TICKS;
     sh.damage[i] = dmg;
+    sh.kind[i] = SHOT_DART;
+    sh.aux[i] = 0;
     emitFx(w, FX_SHOT, ox, oy, oz, dmg);
   }
   return true;
-}
-
-function removeShot(w: World, i: number): void {
-  const sh = w.shots;
-  const j = --sh.count;
-  if (i === j) return;
-  sh.x[i] = sh.x[j];
-  sh.y[i] = sh.y[j];
-  sh.z[i] = sh.z[j];
-  sh.vx[i] = sh.vx[j];
-  sh.vy[i] = sh.vy[j];
-  sh.vz[i] = sh.vz[j];
-  sh.life[i] = sh.life[j];
-  sh.damage[i] = sh.damage[j];
 }
 
 /** Nearest risen living enemy within SEEK_RANGE of a dart, or -1. */
@@ -225,6 +215,8 @@ export function stepSeekers(w: World, s: SimState, terrain: Terrain, level: numb
   const sh = w.shots;
   const h = w.horde;
   for (let i = sh.count - 1; i >= 0; i--) {
+    // The shot pool is shared; only darts are flown here.
+    if (sh.kind[i] !== SHOT_DART) continue;
     if (--sh.life[i] === 0) {
       removeShot(w, i);
       continue;

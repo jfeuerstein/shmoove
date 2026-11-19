@@ -22,7 +22,25 @@ export const CARD_BOON = 2;
 /** Boons: what a card can be when it is not part of the build. */
 export const BOON_HEAL = 0;
 export const BOON_TOKENS = 1;
+/** Only from a shrine, and for the rest of the run: */
+export const BOON_MIGHT = 2;
+export const BOON_VIGOUR = 3;
+export const BOON_REACH = 4;
+/** Boons a full build is offered in place of cards. */
 export const BOON_COUNT = 2;
+/** Boons a shrine can offer. */
+export const SHRINE_BOONS = 5;
+export const BOON_MIGHT_SHARE = 0.08;
+export const BOON_VIGOUR_HP = 20;
+export const BOON_REACH_M = 2;
+
+export const BOON_INFO: readonly { name: string; blurb: string }[] = [
+  { name: 'Breather', blurb: 'Get a third of your health back.' },
+  { name: 'Pocket change', blurb: 'Three tokens.' },
+  { name: 'Might', blurb: 'Everything hits 8% harder for the rest of the run.' },
+  { name: 'Vigour', blurb: '20 more health for the rest of the run.' },
+  { name: 'Reach', blurb: 'Sparks come from 2 m further for the rest of the run.' },
+];
 /** Share of maximum health a heal card gives back. */
 export const BOON_HEAL_SHARE = 0.3;
 export const BOON_TOKEN_COUNT = 3;
@@ -33,6 +51,7 @@ export const OFFER_SIZE = 3;
 export const OFFER_LEVEL = 0;
 export const OFFER_CRATE = 1;
 export const OFFER_TOTEM = 2;
+export const OFFER_SHRINE = 3;
 
 export interface Offer {
   open: boolean;
@@ -180,4 +199,21 @@ export function takeCard(o: Offer, index: number, l: Loadout): number {
   else if (type === CARD_PASSIVE) raisePassive(l, o.id[index], o.by[index]);
   o.open = false;
   return type;
+}
+
+/** A shrine's offer: three different boons. */
+export function rollBoons(o: Offer, rng: Rng): void {
+  o.count = 0;
+  o.source = OFFER_SHRINE;
+  while (o.count < OFFER_SIZE) {
+    const b = rng.int(SHRINE_BOONS);
+    let seen = false;
+    for (let k = 0; k < o.count; k++) if (o.id[k] === b) seen = true;
+    if (seen) continue;
+    const k = o.count++;
+    o.type[k] = CARD_BOON;
+    o.id[k] = b;
+    o.by[k] = 1;
+  }
+  o.open = true;
 }

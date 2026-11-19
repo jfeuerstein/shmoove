@@ -102,6 +102,7 @@ function stepWorld(w: World, s: SimState, terrain: Terrain): void {
     reapHorde(w);
     return;
   }
+  // [hazards] lobbed shots landing, tar, enemies holding on: sets w.player.cling
   stepWeapons(w, s, terrain);
   reapHorde(w);
   stepSparks(w, s, terrain);

@@ -19,8 +19,18 @@ export const PALETTE = {
   accent: 0xff4d8d,
   /** One colour per gear, 1..5. Used by the HUD and anything that shows speed. */
   gears: [0x8a86a8, 0x6ec6ff, 0x3df5c8, 0xffd23f, 0xff4d8d],
-  /** One colour per enemy kind (shuffler, gnat, bollard), saturated against the dark ground. */
-  enemies: [0xf0567a, 0xc4f04a, 0x8f6bff],
+  /** One colour per enemy kind (shuffler, gnat, bollard, cutter, lobber, sludge, clinger). */
+  enemies: [0xf0567a, 0xc4f04a, 0x8f6bff, 0xff7a2f, 0x4ad9f0, 0x6f8f3a, 0xf0e04a],
+  elite: 0xffffff,
+  /** Zones: a mine, tar, where a lobbed shot will land. */
+  zones: [0xffd23f, 0x23301a, 0xff3355],
+  /** Map things: crate, gold crate, shrine, gate, hoop, totem. */
+  things: [0xb07a3c, 0xffd23f, 0x9bf6ff, 0xffffff, 0xff9a3d, 0xff4d8d],
+  orbit: 0xffe37a,
+  arc: 0xb8f4ff,
+  lance: 0xfff1b0,
+  stone: 0xd8d2c4,
+  slam: 0xfff1b0,
   enemyFlash: 0xffffff,
   spark: 0x9bf6ff,
   shot: 0xffffff,
