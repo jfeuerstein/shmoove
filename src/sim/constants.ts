@@ -13,7 +13,7 @@ export interface FeelDef {
   min: number;
   max: number;
   step: number;
-  group: 'input' | 'run' | 'carve' | 'tuck' | 'hop' | 'air' | 'ground' | 'gears' | 'view' | 'camera';
+  group: 'input' | 'run' | 'carve' | 'tuck' | 'hop' | 'air' | 'ground' | 'gears' | 'view' | 'camera' | 'combat' | 'wake';
   note: string;
 }
 
@@ -82,6 +82,21 @@ const DEFS = {
   camZoomRate: { v: 2.2, min: 0.3, max: 10, step: 0.1, group: 'camera', note: 'How fast pull-back and field of view follow the gear, 1/s' },
   camLandKick: { v: 0.05, min: 0, max: 0.3, step: 0.01, group: 'camera', note: 'Camera dip per m/s of landing impact, m' },
   camGroundClear: { v: 1.2, min: 0.2, max: 5, step: 0.1, group: 'camera', note: 'Closest the camera gets to the ground, m' },
+  // combat (how contact with the horde feels; damage and health numbers live in balance.ts)
+  invulnTicks: { v: 36, min: 0, max: 120, step: 2, group: 'combat', note: 'How long nothing can hurt you after a hit, ticks' },
+  hitShoveRadius: { v: 5, min: 0, max: 12, step: 0.5, group: 'combat', note: 'How far around you a hit throws the horde back, m' },
+  hitShoveSpeed: { v: 9, min: 0, max: 25, step: 0.5, group: 'combat', note: 'How hard a hit throws the horde back, m/s' },
+  hitStunTicks: { v: 30, min: 0, max: 120, step: 2, group: 'combat', note: 'How long a thrown enemy stays harmless, ticks' },
+  plowSpeedCost: { v: 0.25, min: 0, max: 2, step: 0.05, group: 'combat', note: 'Speed each plowed enemy costs you, m/s' },
+  plowShove: { v: 7, min: 0, max: 20, step: 0.5, group: 'combat', note: 'How hard a plowed enemy is knocked aside, m/s' },
+  bonkBounce: { v: 3, min: 0, max: 10, step: 0.5, group: 'combat', note: 'Speed you rebound with off something too heavy to plow, m/s' },
+  // wake (the trail behind you and the loop that pops)
+  wakeLength: { v: 34, min: 10, max: 80, step: 1, group: 'wake', note: 'Length of the trail in gear 1, m' },
+  wakeLengthPerGear: { v: 5, min: 0, max: 20, step: 0.5, group: 'wake', note: 'Trail added per gear, m' },
+  wakeLifeTicks: { v: 420, min: 60, max: 1200, step: 10, group: 'wake', note: 'How long a piece of trail lasts, ticks' },
+  wakeWidth: { v: 1.1, min: 0.3, max: 4, step: 0.1, group: 'wake', note: 'How far either side of the trail burns, m' },
+  wakeCloseDist: { v: 2.6, min: 0.5, max: 8, step: 0.1, group: 'wake', note: 'How near your own trail you must pass to close a loop, m' },
+  wakeLoopMin: { v: 16, min: 6, max: 40, step: 1, group: 'wake', note: 'Shortest loop that pops, m of trail' },
 } as const satisfies Record<string, FeelDef>;
 
 export type FeelKey = keyof typeof DEFS;

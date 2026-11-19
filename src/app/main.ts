@@ -61,7 +61,7 @@ function boot(): void {
   settings.applySaved();
 
   const terrain = makeTerrain(params);
-  const sim = new Sim(terrain);
+  const sim = new Sim(terrain, { seed: params.seed, horde: !params.flat && !params.solo });
   const hookInput = new HookInput();
   const frameInput = makeInputFrame();
 

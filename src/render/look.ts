@@ -19,6 +19,16 @@ export const PALETTE = {
   accent: 0xff4d8d,
   /** One colour per gear, 1..5. Used by the HUD and anything that shows speed. */
   gears: [0x8a86a8, 0x6ec6ff, 0x3df5c8, 0xffd23f, 0xff4d8d],
+  /** One colour per enemy kind (shuffler, gnat, bollard), saturated against the dark ground. */
+  enemies: [0xf0567a, 0xc4f04a, 0x8f6bff],
+  enemyFlash: 0xffffff,
+  spark: 0x9bf6ff,
+  shot: 0xffffff,
+  wake: 0xff9a3d,
+  pop: 0xfff1b0,
+  threat: 0xff3355,
+  hp: 0x5df58a,
+  hpLow: 0xff3355,
   sun: 0xfff1d6,
   ambient: 0x6a62a8,
 } as const;

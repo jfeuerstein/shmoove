@@ -5,6 +5,7 @@
  * - `hook`   flag: install `window.__shmoove` for the e2e and perf runners.
  * - `perf`   flag: the run is being measured.
  * - `flat`   flag: flat ground instead of the bowl (a fixture for tests that need level ground).
+ * - `solo`   flag: the mover alone on the bowl, no horde (the feel slice).
  * - `seed`   integer, default 1: the map seed.
  * - `scheme` `tuck` | `lift` | `swipe`, default `tuck`: the control scheme.
  */
@@ -15,6 +16,7 @@ export interface Params {
   hook: boolean;
   perf: boolean;
   flat: boolean;
+  solo: boolean;
   seed: number;
   scheme: Scheme;
 }
@@ -49,5 +51,5 @@ function scheme(q: URLSearchParams): Scheme {
 
 export function parseParams(search: string): Params {
   const q = new URLSearchParams(search);
-  return { debug: flag(q, 'debug'), hook: flag(q, 'hook'), perf: flag(q, 'perf'), flat: flag(q, 'flat'), seed: seed(q), scheme: scheme(q) };
+  return { debug: flag(q, 'debug'), hook: flag(q, 'hook'), perf: flag(q, 'perf'), flat: flag(q, 'flat'), solo: flag(q, 'solo'), seed: seed(q), scheme: scheme(q) };
 }
