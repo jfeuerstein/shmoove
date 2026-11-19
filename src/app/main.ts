@@ -18,6 +18,7 @@ import { BOWL_RADIUS, makeBowl } from '../sim/bowl';
 import { flatTerrain, type Terrain } from '../sim/terrain';
 import { makeInputFrame } from '../sim/types';
 import { DebugPanel } from '../ui/debugPanel';
+import { EndScreen } from '../ui/endScreen';
 import { Hud } from '../ui/hud';
 import { StickView } from '../ui/stickView';
 import { FixedStepper, FrameStats, RafDriver } from './loop';
@@ -75,11 +76,18 @@ function boot(): void {
   view.scene.add(mover.object);
   const chase = new ChaseCamera(view.camera);
   const hudRoot = document.getElementById('hud') ?? document.body;
-  const hud = new Hud(hudRoot);
+  const hud = new Hud(hudRoot, { run: sim.horde, debug: params.debug });
   const stick = new StickView(hudRoot, touch.gestures);
   const panel = params.debug ? new DebugPanel(hudRoot, settings, (s) => touch.setScheme(s)) : null;
 
   const stepper = new FixedStepper(DT);
+  const restart = (): void => {
+    sim.reset();
+    chase.reset();
+    endScreen.reset();
+    stepper.reset();
+  };
+  const endScreen = new EndScreen(hudRoot, restart);
   const stats = new FrameStats();
   const info = view.renderer.info.render;
   let stepMs = 0;
@@ -97,7 +105,8 @@ function boot(): void {
   const draw = (alpha: number, dt: number): void => {
     mover.update(sim.prev, sim.state, alpha, terrain);
     chase.update(sim.prev, sim.state, alpha, dt, terrain);
-    hud.update(sim.state);
+    hud.update(sim);
+    if (sim.horde) endScreen.update(sim.world, dt);
     stick.update();
     if (panel) panel.update();
     view.render();
@@ -137,6 +146,7 @@ function boot(): void {
         draw(1, n * DT);
         finishFrame(t0);
       },
+      restart,
       stats: () => stats.summary(),
     });
   }
