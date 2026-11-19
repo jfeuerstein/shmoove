@@ -82,6 +82,8 @@ export const CROUCH_AIR = 0.8;
 const PUSH_SHARE = 0.95;
 /** Time for the pose to get most of the way to a new one, s. */
 export const POSE_TIME = 0.07;
+/** A pose this near the one it is easing to is taken as there. */
+const POSE_SNAP = 1e-3;
 
 /** Steepest lean into a turn, rad. */
 const MAX_LEAN = 0.55;
@@ -377,11 +379,12 @@ export class MoverView {
     else crouch = CROUCH_RIDE;
     if (this.posed) {
       const k = dt === Infinity ? 1 : 1 - Math.exp(-(dt > 0 ? dt : 0) / POSE_TIME);
-      crouch = lerp(this.crouch, crouch, k);
-      pitch = lerp(this.pitch, pitch, k);
+      // Close enough is there, so a settled pose stops being rebuilt.
+      if (Math.abs(crouch - this.crouch) > POSE_SNAP) crouch = lerp(this.crouch, crouch, k);
+      if (Math.abs(pitch - this.pitch) > POSE_SNAP) pitch = lerp(this.pitch, pitch, k);
     }
     this.posed = true;
-    this.pose(crouch, pitch);
+    if (crouch !== this.crouch || pitch !== this.pitch) this.pose(crouch, pitch);
 
     const tuck = b.tucked;
     if (tuck !== this.tuckShown) {

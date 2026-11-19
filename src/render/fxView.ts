@@ -18,6 +18,7 @@
  */
 import {
   AdditiveBlending,
+  type BufferAttribute,
   BoxGeometry,
   type BufferGeometry,
   CircleGeometry,
@@ -159,6 +160,16 @@ export function addInstanceFloat(geo: BufferGeometry, name: string, n: number, s
   a.setUsage(DynamicDrawUsage);
   geo.setAttribute(name, a);
   return a;
+}
+
+/**
+ * Send only the first `n` items of a dynamic attribute to the GPU this frame: pools are sized for the
+ * worst case, and uploading the whole of one every frame costs far more than writing it.
+ */
+export function uploadFirst(attr: BufferAttribute, n: number): void {
+  attr.clearUpdateRanges();
+  attr.addUpdateRange(0, n * attr.itemSize);
+  attr.needsUpdate = true;
 }
 
 /** Linear RGB of a palette colour into `out` at `o`. */
@@ -686,8 +697,8 @@ export class FxView {
     this.shards.count = this.shardCount;
     this.shards.visible = this.shardCount > 0;
     if (this.shardCount > 0) {
-      this.shards.instanceMatrix.needsUpdate = true;
-      if (col) col.needsUpdate = true;
+      uploadFirst(this.shards.instanceMatrix, this.shardCount);
+      if (col) uploadFirst(col, this.shardCount);
     }
   }
 

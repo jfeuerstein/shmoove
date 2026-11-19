@@ -11,7 +11,7 @@ import { BoxGeometry, type InstancedBufferAttribute, type InstancedMesh } from '
 import { DT } from '../sim/constants';
 import { MAX_SHOTS, SHOT_STONE, type World } from '../sim/world';
 import { PALETTE } from './look';
-import { addInstanceColor, addInstanceFloat, makeInstanced, rgbInto, segmentMatrix, tintMaterial, writeMatrix } from './fxView';
+import { addInstanceColor, addInstanceFloat, makeInstanced, rgbInto, segmentMatrix, tintMaterial, uploadFirst, writeMatrix } from './fxView';
 
 /** Length and thickness of a dart's streak, m. */
 export const STREAK_LENGTH = 1.1;
@@ -76,10 +76,10 @@ export class ShotsView {
     }
     this.mesh.count = s.count;
     this.mesh.visible = s.count > 0;
-    this.mesh.instanceMatrix.needsUpdate = true;
     if (s.count > 0) {
-      this.glow.needsUpdate = true;
-      if (this.mesh.instanceColor) this.mesh.instanceColor.needsUpdate = true;
+      uploadFirst(this.mesh.instanceMatrix, s.count);
+      uploadFirst(this.glow, s.count);
+      if (this.mesh.instanceColor) uploadFirst(this.mesh.instanceColor, s.count);
     }
   }
 }

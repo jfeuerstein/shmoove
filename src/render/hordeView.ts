@@ -51,7 +51,7 @@ import {
   STATE_LATCHED,
   type World,
 } from '../sim/world';
-import { rgbInto } from './fxView';
+import { rgbInto, uploadFirst } from './fxView';
 import { PALETTE, flatMaterial } from './look';
 import { GroundRings } from './zonesView';
 
@@ -400,6 +400,14 @@ export class HordeView {
   }
 
   private prepare(mesh: InstancedMesh): void {
+    // Every slot starts as a pure scale and move (zeros elsewhere, one in the corner and at y), so
+    // a frame writes only the entries that change.
+    const m = mesh.instanceMatrix.array;
+    m.fill(0);
+    for (let i = 0; i < MAX_ENEMIES; i++) {
+      m[i * 16 + 5] = 1;
+      m[i * 16 + 15] = 1;
+    }
     mesh.instanceMatrix.setUsage(DynamicDrawUsage);
     mesh.frustumCulled = false;
     mesh.count = 0;
@@ -468,24 +476,17 @@ export class HordeView {
       const big = elite !== ELITE_NONE || (h.mark[i] & MARK_ELITE) !== 0;
       const scale = big ? rise * ELITE_SCALE : rise;
 
+      // Only the entries that change: the zeros and the one were laid down in `prepare`.
       const m = this.meshes[k].instanceMatrix.array;
       const o = n * 16;
       m[o] = c * scale;
-      m[o + 1] = 0;
       m[o + 2] = -s * scale;
-      m[o + 3] = 0;
-      m[o + 4] = 0;
       m[o + 5] = scale;
-      m[o + 6] = 0;
-      m[o + 7] = 0;
       m[o + 8] = s * scale;
-      m[o + 9] = 0;
       m[o + 10] = c * scale;
-      m[o + 11] = 0;
       m[o + 12] = x;
       m[o + 13] = y;
       m[o + 14] = z;
-      m[o + 15] = 1;
 
       const a = this.anim[k].array as Float32Array;
       const f = h.flash[i];
@@ -499,21 +500,10 @@ export class HordeView {
       const r = latched ? 0 : def.radius * SHADOW_SCALE * scale;
       const so = i * 16;
       shadow[so] = r;
-      shadow[so + 1] = 0;
-      shadow[so + 2] = 0;
-      shadow[so + 3] = 0;
-      shadow[so + 4] = 0;
-      shadow[so + 5] = 1;
-      shadow[so + 6] = 0;
-      shadow[so + 7] = 0;
-      shadow[so + 8] = 0;
-      shadow[so + 9] = 0;
       shadow[so + 10] = r;
-      shadow[so + 11] = 0;
       shadow[so + 12] = x;
       shadow[so + 13] = y + SHADOW_LIFT;
       shadow[so + 14] = z;
-      shadow[so + 15] = 1;
 
       if (elite === ELITE_HASTE || elite === ELITE_SHIELD || elite === ELITE_JAM) {
         const reach = HORDE.auraReach;
@@ -525,12 +515,14 @@ export class HordeView {
       const mesh = this.meshes[k];
       mesh.count = counts[k];
       mesh.visible = counts[k] > 0;
-      mesh.instanceMatrix.needsUpdate = true;
-      this.anim[k].needsUpdate = true;
+      if (counts[k] > 0) {
+        uploadFirst(mesh.instanceMatrix, counts[k]);
+        uploadFirst(this.anim[k], counts[k]);
+      }
     }
     this.shadows.count = h.count;
     this.shadows.visible = h.count > 0;
-    this.shadows.instanceMatrix.needsUpdate = true;
+    if (h.count > 0) uploadFirst(this.shadows.instanceMatrix, h.count);
     this.auras.end();
   }
 }

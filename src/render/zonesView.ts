@@ -210,9 +210,12 @@ export class GroundRings {
   private readonly sinA: Float32Array;
   private readonly cosA: Float32Array;
   private rings = 0;
+  /** Where each slot's ring was last laid (x, y, z, inner, outer): a ring that has not moved keeps its points. */
+  private readonly laid: Float64Array;
 
   constructor(capacity: number, segments: number, name: string, terrain: Terrain | null, lift: number) {
     this.capacity = capacity;
+    this.laid = new Float64Array(capacity * 5).fill(Number.NaN);
     this.segments = segments;
     this.terrain = terrain;
     this.lift = lift;
@@ -282,18 +285,31 @@ export class GroundRings {
     const t = this.terrain;
     const lift = this.lift;
     let v = this.rings * (seg + 1) * 2;
+    // Following the ground is the costly part: a ring laid where it was last frame keeps its points.
+    const l = this.laid;
+    const k = this.rings * 5;
+    const moved = l[k] !== x || l[k + 1] !== y || l[k + 2] !== z || l[k + 3] !== rIn || l[k + 4] !== rOut;
+    if (moved) {
+      l[k] = x;
+      l[k + 1] = y;
+      l[k + 2] = z;
+      l[k + 3] = rIn;
+      l[k + 4] = rOut;
+    }
     for (let j = 0; j <= seg; j++) {
       const s = this.sinA[j];
       const c = this.cosA[j];
       const f = j / seg <= fill ? fade : fade * dim;
       for (let e = 0; e < 2; e++) {
-        const r = e === 0 ? rIn : rOut;
-        const px = x + s * r;
-        const pz = z + c * r;
         const p = v * 3;
-        this.positions[p] = px;
-        this.positions[p + 1] = (t ? t.heightAt(px, pz) : y) + lift;
-        this.positions[p + 2] = pz;
+        if (moved) {
+          const r = e === 0 ? rIn : rOut;
+          const px = x + s * r;
+          const pz = z + c * r;
+          this.positions[p] = px;
+          this.positions[p + 1] = (t ? t.heightAt(px, pz) : y) + lift;
+          this.positions[p + 2] = pz;
+        }
         this.fades[v] = f;
         this.colors[p] = rgb[o];
         this.colors[p + 1] = rgb[o + 1];

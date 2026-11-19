@@ -30,7 +30,7 @@ import {
   type World,
 } from '../sim/world';
 import { PALETTE } from './look';
-import { addInstanceColor, addInstanceFloat, fadeMaterial, makeInstanced, rgbInto, tintMaterial, writeMatrix } from './fxView';
+import { addInstanceColor, addInstanceFloat, fadeMaterial, makeInstanced, rgbInto, tintMaterial, uploadFirst, writeMatrix } from './fxView';
 import { GroundRings } from './zonesView';
 
 /** From the map's rules: the shrine's band, its laps, and a gate's half-width, m. */
@@ -250,9 +250,9 @@ export class ThingsView {
     this.solids.count = n;
     this.solids.visible = n > 0;
     if (n > 0) {
-      this.solids.instanceMatrix.needsUpdate = true;
-      this.glow.needsUpdate = true;
-      if (this.solids.instanceColor) this.solids.instanceColor.needsUpdate = true;
+      uploadFirst(this.solids.instanceMatrix, n);
+      uploadFirst(this.glow, n);
+      if (this.solids.instanceColor) uploadFirst(this.solids.instanceColor, n);
     }
     this.hoops.count = hoops;
     this.hoops.visible = hoops > 0;
