@@ -1,12 +1,15 @@
 /**
  * Shared set-up for the weapon tests: one weapon alone on level ground among hand-placed enemies,
- * with the speed and gear held so rides compare, and a scripted ride through a placed crowd.
+ * with the speed and gear held so rides compare, the mover held on one spot in different poses,
+ * and a scripted ride through a placed crowd.
  */
-import { W_WAKE } from '../../../src/sim/arsenal';
-import { setWeaponLevel } from '../../../src/sim/build';
-import type { Sim } from '../../../src/sim/sim';
-import { makeInputFrame, type InputFrame } from '../../../src/sim/types';
-import { KIND_BOLLARD, KIND_SHUFFLER, removeEnemy, spawnEnemy, type World } from '../../../src/sim/world';
+import { P_HASTE, W_WAKE } from '../../../src/sim/arsenal';
+import { applyBuildToMover, setPassiveLevel, setWeaponLevel } from '../../../src/sim/build';
+import { DT } from '../../../src/sim/constants';
+import { stepMover } from '../../../src/sim/mover';
+import { copySimState, makeSimState, type Sim } from '../../../src/sim/sim';
+import { makeInputFrame, type InputFrame, type SimState } from '../../../src/sim/types';
+import { KIND_BOLLARD, KIND_SHUFFLER, spawnEnemy, type World } from '../../../src/sim/world';
 import { FORWARD, steer, TUCK } from '../fixtures';
 import { arena, place, root } from '../world-fixtures';
 
@@ -20,6 +23,82 @@ export function rig(id: number, level: number, keepWake = false): Sim {
   setWeaponLevel(sim.world, id, level);
   sim.world.player.xpNext = Infinity;
   return sim;
+}
+
+/** Give the player the Haste passive at `level` (5 is the most there is); returns the wait multiplier. */
+export function haste(sim: Sim, level: number): number {
+  setPassiveLevel(sim.world, P_HASTE, level);
+  return sim.world.player.stats.haste;
+}
+
+/** Ticks in `seconds`, for waits that are a whole number of ticks. */
+export function ticksIn(seconds: number): number {
+  return Math.round(seconds / DT);
+}
+
+// ---- the mover held on one spot ------------------------------------------------------------
+
+/**
+ * How the mover is held for a tick: standing still; riding at 12 m/s with the thumb on and off and
+ * a hop every 45 ticks (so it tucks, carves, hops and lands); or launched, 4 m up at 30 m/s.
+ */
+export type Pose = 'stand' | 'ride' | 'launch';
+
+const POSE_SPEED: Record<Pose, number> = { stand: 0, ride: 12, launch: 30 };
+const RIDE_HOP: InputFrame = { steerX: 0, steerY: 0, carve: false, hop: true };
+const RIDE_CARVE: InputFrame = { steerX: 0, steerY: 1, carve: true, hop: false };
+
+/** What the held mover is given on tick `t` of a pose. */
+function poseInput(pose: Pose, t: number): InputFrame {
+  if (pose !== 'ride') return TUCK;
+  if (t % 45 === 20) return RIDE_HOP;
+  return t % 90 < 45 ? TUCK : RIDE_CARVE;
+}
+
+let rehearsal: SimState | null = null;
+
+/**
+ * One rooted step with the mover facing +z at the origin in `pose` and `gear`. Its velocity, gear,
+ * tuck, hops and landings are whatever the pose says, but it is put back so that it ends the
+ * mover's own step exactly at the origin (the step is rehearsed on a copy first, on level ground):
+ * every pose sees the same field from the same place.
+ */
+export function poseTick(sim: Sim, pose: Pose, gear: number, t: number, type = -1): number {
+  root(sim.world);
+  const m = sim.state.mover;
+  const speed = POSE_SPEED[pose];
+  const ground = sim.terrain.heightAt(0, 0);
+  m.heading = 0;
+  m.vx = 0;
+  m.vz = speed;
+  m.x = 0;
+  m.z = 0;
+  if (pose === 'stand') {
+    m.grounded = true;
+    m.y = ground;
+    m.vy = 0;
+  } else if (pose === 'launch') {
+    m.grounded = false;
+    m.y = ground + 4;
+    m.vy = 0;
+  }
+  holdGear(sim, gear);
+  const input = poseInput(pose, t);
+  rehearsal ??= makeSimState(sim.terrain);
+  copySimState(rehearsal, sim.state);
+  applyBuildToMover(sim.world, rehearsal);
+  stepMover(rehearsal, input, sim.terrain);
+  m.x -= rehearsal.mover.x;
+  m.z -= rehearsal.mover.z;
+  sim.step(input);
+  return type < 0 ? 0 : countFx(sim.world, type);
+}
+
+/** `ticks` held steps; returns how many FX of `type` were seen. */
+export function holdPose(sim: Sim, pose: Pose, gear: number, ticks: number, type = -1): number {
+  let seen = 0;
+  for (let t = 0; t < ticks; t++) seen += poseTick(sim, pose, gear, t, type);
+  return seen;
 }
 
 /** A ground point `d` metres from the mover, `bearing` radians off its heading (positive is to the right). */
@@ -91,9 +170,9 @@ const LEFT = steer(-1, 0.35);
 const RIGHT = steer(1, 0.35);
 
 /**
- * The ride every weapon is compared on: a tucked straight with a hop in it, a hard carve left,
- * another straight and hop, a hard carve right, over and over, so it zig-zags onward over new
- * ground. It has every trigger in it (metres, hops, landings, tucking), at a held 10 m/s.
+ * The scripted ride: a tucked straight with a hop in it, a hard carve left, another straight and
+ * hop, a hard carve right, over and over, so it zig-zags onward over new ground. It has everything
+ * a mover does in it (distance, turns, hops, landings, tucking).
  */
 export function rideInput(t: number): InputFrame {
   const k = t % 260;
@@ -104,107 +183,92 @@ export function rideInput(t: number): InputFrame {
 }
 
 export const RIDE_SPEED = 10;
-/** The longest scripted ride the crowd is laid for, ticks. */
+/** How long the table rides, ticks. */
 export const RIDE_TICKS = 60 * 60;
 
-/** Where the scripted ride goes, sampled every `every` ticks, ridden on empty ground. */
-function tracePath(ticks: number, every: number): { x: number; z: number; hx: number; hz: number }[] {
-  const sim = rig(W_WAKE, 0);
-  const out: { x: number; z: number; hx: number; hz: number }[] = [];
-  for (let t = 0; t < ticks; t++) {
-    holdSpeed(sim, RIDE_SPEED);
-    sim.step(rideInput(t));
-    if (t % every === 0) {
-      const m = sim.state.mover;
-      out.push({ x: m.x, z: m.z, hx: Math.sin(m.heading), hz: Math.cos(m.heading) });
-    }
-  }
-  return out;
-}
-
-export interface Field {
-  /** Where the crowd stands: shufflers, with a bollard every so often. */
-  x: number[];
-  z: number[];
-  kind: number[];
-}
-
-let fieldCache: Field | null = null;
-
-/**
- * A crowd laid along the scripted ride: on both sides of the line at a few distances, so weapons
- * that reach out, trail behind and point ahead all find something.
- */
-export function rideField(): Field {
-  if (fieldCache) return fieldCache;
-  const path = tracePath(RIDE_TICKS + 120, 24);
-  const f: Field = { x: [], z: [], kind: [] };
-  const offsets = [-5, -2.5, 0, 2.5, 5];
-  path.forEach((p, n) => {
-    if (n < 2) return;
-    offsets.forEach((o, j) => {
-      const x = p.x + p.hz * o;
-      const z = p.z - p.hx * o;
-      // Keep apart from what is already placed: a crowd, not a pile.
-      for (let q = 0; q < f.x.length; q++) if (Math.hypot(f.x[q] - x, f.z[q] - z) < 1.6) return;
-      f.x.push(x);
-      f.z.push(z);
-      f.kind.push((n + j) % 11 === 0 ? KIND_BOLLARD : KIND_SHUFFLER);
-    });
-  });
-  fieldCache = f;
-  return f;
-}
-
-export interface RideResult {
+export interface CrowdResult {
   kills: number;
   /** Health taken off enemies, not counting overkill. */
   damage: number;
 }
 
-/** Each placed enemy carries its slot in the crowd in `phase` (only used to animate), so it survives reordering. */
-const SLOT_SCALE = 1 / 65536;
-/** The crowd stands up this close to the mover and is cleared away (not killed) beyond the far distance, m. */
-const NEAR = 30;
+/** The crowd's places around the mover: (metres to its right, metres ahead), and what stands there. */
+const CROWD: { side: number; ahead: number; kind: number }[] = [];
+for (let k = 0; k < 44; k++) {
+  // A sunflower spiral from 1.6 m out to about 14 m: something at every distance and bearing.
+  const a = k * 2.399963;
+  const r = 1.6 + Math.sqrt(k) * 1.9;
+  CROWD.push({ side: Math.sin(a) * r, ahead: Math.cos(a) * r, kind: k % 11 === 5 ? KIND_BOLLARD : KIND_SHUFFLER });
+}
+export const CROWD_SIZE = CROWD.length;
+
 /**
  * The crowd's shufflers are toughened to between half and one and a half times this much health
  * (a shuffler has 10), standing in for the tougher enemies of a later run: against 10 health every
- * hit kills and gears could not show, and against one fixed health kills would jump at a threshold.
+ * hit kills, and against one fixed health kills would jump at a threshold.
  */
 export const CROWD_SHUFFLER_HP = 30;
-const FAR = 38;
+/** A crowd member killed stands up again in its place this long after, ticks. */
+export const CROWD_RESPAWN = 120;
+/** Each placed enemy carries its place in the crowd in `phase` (only used to animate), so it survives reordering. */
+const SLOT_SCALE = 1 / 65536;
 
 /**
- * Ride the script for `ticks` through the crowd with the gear held. Each enemy of the crowd stands
- * once: it is placed as the mover comes near and taken away, uncounted, once the mover is well
- * past, so the horde stays small however long the ride. The crowd's shufflers have about `shufflerHp`
- * each (see CROWD_SHUFFLER_HP).
+ * `ticks` among a crowd that keeps its places around the mover: each tick everything in the crowd
+ * is carried along with the mover (moved by its move and turned by its turn), so whatever a weapon
+ * did to where an enemy stands is kept but the mover never leaves the crowd behind. A member killed
+ * stands up again in its place after CROWD_RESPAWN ticks. `riding` rides the scripted ride at a held
+ * 10 m/s in gear 3; otherwise the mover stands still in gear 1.
  */
-export function rideThroughCrowd(sim: Sim, gear: number, ticks: number, shufflerHp = CROWD_SHUFFLER_HP): RideResult {
-  const f = rideField();
+export function crowdRide(sim: Sim, riding: boolean, ticks: number, shufflerHp = CROWD_SHUFFLER_HP): CrowdResult {
   const w = sim.world;
   const h = w.horde;
-  // 0 waiting, 1 standing, 2 gone.
-  const state = new Uint8Array(f.x.length);
+  const m = sim.state.mover;
+  // The tick each place's member died, or -1 while it stands.
+  const diedAt = new Int32Array(CROWD.length).fill(-1);
+  const present = new Uint8Array(CROWD.length);
+  const stand = (k: number): void => {
+    const c = CROWD[k];
+    const fx = Math.sin(m.heading);
+    const fz = Math.cos(m.heading);
+    // Right of the heading is (cos h, -sin h).
+    const x = m.x + fz * c.side + fx * c.ahead;
+    const z = m.z - fx * c.side + fz * c.ahead;
+    const i = place(sim, c.kind, x, z);
+    h.phase[i] = (k + 0.5) * SLOT_SCALE;
+    if (c.kind === KIND_SHUFFLER) h.hp[i] = shufflerHp * (0.5 + ((k * 0.618034) % 1));
+  };
+  for (let k = 0; k < CROWD.length; k++) stand(k);
   let damage = 0;
   for (let t = 0; t < ticks; t++) {
-    const m = sim.state.mover;
-    for (let i = h.count - 1; i >= 0; i--) {
-      if (Math.hypot(h.x[i] - m.x, h.z[i] - m.z) <= FAR) continue;
-      state[Math.floor(h.phase[i] / SLOT_SCALE)] = 2;
-      removeEnemy(w, i);
+    for (let k = 0; k < CROWD.length; k++) {
+      if (diedAt[k] >= 0 && t - diedAt[k] >= CROWD_RESPAWN) {
+        stand(k);
+        diedAt[k] = -1;
+      }
     }
-    for (let k = 0; k < f.x.length; k++) {
-      if (state[k] !== 0 || Math.hypot(f.x[k] - m.x, f.z[k] - m.z) > NEAR) continue;
-      const i = place(sim, f.kind[k], f.x[k], f.z[k]);
-      if (i < 0) break;
-      h.phase[i] = (k + 0.5) * SLOT_SCALE;
-      if (f.kind[k] === KIND_SHUFFLER) h.hp[i] = shufflerHp * (0.5 + ((k * 0.618034) % 1));
-      state[k] = 1;
-    }
+    const x0 = m.x;
+    const z0 = m.z;
+    const h0 = m.heading;
     const before = totalHp(w);
-    tick(sim, rideInput(t), { speed: RIDE_SPEED, gear });
+    if (riding) tick(sim, rideInput(t), { speed: RIDE_SPEED, gear: 3 });
+    else tick(sim, TUCK, { speed: 0, gear: 1 });
     damage += before - totalHp(w);
+    present.fill(0);
+    for (let i = 0; i < h.count; i++) present[Math.floor(h.phase[i] / SLOT_SCALE)] = 1;
+    for (let k = 0; k < CROWD.length; k++) if (diedAt[k] < 0 && present[k] === 0) diedAt[k] = t;
+    // Carry the crowd along: turn about where the mover was by its turn, then move by its move.
+    const da = m.heading - h0;
+    const c = Math.cos(da);
+    const sn = Math.sin(da);
+    for (let i = 0; i < h.count; i++) {
+      const dx = h.x[i] - x0;
+      const dz = h.z[i] - z0;
+      // Headings turn x toward z as (sin, cos): rotating a heading by da rotates offsets the same way.
+      h.x[i] = m.x + dx * c + dz * sn;
+      h.z[i] = m.z - dx * sn + dz * c;
+      h.y[i] = sim.terrain.heightAt(h.x[i], h.z[i]);
+    }
   }
   return { kills: w.player.kills, damage };
 }
