@@ -6,23 +6,24 @@
  *   low slab of debris with its planks lying round it; at the moment it breaks the planks are thrown
  *   out of it and tumble down.
  * - shrine: a pillar on a stepped plinth with a gem floating and turning over it and four studs
- *   circling the gem; on the ground, a ring at the middle of the band it is ridden round in, lit round
- *   by `progress` (laps of `SHRINE_LAPS`). Spent: a dark stump, a faint ring, and the gem fallen on
- *   the ground beside it (it drops when the shrine is done).
+ *   circling the gem; on the ground, a bright ring whose outer edge is exactly its reach (ride inside
+ *   it and it opens), breathing while it waits. Spent: a dark stump, a faint ring, and the gem fallen
+ *   on the ground beside it (it drops when the shrine is done).
  * - gate: two flag poles on feet, a pennant flapping on each, and a banner across. The next gate of
- *   its slalom (its place in the group equals `state`) is bright and its banner pulses; the gates
- *   still to come are dim; the cleared ones grey with their banner lowered. A dashed line on the
+ *   its slalom (its place in the group equals `state`, which is also how many are taken) is bright and
+ *   its banner pulses; the gates still to come are dim; the taken ones grey with their banner lowered. A dashed line on the
  *   ground runs from each gate to the next; the leg into the next gate is lit and marches. Spent:
  *   grey stumps and the banner lying on the ground.
- * - hoop: a ring in the air facing its `yaw`, held up by two poles with a balloon on each, and a
- *   chevron on the run-in of the kicker that reaches it, pointing the way to ride. Faint, the
- *   balloons shrunk, while it is waiting to come back.
+ * - hoop: a ring standing on its kicker's top facing its `yaw`, as big as its catch, held up by two
+ *   poles with a balloon on each, and a chevron on the kicker's run-in pointing the way to ride.
+ *   Faint, the balloons shrunk, while it is waiting to come back.
  * - totem: a carved stack of three blocks round a spine, a pair of eyes on each, all facing the
  *   bowl's middle, a diamond turning above. When it is rammed (spent, the elite called) it shakes
  *   with its eyes lit for `CALL_TIME` and sinks into the ground, leaving a grey stump.
- * - every live thing has a beacon: a tall thin column of its colour, crossed planes, faint at the
- *   foot, brightest a third of the way up, gone at the top,
- *   drawn without fog so it is seen over hills and from across the bowl. A slalom has one, over the
+ * - every live thing but a plain crate (there are many, and they are found by riding) has a beacon:
+ *   a tall thin column of its colour, crossed planes, faint at the foot, brightest a third of the way
+ *   up, gone at the top, drawn without fog so it is seen over hills and from across the bowl. It fades
+ *   out as the rider comes near (the label over the thing takes over). A slalom has one, over the
  *   gate that is next. Gone when the thing is spent (a hoop's while it is gone).
  *
  * Every box of every thing is one instance of one mesh: first each thing's body (the boxes that say
@@ -43,7 +44,6 @@ import {
   TorusGeometry,
 } from 'three';
 import type { Terrain } from '../sim/terrain';
-import { HOOP_AHEAD } from '../sim/bowl';
 import { THINGS } from '../sim/things';
 import {
   MAX_THINGS,
@@ -70,10 +70,8 @@ import {
 } from './fxView';
 import { GroundRings } from './zonesView';
 
-/** From the map's rules: the shrine's band, its laps, and a gate's half-width, m. */
-export const SHRINE_INNER = THINGS.shrineInner;
-export const SHRINE_OUTER = THINGS.shrineOuter;
-export const SHRINE_LAPS = THINGS.shrineLaps;
+/** From the map's rules: a shrine's reach (its ring's outer edge) and a gate's half-width, m. */
+export const SHRINE_REACH = THINGS.shrineReach;
 export const GATE_HALF = THINGS.gateHalf;
 /** A hoop is taken within this of its middle: drawn that big, m. */
 export const HOOP_RADIUS = THINGS.hoopReach;
@@ -138,11 +136,12 @@ const SPENT_DIM = 0.7;
 /** Hoop strength waiting, and while it is gone. */
 export const HOOP_READY = 0.9;
 export const HOOP_GONE = 0.15;
-/** The shrine ring: band width, strength, the unlit part's share of it, and when spent. */
-const RING_BAND = 0.7;
-const RING_FADE = 0.8;
-const RING_DIM = 0.25;
-const RING_SPENT = 0.15;
+/** The shrine ring: band width (inside its reach), strength at the low and high of its breath, and when spent. */
+export const RING_BAND = 0.8;
+export const RING_LOW = 0.7;
+export const RING_HIGH = 1;
+const RING_BREATH = 2.2;
+export const RING_SPENT = 0.15;
 const RING_LIFT = 0.15;
 const RING_SEGMENTS = 96;
 const MAX_SHRINES = 8;
@@ -153,8 +152,9 @@ export const BEACON_HIGH = 42;
 export const BEACON_WIDE = 0.7;
 export const BEACON_FADE = 0.35;
 export const BEACON_GOLD = 0.6;
-/** Plain crates are many: their beacons are fainter, so the rarer things stand out. */
-export const BEACON_CRATE = 0.22;
+/** A beacon is full while the rider is further than this from its thing, m, and gone nearer than the second. */
+export const BEACON_FAR = 50;
+export const BEACON_NEAR = 30;
 
 // Colour slots in the table: three tones (base, dark, light) of each of the six things, then the
 // same three of spent grey, then the lit eyes.
@@ -179,6 +179,11 @@ function slot(c: number, t: number): number {
 
 function clamp01(v: number): number {
   return v < 0 ? 0 : v > 1 ? 1 : v;
+}
+
+/** How much of its strength a beacon keeps with the rider `d` m from its thing: 1 far off, 0 near. */
+export function beaconShare(d: number): number {
+  return clamp01((d - BEACON_NEAR) / (BEACON_FAR - BEACON_NEAR));
 }
 
 /** Where up a beacon its light is strongest, as a share of its height. */
@@ -245,6 +250,9 @@ export class ThingsView {
   private readonly gateIdx = new Int32Array(MAX_THINGS);
   private n = 0;
   private beaconsN = 0;
+  /** Where the rider is this frame, for the beacons. */
+  private riderX = Number.POSITIVE_INFINITY;
+  private riderZ = Number.POSITIVE_INFINITY;
 
   /** With a terrain, the shrines' rings, a hoop's poles and the lines on the ground follow it. */
   constructor(terrain: Terrain | null = null) {
@@ -360,7 +368,13 @@ export class ThingsView {
     }
   }
 
+  /** A beacon over (x, z), its strength `fade` scaled by how far the rider is; -1 if the rider is too near for one. */
   private beacon(x: number, y: number, z: number, color: number, fade: number): number {
+    const dx = x - this.riderX;
+    const dz = z - this.riderZ;
+    const near = beaconShare(Math.sqrt(dx * dx + dz * dz));
+    if (near <= 0) return -1;
+    fade *= near;
     const b = this.beaconsN++;
     writeMatrix(this.beacons.instanceMatrix.array, b, BEACON_WIDE, 0, 0, 0, BEACON_HIGH, 0, 0, 0, BEACON_WIDE, x, y + BEACON_BASE, z);
     (this.beaconFade.array as Float32Array)[b] = fade;
@@ -379,9 +393,14 @@ export class ThingsView {
     return time - this.spentAt[i];
   }
 
-  /** `time` in seconds, for what turns, bobs and falls. */
-  update(w: World, time: number): void {
+  /**
+   * `time` in seconds, for what turns, bobs and falls; (riderX, riderZ) where the rider is, for the
+   * beacons (none given: far from everything).
+   */
+  update(w: World, time: number, riderX = Number.POSITIVE_INFINITY, riderZ = Number.POSITIVE_INFINITY): void {
     const t = w.things;
+    this.riderX = riderX;
+    this.riderZ = riderZ;
     this.n = 0;
     this.beaconsN = 0;
     this.rings.begin();
@@ -413,7 +432,6 @@ export class ThingsView {
           this.box(x, y + DEBRIS_HIGH / 2, z, yaw, 0, DEBRIS_WIDE, DEBRIS_HIGH, DEBRIS_WIDE, slot(C_SPENT, T_BASE), kind === THING_GOLD_CRATE ? 1.2 : 1, GLOW_SPENT);
         } else if (kind === THING_CRATE) {
           this.box(x, y + CRATE_SIZE / 2, z, yaw, 0, CRATE_SIZE, CRATE_SIZE, CRATE_SIZE, slot(THING_CRATE, T_BASE), 1, GLOW_CRATE);
-          this.beaconOf[i] = this.beacon(x, y, z, PALETTE.things[THING_CRATE], BEACON_CRATE);
         } else {
           const bob = GOLD_BOB * (0.5 + 0.5 * Math.sin(time * Math.PI * 2 * 0.6 + i));
           const spin = yaw + time * GOLD_SPIN * Math.PI * 2;
@@ -421,17 +439,17 @@ export class ThingsView {
           this.beaconOf[i] = this.beacon(x, y, z, PALETTE.things[THING_GOLD_CRATE], BEACON_GOLD);
         }
       } else if (kind === THING_SHRINE) {
-        const mid = (SHRINE_INNER + SHRINE_OUTER) / 2;
         if (done) {
           this.box(x, y + STUMP_HIGH / 2, z, yaw, 0, PILLAR_WIDE, STUMP_HIGH, PILLAR_WIDE, slot(C_SPENT, T_BASE), 1, GLOW_SPENT);
-          this.rings.add(x, y, z, mid - RING_BAND / 2, mid + RING_BAND / 2, this.table, slot(THING_SHRINE, T_BASE) * 3, RING_SPENT);
+          this.rings.add(x, y, z, SHRINE_REACH - RING_BAND, SHRINE_REACH, this.table, slot(THING_SHRINE, T_BASE) * 3, RING_SPENT);
         } else {
           this.box(x, y + PILLAR_HIGH / 2, z, yaw, 0, PILLAR_WIDE, PILLAR_HIGH, PILLAR_WIDE, slot(THING_SHRINE, T_BASE), 1, GLOW_SHRINE);
           const spin = time * CAP_SPIN * Math.PI * 2;
           const bob = CAP_BOB * Math.sin(time * 1.7 + i);
           this.box(x, y + PILLAR_HIGH + CAP_SIZE * 0.9 + bob, z, spin, Math.PI / 4, CAP_SIZE, CAP_SIZE, CAP_SIZE, slot(THING_SHRINE, T_LIGHT), 1, GLOW_SHRINE);
-          const fill = clamp01(t.progress[i] / SHRINE_LAPS);
-          this.rings.add(x, y, z, mid - RING_BAND / 2, mid + RING_BAND / 2, this.table, slot(THING_SHRINE, T_BASE) * 3, RING_FADE, fill, RING_DIM);
+          // The whole ring lit, breathing: come in.
+          const breath = RING_LOW + (RING_HIGH - RING_LOW) * (0.5 + 0.5 * Math.sin(time * RING_BREATH * Math.PI + i));
+          this.rings.add(x, y, z, SHRINE_REACH - RING_BAND, SHRINE_REACH, this.table, slot(THING_SHRINE, T_LIGHT) * 3, breath);
           this.beaconOf[i] = this.beacon(x, y, z, PALETTE.things[THING_SHRINE], BEACON_FADE);
         }
       } else if (kind === THING_GATE) {
@@ -505,8 +523,7 @@ export class ThingsView {
     const t = w.things;
     const state = t.state[i];
     if (state === gateIdx) return 1;
-    // Already cleared on this run of the slalom (`state` names a gate of this slalom; any other value,
-    // such as waiting after a miss, leaves every gate looking ready).
+    // Already taken (`state` names a later gate of this slalom).
     if (gateIdx < state && this.isGateOf(w, i - gateIdx + state, t.group[i])) return -1;
     return 0;
   }
@@ -722,8 +739,8 @@ export class ThingsView {
       this.box(px, top + 0.55 + b * 0.5 + bob, pz, yaw + time * 0.5 * e, Math.PI / 4, b, b * 1.25, b, slot(THING_HOOP, T_LIGHT), dim, glow);
     }
     // A chevron on the kicker's run-in, pointing the way to ride it into the hoop.
-    const cx = x - fx * (HOOP_AHEAD + RUN_IN_BACK);
-    const cz = z - fz * (HOOP_AHEAD + RUN_IN_BACK);
+    const cx = x - fx * RUN_IN_BACK;
+    const cz = z - fz * RUN_IN_BACK;
     const pulse = ready ? 0.6 + 0.4 * Math.sin(time * 4 + i) : 0;
     this.chevron(cx, cz, y - 5, fx, fz, slot(THING_HOOP, T_BASE), dim, ready ? 0.5 + 0.5 * pulse : GLOW_SPENT);
   }

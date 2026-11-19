@@ -396,7 +396,7 @@ function boot(): void {
     shots.update(w, alpha, now);
     bosses.update(w, alpha);
     zones.update(w, alpha);
-    things.update(w, now);
+    things.update(w, now, mx, mz);
     park.update(b, now);
     weapons.update(w, sim.prev, sim.state, alpha, now);
     wake.update(w.wake, mx, mz, groundAt, w.player.stats.area);
