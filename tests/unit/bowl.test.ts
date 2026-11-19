@@ -465,7 +465,9 @@ describe('the sites of the things on the map', () => {
       for (let i = 0; i < sites.length; i++) {
         const s = sites[i];
         expect(Math.hypot(s.x, s.z)).toBeLessThan(125);
-        expect(slope(b, s.x, s.z)).toBeLessThan(0.35);
+        // A hoop hangs in the air over a kicker's landing: the ground it answers for is the kicker's top.
+        const [gx, gz] = s.kind === 'hoop' ? [s.x - Math.sin(s.yaw) * 5, s.z - Math.cos(s.yaw) * 5] : [s.x, s.z];
+        expect(slope(b, gx, gz)).toBeLessThan(0.35);
         expect(Math.hypot(s.x - b.spawnX, s.z - b.spawnZ)).toBeGreaterThanOrEqual(14);
         for (const p of b.pads) expect(Math.hypot(s.x - p.x, s.z - p.z)).toBeGreaterThanOrEqual(14);
         for (let j = i + 1; j < sites.length; j++) {

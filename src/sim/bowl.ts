@@ -896,6 +896,9 @@ const SITE = {
     { drop: 0.1, skew: 1.5, climb: 2, slope: 0.6, kicker: 6, crater: -BOWL_RADIUS, pipe: 0 },
   ],
   hoops: 4,
+  /** Least drop behind a kicker for a hoop over it, m, looked for this far back along its line. */
+  hoopRunIn: 6,
+  hoopLookBack: 70,
   totems: 2,
   /** Least distance between the two totems, m. */
   totemApart: 60,
@@ -921,6 +924,25 @@ function circuitDist(sh: Shape, x: number, z: number): number {
 }
 
 type SlalomRules = (typeof SITE.slalom)[number];
+
+/**
+ * The most height there is to drop onto a kicker straight back along its line, within
+ * `hoopLookBack` metres and short of the top of the rim, m.
+ */
+function kickerRunIn(bowl: Bowl, x: number, z: number, yaw: number): number {
+  const top = bowl.heightAt(x, z);
+  const fx = dsin(yaw);
+  const fz = dcos(yaw);
+  let best = -Infinity;
+  for (let d = 2; d <= SITE.hoopLookBack; d += 2) {
+    const px = x - fx * d;
+    const pz = z - fz * d;
+    if (px * px + pz * pz > (BOWL_RADIUS - 20) * (BOWL_RADIUS - 20)) break;
+    const h = bowl.heightAt(px, pz) - top;
+    if (h > best) best = h;
+  }
+  return best;
+}
 
 /**
  * True if a slalom line from (x, z) along (dx, dz), from a few metres before its first gate to a
@@ -949,7 +971,7 @@ function slalomFits(bowl: Bowl, sh: Shape, x: number, z: number, dx: number, dz:
 }
 
 /**
- * Choose the sites from the finished terrain: two slaloms, up to four hoops over kickers, two
+ * Choose the sites from the finished terrain: up to four hoops over kickers, two slaloms, two
  * shrines, two totems, two gold crates and twelve crates, in that order (the hardest to fit first).
  * Every site is on the floor, on gentle ground, clear of the spawn, the pads and every other site.
  * Over seeds 1 to 300 every seed gets the full set; one that does not throws rather than hand back
@@ -959,7 +981,11 @@ function chooseSites(bowl: Bowl, sh: Shape, rng: Rng): void {
   const sites = bowl.features.sites;
   const kickers = bowl.features.kickers;
 
-  /** The rules every site keeps. Sites of the same nonzero `group` ignore each other. */
+  /**
+   * The rules every site keeps. Sites of the same nonzero `group` ignore each other. A hoop hangs
+   * in the air over a kicker's landing, so the slope it answers for is its kicker's top (checked
+   * where hoops are chosen), not the landing under it.
+   */
   const fits = (x: number, z: number, group: number, hoop: boolean): boolean => {
     if (x * x + z * z >= SITE.floorR * SITE.floorR) return false;
     if (dist(x, z, bowl.spawnX, bowl.spawnZ) < SITE.apart) return false;
@@ -969,7 +995,7 @@ function chooseSites(bowl: Bowl, sh: Shape, rng: Rng): void {
       if (dist(x, z, o.x, o.z) < SITE.apart) return false;
     }
     if (!hoop) for (const k of kickers) if (dist(x, z, k.x, k.z) < SITE.kickerClear) return false;
-    return siteSlope(bowl, x, z) < SITE.maxSlope;
+    return hoop || siteSlope(bowl, x, z) < SITE.maxSlope;
   };
   const add = (kind: SiteKind, x: number, z: number, yaw: number, group: number): void => {
     sites.push({ kind, x, z, yaw, group });
@@ -983,6 +1009,24 @@ function chooseSites(bowl: Bowl, sh: Shape, rng: Rng): void {
     cx = r * dsin(a);
     cz = r * dcos(a);
   };
+
+  // Hoops: a hoop takes speed to reach, so they hang over the kickers with the longest drop behind
+  // them (a kicker ridden out of a pipe or the crater climbs to its ramp and gets none).
+  const runIn = kickers.map((k) => kickerRunIn(bowl, k.x, k.z, k.yaw));
+  const order = kickers.map((_, i) => i).sort((a, b) => runIn[b] - runIn[a] || a - b);
+  // If no kicker has the drop, the one with the most still gets a hoop: every map has one.
+  let hoops = 0;
+  for (let pass = 0; pass < 2 && hoops === 0; pass++) {
+    for (const i of order) {
+      const k = kickers[i];
+      if (hoops >= (pass === 0 ? SITE.hoops : 1) || (pass === 0 && runIn[i] < SITE.hoopRunIn)) break;
+      const x = k.x + dsin(k.yaw) * HOOP_AHEAD;
+      const z = k.z + dcos(k.yaw) * HOOP_AHEAD;
+      if (!fits(x, z, 0, true) || siteSlope(bowl, k.x, k.z) >= SITE.maxSlope) continue;
+      add('hoop', x, z, k.yaw, 0);
+      hoops++;
+    }
+  }
 
   // Slaloms: five gates down a line that falls, alternating either side of it.
   for (let g = 1; g <= SITE.slaloms; g++) {
@@ -1012,17 +1056,6 @@ function chooseSites(bowl: Bowl, sh: Shape, rng: Rng): void {
       }
     }
     if (!placed) throw new Error(`makeBowl(${bowl.seed}): no room for slalom ${g}`);
-  }
-
-  // Hoops: over the kickers whose landing side has room, in the kickers' order.
-  let hoops = 0;
-  for (const k of kickers) {
-    if (hoops >= SITE.hoops) break;
-    const x = k.x + dsin(k.yaw) * HOOP_AHEAD;
-    const z = k.z + dcos(k.yaw) * HOOP_AHEAD;
-    if (!fits(x, z, 0, true)) continue;
-    add('hoop', x, z, k.yaw, 0);
-    hoops++;
   }
 
   // Shrines: open, gentle ground with room to ride round them.

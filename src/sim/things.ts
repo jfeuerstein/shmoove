@@ -14,11 +14,13 @@
  *   next, or SLALOM_MISSED while it waits to start again) and its `timer` (ticks since the last gate,
  *   or since the miss). `progress` is the gate's own: which side of its line the mover was on last
  *   tick, signed metres (0 before the first tick).
- * - hoop: `state` HOOP_TAKEN and `timer` ticks until it is back.
+ * - hoop: `state` HOOP_TAKEN and `timer` ticks until it is back. It is taken by the mover's middle,
+ *   a body radius above its feet.
  * - totem: nothing until it is spent.
  */
 import { HOOP_AHEAD, HOOP_RISE, type Bowl, type SiteKind } from './bowl';
 import { queueOffer } from './build';
+import { PLAYER_RADIUS } from './balance';
 import { DT } from './constants';
 import { dcos, dsin } from './math';
 import { OFFER_CRATE, OFFER_SHRINE, OFFER_TOTEM } from './offer';
@@ -352,7 +354,8 @@ function stepHoop(w: World, s: SimState, i: number): void {
   }
   if (m.grounded) return;
   const dx = m.x - t.x[i];
-  const dy = m.y - t.y[i];
+  // The mover is a ball on its feet: its middle is a radius above them.
+  const dy = m.y + PLAYER_RADIUS - t.y[i];
   const dz = m.z - t.z[i];
   if (dx * dx + dy * dy + dz * dz > THINGS.hoopReach * THINGS.hoopReach) return;
   // A streak: one more token for every other hoop taken in the last 20 s (the ones not back yet).

@@ -2,6 +2,7 @@
 import thingsSource from '../../src/sim/things.ts?raw';
 import { describe, expect, it } from 'vitest';
 import { P_LUCK } from '../../src/sim/arsenal';
+import { PLAYER_RADIUS } from '../../src/sim/balance';
 import { setPassiveLevel } from '../../src/sim/build';
 import { gearForSpeed } from '../../src/sim/flow';
 import { OFFER_CRATE, OFFER_SHRINE, OFFER_TOTEM } from '../../src/sim/offer';
@@ -483,14 +484,14 @@ describe('a slalom', () => {
 });
 
 describe('a hoop', () => {
-  /** A level pass through (x, y, 0) along +z. Returns the run tick something was taken, or -1. */
+  /** A level pass with the mover's middle through (x, y, 0), along +z. Returns the tick a token came, or -1. */
   function flyThrough(sim: Sim, x: number, y: number): number {
-    fly(sim, x, y, -8, 0, 16);
+    fly(sim, x, y - PLAYER_RADIUS, -8, 0, 16);
     let taken = -1;
     for (let t = 0; t < 60; t++) {
       // Hold the height so the pass is level.
       const m = sim.state.mover;
-      m.y = y;
+      m.y = y - PLAYER_RADIUS;
       m.vy = 0;
       const before = sim.world.player.tokens;
       step(sim, 1);
@@ -507,9 +508,9 @@ describe('a hoop', () => {
     const { sim } = recordingArena();
     const h = addThing(sim.world, THING_HOOP, 0, 4, 0, 0, 0);
     const seen: Seen[] = [];
-    fly(sim, 0, 5.4, -8, 0, 16);
+    fly(sim, 0, 4.9, -8, 0, 16);
     for (let t = 0; t < 60; t++) {
-      sim.state.mover.y = 5.4;
+      sim.state.mover.y = 4.9;
       sim.state.mover.vy = 0;
       step(sim, 1, seen);
     }
