@@ -111,7 +111,9 @@ export class EndScreen {
     this.rows[0].textContent = `Time  ${card.time}`;
     this.rows[1].textContent = `Kills  ${card.kills}`;
     this.rows[2].textContent = `Level  ${card.level}`;
-    this.rows[3].textContent = card.pops > 0 ? `Loops  ${card.pops}  (best ${card.bestPop})` : 'Loops  0';
+    // Loops only mean something to a player who carried the Wake and closed one.
+    this.rows[3].textContent = card.pops > 0 ? `Loops  ${card.pops}  (best ${card.bestPop})` : '';
+    this.rows[3].hidden = card.pops === 0;
     this.element.className = 'end end-show';
   }
 

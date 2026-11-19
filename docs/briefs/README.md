@@ -26,7 +26,7 @@ what to return. The verifier gets the same file.
 | `m3-cards-ui.md` | M3 | sonnet | merged |
 | `m3-render.md` | M3 | opus | restarted from `wip/m3-render` on the owner's say-so |
 | `m3-balance.md` | M3 | opus | stopped at the pivot; not merged |
-| `m3-lesson.md` | M3 (pulled forward from M6) | sonnet | restarted from `wip/m3-lesson` with a new script |
+| `m3-lesson.md` | M3 (pulled forward from M6) | sonnet | merged |
 | `m3b-weapons-timers.md` | M3, second pass | opus | merged |
 | `m3b-balance.md` | M3, second pass | opus | written; not started |
 | `m3b-rails.md` | M3, second pass | opus | written; starts when the drawing task lands |
