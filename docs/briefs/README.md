@@ -33,6 +33,7 @@ what to return. The verifier gets the same file.
 | `m4-run.md` | M4 | opus | out |
 | `m5-audio.md` | M5 (the part a playtest needs) | opus | out |
 | `m5-juice.md` | M5 (the part a playtest needs) | sonnet | out |
+| `m4-balance.md` | M4 | opus | written; starts when the run lands |
 
 Verification: one opus verifier checked the five merged M0/M1 briefs together; its findings became
 `m1-verifier-fixes.md`. A second checked the four M2 briefs and the lead's M2 core; the core's
