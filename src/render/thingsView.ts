@@ -18,7 +18,7 @@
  *   chevron on the run-in of the kicker that reaches it, pointing the way to ride. Faint, the
  *   balloons shrunk, while it is waiting to come back.
  * - totem: a carved stack of three blocks round a spine, a pair of eyes on each and a beak on the
- *   top, a diamond turning above. When it is rammed (spent, the elite called) it shakes with its eyes
+ *   top, all facing the bowl's middle, a diamond turning above. When it is rammed (spent, the elite called) it shakes with its eyes
  *   lit for `CALL_TIME` and sinks into the ground, leaving a grey stump.
  * - every live thing has a beacon: a tall thin column of its colour, crossed planes fading upward,
  *   drawn without fog so it is seen over hills and from across the bowl. A slalom has one, over the
@@ -147,11 +147,13 @@ const RING_SEGMENTS = 96;
 const MAX_SHRINES = 8;
 
 /** Beacons: where they start above the thing, how tall and wide, and how strong. */
-export const BEACON_BASE = 3.5;
+export const BEACON_BASE = 7;
 export const BEACON_HIGH = 42;
-export const BEACON_WIDE = 0.9;
-export const BEACON_FADE = 0.45;
-export const BEACON_GOLD = 0.75;
+export const BEACON_WIDE = 0.7;
+export const BEACON_FADE = 0.35;
+export const BEACON_GOLD = 0.6;
+/** Plain crates are many: their beacons are fainter, so the rarer things stand out. */
+export const BEACON_CRATE = 0.22;
 
 // Colour slots in the table: three tones (base, dark, light) of each of the six things, then the
 // same three of spent grey, then the lit eyes.
@@ -397,7 +399,7 @@ export class ThingsView {
           this.box(x, y + DEBRIS_HIGH / 2, z, yaw, 0, DEBRIS_WIDE, DEBRIS_HIGH, DEBRIS_WIDE, slot(C_SPENT, T_BASE), kind === THING_GOLD_CRATE ? 1.2 : 1, GLOW_SPENT);
         } else if (kind === THING_CRATE) {
           this.box(x, y + CRATE_SIZE / 2, z, yaw, 0, CRATE_SIZE, CRATE_SIZE, CRATE_SIZE, slot(THING_CRATE, T_BASE), 1, GLOW_CRATE);
-          this.beaconOf[i] = this.beacon(x, y, z, PALETTE.things[THING_CRATE], BEACON_FADE);
+          this.beaconOf[i] = this.beacon(x, y, z, PALETTE.things[THING_CRATE], BEACON_CRATE);
         } else {
           const bob = GOLD_BOB * (0.5 + 0.5 * Math.sin(time * Math.PI * 2 * 0.6 + i));
           const spin = yaw + time * GOLD_SPIN * Math.PI * 2;
@@ -717,7 +719,8 @@ export class ThingsView {
     const x = t.x[i];
     const y = t.y[i];
     const z = t.z[i];
-    const yaw = t.yaw[i];
+    // Its faces look toward the bowl's middle, where riders mostly come from.
+    const yaw = Math.atan2(-x, -z);
     const done = t.state[i] === THING_DONE;
     let sink = 0;
     let shake = 0;

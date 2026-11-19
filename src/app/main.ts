@@ -12,6 +12,7 @@ import { FxView } from '../render/fxView';
 import { HordeView } from '../render/hordeView';
 import { PALETTE } from '../render/look';
 import { MoverView } from '../render/moverView';
+import { ParkView } from '../render/parkView';
 import { RailsView } from '../render/railsView';
 import { Shake } from '../render/shake';
 import { GameScene } from '../render/scene';
@@ -137,6 +138,8 @@ function boot(): void {
   view.scene.add(makeTerrainView(terrain));
   // The rails never move: drawn once, from the terrain, with nothing to update per frame.
   view.scene.add(new RailsView(terrain).object);
+  const park = new ParkView(terrain, params.seed);
+  view.scene.add(park.object);
   const mover = new MoverView();
   view.scene.add(mover.object);
   // The horde, sparks, shots, the Wake and effects: drawn from the world, never writing it.
@@ -336,6 +339,7 @@ function boot(): void {
     bosses.update(w, alpha);
     zones.update(w, alpha);
     things.update(w, now);
+    park.update(b, now);
     weapons.update(w, sim.prev, sim.state, alpha, now);
     wake.update(w.wake, mx, mz, groundAt);
     fx.update(dt);
