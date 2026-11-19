@@ -17,7 +17,7 @@ const dist = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
 
 export default {
   name: 'cards',
-  query: '?hook&debug',
+  query: '?hook&debug&nolesson',
   async run(t) {
     const { page, hook, check } = t;
     const level = async () => {

@@ -20,7 +20,7 @@ import { extname, join, normalize, sep } from 'node:path';
 import { writeServiceWorker } from '../../scripts/make-sw.mjs';
 import { DIST, ensureBuild, launchBrowser, newPhoneContext, waitForHook, watchProblems } from './run.mjs';
 
-const QUERY = '/?hook';
+const QUERY = '/?hook&nolesson';
 const MARKER = '<!-- pwa check: second build -->';
 const BAR = '[data-pwa="update"]';
 
