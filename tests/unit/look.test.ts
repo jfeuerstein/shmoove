@@ -108,3 +108,23 @@ describe('the looks', () => {
     expect(tone(0x808080, -0.5)).toBe(0x404040);
   });
 });
+
+describe('one colour language in every look', () => {
+  const near = (a: number, b: number): boolean => {
+    const d = (s: number): number => Math.abs(((a >> s) & 255) - ((b >> s) & 255));
+    return d(16) + d(8) + d(0) < 90;
+  };
+  for (const look of LOOKS) {
+    const p = paletteOf(look.id);
+    it(`${look.name}: every point of interest but the plain crate is the one gold`, () => {
+      for (let k = 2; k < p.things.length; k++) expect(p.things[k]).toBe(p.things[1]);
+      expect(p.things[0]).not.toBe(p.things[1]);
+    });
+    it(`${look.name}: no enemy or boss wears the colour of experience or of what pays`, () => {
+      for (const c of [...p.enemies, ...p.bosses]) {
+        expect(near(c, p.spark), `#${c.toString(16)} against the spark`).toBe(false);
+        expect(near(c, p.things[1]), `#${c.toString(16)} against gold`).toBe(false);
+      }
+    });
+  }
+});

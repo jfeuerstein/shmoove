@@ -109,3 +109,8 @@
 .end-report:active {
   filter: brightness(1.2);
 }
+
+/* The card shows the build itself; the bar under it would only show through and tangle with it. */
+body:has(.end.end-show) .bb {
+  visibility: hidden;
+}
