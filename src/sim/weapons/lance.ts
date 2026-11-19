@@ -1,54 +1,52 @@
 /**
- * Lance: a beam ahead of the mover, on only while it is tucked in gear 2 or higher, longer the
- * higher the gear. Carving turns it off: the way to use it is to point at a crowd and commit.
+ * Lance: a beam straight ahead of the mover, always on. Everything in it burns a little every tenth
+ * of a second. Point it at a crowd; riding, standing or flying, it burns the same.
  */
 import { W_LANCE } from '../arsenal';
-import { TICK_HZ } from '../constants';
+import { DT } from '../constants';
 import { dcos, dsin } from '../math';
 import { powerOf } from '../stats';
 import type { Terrain } from '../terrain';
 import type { SimState } from '../types';
 import { damageEnemy, KINDS, MAX_ENEMY_RADIUS, queryEnemies, SPAWN_TICKS, WEAPON_MEM, type World } from '../world';
+import { afterShot, isReady, waitOf } from './timer';
 
 /** The Lance's numbers. Arrays are by weapon level 1..5. */
 export const LANCE = {
-  /** Beam length before the gear's share, m, times area. */
-  length: [6, 7, 8, 9, 10],
-  /** Damage per second to everything in the beam, before gear power. */
+  /** Beam length, m, times area. */
+  length: [7, 8, 9, 10, 11],
+  /** Damage per second to everything in the beam, before might and Haste. */
   dps: [14, 18, 22, 27, 32],
-  /** Beam length added per gear (gear 2 adds twice this), m, times area. */
-  lengthPerGear: 1.5,
   /** How far either side of the beam's line it reaches, m, times area. */
   halfWidth: 0.7,
-  /** Damage lands once every this many ticks. */
-  every: 6,
-  /** The lowest gear the beam works in. */
-  minGear: 2,
+  /** Damage lands once every this many seconds, before Haste (Haste makes it land more often). */
+  wait: 0.1,
 } as const;
 
-const MEM_WAIT = 0;
+/** mem: seconds waited since the beam last burned. */
+const MEM_WAITED = 0;
 
-/** The beam's length now, m: 0 when it is off. For the renderer and tests. */
-export function lanceLength(w: World, s: SimState): number {
+/** The beam's length now, m: 0 when the player does not carry it. For the renderer and tests. */
+export function lanceLength(w: World, _s?: SimState): number {
   const level = w.player.loadout.weaponLevel[W_LANCE];
-  const m = s.mover;
-  if (level <= 0 || !m.tucked || m.gear < LANCE.minGear) return 0;
-  return (LANCE.length[(level > 5 ? 5 : level) - 1] + LANCE.lengthPerGear * m.gear) * w.player.stats.area;
+  if (level <= 0) return 0;
+  return LANCE.length[(level > 5 ? 5 : level) - 1] * w.player.stats.area;
 }
 
 export function stepLance(w: World, s: SimState, _terrain: Terrain, level: number): void {
   if (level <= 0) return;
-  // The clock runs whether the beam is on or not, so flicking the tuck cannot hit faster.
-  const at = W_LANCE * WEAPON_MEM + MEM_WAIT;
-  if (w.mem[at] > 0) w.mem[at]--;
-  const len = lanceLength(w, s);
-  if (len <= 0 || w.mem[at] > 0) return;
-  w.mem[at] = LANCE.every;
-
-  const m = s.mover;
   const st = w.player.stats;
+  const at = W_LANCE * WEAPON_MEM + MEM_WAITED;
+  const wait = waitOf(LANCE.wait, st);
+  w.mem[at] += DT;
+  if (!isReady(w.mem[at], wait)) return;
+  w.mem[at] = afterShot(w.mem[at], wait);
+
+  const len = lanceLength(w, s);
+  const m = s.mover;
   const half = LANCE.halfWidth * st.area;
-  const dmg = (LANCE.dps[level - 1] * powerOf(st, m.gear) * LANCE.every) / TICK_HZ;
+  // Each burn is a tenth of a second's worth at the table rate; Haste burns more often.
+  const dmg = LANCE.dps[level - 1] * powerOf(st, m.gear) * LANCE.wait;
   const fx = dsin(m.heading);
   const fz = dcos(m.heading);
   const cx = m.x + fx * len * 0.5;
