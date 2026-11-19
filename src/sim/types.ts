@@ -1,4 +1,5 @@
 /** Shared sim types. The contract between the sim, the input layer, the renderer and the bots. */
+import type { MoverMods } from './stats';
 
 export interface Vec3 {
   x: number;
@@ -21,6 +22,8 @@ export interface InputFrame {
   carve: boolean;
   /** A hop was asked for on this tick. True for one tick only; the sim buffers it. */
   hop: boolean;
+  /** Which card to take while an offer is open: 0, 1 or 2. Left out or -1 means no choice yet. */
+  pick?: number;
 }
 
 export function makeInputFrame(): InputFrame {
@@ -70,6 +73,8 @@ export interface MoverState {
   landSpeed: number;
   /** Speed into the ground at the last landing, m/s. For the camera kick and the landing scrub. */
   impact: number;
+  /** How long the flight that ended at the last landing lasted, ticks. */
+  lastAir: number;
   /** Ticks until a boost pad can fire again. */
   padCooldown: number;
   /** 1..5. */
@@ -90,5 +95,7 @@ export interface SimState {
   events: number;
   /** Metres travelled along the ground and through the air. */
   distance: number;
+  /** What the build does to movement. All ones and zeros until the build says otherwise. */
+  mods: MoverMods;
   mover: MoverState;
 }

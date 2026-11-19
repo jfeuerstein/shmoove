@@ -4,6 +4,7 @@ import { stepDirector } from './director';
 import { stepGear } from './flow';
 import { stepHorde } from './horde';
 import { makeMover, stepMover } from './mover';
+import { copyMoverMods, makeMoverMods } from './stats';
 import type { Terrain } from './terrain';
 import type { InputFrame, MoverState, SimState } from './types';
 import { stepSeekers } from './seekers';
@@ -32,6 +33,7 @@ function copyMover(dst: MoverState, src: MoverState): void {
   dst.landPending = src.landPending;
   dst.landSpeed = src.landSpeed;
   dst.impact = src.impact;
+  dst.lastAir = src.lastAir;
   dst.padCooldown = src.padCooldown;
   dst.gear = src.gear;
   dst.gearHold = src.gearHold;
@@ -45,11 +47,13 @@ export function copySimState(dst: SimState, src: SimState): void {
   dst.viewYaw = src.viewYaw;
   dst.events = src.events;
   dst.distance = src.distance;
+  copyMoverMods(dst.mods, src.mods);
   copyMover(dst.mover, src.mover);
 }
 
-function makeState(terrain: Terrain): SimState {
-  return { tick: 0, viewYaw: terrain.spawnYaw, events: 0, distance: 0, mover: makeMover(terrain) };
+/** A fresh state at the spawn. */
+export function makeSimState(terrain: Terrain): SimState {
+  return { tick: 0, viewYaw: terrain.spawnYaw, events: 0, distance: 0, mods: makeMoverMods(), mover: makeMover(terrain) };
 }
 
 export interface SimOptions {
@@ -110,8 +114,8 @@ export class Sim {
 
   constructor(terrain: Terrain, options: SimOptions = {}) {
     this.terrain = terrain;
-    this.state = makeState(terrain);
-    this.prev = makeState(terrain);
+    this.state = makeSimState(terrain);
+    this.prev = makeSimState(terrain);
     this.world = makeWorld(options.seed ?? 1);
     this.horde = options.horde === true;
   }
@@ -138,7 +142,7 @@ export class Sim {
 
   /** Start the run again from the spawn, same seed, in place. */
   reset(): void {
-    const fresh = makeState(this.terrain);
+    const fresh = makeSimState(this.terrain);
     copySimState(this.state, fresh);
     copySimState(this.prev, fresh);
     resetWorld(this.world);

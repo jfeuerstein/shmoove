@@ -49,6 +49,7 @@ export function makeMover(terrain: Terrain): MoverState {
     landPending: false,
     landSpeed: 0,
     impact: 0,
+    lastAir: 0,
     padCooldown: 0,
     gear: 1,
     gearHold: 0,
@@ -159,7 +160,7 @@ function hop(m: MoverState, s: SimState): void {
     s.events |= EV_CHAIN_LOST;
   }
   m.landPending = false;
-  m.vy += FEEL.hopSpeed;
+  m.vy += FEEL.hopSpeed * s.mods.hopSpeed;
   m.grounded = false;
   m.airTicks = 0;
   m.hopBuffer = 0;
@@ -191,7 +192,7 @@ function stepGround(m: MoverState, s: SimState, input: InputFrame, terrain: Terr
   let yaw = hs > 1e-4 ? datan2(m.vx, m.vz) : m.heading;
 
   // A hard landing that was not hopped out of costs speed once the clean window has closed.
-  if (m.landPending && m.groundTicks >= FEEL.cleanWindowTicks) {
+  if (m.landPending && m.groundTicks >= FEEL.cleanWindowTicks + s.mods.hopWindow) {
     speed *= 1 - FEEL.landScrub * clamp(m.impact / FEEL.landScrubImpact, 0, 1);
     m.landPending = false;
     if (m.chain > 0) {
@@ -200,11 +201,14 @@ function stepGround(m: MoverState, s: SimState, input: InputFrame, terrain: Terr
     }
   }
 
+  const mods = s.mods;
+  // Whatever is holding on drags, tucked or not.
+  const drag = FEEL.tuckDrag * mods.drag + mods.cling;
   if (m.tucked) {
-    speed -= (FEEL.tuckDrag * speed + FEEL.rollFriction) * DT;
+    speed -= (drag * speed + FEEL.rollFriction) * DT;
   } else {
-    speed -= FEEL.tuckDrag * speed * DT;
-    if (speed > FEEL.runSpeed) speed -= FEEL.carveDrag * (speed - FEEL.runSpeed) * DT;
+    speed -= drag * speed * DT;
+    if (speed > FEEL.runSpeed) speed -= FEEL.carveDrag * mods.scrub * (speed - FEEL.runSpeed) * DT;
     if (!steering) speed -= FEEL.idleBrake * DT;
   }
   if (speed < 0) speed = 0;
@@ -221,7 +225,7 @@ function stepGround(m: MoverState, s: SimState, input: InputFrame, terrain: Terr
       if (m.sliding) maxTurn *= FEEL.slideTurn;
       const turn = clamp(off, -maxTurn, maxTurn);
       yaw += turn;
-      if (speed > FEEL.runSpeed) speed -= FEEL.carveScrub * Math.abs(turn) * speed;
+      if (speed > FEEL.runSpeed) speed -= FEEL.carveScrub * mods.scrub * Math.abs(turn) * speed;
       if (m.sliding) speed = Math.max(0, speed - FEEL.slideBrake * DT);
     }
     const target = FEEL.runSpeed * steerLen;
@@ -280,9 +284,11 @@ function ridePads(m: MoverState, s: SimState, terrain: Terrain, speed: number): 
 }
 
 function stepAir(m: MoverState, s: SimState, input: InputFrame, terrain: Terrain): void {
+  const mods = s.mods;
   m.tucked = !input.carve;
-  m.vy -= FEEL.gravity * DT;
-  const drag = 1 - FEEL.airDrag * DT;
+  // On the way up the build can make the air hold you a little longer.
+  m.vy -= FEEL.gravity * (m.vy > 0 ? mods.hang : 1) * DT;
+  const drag = 1 - (FEEL.airDrag * mods.drag + mods.cling) * DT;
   m.vx *= drag;
   m.vz *= drag;
 
@@ -296,7 +302,8 @@ function stepAir(m: MoverState, s: SimState, input: InputFrame, terrain: Terrain
   if (input.carve && hs > STILL && len2(input.steerX, input.steerY) > 1e-3) {
     const want = wantedYaw(m, s, input);
     const yaw = datan2(m.vx, m.vz);
-    const turned = yaw + clamp(angleDiff(want, yaw), -FEEL.airTurn * DT, FEEL.airTurn * DT);
+    const airTurn = FEEL.airTurn * mods.airTurn * DT;
+    const turned = yaw + clamp(angleDiff(want, yaw), -airTurn, airTurn);
     m.vx = dsin(turned) * hs;
     m.vz = dcos(turned) * hs;
   }
@@ -322,6 +329,7 @@ function stepAir(m: MoverState, s: SimState, input: InputFrame, terrain: Terrain
   m.vz -= vn * m.nz;
   m.grounded = true;
   m.groundTicks = 0;
+  m.lastAir = m.airTicks;
   if (m.airTicks >= FEEL.minAirTicks) {
     m.landPending = true;
     m.landSpeed = landH;

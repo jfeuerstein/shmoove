@@ -414,6 +414,90 @@ describe('gears', () => {
   });
 });
 
+describe('what the build does to movement', () => {
+  const tuckFrom25 = (set: (sim: Sim) => void): number => {
+    const sim = new Sim(flatTerrain());
+    set(sim);
+    launch(sim, 25);
+    run(sim, TUCK, 300);
+    return sim.state.mover.speed;
+  };
+
+  it('less drag holds speed longer; something holding on bleeds it', () => {
+    const plain = tuckFrom25(() => {});
+    expect(tuckFrom25((sim) => (sim.state.mods.drag = 0.5))).toBeGreaterThan(plain + 0.5);
+    expect(tuckFrom25((sim) => (sim.state.mods.cling = 0.2))).toBeLessThan(plain - 4);
+  });
+
+  it('better edges make a hard turn at speed cost less', () => {
+    const after = (scrub: number): number => {
+      const sim = new Sim(flatTerrain());
+      sim.state.mods.scrub = scrub;
+      launch(sim, 25);
+      run(sim, steer(-1, 0), 60);
+      return sim.state.mover.speed;
+    };
+    expect(after(0.5)).toBeGreaterThan(after(1) + 1);
+  });
+
+  it('springs hop higher and leave longer to hop clean', () => {
+    const peak = (hopSpeed: number): number => {
+      const sim = new Sim(flatTerrain());
+      sim.state.mods.hopSpeed = hopSpeed;
+      run(sim, FORWARD, 60);
+      sim.step(hopNow(FORWARD));
+      let top = 0;
+      while (!sim.state.mover.grounded) {
+        sim.step(FORWARD);
+        top = Math.max(top, sim.state.mover.y);
+      }
+      return top;
+    };
+    expect(peak(1.3)).toBeGreaterThan(peak(1) * 1.4);
+
+    // A hop a few ticks too late for the plain window is clean with a wider one.
+    const lateIsClean = (extra: number): boolean => {
+      const sim = new Sim(flatTerrain());
+      sim.state.mods.hopWindow = extra;
+      run(sim, FORWARD, 120);
+      return hopChain(sim, FORWARD, 300, FEEL.cleanWindowTicks + 2) > 0;
+    };
+    expect(lateIsClean(0)).toBe(false);
+    expect(lateIsClean(4)).toBe(true);
+  });
+
+  it('wings steer more in the air and hang longer', () => {
+    const flight = (airTurn: number, hang: number): { x: number; ticks: number } => {
+      const sim = new Sim(flatTerrain());
+      sim.state.mods.airTurn = airTurn;
+      sim.state.mods.hang = hang;
+      launch(sim, 15);
+      sim.step(hopNow(steer(-1, 0)));
+      let ticks = 1;
+      while (!sim.state.mover.grounded) {
+        sim.step(steer(-1, 0));
+        ticks++;
+      }
+      return { x: sim.state.mover.x, ticks };
+    };
+    const plain = flight(1, 1);
+    expect(flight(2.5, 1).x).toBeGreaterThan(plain.x * 1.8);
+    expect(flight(1, 0.74).ticks).toBeGreaterThan(plain.ticks + 3);
+  });
+
+  it('records how long the last flight was', () => {
+    const sim = new Sim(flatTerrain());
+    run(sim, FORWARD, 60);
+    sim.step(hopNow(FORWARD));
+    let ticks = 1;
+    while (!sim.state.mover.grounded) {
+      sim.step(FORWARD);
+      ticks++;
+    }
+    expect(Math.abs(sim.state.mover.lastAir - ticks)).toBeLessThanOrEqual(1);
+  });
+});
+
 describe('determinism', () => {
   it('the same inputs give the same run, bit for bit', () => {
     const play = (): number => {

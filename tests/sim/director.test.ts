@@ -1,9 +1,9 @@
 /** What a player would notice about where the horde comes from, how much of it, and of what. */
+import { makeSimState } from '../../src/sim/sim';
 import { describe, expect, it } from 'vitest';
 import { makeBowl, type Bowl } from '../../src/sim/bowl';
 import { behindLimit, DIRECTOR, stepDirector, targetCount } from '../../src/sim/director';
 import { stepHorde } from '../../src/sim/horde';
-import { makeMover } from '../../src/sim/mover';
 import type { SimState, Vec3 } from '../../src/sim/types';
 import {
   hashWorld,
@@ -35,7 +35,8 @@ class Scripted {
   constructor(seed: number) {
     this.terrain = bowl(seed);
     this.w = makeWorld(seed);
-    this.s = { tick: 0, viewYaw: 0, events: 0, distance: 0, mover: makeMover(this.terrain) };
+    this.s = makeSimState(this.terrain);
+    this.s.viewYaw = 0;
   }
 
   get seconds(): number {
