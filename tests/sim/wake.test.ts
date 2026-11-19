@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { FEEL } from '../../src/sim/constants';
 import type { Sim } from '../../src/sim/sim';
 import { wakeLength, WAKE_STEP } from '../../src/sim/wake';
-import { KIND_BOLLARD, KIND_SHUFFLER, KINDS } from '../../src/sim/world';
+import { damageEnemy, KIND_BOLLARD, KIND_SHUFFLER, KINDS } from '../../src/sim/world';
 import { FORWARD, run, steer } from './fixtures';
 import { arena, FX_POP, place, root, stepCounting } from './world-fixtures';
 
@@ -158,6 +158,29 @@ describe('the loop', () => {
     expect(s.value[0]).toBe(2);
     expect(s.pull[0]).toBe(0);
     expect(s.x[0]).toBeCloseTo(c.cx + c.r + 12, 3);
+  });
+
+  it('sweeps only on the tick of the pop: a survivor that dies later drops an ordinary spark', () => {
+    const sim = arena();
+    const b = place(sim, KIND_BOLLARD, c.cx, c.cz);
+    const counts = new Map<number, number>();
+    rideCircle(sim, 420, counts);
+    expect(counts.get(FX_POP) ?? 0).toBeGreaterThan(0);
+    const h = sim.world.horde;
+    expect(h.count).toBe(1);
+    expect(h.hp[b]).toBeGreaterThan(0);
+    // Later, and far from the player, it dies to something else.
+    sim.world.player.wakeLevel = 0;
+    const m = sim.state.mover;
+    h.x[b] = m.x + 40;
+    h.z[b] = m.z;
+    run(sim, steer(0, 0), 2);
+    damageEnemy(sim.world, b, KINDS[KIND_BOLLARD].hp);
+    sim.step(steer(0, 0));
+    const s = sim.world.sparks;
+    expect(sim.world.player.kills).toBe(1);
+    expect(s.count).toBe(1);
+    expect(s.pull[0]).toBe(0);
   });
 
   it('hits harder in a higher gear', () => {
