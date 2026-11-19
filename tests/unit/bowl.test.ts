@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BOWL_RADIUS, makeBowl, type Bowl, type Site, type SiteKind } from '../../src/sim/bowl';
+import { BOWL_RADIUS, makeBowl, type Bowl, type RailSite, type Site, type SiteKind } from '../../src/sim/bowl';
 import type { Vec3 } from '../../src/sim/types';
 
 const SEEDS = [1, 2, 3, 4, 5];
@@ -562,6 +562,238 @@ describe('the sites of the things on the map', () => {
     for (const seed of SEEDS) {
       const [a, c] = sitesOf(bowl(seed), 'totem');
       expect(Math.hypot(a.x - c.x, a.z - c.z)).toBeGreaterThanOrEqual(60);
+    }
+  });
+});
+
+/**
+ * FNV-1a over the JSON of each seed's sites and pads, recorded before the map had rails. Choosing
+ * the rails must never move what was already there.
+ */
+const SITES_BEFORE_RAILS: Record<number, { sites: string; pads: string }> = {
+  1: { sites: '8cdfc0bb', pads: '1296ade0' },
+  2: { sites: 'd9842aca', pads: 'a2f89278' },
+  3: { sites: '6d90959f', pads: '929fc65e' },
+  4: { sites: 'a2929c0b', pads: '8d97dc08' },
+  5: { sites: 'a502ec67', pads: '7d277a24' },
+};
+
+function fnv(s: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h.toString(16).padStart(8, '0');
+}
+
+const LIFT = 1.2;
+const RUN_UP = 3;
+type Seg = [number, number, number, number];
+
+function railLen(r: RailSite): number {
+  return Math.hypot(r.x1 - r.x0, r.z1 - r.z0);
+}
+
+/** The rail with 3 m carried on beyond each end. */
+function withRunUps(r: RailSite): Seg {
+  const l = railLen(r);
+  const ux = ((r.x1 - r.x0) / l) * RUN_UP;
+  const uz = ((r.z1 - r.z0) / l) * RUN_UP;
+  return [r.x0 - ux, r.z0 - uz, r.x1 + ux, r.z1 + uz];
+}
+
+/** Least distance between two segments, by walking one in 5 cm steps against the other. */
+function segSegDist(a: Seg, b: Seg): number {
+  let best = Infinity;
+  const n = Math.ceil(Math.hypot(a[2] - a[0], a[3] - a[1]) / 0.05);
+  for (let k = 0; k <= n; k++) {
+    const q = k / n;
+    best = Math.min(best, segDist(a[0] + (a[2] - a[0]) * q, a[1] + (a[3] - a[1]) * q, b[0], b[1], b[2], b[3]));
+  }
+  return best;
+}
+
+/** Height lost from the first end to the second, per metre of length. */
+function fallOf(b: Bowl, r: RailSite): number {
+  return (b.heightAt(r.x0, r.z0) - b.heightAt(r.x1, r.z1)) / railLen(r);
+}
+
+function chainsOf(b: Bowl): RailSite[][] {
+  const ids = [...new Set(b.features.rails.filter((r) => r.chain > 0).map((r) => r.chain))];
+  return ids.map((c) => b.features.rails.filter((r) => r.chain === c));
+}
+
+describe('the rails', () => {
+  it('leave the ground, the sites and the pads exactly as they were before there were rails', () => {
+    for (const seed of SEEDS) {
+      const b = bowl(seed);
+      expect(fnv(JSON.stringify(b.features.sites))).toBe(SITES_BEFORE_RAILS[seed].sites);
+      expect(fnv(JSON.stringify(b.pads))).toBe(SITES_BEFORE_RAILS[seed].pads);
+    }
+  });
+
+  it('are the same for the same seed and differ between seeds', () => {
+    for (const seed of SEEDS) {
+      const again = makeBowl(seed);
+      expect(again.features.rails).toEqual(bowl(seed).features.rails);
+      expect(again.rails).toEqual(bowl(seed).rails);
+    }
+    expect(bowl(1).features.rails).not.toEqual(bowl(2).features.rails);
+  });
+
+  it('number 8 to 12, each a straight bar 14 to 32 m long standing 1.2 m above the ground at both ends', () => {
+    for (const seed of SEEDS) {
+      const b = bowl(seed);
+      expect(b.rails.length).toBeGreaterThanOrEqual(8);
+      expect(b.rails.length).toBeLessThanOrEqual(12);
+      expect(b.features.rails).toHaveLength(b.rails.length);
+      b.features.rails.forEach((r, i) => {
+        const bar = b.rails[i];
+        expect([bar.x0, bar.z0, bar.x1, bar.z1]).toEqual([r.x0, r.z0, r.x1, r.z1]);
+        expect(bar.y0).toBeCloseTo(b.heightAt(r.x0, r.z0) + LIFT, 9);
+        expect(bar.y1).toBeCloseTo(b.heightAt(r.x1, r.z1) + LIFT, 9);
+        expect(railLen(r)).toBeGreaterThanOrEqual(14);
+        expect(railLen(r)).toBeLessThanOrEqual(32);
+      });
+    }
+  });
+
+  it('stand on the floor, with the ground under them 0.7 to 2.4 m below along their whole length', () => {
+    for (const seed of SEEDS) {
+      const b = bowl(seed);
+      b.features.rails.forEach((r, i) => {
+        const bar = b.rails[i];
+        const [ax, az, cx, cz] = withRunUps(r);
+        expect(Math.hypot(ax, az)).toBeLessThan(125);
+        expect(Math.hypot(cx, cz)).toBeLessThan(125);
+        const len = railLen(r);
+        for (let d = 0; d <= len; d += 1) {
+          const q = d / len;
+          const under = bar.y0 + (bar.y1 - bar.y0) * q - b.heightAt(r.x0 + (r.x1 - r.x0) * q, r.z0 + (r.z1 - r.z0) * q);
+          expect(under, `seed ${seed} rail ${i} at ${d} m`).toBeGreaterThanOrEqual(0.7 - 1e-9);
+          expect(under, `seed ${seed} rail ${i} at ${d} m`).toBeLessThanOrEqual(2.4 + 1e-9);
+        }
+      });
+    }
+  });
+
+  it('fall from their first end by at least 0.03 of their length, or are within 0.02 of level', () => {
+    for (const seed of SEEDS) {
+      const b = bowl(seed);
+      let falling = 0;
+      b.features.rails.forEach((r, i) => {
+        const f = fallOf(b, r);
+        // The first end is the high one, unless the rail is level.
+        expect(f, `seed ${seed} rail ${i}`).toBeGreaterThanOrEqual(-0.02);
+        expect(f <= 0.02 || f >= 0.03, `seed ${seed} rail ${i}: fall ${f}`).toBe(true);
+        if (f >= 0.03) falling++;
+      });
+      // Most of them fall: the map runs downhill.
+      expect(falling).toBeGreaterThanOrEqual(b.rails.length / 2);
+    }
+  });
+
+  it('have 3 m of gentle run-up at each end, 4 m clear of sites, pads and other rails, and keep 14 m from the spawn', () => {
+    for (const seed of SEEDS) {
+      const b = bowl(seed);
+      const rails = b.features.rails;
+      rails.forEach((r, i) => {
+        const len = railLen(r);
+        const ux = (r.x1 - r.x0) / len;
+        const uz = (r.z1 - r.z0) / len;
+        for (let d = 0; d <= RUN_UP; d += 0.25) {
+          expect(slope(b, r.x0 - ux * d, r.z0 - uz * d)).toBeLessThan(0.35);
+          expect(slope(b, r.x1 + ux * d, r.z1 + uz * d)).toBeLessThan(0.35);
+        }
+        const e = withRunUps(r);
+        expect(segDist(b.spawnX, b.spawnZ, ...e)).toBeGreaterThanOrEqual(14);
+        for (const s of b.features.sites) {
+          if (s.kind !== 'hoop') expect(segDist(s.x, s.z, ...e), `seed ${seed} rail ${i} by a ${s.kind}`).toBeGreaterThanOrEqual(4);
+        }
+        for (const p of b.pads) expect(segDist(p.x, p.z, ...e) - p.radius).toBeGreaterThanOrEqual(4);
+        rails.forEach((o, j) => {
+          if (j === i) return;
+          const bare: Seg = [o.x0, o.z0, o.x1, o.z1];
+          // Rails of one chain lie end to end on one line: there only the bars keep apart.
+          const near = o.chain > 0 && o.chain === r.chain ? segSegDist([r.x0, r.z0, r.x1, r.z1], bare) : segSegDist(e, bare);
+          expect(near, `seed ${seed} rails ${i} and ${j}`).toBeGreaterThanOrEqual(4 - 1e-6);
+        });
+      });
+    }
+  });
+
+  it('lay at least two chains of two or three rails end to end along one line, 5 to 8 m apart', () => {
+    for (const seed of SEEDS) {
+      const b = bowl(seed);
+      const chains = chainsOf(b);
+      expect(chains.length).toBeGreaterThanOrEqual(2);
+      for (const chain of chains) {
+        expect(chain.length).toBeGreaterThanOrEqual(2);
+        expect(chain.length).toBeLessThanOrEqual(3);
+        for (const r of chain) expect(r.kind).toBe('chain');
+        const first = chain[0];
+        const ux = (first.x1 - first.x0) / railLen(first);
+        const uz = (first.z1 - first.z0) / railLen(first);
+        for (let k = 1; k < chain.length; k++) {
+          const a = chain[k - 1];
+          const c = chain[k];
+          // The same heading, both ends on the first one's line, starting ahead of the last one's end.
+          expect(((c.x1 - c.x0) * ux + (c.z1 - c.z0) * uz) / railLen(c)).toBeCloseTo(1, 9);
+          expect(Math.abs((c.x0 - first.x0) * uz - (c.z0 - first.z0) * ux)).toBeLessThan(1e-6);
+          expect(Math.abs((c.x1 - first.x0) * uz - (c.z1 - first.z0) * ux)).toBeLessThan(1e-6);
+          const gap = (c.x0 - a.x1) * ux + (c.z0 - a.z1) * uz;
+          expect(gap).toBeGreaterThanOrEqual(5 - 1e-9);
+          expect(gap).toBeLessThanOrEqual(8 + 1e-9);
+        }
+      }
+      for (const r of b.features.rails) if (r.kind !== 'chain') expect(r.chain).toBe(0);
+    }
+  });
+
+  it('put at least two down the fall line of a hillside', () => {
+    for (const seed of SEEDS) {
+      const b = bowl(seed);
+      const hills = b.features.rails.filter((r) => r.kind === 'hill');
+      expect(hills.length).toBeGreaterThanOrEqual(2);
+      for (const r of hills) {
+        const [gx, gz] = grad(b, (r.x0 + r.x1) / 2, (r.z0 + r.z1) / 2);
+        const s = Math.hypot(gx, gz);
+        expect(s).toBeGreaterThanOrEqual(0.1);
+        // Heading within a few degrees of straight down the slope at its middle.
+        const down = -(gx * (r.x1 - r.x0) + gz * (r.z1 - r.z0)) / (s * railLen(r));
+        expect(down).toBeGreaterThan(Math.cos(0.05));
+        expect(fallOf(b, r)).toBeGreaterThanOrEqual(0.03);
+      }
+    }
+  });
+
+  it('put at least one down the floor of each half-pipe, beside its centre line, falling the way the pipe does', () => {
+    for (const seed of SEEDS) {
+      const b = bowl(seed);
+      for (const p of b.features.pipes) {
+        const pl = Math.hypot(p.x1 - p.x0, p.z1 - p.z0);
+        const ux = (p.x1 - p.x0) / pl;
+        const uz = (p.z1 - p.z0) / pl;
+        const inPipe = b.features.rails.filter((r) => {
+          if (r.kind !== 'pipe') return false;
+          const par = ((r.x1 - r.x0) * ux + (r.z1 - r.z0) * uz) / railLen(r);
+          const off0 = (r.x0 - p.x0) * uz - (r.z0 - p.z0) * ux;
+          const off1 = (r.x1 - p.x0) * uz - (r.z1 - p.z0) * ux;
+          const s0 = (r.x0 - p.x0) * ux + (r.z0 - p.z0) * uz;
+          const s1 = (r.x1 - p.x0) * ux + (r.z1 - p.z0) * uz;
+          return (
+            par > 1 - 1e-9 &&
+            Math.abs(off0 - off1) < 1e-6 &&
+            Math.abs(off0) >= 1.5 - 1e-9 &&
+            Math.abs(off0) <= 3.5 + 1e-9 &&
+            s0 >= 0 &&
+            s1 <= pl
+          );
+        });
+        expect(inPipe.length, `seed ${seed}`).toBeGreaterThanOrEqual(1);
+        for (const r of inPipe) expect(fallOf(b, r)).toBeGreaterThanOrEqual(0.03);
+      }
     }
   });
 });

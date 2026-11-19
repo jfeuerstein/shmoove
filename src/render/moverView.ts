@@ -11,7 +11,9 @@
  * leaning into turns by the sideways acceleration. How low the figure crouches tells what the
  * thumb is doing: pushing (the stick held, below run speed) it stands tall; riding at speed with the
  * stick held, knees bent; coasting (`tucked`) it crouches low; in the air it tucks and the board's
- * nose comes up. The pose eases from one to the next over `POSE_TIME`.
+ * nose comes up. On a rail (`rail >= 0`) it boardslides: the board turns across the rail with its
+ * deck on the bar, and the figure, facing the way it is going, crouches with its arms spread wide
+ * and high. The pose eases from one to the next over `POSE_TIME`.
  *
  * Two meshes, each one geometry rebuilt in place every frame (72 triangles together): the figure
  * and the board. `update` allocates nothing.
@@ -68,6 +70,9 @@ const HEAD_WIDE = 0.12;
 /** The arms reach this far out along the board each way from the shoulders, and drop this far, m. */
 const ARM_REACH = 0.55;
 const ARM_DROP = 0.2;
+/** Grinding, the arms spread this far and rise this far above the shoulders, m. */
+const ARM_REACH_GRIND = 0.78;
+const ARM_RISE_GRIND = 0.08;
 /** Limb thickness: hips, ankles, arms, m. */
 const THIGH_R = 0.11;
 const ANKLE_R = 0.07;
@@ -78,6 +83,7 @@ export const CROUCH_PUSH = 0;
 export const CROUCH_RIDE = 0.35;
 export const CROUCH_COAST = 1;
 export const CROUCH_AIR = 0.8;
+export const CROUCH_GRIND = 0.7;
 /** Below this share of run speed with the stick held, the rider is pushing. */
 const PUSH_SHARE = 0.95;
 /** Time for the pose to get most of the way to a new one, s. */
@@ -296,6 +302,10 @@ export class MoverView {
   /** The pose last drawn: crouch 0 (tall) to 1 (lowest), and the board's nose-up pitch, rad. */
   crouch = CROUCH_RIDE;
   pitch = 0;
+  /** How far the arms are spread, 0 riding to 1 grinding. */
+  spread = 0;
+  /** True while the last pose drawn was a grind: the board across the rail. */
+  grinding = false;
 
   /** Placed at the mover, tilted to the ground. */
   private readonly root = new Group();
@@ -333,7 +343,7 @@ export class MoverView {
     this.shadow.renderOrder = 1;
     container.add(this.root, this.shadow);
     this.object = container;
-    this.pose(this.crouch, this.pitch);
+    this.pose(this.crouch, this.pitch, this.spread);
   }
 
   /**
@@ -349,8 +359,10 @@ export class MoverView {
     const turn = angleDelta(a.heading, b.heading);
     const heading = a.heading + turn * alpha;
 
+    const grinding = b.rail >= 0;
+    this.grinding = grinding;
     this.root.position.set(x, y, z);
-    if (b.grounded) {
+    if (b.grounded && !grinding) {
       this.n.set(lerp(a.nx, b.nx, alpha), lerp(a.ny, b.ny, alpha), lerp(a.nz, b.nz, alpha)).normalize();
       this.root.quaternion.setFromUnitVectors(this.up, this.n);
     } else {
@@ -366,12 +378,24 @@ export class MoverView {
     if (!b.grounded) lean *= 0.5;
     if (lean > MAX_LEAN) lean = MAX_LEAN;
     else if (lean < -MAX_LEAN) lean = -MAX_LEAN;
-    this.body.rotation.set(0, heading, lean);
+    if (grinding) {
+      // A boardslide: turned a quarter so the board lies across the rail and the side the rider
+      // faces (+x) points the way it is going, the deck itself resting on the bar.
+      this.body.rotation.set(0, heading - Math.PI / 2, 0);
+      this.body.position.set(0, -DECK_LOW, 0);
+    } else {
+      this.body.rotation.set(0, heading, lean);
+      this.body.position.set(0, 0, 0);
+    }
 
     // What the thumb is doing, read off the pose.
     let crouch: number;
     let pitch = 0;
-    if (!b.grounded) {
+    let spread = 0;
+    if (grinding) {
+      crouch = CROUCH_GRIND;
+      spread = 1;
+    } else if (!b.grounded) {
       crouch = CROUCH_AIR;
       pitch = AIR_NOSE;
     } else if (b.tucked) crouch = CROUCH_COAST;
@@ -382,9 +406,10 @@ export class MoverView {
       // Close enough is there, so a settled pose stops being rebuilt.
       if (Math.abs(crouch - this.crouch) > POSE_SNAP) crouch = lerp(this.crouch, crouch, k);
       if (Math.abs(pitch - this.pitch) > POSE_SNAP) pitch = lerp(this.pitch, pitch, k);
+      if (Math.abs(spread - this.spread) > POSE_SNAP) spread = lerp(this.spread, spread, k);
     }
     this.posed = true;
-    if (crouch !== this.crouch || pitch !== this.pitch) this.pose(crouch, pitch);
+    if (crouch !== this.crouch || pitch !== this.pitch || spread !== this.spread) this.pose(crouch, pitch, spread);
 
     const tuck = b.tucked;
     if (tuck !== this.tuckShown) {
@@ -406,10 +431,11 @@ export class MoverView {
     this.shadow.scale.set(s, 1, s);
   }
 
-  /** Build the board and the rider for a crouch (0..1) and the board's nose-up pitch. */
-  private pose(crouch: number, pitch: number): void {
+  /** Build the board and the rider for a crouch (0..1), the board's nose-up pitch and the arms' spread (0..1). */
+  private pose(crouch: number, pitch: number, spread: number): void {
     this.crouch = crouch;
     this.pitch = pitch;
+    this.spread = spread;
 
     // The board turns nose-up about its middle. Its axes: along (f), up (u), across (x).
     const cp = Math.cos(pitch);
@@ -475,9 +501,11 @@ export class MoverView {
     const sx = tx * TORSO_HALF * 2;
     const sy = hy + ty * TORSO_HALF * 2;
     fs.diamond(sx + tx * HEAD_UP, sy + ty * HEAD_UP, 0, HEAD_HIGH, HEAD_WIDE);
-    // Arms out along the board for balance, a little forward of the shoulders.
+    // Arms out along the board for balance, a little forward of the shoulders; spread, wider and up.
     const ay = sy - 0.06;
-    fs.limb(sx + 0.08, ay - ARM_DROP, ARM_REACH, sx + 0.08, ay - ARM_DROP * 1.2, -ARM_REACH, ARM_R, ARM_R);
+    const reach = lerp(ARM_REACH, ARM_REACH_GRIND, spread);
+    const drop = lerp(ARM_DROP, -ARM_RISE_GRIND, spread);
+    fs.limb(sx + 0.08, ay - drop, reach, sx + 0.08, ay - drop * 1.2, -reach, ARM_R, ARM_R);
     fs.end();
   }
 

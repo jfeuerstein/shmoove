@@ -14,7 +14,7 @@
  */
 import { dcos, dsin, datan2, PI, smoothstep, TAU } from './math';
 import { Rng } from './rng';
-import type { BoostPad, Rail, Terrain } from './terrain';
+import { railOver, type BoostPad, type Rail, type Terrain } from './terrain';
 import type { Vec3 } from './types';
 
 export const BOWL_RADIUS = 170;
@@ -28,6 +28,32 @@ export interface BowlFeatures {
   kickers: { x: number; z: number; yaw: number }[];
   /** Where the things on the map go (see `chooseSites`). Chosen after the ground is final. */
   sites: Site[];
+  /**
+   * The rails, in the same order as `Bowl.rails` (see `chooseRails`). Chosen after the sites, from
+   * their own stream.
+   */
+  rails: RailSite[];
+}
+
+/**
+ * What a rail is there for: one of a chain laid end to end, one down the fall line of a hillside,
+ * one down a half-pipe's floor, or one where it fitted.
+ */
+export type RailKind = 'chain' | 'hill' | 'pipe' | 'open';
+
+/**
+ * A rail on the map, seen from above. x0,z0 is the high end, the one it is ridden from (either end
+ * of a level one). The rails of one chain share a `chain` (1, 2, ...) and are listed in the order
+ * they are ridden; every other rail has chain 0. The bar stands `RAIL_LIFT` m above the ground at
+ * both ends.
+ */
+export interface RailSite {
+  x0: number;
+  z0: number;
+  x1: number;
+  z1: number;
+  kind: RailKind;
+  chain: number;
 }
 
 /** What stands at a site. */
@@ -678,6 +704,7 @@ function layout(seed: number, attempt: number): Layout | null {
       return { x: c.x, z: c.z, yaw: datan2(k.fx, k.fz) };
     }),
     sites: [],
+    rails: [],
   };
   return { shape: sh, pads, features, spawnX: bx, spawnZ: bz, spawnYaw: datan2(sh.sfx, sh.sfz) };
 }
@@ -721,8 +748,8 @@ class BowlTerrain implements Bowl {
   readonly spawnZ: number;
   readonly spawnYaw: number;
   readonly pads: readonly BoostPad[];
-  /** Rails to grind. None yet: the generator places them in a later task. */
-  readonly rails: readonly Rail[] = [];
+  /** Rails to grind, filled once by `chooseRails` (the same order as `features.rails`). */
+  readonly rails: Rail[] = [];
   private readonly grid: Float32Array;
   /** Slope from the last `sample` call. */
   private gx = 0;
@@ -1115,6 +1142,369 @@ function chooseSites(bowl: Bowl, sh: Shape, rng: Rng): void {
   }
 }
 
+// ---------------------------------------------------------------------------------------------
+// Rails: straight bars to grind, stood on the finished ground.
+
+/** A rail's bar stands this far above the ground at both ends, m. */
+export const RAIL_LIFT = 1.2;
+
+/** Where rails go, and the rules every one of them keeps. Map design, not feel. */
+const RAIL = {
+  /** How many rails a map has. */
+  min: 8,
+  max: 12,
+  /** The rail and its run-ups stay inside this radius, m. */
+  floorR: 125,
+  minLen: 14,
+  maxLen: 32,
+  /** The ground under the bar, sampled every metre, lies this far below it, m. */
+  underMin: 0.7,
+  underMax: 2.4,
+  /** A rail falls by at least `fall` of its length from end to end, or by no more than `level`. */
+  fall: 0.03,
+  level: 0.02,
+  /** And never more steeply than this. */
+  steep: 0.3,
+  /** Clear run-up beyond each end, m, on ground under `runUpSlope`. */
+  runUp: 3,
+  runUpSlope: 0.35,
+  /**
+   * Along each run-up the ground stays this far below the bar's line carried on past the end, m,
+   * so a hop taken there comes down level with the bar.
+   */
+  runUpUnderMin: 0.9,
+  runUpUnderMax: 1.5,
+  /** No site (hoops excepted), pad edge or other rail within this of a rail's line or run-ups, m. */
+  apart: 4,
+  /** No rail within this of the spawn, m. */
+  spawn: 14,
+  chains: 2,
+  /** A chain has two rails, or three where a third fits, laid end to end along one line. */
+  chainMost: 3,
+  /** Lengths tried for a chain's first rail and for the next ones, m, in order. */
+  chainFirstLens: [32, 29, 26, 23, 20, 17],
+  chainNextLens: [20, 16, 24, 14, 28],
+  /** Gaps tried between one rail of a chain and the next, m, nearest first (5 to 8). */
+  chainGaps: [5, 5.5, 6, 6.5, 7, 7.5, 8],
+  /** A chain starts where the ground falls at least this steeply (speed off the first rail carries the flight)... */
+  chainSlope: 0.12,
+  /** ...and heads within this of straight down, rad. */
+  chainSkew: 0.5,
+  chainTries: 10000,
+  hills: 2,
+  /** Least slope under the middle of a hillside rail. */
+  hillSlope: 0.1,
+  /** A pipe rail runs parallel to the pipe's axis, this far to one side of it, m. */
+  pipeSideMin: 1.5,
+  pipeSideMax: 3.5,
+  /** Candidates drawn for each rail before giving up (and for each chain, `chainTries`). */
+  tries: 2000,
+} as const;
+
+/**
+ * What the chain check assumes of a rider: on at run speed a few metres along the first rail, the
+ * grind's push, the pop off the end, gravity, the ticks after leaving a rail before another can be
+ * caught, and a little less reach below and above a bar than the mover has. These are the mover's
+ * values when the map was laid out, copied rather than read so the map for a seed never depends on
+ * a feel slider; `tests/sim/bowl-rails.test.ts` rides every chain with the real mover.
+ *
+ * The wait matters most: 18 ticks off the end a rider has dropped about half a metre below the
+ * first rail's line carried on, whatever its speed, which is all the reach it has. So the next rail
+ * has to start lower than that line: a chain only fits where the fall line steepens.
+ */
+const CHAIN_RIDER = {
+  speed: 10,
+  onAt: 3,
+  push: 1.5,
+  pop: 2,
+  gravity: 25,
+  wait: 18,
+  below: 0.45,
+  above: 1.1,
+  maxVy: 1,
+} as const;
+const RAIL_DT = 1 / 60;
+
+/** A rail seen from above, x0,z0 being the end it is ridden from. */
+interface RailLine {
+  x0: number;
+  z0: number;
+  x1: number;
+  z1: number;
+}
+
+function segPointDist(ax: number, az: number, bx: number, bz: number, px: number, pz: number): number {
+  const dx = bx - ax;
+  const dz = bz - az;
+  const l2 = dx * dx + dz * dz;
+  let t = l2 > 1e-12 ? ((px - ax) * dx + (pz - az) * dz) / l2 : 0;
+  if (t < 0) t = 0;
+  else if (t > 1) t = 1;
+  return dist(px, pz, ax + dx * t, az + dz * t);
+}
+
+/** Which side of the line a->b the point p is on (the sign of the cross product). */
+function side(ax: number, az: number, bx: number, bz: number, px: number, pz: number): number {
+  return (bx - ax) * (pz - az) - (bz - az) * (px - ax);
+}
+
+/** Least distance between two segments (0 if they cross). */
+function segSegDist(a: RailLine, b: RailLine): number {
+  const s1 = side(a.x0, a.z0, a.x1, a.z1, b.x0, b.z0);
+  const s2 = side(a.x0, a.z0, a.x1, a.z1, b.x1, b.z1);
+  const s3 = side(b.x0, b.z0, b.x1, b.z1, a.x0, a.z0);
+  const s4 = side(b.x0, b.z0, b.x1, b.z1, a.x1, a.z1);
+  if (s1 * s2 < 0 && s3 * s4 < 0) return 0;
+  return Math.min(
+    segPointDist(a.x0, a.z0, a.x1, a.z1, b.x0, b.z0),
+    segPointDist(a.x0, a.z0, a.x1, a.z1, b.x1, b.z1),
+    segPointDist(b.x0, b.z0, b.x1, b.z1, a.x0, a.z0),
+    segPointDist(b.x0, b.z0, b.x1, b.z1, a.x1, a.z1),
+  );
+}
+
+/** The rail with its run-ups: carried on `RAIL.runUp` m beyond each end. */
+function withRunUps(l: RailLine): RailLine {
+  const len = dist(l.x0, l.z0, l.x1, l.z1);
+  const ux = ((l.x1 - l.x0) / len) * RAIL.runUp;
+  const uz = ((l.z1 - l.z0) / len) * RAIL.runUp;
+  return { x0: l.x0 - ux, z0: l.z0 - uz, x1: l.x1 + ux, z1: l.z1 + uz };
+}
+
+/** Height lost from the first end of the rail to the second, as a share of its length (negative: it climbs). */
+function railFall(t: Terrain, l: RailLine): number {
+  return (t.heightAt(l.x0, l.z0) - t.heightAt(l.x1, l.z1)) / dist(l.x0, l.z0, l.x1, l.z1);
+}
+
+/**
+ * True if the rail keeps the rules of its own: its length; on the floor with its run-ups; the
+ * ground under it neither too near nor too far; falling clearly or level; and a run-up at each end
+ * on gentle ground that sits where the bar's line carried on can be hopped onto. (The clearances
+ * from other things are checked by `railClear`.)
+ */
+function railShapeFits(t: Terrain, l: RailLine): boolean {
+  const len = dist(l.x0, l.z0, l.x1, l.z1);
+  if (len < RAIL.minLen || len > RAIL.maxLen) return false;
+  const e = withRunUps(l);
+  const r2 = RAIL.floorR * RAIL.floorR;
+  if (e.x0 * e.x0 + e.z0 * e.z0 >= r2 || e.x1 * e.x1 + e.z1 * e.z1 >= r2) return false;
+  const f = Math.abs(railFall(t, l));
+  if ((f > RAIL.level && f < RAIL.fall) || f > RAIL.steep) return false;
+  const y0 = t.heightAt(l.x0, l.z0) + RAIL_LIFT;
+  const y1 = t.heightAt(l.x1, l.z1) + RAIL_LIFT;
+  const n = Math.ceil(len);
+  for (let k = 1; k < n; k++) {
+    const q = k / len;
+    const under = y0 + (y1 - y0) * q - t.heightAt(l.x0 + (l.x1 - l.x0) * q, l.z0 + (l.z1 - l.z0) * q);
+    if (under < RAIL.underMin || under > RAIL.underMax) return false;
+  }
+  // The run-ups, sampled every half metre out from each end.
+  const ux = (l.x1 - l.x0) / len;
+  const uz = (l.z1 - l.z0) / len;
+  const grade = (y1 - y0) / len;
+  for (let d = 0.5; d <= RAIL.runUp + 1e-9; d += 0.5) {
+    for (let end = 0; end < 2; end++) {
+      const px = end === 0 ? l.x0 - ux * d : l.x1 + ux * d;
+      const pz = end === 0 ? l.z0 - uz * d : l.z1 + uz * d;
+      const line = end === 0 ? y0 - grade * d : y1 + grade * d;
+      const under = line - t.heightAt(px, pz);
+      if (under < RAIL.runUpUnderMin || under > RAIL.runUpUnderMax) return false;
+      if (siteSlope(t, px, pz) >= RAIL.runUpSlope) return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * True if the rail and its run-ups keep clear of the spawn, the pads, every site but the hoops, and
+ * the other rails (`partners`, the rails of its own chain, need only clear the bar itself).
+ */
+function railClear(bowl: Bowl, l: RailLine, others: readonly RailLine[], partners: readonly RailLine[]): boolean {
+  const e = withRunUps(l);
+  if (segPointDist(e.x0, e.z0, e.x1, e.z1, bowl.spawnX, bowl.spawnZ) < RAIL.spawn) return false;
+  for (const p of bowl.pads) if (segPointDist(e.x0, e.z0, e.x1, e.z1, p.x, p.z) < RAIL.apart + p.radius) return false;
+  for (const s of bowl.features.sites) {
+    if (s.kind !== 'hoop' && segPointDist(e.x0, e.z0, e.x1, e.z1, s.x, s.z) < RAIL.apart) return false;
+  }
+  for (const o of others) {
+    if (segSegDist(e, o) < RAIL.apart || segSegDist(l, withRunUps(o)) < RAIL.apart) return false;
+  }
+  for (const o of partners) if (segSegDist(l, o) < RAIL.apart) return false;
+  return true;
+}
+
+/**
+ * True if a rider who gets on `a` at run speed a few metres from its start, grinds it to the end
+ * without touching anything, and flies off the end comes down onto `b` (laid on along the same
+ * line) before the ground, in the first half of it. Assumes the `CHAIN_RIDER`.
+ */
+function chainCatches(t: Terrain, a: RailLine, b: RailLine): boolean {
+  const c = CHAIN_RIDER;
+  const ya0 = t.heightAt(a.x0, a.z0) + RAIL_LIFT;
+  const ya1 = t.heightAt(a.x1, a.z1) + RAIL_LIFT;
+  const yb0 = t.heightAt(b.x0, b.z0) + RAIL_LIFT;
+  const yb1 = t.heightAt(b.x1, b.z1) + RAIL_LIFT;
+  const hl = dist(a.x0, a.z0, a.x1, a.z1);
+  const l3 = Math.sqrt(hl * hl + (ya1 - ya0) * (ya1 - ya0));
+  // The grind: the slope pulls, the grind pushes.
+  let v = c.speed;
+  for (let d = (c.onAt / hl) * l3; d < l3; d += v * RAIL_DT) v += ((c.gravity * (ya0 - ya1)) / l3 + c.push) * RAIL_DT;
+  // The flight.
+  const ux = (a.x1 - a.x0) / hl;
+  const uz = (a.z1 - a.z0) / hl;
+  const vh = (v * hl) / l3;
+  let vy = (v * (ya1 - ya0)) / l3 + c.pop;
+  let x = a.x1;
+  let z = a.z1;
+  let y = ya1;
+  const bdx = b.x1 - b.x0;
+  const bdz = b.z1 - b.z0;
+  const bl2 = bdx * bdx + bdz * bdz;
+  for (let tick = 0; tick < 240; tick++) {
+    vy -= c.gravity * RAIL_DT;
+    x += ux * vh * RAIL_DT;
+    z += uz * vh * RAIL_DT;
+    y += vy * RAIL_DT;
+    const q = ((x - b.x0) * bdx + (z - b.z0) * bdz) / bl2;
+    if (q >= 0 && q <= 1) {
+      const ry = yb0 + (yb1 - yb0) * q;
+      if (tick >= c.wait - 1 && vy <= c.maxVy && y >= ry - c.below && y <= ry + c.above) return q <= 0.5;
+    }
+    if (y <= t.heightAt(x, z)) return false;
+  }
+  return false;
+}
+
+/**
+ * Choose the rails from the finished ground and sites: one down each half-pipe's floor, beside the
+ * axis; two chains of rails end to end down a fall line, each close enough behind the last that
+ * riding off one lands on the next; two down the fall line of a hillside; then more where they fit,
+ * up to a count drawn from the seed. Over seeds 1 to 300 every seed gets them all; one that does
+ * not throws rather than hand back a map short of its rails.
+ */
+function chooseRails(bowl: BowlTerrain, rng: Rng): void {
+  const lines: RailLine[] = [];
+  const sites = bowl.features.rails;
+  const want = RAIL.min + rng.int(RAIL.max - RAIL.min + 1);
+  const add = (l: RailLine, kind: RailKind, chain: number): void => {
+    lines.push(l);
+    sites.push({ x0: l.x0, z0: l.z0, x1: l.x1, z1: l.z1, kind, chain });
+    bowl.rails.push(railOver((x, z) => bowl.heightAt(x, z), l.x0, l.z0, l.x1, l.z1, RAIL_LIFT));
+  };
+  /** The line from (x, z) along (dx, dz), `from` to `to` metres. */
+  const along = (x: number, z: number, dx: number, dz: number, from: number, to: number): RailLine => ({
+    x0: x + dx * from,
+    z0: z + dz * from,
+    x1: x + dx * to,
+    z1: z + dz * to,
+  });
+  /** The same line ridden from its high end. */
+  const highFirst = (l: RailLine): RailLine => (railFall(bowl, l) >= 0 ? l : { x0: l.x1, z0: l.z1, x1: l.x0, z1: l.z0 });
+  const fits = (l: RailLine, partners: readonly RailLine[] = []): boolean =>
+    railShapeFits(bowl, l) && railClear(bowl, l, lines, partners);
+  // A candidate point on the floor, uniform over the disc, and the way downhill from it.
+  let cx = 0;
+  let cz = 0;
+  let fx = 0;
+  let fz = 0;
+  let slope = 0;
+  const draw = (): void => {
+    const r = (RAIL.floorR - 6) * Math.sqrt(rng.next());
+    const a = rng.range(0, TAU);
+    cx = r * dsin(a);
+    cz = r * dcos(a);
+    bowl.normalAt(cx, cz, RUN_N);
+    const h = Math.sqrt(RUN_N.x * RUN_N.x + RUN_N.z * RUN_N.z);
+    slope = h / RUN_N.y;
+    fx = h > 1e-9 ? RUN_N.x / h : 0;
+    fz = h > 1e-9 ? RUN_N.z / h : 1;
+  };
+
+  // Down each half-pipe's floor, parallel to the axis and off to one side of it.
+  for (const p of bowl.features.pipes) {
+    const len = dist(p.x0, p.z0, p.x1, p.z1);
+    const dx = (p.x1 - p.x0) / len;
+    const dz = (p.z1 - p.z0) / len;
+    let placed = false;
+    for (let i = 0; i < RAIL.tries && !placed; i++) {
+      const off = rng.range(RAIL.pipeSideMin, RAIL.pipeSideMax) * (rng.chance(0.5) ? 1 : -1);
+      const s0 = rng.range(RAIL.runUp, len - RAIL.minLen - RAIL.runUp);
+      const s1 = Math.min(s0 + rng.range(RAIL.minLen, RAIL.maxLen), len - RAIL.runUp);
+      const l = highFirst(along(p.x0 + dz * off, p.z0 - dx * off, dx, dz, s0, s1));
+      if (!fits(l)) continue;
+      add(l, 'pipe', 0);
+      placed = true;
+    }
+    if (!placed) throw new Error(`makeBowl(${bowl.seed}): no room for a rail in a pipe`);
+  }
+
+  // Chains: two or three rails end to end along one line that starts down the fall line. The first
+  // is the longest that fits there (the faster it is left, the farther the flight carries); each
+  // next one starts as soon after the last as lets riding off that one land on it.
+  const next = (chain: readonly RailLine[], ux: number, uz: number): RailLine | null => {
+    const last = chain[chain.length - 1];
+    for (const gap of RAIL.chainGaps) {
+      for (const len of RAIL.chainNextLens) {
+        const l = along(last.x1, last.z1, ux, uz, gap, gap + len);
+        // Ridden first end to last: each one falls that way, or is level.
+        if (railFall(bowl, l) >= -RAIL.level && fits(l, chain) && chainCatches(bowl, last, l)) return l;
+      }
+    }
+    return null;
+  };
+  for (let c = 1; c <= RAIL.chains; c++) {
+    let placed = false;
+    for (let i = 0; i < RAIL.chainTries && !placed; i++) {
+      draw();
+      if (slope < RAIL.chainSlope) continue;
+      const yaw = datan2(fx, fz) + rng.range(-RAIL.chainSkew, RAIL.chainSkew);
+      const ux = dsin(yaw);
+      const uz = dcos(yaw);
+      for (const len of RAIL.chainFirstLens) {
+        const first = along(cx, cz, ux, uz, 0, len);
+        if (railFall(bowl, first) < -RAIL.level || !fits(first)) continue;
+        const chain = [first];
+        const second = next(chain, ux, uz);
+        if (!second) continue;
+        chain.push(second);
+        while (chain.length < RAIL.chainMost) {
+          const more = next(chain, ux, uz);
+          if (!more) break;
+          chain.push(more);
+        }
+        for (const l of chain) add(l, 'chain', c);
+        placed = true;
+        break;
+      }
+    }
+    if (!placed) throw new Error(`makeBowl(${bowl.seed}): no room for rail chain ${c}`);
+  }
+
+  // Down the fall line of a hillside, centred where the slope is read.
+  for (let n = 0; n < RAIL.hills; n++) {
+    let placed = false;
+    for (let i = 0; i < RAIL.tries && !placed; i++) {
+      draw();
+      if (slope < RAIL.hillSlope) continue;
+      const half = rng.range(RAIL.minLen, RAIL.maxLen) / 2;
+      const l = along(cx, cz, fx, fz, -half, half);
+      if (railFall(bowl, l) < RAIL.fall || !fits(l)) continue;
+      add(l, 'hill', 0);
+      placed = true;
+    }
+    if (!placed) throw new Error(`makeBowl(${bowl.seed}): no room for a hillside rail`);
+  }
+
+  // The rest wherever they fit, any way round.
+  for (let i = 0; i < RAIL.tries && lines.length < want; i++) {
+    draw();
+    const yaw = rng.range(0, TAU);
+    const half = rng.range(RAIL.minLen, RAIL.maxLen) / 2;
+    const l = highFirst(along(cx, cz, dsin(yaw), dcos(yaw), -half, half));
+    if (fits(l)) add(l, 'open', 0);
+  }
+}
+
 /**
  * Build the bowl for a seed. Same seed, bit-identical terrain.
  *
@@ -1137,6 +1527,7 @@ export function makeBowl(seed: number): Bowl {
     if (padsOk && spawnRunDrop(bowl) >= SPAWN_RUN_DROP) {
       // The ground is final; what stands on it is chosen from its own stream, so it never moves it.
       chooseSites(bowl, lay.shape, new Rng(seed).fork('sites'));
+      chooseRails(bowl, new Rng(seed).fork('rails'));
       return bowl;
     }
   }
