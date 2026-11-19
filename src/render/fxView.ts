@@ -12,6 +12,9 @@
  *   the struck enemies in order, gone in `BOLT_LIFE`.
  * - `FX_HEAL`, `FX_TOKEN`: a small mark rising from the mover.
  * - `FX_PLAYER_HIT`: `hitTint` jumps up and decays; the UI overlay draws it as a red wash.
+ * - Grinding (read from the sim state's mover and events, not the queue): while the board is on a
+ *   rail, a stream of small `PALETTE.grindSpark` shards flies back and up off it, and
+ *   `EV_GRIND_START` and `EV_GRIND_END` each throw a burst of them. Same pool as the other shards.
  *
  * `ingest` must be called once per tick, right after the step (the queue is only valid until the
  * next one); `update` once per frame. Nothing allocates after construction.
@@ -32,6 +35,7 @@ import {
   TetrahedronGeometry,
 } from 'three';
 import type { Terrain } from '../sim/terrain';
+import { EV_GRIND_END, EV_GRIND_START, type SimState } from '../sim/types';
 import {
   FX_ARC,
   FX_BLAST,
@@ -309,7 +313,20 @@ const HIT_FADE = 0.4;
 
 /** Shard colours: the enemy kinds, then the things. */
 const THING_COLOR_BASE = KIND_COUNT;
-const SHARD_COLORS = [...PALETTE.enemies, ...PALETTE.things];
+const SHARD_COLORS = [...PALETTE.enemies, ...PALETTE.things, PALETTE.grindSpark];
+const GRIND_COLOR = SHARD_COLORS.length - 1;
+
+/** Grind sparks streamed each tick on a rail, and thrown when a grind starts or ends. */
+export const GRIND_STREAM = 2;
+export const GRIND_BURST = 10;
+/** A streamed spark's size (share of a shard's), and how much of the board's speed it keeps. */
+const GRIND_SIZE = 0.45;
+const GRIND_TRAIL = 0.35;
+/** Its speed up and sideways, m/s. */
+const GRIND_UP = 3;
+const GRIND_SIDE = 2.2;
+/** The burst's spread: as a thing about this big, m (a 0.6 m thing throws `perUnit` shards). */
+const GRIND_BURST_RADIUS = 0.6;
 /** Mark colours. */
 const MARK_HEAL = 0;
 const MARK_TOKEN = 1;
@@ -381,6 +398,9 @@ export class FxView {
   private readonly mCol = new Uint8Array(MARK_POOL);
   private markNext = 0;
 
+  /** The sim tick grind sparks were last thrown for. */
+  private grindTick = -1;
+
   /** Cheap deterministic noise for shard directions and bolt jags. */
   private seed = 0x9e3779b9;
 
@@ -442,6 +462,7 @@ export class FxView {
   /** Drop everything still playing from the last run. */
   reset(): void {
     this.hitTint = 0;
+    this.grindTick = -1;
     this.gAge.fill(-1);
     this.glowNext = 0;
     this.shardCount = 0;
@@ -466,9 +487,10 @@ export class FxView {
 
   /**
    * Take this tick's effects. Call once per tick, right after `sim.step`. (mx, my, mz) is where the
-   * mover's feet are after the step: bolts start there.
+   * mover's feet are after the step: bolts start there. With the sim state, grinds throw sparks.
    */
-  ingest(w: World, mx = 0, my = 0, mz = 0): void {
+  ingest(w: World, mx = 0, my = 0, mz = 0, s: SimState | null = null): void {
+    if (s) this.grind(s);
     const f = w.fx;
     this.boltOpen = -1;
     for (let i = 0; i < f.count; i++) {
@@ -510,6 +532,39 @@ export class FxView {
     this.boltOpen = -1;
   }
 
+  /**
+   * Sparks off a board on a rail, from the mover's state and this tick's events. Only on a tick the
+   * sim really stepped: while it holds (cards open, the run over) the board stands still on the bar.
+   */
+  private grind(s: SimState): void {
+    if (s.tick === this.grindTick) return;
+    this.grindTick = s.tick;
+    const m = s.mover;
+    if ((s.events & (EV_GRIND_START | EV_GRIND_END)) !== 0) {
+      this.burst(GRIND_COLOR, m.x, m.y, m.z, GRIND_BURST_RADIUS, GRIND_BURST, GRIND_SIZE);
+    }
+    if (m.rail < 0) return;
+    const hs = Math.sqrt(m.vx * m.vx + m.vz * m.vz);
+    // Across the way it is going, on the ground.
+    const sx = hs > 1e-6 ? -m.vz / hs : 1;
+    const sz = hs > 1e-6 ? m.vx / hs : 0;
+    for (let j = 0; j < GRIND_STREAM; j++) {
+      const i = this.shardCount < SHARD_POOL ? this.shardCount++ : Math.floor(this.rand() * SHARD_POOL);
+      const side = (this.rand() * 2 - 1) * GRIND_SIDE;
+      const back = GRIND_TRAIL * (0.5 + this.rand());
+      this.sx[i] = m.x;
+      this.sy[i] = m.y;
+      this.sz[i] = m.z;
+      this.svx[i] = -m.vx * back + sx * side;
+      this.svy[i] = GRIND_UP * (0.4 + this.rand());
+      this.svz[i] = -m.vz * back + sz * side;
+      this.sage[i] = 0;
+      this.sspin[i] = this.rand() * Math.PI * 2;
+      this.ssize[i] = GRIND_SIZE * (0.7 + 0.6 * this.rand());
+      this.scol[i] = GRIND_COLOR;
+    }
+  }
+
   private glow(type: number, x: number, y: number, z: number, r: number, life: number, peak: number, inner: number, color: number): void {
     const p = this.glowNext;
     this.glowNext = (p + 1) % GLOW_POOL;
@@ -525,9 +580,9 @@ export class FxView {
     rgbInto(this.gRgb, p * 3, color);
   }
 
-  private burst(col: number, x: number, y: number, z: number, radius: number, perUnit: number): void {
+  private burst(col: number, x: number, y: number, z: number, radius: number, perUnit: number, scale = 1): void {
     const n = Math.max(3, Math.round(perUnit * Math.sqrt(radius / 0.6)));
-    const size = 0.6 + radius * 0.6;
+    const size = (0.6 + radius * 0.6) * scale;
     for (let j = 0; j < n; j++) {
       // A full pool overwrites a live shard at random: in a crowd nobody notices which.
       const i = this.shardCount < SHARD_POOL ? this.shardCount++ : Math.floor(this.rand() * SHARD_POOL);

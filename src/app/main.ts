@@ -10,6 +10,7 @@ import { FxView } from '../render/fxView';
 import { HordeView } from '../render/hordeView';
 import { PALETTE } from '../render/look';
 import { MoverView } from '../render/moverView';
+import { RailsView } from '../render/railsView';
 import { GameScene } from '../render/scene';
 import { ShotsView } from '../render/shotsView';
 import { SparksView } from '../render/sparksView';
@@ -127,6 +128,8 @@ function boot(): void {
   const { source: input, touch } = makeInput(settings.scheme, canvas, hookInput, picks);
   const view = new GameScene(canvas);
   view.scene.add(makeTerrainView(terrain));
+  // The rails never move: drawn once, from the terrain, with nothing to update per frame.
+  view.scene.add(new RailsView(terrain).object);
   const mover = new MoverView();
   view.scene.add(mover.object);
   // The horde, sparks, shots, the Wake and effects: drawn from the world, never writing it.
@@ -267,7 +270,7 @@ function boot(): void {
     sim.step(frameInput);
     if (lesson) stepLesson(lesson);
     const m = sim.state.mover;
-    fx.ingest(sim.world, m.x, m.y, m.z);
+    fx.ingest(sim.world, m.x, m.y, m.z, sim.state);
     numbers?.ingest(sim.world);
     const nowChoosing = sim.world.run.phase === PHASE_CHOOSE;
     if (choosing && !nowChoosing) ramp.begin();

@@ -1,8 +1,10 @@
 import { Color, type InstancedBufferAttribute } from 'three';
 import { describe, expect, it } from 'vitest';
-import { BOLT_FROM, BOLT_JAG, BOLT_LIFE, BOLT_POINTS, BOLT_TO, FxView } from '../../src/render/fxView';
+import { BOLT_FROM, BOLT_JAG, BOLT_LIFE, BOLT_POINTS, BOLT_TO, FxView, GRIND_BURST, GRIND_STREAM } from '../../src/render/fxView';
 import { PALETTE } from '../../src/render/look';
+import { makeSimState } from '../../src/sim/sim';
 import { flatTerrain } from '../../src/sim/terrain';
+import { EV_GRIND_END, EV_GRIND_START, EV_HOP } from '../../src/sim/types';
 import {
   emitFx,
   FX_ARC,
@@ -161,5 +163,76 @@ describe('FxView glows and marks', () => {
     expect(fx.liveMarks).toBe(0);
     fx.reset();
     expect(fx.liveShards + fx.liveGlows + fx.liveBolts + fx.liveMarks).toBe(0);
+  });
+});
+
+describe('FxView grind sparks', () => {
+  it('streams small grind-coloured sparks back off the board while it is on a rail, and bursts at both ends', () => {
+    const terrain = flatTerrain(100);
+    const w = makeWorld(1);
+    const s = makeSimState(terrain);
+    const m = s.mover;
+    m.x = 3;
+    m.y = 1.2;
+    m.z = 0;
+    m.vx = 0;
+    m.vz = 14;
+    const fx = new FxView(terrain);
+
+    /** One sim step's worth: the tick moves on, then the view takes it. */
+    const tick = (events: number): void => {
+      s.tick++;
+      s.events = events;
+      fx.ingest(w, m.x, m.y, m.z, s);
+    };
+
+    // Riding past, or hopping, throws nothing.
+    tick(EV_HOP);
+    expect(fx.liveShards).toBe(0);
+
+    // On: a burst, and the stream starts.
+    m.rail = 0;
+    tick(EV_GRIND_START);
+    const burst = fx.liveShards;
+    expect(burst).toBeGreaterThanOrEqual(GRIND_BURST);
+    for (let t = 0; t < 10; t++) tick(0);
+    expect(fx.liveShards).toBe(burst + 10 * GRIND_STREAM);
+    // While the sim holds still (cards on the table) the board throws nothing.
+    s.events = 0;
+    for (let t = 0; t < 5; t++) fx.ingest(w, m.x, m.y, m.z, s);
+    expect(fx.liveShards).toBe(burst + 10 * GRIND_STREAM);
+
+    // They are the grind's colour, and they fly back from the way the board goes, and up.
+    fx.update(1 / 60);
+    const col = fx.shards.instanceColor;
+    if (!col) throw new Error('no colours');
+    const want = new Color(PALETTE.grindSpark);
+    for (let i = 0; i < fx.liveShards; i++) {
+      expect(col.getX(i)).toBeCloseTo(want.r, 5);
+      expect(col.getY(i)).toBeCloseTo(want.g, 5);
+      expect(col.getZ(i)).toBeCloseTo(want.b, 5);
+    }
+    const before = fx.liveShards;
+    tick(0);
+    fx.update(1 / 60);
+    const mat = fx.shards.instanceMatrix.array;
+    let back = 0;
+    for (let i = before; i < fx.liveShards; i++) {
+      expect(mat[i * 16 + 13]).toBeGreaterThan(m.y);
+      if (mat[i * 16 + 14] < m.z) back++;
+    }
+    expect(back).toBe(GRIND_STREAM);
+
+    // Off: one more burst, then nothing new.
+    m.rail = -1;
+    const n = fx.liveShards;
+    tick(EV_GRIND_END);
+    expect(fx.liveShards).toBeGreaterThanOrEqual(n + GRIND_BURST);
+    const after = fx.liveShards;
+    tick(0);
+    expect(fx.liveShards).toBe(after);
+    // And they die away.
+    for (let k = 0; k < 10; k++) fx.update(0.1);
+    expect(fx.liveShards).toBe(0);
   });
 });

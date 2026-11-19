@@ -15,6 +15,7 @@ interface Pose {
   grounded?: boolean;
   tucked?: boolean;
   y?: number;
+  rail?: number;
 }
 
 function state(p: Pose): SimState {
@@ -27,6 +28,7 @@ function state(p: Pose): SimState {
   m.speed = p.speed ?? 12;
   m.grounded = p.grounded ?? true;
   m.tucked = p.tucked ?? false;
+  m.rail = p.rail ?? -1;
   m.nx = 0;
   m.ny = 1;
   m.nz = 0;
@@ -163,5 +165,46 @@ describe('MoverView: a rider on a board', () => {
     expect(view.crouch).toBeLessThan(1);
     for (let i = 0; i < 60; i++) view.update(push, push, 1, terrain, 1 / 60);
     expect(view.crouch).toBeLessThan(0.01);
+  });
+
+  it('on a rail boardslides: the board across the rail with its deck on the bar, crouched, arms spread wide', () => {
+    for (const heading of [0, 0.9, -2.2]) {
+      const ride = posed({ heading, speed: FEEL.runSpeed * 1.4 });
+      const air = posed({ heading, grounded: false, y: 1.2, speed: FEEL.runSpeed * 1.4 });
+      const grind = posed({ heading, grounded: false, y: 1.2, rail: 0, speed: FEEL.runSpeed * 1.4 });
+      expect(grind.grinding).toBe(true);
+      expect(ride.grinding).toBe(false);
+      // The board's length lies across the way it is going, level.
+      const { nose, tail } = ends(grind);
+      const d = nose.clone().sub(tail);
+      expect(Math.abs(d.y)).toBeLessThan(1e-4);
+      d.y = 0;
+      d.normalize();
+      expect(Math.abs(d.x * Math.sin(heading) + d.z * Math.cos(heading))).toBeLessThan(1e-4);
+      // Riding and in the air it points along the heading.
+      for (const v of [ride, air]) {
+        const e = ends(v);
+        const f = e.nose.clone().sub(e.tail);
+        f.y = 0;
+        f.normalize();
+        expect(f.x * Math.sin(heading) + f.z * Math.cos(heading)).toBeGreaterThan(0.99);
+      }
+      // The deck rests on the bar: its underside at the rider's height, not on wheels above it.
+      const deckLow = Math.min(...world(grind.board).filter((v) => v.y > 1.2 - 0.02).map((v) => v.y));
+      expect(deckLow).toBeCloseTo(1.2, 2);
+      // Crouched lower than riding, and the arms spread wider than in either other pose.
+      expect(top(grind) - 1.2).toBeLessThan(top(ride) - 0.1);
+      const span = (v: MoverView): number => {
+        const pts = world(v.figure);
+        // Measured along the board, wherever it points.
+        const e = ends(v);
+        const along = e.nose.clone().sub(e.tail).setY(0).normalize();
+        return Math.max(...pts.map((p) => p.dot(along))) - Math.min(...pts.map((p) => p.dot(along)));
+      };
+      expect(span(grind)).toBeGreaterThan(span(ride) + 0.3);
+      expect(span(grind)).toBeGreaterThan(span(air) + 0.3);
+      expect(grind.spread).toBe(1);
+      expect(ride.spread).toBe(0);
+    }
   });
 });
