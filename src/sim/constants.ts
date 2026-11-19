@@ -97,6 +97,7 @@ const DEFS = {
   wakeLifeTicks: { v: 420, min: 60, max: 1200, step: 10, group: 'wake', note: 'How long a piece of trail lasts, ticks' },
   wakeWidth: { v: 1.1, min: 0.3, max: 4, step: 0.1, group: 'wake', note: 'How far either side of the trail burns, m' },
   wakeCloseDist: { v: 2.6, min: 0.5, max: 8, step: 0.1, group: 'wake', note: 'How near your own trail you must pass to close a loop, m' },
+  wakePopEdge: { v: 2.2, min: 0, max: 6, step: 0.1, group: 'wake', note: 'How far outside the loop the pop still reaches, m. The horde chasing you round the ring is on the ring, not inside it' },
   wakeLoopMinArea: { v: 18, min: 0, max: 80, step: 1, group: 'wake', note: 'Smallest area a loop must enclose to pop, m2. Stops a strip beside your own trail counting as a loop' },
   wakeLoopMin: { v: 16, min: 6, max: 40, step: 1, group: 'wake', note: 'Shortest loop that pops, m of trail' },
 } as const satisfies Record<string, FeelDef>;

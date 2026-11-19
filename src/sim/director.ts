@@ -24,7 +24,7 @@ export const DIRECTOR = {
   /** Run times (s) at which the rate, floor and cap below are given; linear between, flat after. */
   at: [0, 30, 60, 120, 180],
   /** Enemies arriving per second. */
-  rate: [2.5, 5, 8, 14, 20],
+  rate: [2.5, 5, 8, 13, 17],
   /** Fewer than this alive and the director spawns perTick a tick until there are this many. */
   floor: [10, 15, 25, 40, 60],
   /** Never more than this alive. */

@@ -3,7 +3,7 @@
  *
  * The trail is a string of points laid every WAKE_STEP metres. Anything standing in it burns. When
  * the mover comes back to its own trail far enough along, the trail between there and here is a
- * closed loop: everything inside it takes the pop, sparks inside fly to the player, and the trail
+ * closed loop: everything inside it and on its ring takes the pop, sparks inside fly to the player, and the trail
  * starts again. Circling the horde is the attack.
  */
 import { gearPower, WAKE } from './balance';
@@ -69,6 +69,17 @@ function inLoop(k: Wake, from: number, to: number, px: number, pz: number): bool
   return inside;
 }
 
+/** Is (px, pz) within `reach` of the loop's own line, trail points [from, to]? */
+function onLoop(k: Wake, from: number, to: number, px: number, pz: number, reach: number): boolean {
+  const r2 = reach * reach;
+  for (let i = from; i <= to; i++) {
+    const dx = k.x[i] - px;
+    const dz = k.z[i] - pz;
+    if (dx * dx + dz * dz <= r2) return true;
+  }
+  return false;
+}
+
 /** Area enclosed by trail points [from, to], m2. */
 function loopArea(k: Wake, from: number, to: number): number {
   let twice = 0;
@@ -127,12 +138,20 @@ function pop(w: World, from: number, power: number): void {
 
   const h = w.horde;
   const damage = WAKE.popDamage[w.player.wakeLevel - 1] * power;
-  const n = queryEnemies(w, cx, cz, radius + MAX_ENEMY_RADIUS, w.nearA);
+  // The pop takes what is inside the loop and what is on the ring itself: the horde that chased
+  // the mover round is strung along the trail, not standing in the middle.
+  const edge = FEEL.wakePopEdge;
+  const n = queryEnemies(w, cx, cz, radius + edge + MAX_ENEMY_RADIUS, w.nearA);
   let killed = 0;
   for (let q = 0; q < n; q++) {
     const i = w.nearA[q];
     if (h.hp[i] <= 0 || h.age[i] < SPAWN_TICKS) continue;
-    if (!inLoop(k, from, to, h.x[i], h.z[i])) continue;
+    if (
+      !inLoop(k, from, to, h.x[i], h.z[i]) &&
+      !onLoop(k, from, to, h.x[i], h.z[i], edge + KINDS[h.kind[i]].radius)
+    ) {
+      continue;
+    }
     h.mark[i] |= MARK_SWEPT;
     damageEnemy(w, i, damage, true);
     if (h.hp[i] <= 0) killed++;

@@ -135,8 +135,8 @@ describe('the loop', () => {
       const a = (i / inside) * Math.PI * 2;
       place(sim, KIND_SHUFFLER, c.cx + Math.cos(a) * c.r * 0.4, c.cz + Math.sin(a) * c.r * 0.4);
     }
-    place(sim, KIND_SHUFFLER, c.cx + c.r + 6, c.cz);
-    place(sim, KIND_SHUFFLER, c.cx, c.cz - c.r - 6);
+    place(sim, KIND_SHUFFLER, c.cx + c.r + 8, c.cz);
+    place(sim, KIND_SHUFFLER, c.cx, c.cz - c.r - 8);
     const counts = new Map<number, number>();
 
     let killsBefore = 0;
@@ -158,6 +158,30 @@ describe('the loop', () => {
     expect(sim.world.horde.hp[0]).toBe(KINDS[KIND_SHUFFLER].hp);
     expect(sim.world.horde.hp[1]).toBe(KINDS[KIND_SHUFFLER].hp);
     expect(sim.world.player.hp).toBe(100);
+  });
+
+  it('also takes what is on the ring, just outside the loop, but not what is well clear of it', () => {
+    const sim = arena();
+    // Bollards survive the trail's burn, so what the pop did to each can be read off afterwards.
+    const outsideNear = place(sim, KIND_BOLLARD, c.cx - (c.r + KINDS[KIND_BOLLARD].radius + 1.2), c.cz);
+    const outsideFar = place(sim, KIND_BOLLARD, c.cx - (c.r + KINDS[KIND_BOLLARD].radius + 6), c.cz);
+    const counts = new Map<number, number>();
+    for (let t = 0; t < 60; t++) {
+      root(sim.world);
+      sim.step(FORWARD);
+    }
+    let before = 0;
+    let after = 0;
+    for (let t = 0; t < 420 && (counts.get(FX_POP) ?? 0) === 0; t++) {
+      root(sim.world);
+      before = sim.world.horde.hp[outsideNear];
+      stepCounting(sim, CIRCLE, 1, counts);
+      after = sim.world.horde.hp[outsideNear];
+    }
+    expect(counts.get(FX_POP) ?? 0).toBe(1);
+    // The near one took the pop on that tick (far more than a burn); the far one took nothing at all.
+    expect(before - after).toBeGreaterThan(20);
+    expect(sim.world.horde.hp[outsideFar]).toBe(KINDS[KIND_BOLLARD].hp);
   });
 
   it('spends the trail: one lap, one pop', () => {

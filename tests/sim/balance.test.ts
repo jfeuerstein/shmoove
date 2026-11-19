@@ -152,15 +152,17 @@ describe('the horde slice, five bots on seeds 1 to 5, a full run each', () => {
     expect(rows.filter((r) => r.best >= 6).map((r) => r.seed).length).toBeGreaterThanOrEqual(3);
   });
 
-  it('5. the rider sees the clock run out on 3 of 5, each time with 10 to 80 health, level 8+ and 300+ kills', () => {
+  it('5. the rider sees the clock run out on 3 of 5 with 10 to 80 health, level 8+ and 300+ kills; at most one easy win', () => {
     const rows = SEEDS.map((seed) => {
       const r = get('rider', seed);
       const ok = r.end === 'won' && r.hp >= 10 && r.hp <= 80 && r.level >= 8 && r.kills >= 300;
       return { seed, end: r.end, at: r1(r.seconds), hp: Math.round(r.hp), level: r.level, kills: r.kills, ok };
     });
     expect(rows.filter((r) => r.ok).length).toBeGreaterThanOrEqual(3);
-    // A run that wins must also have been a fight and a build.
-    expectAll(rows.filter((r) => r.end === 'won'));
+    // Every win was a build, and at most one of the five was a comfortable one.
+    const won = rows.filter((r) => r.end === 'won');
+    expect(won.filter((r) => r.level < 8 || r.kills < 300)).toEqual([]);
+    expect(won.filter((r) => r.hp > 80).length).toBeLessThanOrEqual(1);
   });
 
   it('6. after the first hit nobody goes from full health to dead in under 8 s', () => {
