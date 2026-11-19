@@ -4,8 +4,9 @@ A one-thumb 3D survivor on a skateboard, for a phone held upright. A horde close
 skate bowl; your weapons fire themselves, the dead drop sparks, levels are cards. The board is how
 you get about: push, coast, ollie, and be somewhere else before the horde arrives.
 
-**Where it is:** a three-minute run with ten weapons, eleven passives, seven kinds of enemy and a
-map full of things to ride through. Not yet balanced, and the newest content is only partly drawn.
+**Where it is:** a ten-minute run in three acts with two mini-bosses and a final boss, ten weapons,
+eleven passives, seven kinds of enemy, a map full of things to ride through and rails to grind,
+sound, and a first-run lesson. Being balanced and checked for a first full playtest.
 
 ```
 npm ci
