@@ -27,7 +27,7 @@ what to return. The verifier gets the same file.
 | `m3-render.md` | M3 | opus | stopped at the pivot, part done (three commits and uncommitted work in its worktree); not restarted |
 | `m3-balance.md` | M3 | opus | stopped at the pivot; not merged |
 | `m3-lesson.md` | M3 (pulled forward from M6) | sonnet | stopped at the pivot, written for the old rules; not restarted |
-| `m3b-weapons-timers.md` | M3, second pass | opus | out |
+| `m3b-weapons-timers.md` | M3, second pass | opus | merged |
 
 Verification: one opus verifier checked the five merged M0/M1 briefs together; its findings became
 `m1-verifier-fixes.md`. A second checked the four M2 briefs and the lead's M2 core; the core's

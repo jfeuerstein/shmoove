@@ -160,8 +160,8 @@ gives up a slope's pull.
 
 To do, in order:
 
-1. Weapons fire on timers, not metres or hops or tucks (they are still fed by movement). In
-   progress.
+1. Weapons fire on timers, not metres or hops or tucks. Done: a test holds the mover still, rides
+   it and launches it at 30 m/s and the same field takes the same damage.
 2. Draw the M3 content (enemies, zones, map objects, weapon effects); the mover becomes a rider on
    a board. Part done and stopped; waiting on the owner's go-ahead to restart.
 3. A first-run lesson and a how-to sheet for the game as it now is; the HUD stops making the gear

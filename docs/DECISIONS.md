@@ -141,3 +141,11 @@ Things decided without the owner, newest last. Overrule any of them.
    commits and more uncommitted in its worktree: enemy shapes, elite auras, zones, map objects,
    weapon effects; untested as a whole). Until the drawing is finished the four newest enemies
    are stand-in blocks and the map objects, zones and most weapon effects cannot be seen.
+47. **Weapons on timers, as built.** Each keeps the seconds waited since its last shot, so the
+   first shot comes after one full wait. Seekers and Static hold when nothing is in reach; the
+   Slam fires regardless. Haste shortens every wait, including the Orbit's per-disc wait and the
+   Lance's tick, so it raises their damage too. The Skipper throws at the nearest enemies rather
+   than along the heading. Standing still versus riding, level 3, 60 s: Seekers, Slam, Orbit,
+   Static and Lance are within 3%; Skipper and Crumbs differ (0.73 and 2.61) only because their
+   stones and mines stay where they were put while a riding player's crowd moves. Untuned: the
+   Lance does about a tenth of the leaders, the Slam and the Skipper the most.
