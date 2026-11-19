@@ -377,6 +377,8 @@ export function reapHorde(w: World): void {
   let i = 0;
   while (i < h.count) {
     if (h.hp[i] > 0) {
+      // Marks are for this tick only: a survivor of a sweep is not swept when it dies later.
+      h.mark[i] = 0;
       i++;
       continue;
     }
