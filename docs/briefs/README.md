@@ -12,6 +12,11 @@ what to return. The verifier gets the same file.
 | `m1-debug-panel.md` | M1 | sonnet | merged |
 | `m1-bots.md` | M1 | opus | merged |
 | `m1-verifier-fixes.md` | M1 | sonnet | merged |
+| `m2-common.md` | M2 | - | shared rules for the four below |
+| `m2-horde.md` | M2 | opus | out |
+| `m2-render.md` | M2 | opus | out |
+| `m2-sparks-seekers.md` | M2 | sonnet | out |
+| `m2-hud.md` | M2 | sonnet | out |
 
 Verification: one opus verifier checked the five merged briefs together; its findings became
 `m1-verifier-fixes.md`.
