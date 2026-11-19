@@ -36,7 +36,7 @@ what to return. The verifier gets the same file.
 | `m4-balance.md` | M4 | opus | out |
 | `playtest-verify.md` | before the first full playtest | opus (verifier) | done: works end to end; bosses unseen, no pause |
 | `playtest-fixes.md` | before the first full playtest | opus | merged |
-| `playtest-report.md` | playtest | sonnet | out |
+| `playtest-report.md` | playtest | sonnet | merged |
 | `art-common.md` | art pass | - | shared rules for the four below |
 | `art-figures.md` | art pass | opus | out |
 | `art-weapons.md` | art pass | opus | out |

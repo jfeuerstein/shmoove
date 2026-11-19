@@ -121,6 +121,8 @@ export interface RunReport {
   kills: number;
   seed: number;
   scheme: string;
+  /** The look the run was drawn in (`look.ts`). */
+  look: string;
   build: {
     /** Every card taken, in order. */
     cards: CardTaken[];
@@ -208,6 +210,7 @@ export interface RunReport {
 export interface RunMeta {
   startedAt: number;
   scheme: string;
+  look: string;
   userAgent: string;
   screenW: number;
   screenH: number;
@@ -217,7 +220,7 @@ export interface RunMeta {
 }
 
 export function makeMeta(): RunMeta {
-  return { startedAt: 0, scheme: 'unknown', userAgent: 'unknown', screenW: 0, screenH: 0, dpr: 1, standalone: false, build: 'unknown' };
+  return { startedAt: 0, scheme: 'unknown', look: 'unknown', userAgent: 'unknown', screenW: 0, screenH: 0, dpr: 1, standalone: false, build: 'unknown' };
 }
 
 function round(v: number, places: number): number {
@@ -674,6 +677,7 @@ export class RunLog {
       kills: p.kills,
       seed: w.seed,
       scheme: meta.scheme,
+      look: meta.look,
       build: { cards, weapons, passives },
       damage: { total: round(total, 1), bySource },
       taken: {
@@ -765,7 +769,7 @@ export function reportText(r: RunReport): string {
   const f = r.frames;
   const lines: string[] = [
     `SHMOOVE run report v${r.v}`,
-    `Outcome: ${OUTCOME_WORD[r.outcome]} at ${clock(r.seconds)}, level ${r.level}, ${r.kills} kills, seed ${r.seed}, scheme ${r.scheme}`,
+    `Outcome: ${OUTCOME_WORD[r.outcome]} at ${clock(r.seconds)}, level ${r.level}, ${r.kills} kills, seed ${r.seed}, scheme ${r.scheme}, look ${r.look}`,
     `Build: ${list(r.build.weapons, (x) => `${x.name} ${x.level}`)} | ${list(r.build.passives, (x) => `${x.name} ${x.level}`)}`,
     `Cards (${r.build.cards.length}): ${list(r.build.cards, (c) => `${clock(c.at)} ${c.name} (${c.from})`)}`,
     `Damage dealt (${Math.round(r.damage.total)}): ${list(r.damage.bySource, (d) => `${d.source} ${pct(d.share)}`)}`,

@@ -47,7 +47,7 @@ export class PauseView {
   constructor(
     root: HTMLElement,
     private readonly host: PauseHost,
-    options: { debug?: boolean; reports?: boolean } = {},
+    options: { debug?: boolean; reports?: boolean; extra?: HTMLElement } = {},
     doc: Document = document,
   ) {
     const button = doc.createElement('button');
@@ -90,6 +90,8 @@ export class PauseView {
         if (this.on) this.host.onReports?.();
       });
     }
+    // Whatever else the app wants on the sheet (the look switch), last.
+    if (options.extra) sheet.appendChild(options.extra);
     overlay.appendChild(sheet);
 
     for (const type of STOP) {

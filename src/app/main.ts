@@ -10,7 +10,7 @@ import { ChaseCamera } from '../render/camera';
 import { BossView } from '../render/bossView';
 import { FxView } from '../render/fxView';
 import { HordeView } from '../render/hordeView';
-import { PALETTE } from '../render/look';
+import { LOOK_ID, PALETTE, switchLook } from '../render/look';
 import { MoverView } from '../render/moverView';
 import { RailsView } from '../render/railsView';
 import { Shake } from '../render/shake';
@@ -39,6 +39,7 @@ import { Hud } from '../ui/hud';
 import { HowTo } from '../ui/howTo';
 import { ReportView } from '../ui/reportView';
 import { LowHealthView } from '../ui/lowHealth';
+import { makeLookSwitch } from '../ui/lookSwitch';
 import { LessonView } from '../ui/lessonView';
 import { Numbers } from '../ui/numbers';
 import { bindAutoPause, PauseView } from '../ui/pause';
@@ -140,6 +141,7 @@ function boot(): void {
     if (finished === null && sim.horde && (phase === PHASE_PLAY || phase === PHASE_CHOOSE)) reportStore.keep(makeReport('abandoned'));
   };
   const meta = runLog.meta;
+  meta.look = LOOK_ID;
   meta.userAgent = navigator.userAgent;
   meta.screenW = window.screen.width;
   meta.screenH = window.screen.height;
@@ -459,7 +461,7 @@ function boot(): void {
           onHowTo: () => howTo.open(),
           onReports: () => reportView.open(),
         },
-        { debug: params.debug, reports: true },
+        { debug: params.debug, reports: true, extra: makeLookSwitch(document, LOOK_ID, switchLook) },
       )
     : null;
   if (pauseView) {
