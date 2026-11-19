@@ -4,7 +4,7 @@ import { parseParams } from '../../src/app/params';
 describe('parseParams', () => {
   it('has defaults for an empty query', () => {
     for (const q of ['', '?']) {
-      expect(parseParams(q)).toEqual({ debug: false, hook: false, perf: false, flat: false, solo: false, seed: 1, scheme: 'tuck', horde: 0, sparks: 0 });
+      expect(parseParams(q)).toEqual({ debug: false, hook: false, perf: false, flat: false, solo: false, seed: 1, scheme: 'tuck', horde: 0, sparks: 0, arsenal: false });
     }
   });
 
@@ -62,6 +62,15 @@ describe('parseParams', () => {
       expect(parseParams(`?horde=${encodeURIComponent(bad)}`).horde, bad).toBe(0);
       expect(parseParams(`?sparks=${encodeURIComponent(bad)}`).sparks, bad).toBe(0);
     }
+  });
+
+  it('reads the arsenal fixture as a flag, alone or with the crowd', () => {
+    expect(parseParams('?arsenal').arsenal).toBe(true);
+    expect(parseParams('?arsenal=0').arsenal).toBe(false);
+    expect(parseParams('?hook').arsenal).toBe(false);
+    const p = parseParams('?hook&arsenal&horde=120');
+    expect(p.arsenal && p.hook).toBe(true);
+    expect(p.horde).toBe(120);
   });
 
   it('ignores parameters it does not know and works without the leading ?', () => {

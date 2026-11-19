@@ -472,7 +472,7 @@ export class FxView {
         this.glow(GLOW_FLASH, x, y, z, r, 0.3, 0.55, 0, PALETTE.pop);
       } else if (type === FX_SLAM) {
         const r = a > 0.5 ? a : 0.5;
-        this.glow(GLOW_RING, x, y, z, r, 0.45, 1, 0.82, PALETTE.slam);
+        this.glow(GLOW_RING, x, y, z, r, 0.45, 0.7, 0.82, PALETTE.slam);
         this.glow(GLOW_FLASH, x, y, z, r, 0.2, 0.25, 0, PALETTE.slam);
       } else if (type === FX_BLAST) {
         const r = a > 0.5 ? a : 0.5;

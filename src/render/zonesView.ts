@@ -29,12 +29,12 @@ import { PALETTE, flatMaterial } from './look';
 import { addInstanceColor, addInstanceFloat, discMaterial, fadeMaterial, makeInstanced, rgbInto, writeMatrix } from './fxView';
 
 /** A mine's disc radius, m (the blast reaches further; the disc is where it lies). */
-export const MINE_SIZE = 0.45;
+export const MINE_SIZE = 0.6;
 /** Ticks a blink of an armed mine lasts (on, then off). */
 export const MINE_BLINK_TICKS = 12;
 /** Strength of an unarmed mine, of an armed one's off beat, and its on beat. */
 export const MINE_IDLE = 0.3;
-export const MINE_OFF = 0.2;
+export const MINE_OFF = 0.35;
 export const MINE_ON = 1;
 /** A lob ring's outline starts at this share of its radius; its fill reaches that far when full. */
 export const LOB_INNER = 0.84;

@@ -5,8 +5,9 @@
 // over budget or if the run did not really go anywhere.
 //
 // Two measurements, each in a fresh page: the empty bowl (`?hook&perf`; keys frameMs, stepMs,
-// drawCalls, triangles) and the crowd fixture of 400 enemies and 600 sparks
-// (`?hook&perf&horde=400&sparks=600`; the same keys prefixed with `horde`).
+// drawCalls, triangles) and the crowd fixture of 400 enemies and 600 sparks with the arsenal fixture
+// on top: every weapon, a row of map things and the zones (`?hook&perf&horde=400&sparks=600&arsenal`;
+// the same keys prefixed with `horde`).
 //
 // "Frame work" is the JS time of a frame: the sim steps it carried, the views, and render submission.
 // Headless Chromium rasterises in software, so frames are slow to appear; that is not counted.
@@ -38,7 +39,7 @@ function jsGzipKb() {
 /** The measurements: a label, the query, and the prefix of its keys in budgets.json. */
 const RUNS = [
   { label: 'bowl', query: '?hook&perf', prefix: '' },
-  { label: 'horde', query: '?hook&perf&horde=400&sparks=600', prefix: 'horde' },
+  { label: 'horde', query: '?hook&perf&horde=400&sparks=600&arsenal', prefix: 'horde' },
 ];
 
 function key(prefix, name) {

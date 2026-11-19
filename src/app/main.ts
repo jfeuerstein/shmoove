@@ -14,7 +14,10 @@ import { GameScene } from '../render/scene';
 import { ShotsView } from '../render/shotsView';
 import { SparksView } from '../render/sparksView';
 import { makeTerrainView } from '../render/terrainView';
+import { ThingsView } from '../render/thingsView';
 import { WakeView } from '../render/wakeView';
+import { WeaponsView } from '../render/weaponsView';
+import { ZonesView } from '../render/zonesView';
 import type { InputSource, Scheme } from '../input/source';
 import { TouchInput } from '../input/touch';
 import { DT } from '../sim/constants';
@@ -31,7 +34,7 @@ import { Hud } from '../ui/hud';
 import { Numbers } from '../ui/numbers';
 import { StickView } from '../ui/stickView';
 import { ThreatView } from '../ui/threat';
-import { applyFixture } from './fixtures';
+import { applyArsenal, applyFixture } from './fixtures';
 import { FixedStepper, FrameStats, RafDriver, TimeRamp } from './loop';
 import { parseParams, type Params } from './params';
 import { setupPlatform } from './platform';
@@ -102,11 +105,15 @@ function boot(): void {
   // Off unless the owner switched it on in the panel: the cards are the game. A measured (`?perf`)
   // run has nobody to choose, and the world would hold at the first level.
   const applyAutoPick = (): void => {
-    sim.picker = settings.autoPick || params.perf ? autoPickCard : null;
+    sim.picker = settings.autoPick || params.perf || params.arsenal ? autoPickCard : null;
   };
   applyAutoPick();
   const picks = new PickBox();
-  if (params.horde > 0 || params.sparks > 0) applyFixture(sim, params.horde, params.sparks);
+  const applyFixtures = (): void => {
+    if (params.horde > 0 || params.sparks > 0) applyFixture(sim, params.horde, params.sparks);
+    if (params.arsenal) applyArsenal(sim);
+  };
+  applyFixtures();
   const hookInput = new HookInput();
   const frameInput = makeInputFrame();
 
@@ -119,13 +126,16 @@ function boot(): void {
   const mover = new MoverView();
   view.scene.add(mover.object);
   // The horde, sparks, shots, the Wake and effects: drawn from the world, never writing it.
-  const horde = new HordeView();
+  const horde = new HordeView(terrain);
   const sparks = new SparksView();
   const shots = new ShotsView();
   const wake = new WakeView();
   const fx = new FxView(terrain);
+  const zones = new ZonesView(terrain);
+  const things = new ThingsView(terrain);
+  const weapons = new WeaponsView();
   const groundAt = (x: number, z: number): number => terrain.heightAt(x, z);
-  view.scene.add(wake.mesh, horde.object, sparks.mesh, shots.mesh, fx.object);
+  view.scene.add(zones.object, wake.mesh, things.object, horde.object, sparks.mesh, shots.mesh, weapons.object, fx.object);
   const chase = new ChaseCamera(view.camera);
   const hudRoot = document.getElementById('hud') ?? document.body;
   const hud = new Hud(hudRoot, { run: sim.horde, debug: params.debug });
@@ -144,7 +154,7 @@ function boot(): void {
   let choosing = false;
   const restart = (): void => {
     sim.reset();
-    if (params.horde > 0 || params.sparks > 0) applyFixture(sim, params.horde, params.sparks);
+    applyFixtures();
     fx.reset();
     threat.reset();
     chase.reset();
@@ -167,7 +177,8 @@ function boot(): void {
     const t0 = performance.now();
     input.sample(frameInput);
     sim.step(frameInput);
-    fx.ingest(sim.world);
+    const m = sim.state.mover;
+    fx.ingest(sim.world, m.x, m.y, m.z);
     numbers?.ingest(sim.world);
     const nowChoosing = sim.world.run.phase === PHASE_CHOOSE;
     if (choosing && !nowChoosing) ramp.begin();
@@ -183,11 +194,19 @@ function boot(): void {
     const a = sim.prev.mover;
     const b = sim.state.mover;
     const mx = a.x + (b.x - a.x) * alpha;
+    const my = a.y + (b.y - a.y) * alpha;
     const mz = a.z + (b.z - a.z) * alpha;
+    let turn = (b.heading - a.heading) % (Math.PI * 2);
+    if (turn > Math.PI) turn -= Math.PI * 2;
+    else if (turn < -Math.PI) turn += Math.PI * 2;
+    const heading = a.heading + turn * alpha;
     const now = performance.now() / 1000;
-    horde.update(w, alpha, now, mx, mz);
+    horde.update(w, alpha, now, mx, mz, my, heading);
     sparks.update(w, now);
-    shots.update(w, alpha);
+    shots.update(w, alpha, now);
+    zones.update(w);
+    things.update(w, now);
+    weapons.update(w, sim.prev, sim.state, alpha, now);
     wake.update(w.wake, mx, mz, groundAt);
     fx.update(dt);
     threat.update(w, sim.state, view.camera, dt, fx.hitTint, window.innerWidth, window.innerHeight);

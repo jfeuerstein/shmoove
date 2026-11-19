@@ -1,7 +1,7 @@
 /**
  * The weapons that are on the mover rather than thrown from it:
  *
- * - Orbit: its discs, spinning, where `orbitDisc` puts them.
+ * - Orbit: its discs, stood on edge like blades and spinning, where `orbitDisc` puts them.
  * - Lance: a beam straight ahead of the mover as long as `lanceLength`, a bright core inside a faint
  *   band as wide as it reaches, only while the Lance is on.
  * - Slipstream: faint streaks flowing back through the draft's cone behind the mover, as long as
@@ -21,14 +21,14 @@ import { PALETTE, glowMaterial } from './look';
 import { addInstanceColor, addInstanceFloat, fadeMaterial, makeInstanced, rgbInto, segmentMatrix, writeMatrix } from './fxView';
 
 export const MAX_DISCS = 4;
-const DISC_RADIUS = 0.42;
-const DISC_THICK = 0.1;
+const DISC_RADIUS = 0.32;
+const DISC_THICK = 0.08;
 const DISC_SPIN = 2;
-const DISC_GLOW = 0.6;
+const DISC_GLOW = 0.35;
 /** The beam rides this high above the mover's feet, m. */
 export const LANCE_HEIGHT = 0.9;
 const LANCE_CORE = 0.22;
-const LANCE_CORE_FADE = 0.85;
+const LANCE_CORE_FADE = 0.6;
 const LANCE_BAND_FADE = 0.18;
 /** Streaks in the draft, how long each is as a share of the draft, how fast they flow, their strength. */
 export const STREAKS = 6;
@@ -95,9 +95,21 @@ export class WeaponsView {
     const spin = time * DISC_SPIN * Math.PI * 2;
     for (let k = 0; k < nd; k++) {
       if (!orbitDisc(w, cur, k, this.disc)) break;
+      // Stood on edge, its face out from the mover like a blade, spinning about that axis.
+      let ux = this.disc.x - b.x;
+      let uz = this.disc.z - b.z;
+      const ul = Math.sqrt(ux * ux + uz * uz);
+      ux = ul > 1e-6 ? ux / ul : 0;
+      uz = ul > 1e-6 ? uz / ul : 1;
       const c = Math.cos(spin + k);
       const s = Math.sin(spin + k);
-      writeMatrix(dm, discs++, c, 0, -s, 0, 1, 0, s, 0, c, this.disc.x - b.x + mx, this.disc.y - b.y + my, this.disc.z - b.z + mz);
+      writeMatrix(
+        dm, discs++,
+        uz * c, -s, -ux * c,
+        ux, 0, uz,
+        -uz * s, -c, ux * s,
+        this.disc.x - b.x + mx, this.disc.y - b.y + my, this.disc.z - b.z + mz,
+      );
     }
     this.discs.count = discs;
     this.discs.visible = discs > 0;

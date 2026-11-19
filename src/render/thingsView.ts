@@ -45,7 +45,7 @@ const SOLIDS_PER_THING = 3;
 export const MAX_SOLIDS = MAX_THINGS * SOLIDS_PER_THING;
 
 const CRATE_SIZE = 1.2;
-const GOLD_SIZE = 1.35;
+const GOLD_SIZE = 1.3;
 const GOLD_SPIN = 0.35;
 const GOLD_BOB = 0.12;
 const DEBRIS_WIDE = 1.3;
@@ -65,8 +65,8 @@ const TOTEM_STUMP = 0.9;
 const HOOP_TUBE = 0.12;
 
 /** Glow of each look, and how much of its colour a dim gate keeps. */
-export const GLOW_CRATE = 0.2;
-export const GLOW_GOLD = 0.85;
+export const GLOW_CRATE = 0.12;
+export const GLOW_GOLD = 0.5;
 export const GLOW_SHRINE = 0.45;
 export const GLOW_GATE_NEXT = 0.7;
 export const GLOW_GATE = 0.12;
