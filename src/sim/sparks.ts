@@ -4,6 +4,7 @@
  */
 import { MAGNET_BASE, MAGNET_PER_GEAR, xpForLevel } from './balance';
 import { queueOffer } from './build';
+import { jammed } from './horde';
 import { OFFER_LEVEL } from './offer';
 import { DT } from './constants';
 import type { Terrain } from './terrain';
@@ -79,7 +80,8 @@ export function stepSparks(w: World, s: SimState, terrain: Terrain): void {
     if (sp.pull[i] === 0) {
       const gx = sp.x[i] - m.x;
       const gz = sp.z[i] - m.z;
-      if (gx * gx + gz * gz <= magnet2) sp.pull[i] = 1;
+      // Not near a jam elite: what it guards stays put until it is gone or a loop sweeps it up.
+      if (gx * gx + gz * gz <= magnet2 && !jammed(w, sp.x[i], sp.z[i])) sp.pull[i] = 1;
     }
     if (sp.pull[i] === 0) continue;
     const dx = m.x - sp.x[i];
