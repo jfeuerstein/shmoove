@@ -4,9 +4,10 @@
  * - Orbit: toothed saw blades where `orbitDisc` puts them, tipped a little outward so their faces
  *   show, each spinning on its own axis as it goes round, with a glowing streak along the orbit
  *   behind it. More of them at higher levels, as the sim says.
- * - Bumper: a hoop of chunky plates round the rider at hip height, slowly turning. When the player
- *   is hit (the sim's invulnerability starts) it flares and swells for a moment; the ring it throws
- *   out to the shove radius is `FxView`'s. Taller plates at higher levels.
+ * - Bumper: a wide, open hoop of slim plates round the rider at hip height, slowly turning, the
+ *   rider seen through its gaps. When the player is hit (the sim's invulnerability starts) it flares
+ *   and swells for a blink; the ring it throws out to the shove radius is `FxView`'s. Taller plates
+ *   at higher levels. The blades and their streaks glow only a little: they are the rider's own.
  * - Lance: a beam straight ahead of the mover as long as `lanceLength`: a faint sheath as wide as it
  *   reaches, and a bright core that swells each time the beam burns (on the sim's own beat, the
  *   Lance's wait times Haste) and narrows as it charges for the next, with a charge gathering at the
@@ -52,27 +53,31 @@ const DISC_TEETH = 10;
 const DISC_SPIN = 3;
 const DISC_TILT = 0.35;
 /** Blade glow at level 1, and more per level. */
-const DISC_GLOW = 0.3;
-const DISC_GLOW_PER_LEVEL = 0.06;
+const DISC_GLOW = 0.2;
+const DISC_GLOW_PER_LEVEL = 0.04;
 /** The streak behind each blade: segments, the angle each covers, rad, and its strength. */
 const DISC_TRAIL_SEGS = 3;
 const DISC_TRAIL_STEP = 0.2;
-const DISC_TRAIL_FADE = 0.4;
+const DISC_TRAIL_FADE = 0.22;
 
-/** The Bumper's hoop: its radius, the plates round it, and their size, m. */
-export const HOOP_RADIUS = 0.62;
+/**
+ * The Bumper's hoop: its radius, the plates round it, and their size, m. Wide and open, with slim
+ * plates, so the rider inside it is seen through the gaps.
+ */
+export const HOOP_RADIUS = 0.85;
 const HOOP_PLATES = 8;
-const PLATE_W = 0.3;
-const PLATE_H = 0.22;
-const PLATE_D = 0.1;
-/** Turns a second, glow, and how much taller the plates are per level above 1. */
+const PLATE_W = 0.24;
+const PLATE_H = 0.16;
+const PLATE_D = 0.08;
+const STUD = 0.08;
+/** Turns a second, glow (barely: it is the rider's, not a light), and how much taller the plates are per level above 1. */
 const HOOP_SPIN = 0.12;
-const HOOP_GLOW = 0.25;
+const HOOP_GLOW = 0.1;
 const HOOP_TALLER = 0.15;
-/** Ticks the hoop flares for after a hit, and how much it swells and glows at the peak. */
-const HOOP_FLARE_TICKS = 14;
-const HOOP_SWELL = 0.5;
-const HOOP_FLARE_GLOW = 1.4;
+/** Ticks the hoop flares for after a hit (a blink), and how much it swells and glows at the peak. */
+const HOOP_FLARE_TICKS = 10;
+const HOOP_SWELL = 0.35;
+const HOOP_FLARE_GLOW = 1.1;
 
 /** Kit shapes. */
 const SHAPE_BLADE = 0;
@@ -226,7 +231,7 @@ export function weaponsKit(blade: number, hoop: number): ShapeBuilder {
     m.makeTranslation(0, 0, HOOP_RADIUS).premultiply(rot);
     b.add(new BoxGeometry(PLATE_W, PLATE_H, PLATE_D), plate, m);
     m.makeTranslation(0, 0, HOOP_RADIUS + PLATE_D * 0.5 + 0.03).premultiply(rot);
-    b.add(new BoxGeometry(0.11, 0.11, 0.08), stud, m);
+    b.add(new BoxGeometry(STUD, STUD, PLATE_D * 0.8), stud, m);
   }
   return b;
 }

@@ -5,6 +5,7 @@ import {
   flameShape,
   HEAD_CORE_ALPHA,
   HEAD_EDGE_ALPHA,
+  POP_CLEAR,
   POP_LIFE,
   RIBBON_POINTS,
   UNBURNT_HEAD,
@@ -225,4 +226,27 @@ describe('WakeView flames and the pop', () => {
     again.update(short, pts[n - 1][0], pts[n - 1][1], ground, 1, 0.06);
     expect(again.popping).toBe(false);
   });
+
+  it('keeps the pop faint round the rider, where the loop closed, and loud round the rest of it', () => {
+    const pts: [number, number][] = [];
+    const n = Math.ceil((2 * Math.PI * 5) / WAKE_STEP);
+    for (let j = 0; j < n; j++) pts.push([5 * Math.sin((j / n) * Math.PI * 2), 5 - 5 * Math.cos((j / n) * Math.PI * 2)]);
+    const view = new WakeView();
+    view.update(trail(pts), pts[n - 1][0], pts[n - 1][1], ground, 1, 0);
+    const after = trail([[0.3, 0.1]]);
+    view.update(after, 0.3, 0.1, ground, 1, 0.02);
+    view.update(after, 0.3, 0.1, ground, 1, 0.2);
+    const m = view.flames.instanceMatrix.array;
+    const fade = view.flames.geometry.getAttribute('aFade');
+    let near = 0;
+    let far = 0;
+    for (let i = view.trailFlames; i < view.flames.count; i++) {
+      const d = Math.hypot(m[i * 16 + 12] - 0.3, m[i * 16 + 14] - 0.1);
+      if (d < POP_CLEAR - 0.3) near = Math.max(near, fade.getX(i));
+      else if (d > POP_CLEAR + 0.3) far = Math.max(far, fade.getX(i));
+    }
+    expect(far).toBeGreaterThan(0);
+    expect(near).toBeLessThan(far * 0.5);
+  });
 });
+

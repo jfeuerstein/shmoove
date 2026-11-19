@@ -18,8 +18,8 @@
  * The pop: when a loop closes, the sim cuts the trail back to the newest point. The view sees the
  * trail collapse, finds the loop in the trail it drew last frame (the stretch from the point the
  * board came back to, as the sim finds it), and for a moment flashes it: a burst of tall flames in
- * `PALETTE.pop` that runs round the loop from where it closed and dies down. The ring and flash on
- * the ground are `FxView`'s.
+ * `PALETTE.pop` that runs round the loop from where it closed and dies down, faint round the rider
+ * itself. The ring and flash on the ground are `FxView`'s.
  */
 import { BufferAttribute, BufferGeometry, DoubleSide, DynamicDrawUsage, type InstancedBufferAttribute, type InstancedMesh, Mesh } from 'three';
 import { FEEL } from '../sim/constants';
@@ -33,18 +33,21 @@ export const RIBBON_POINTS = WAKE_MAX + 1;
 export const WAKE_LIFT = 0.07;
 /** The mover is drawn as an extra point only if it is at least this far past the last one, m. */
 const HEAD_MIN = 0.05;
-const WAKE_GLOW = 0.45;
+const WAKE_GLOW = 0.3;
 /** Share of the full width taken by the bright core, centred on the trail. */
 export const WAKE_CORE = 0.4;
-/** Alpha at the head, in the core and at the outer edges: the trail stays under the mover. */
-export const HEAD_CORE_ALPHA = 0.5;
-export const HEAD_EDGE_ALPHA = 0.15;
+/**
+ * Alpha at the head, in the core and at the outer edges: the trail stays under the mover, and the
+ * stretch of it between the camera and the rider is a stripe on the ground, not a slab of colour.
+ */
+export const HEAD_CORE_ALPHA = 0.36;
+export const HEAD_EDGE_ALPHA = 0.08;
 /** The newest trail points do not burn (the sim's head skip): no flames there. */
 export const UNBURNT_HEAD = 2;
 /** A flame: its height at the mover and its width as a share of the burn's half-width. */
 export const FLAME_HEIGHT = 0.7;
 const FLAME_WIDE = 0.95;
-const FLAME_FADE = 0.36;
+const FLAME_FADE = 0.26;
 /** Flicker: how far a flame's height swings, and its beats, rad/s. */
 const FLICKER = 0.3;
 const FLICKER_A = 11;
@@ -52,7 +55,11 @@ const FLICKER_B = 17;
 const LEAN = 0.22;
 /** The pop's flash: how long, s, how tall its flames get, m, and how long the flash takes to run round. */
 export const POP_LIFE = 0.55;
-const POP_HEIGHT = 1.7;
+const POP_HEIGHT = 1.3;
+const POP_FADE = 0.55;
+/** The pop's flames within this of the rider (where the loop closed) burn at `POP_NEAR` of their strength, m. */
+export const POP_CLEAR = 2;
+export const POP_NEAR = 0.35;
 const POP_RUN = 0.14;
 /** A trail that collapses from at least this many points to at most `POP_LEFT` has popped. */
 const POP_FROM = 6;
@@ -321,7 +328,11 @@ export class WakeView {
           const z = this.popZ[j];
           this.flame(fm, f, x, heightAt(x, z), z, half * FLAME_WIDE, POP_HEIGHT * (0.25 + 0.75 * rise), j * 2.1, time * 9 + j);
           this.flameColor(f, this.popRgb);
-          fade[f++] = 0.8 * (1 - t);
+          // Lower round the rider, so it is not lost in the burst it set off.
+          const dx = x - hx;
+          const dz = z - hz;
+          const near = dx * dx + dz * dz < POP_CLEAR * POP_CLEAR ? POP_NEAR : 1;
+          fade[f++] = POP_FADE * (1 - t) * near;
           this.popFlames++;
         }
       }
