@@ -6,12 +6,31 @@
  *
  * A weapon that is not in this table yet is never offered.
  */
-import { W_BUMPER, W_SEEKERS, W_WAKE, WEAPON_COUNT } from '../arsenal';
+import {
+  W_BUMPER,
+  W_CRUMBS,
+  W_LANCE,
+  W_ORBIT,
+  W_SEEKERS,
+  W_SKIPPER,
+  W_SLAM,
+  W_SLIPSTREAM,
+  W_STATIC,
+  W_WAKE,
+  WEAPON_COUNT,
+} from '../arsenal';
 import { stepSeekers } from '../seekers';
 import type { Terrain } from '../terrain';
 import type { SimState } from '../types';
 import { stepWake } from '../wake';
 import type { World } from '../world';
+import { stepCrumbs } from './crumbs';
+import { stepLance } from './lance';
+import { stepOrbit } from './orbit';
+import { stepSkipper } from './skipper';
+import { stepSlam } from './slam';
+import { stepSlipstream } from './slipstream';
+import { stepStatic } from './static';
 
 export interface Weapon {
   id: number;
@@ -28,6 +47,13 @@ export function registerWeapon(weapon: Weapon): void {
 registerWeapon({ id: W_WAKE, step: (w, s) => stepWake(w, s) });
 registerWeapon({ id: W_SEEKERS, step: stepSeekers });
 registerWeapon({ id: W_BUMPER });
+registerWeapon({ id: W_SLAM, step: stepSlam });
+registerWeapon({ id: W_ORBIT, step: stepOrbit });
+registerWeapon({ id: W_STATIC, step: stepStatic });
+registerWeapon({ id: W_SKIPPER, step: stepSkipper });
+registerWeapon({ id: W_SLIPSTREAM, step: stepSlipstream });
+registerWeapon({ id: W_CRUMBS, step: stepCrumbs });
+registerWeapon({ id: W_LANCE, step: stepLance });
 
 /** Mark in `pool` the weapons that exist. */
 export function builtWeapons(pool: Uint8Array): void {
