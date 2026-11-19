@@ -220,3 +220,7 @@ Things decided without the owner, newest last. Overrule any of them.
    `docs/briefs/playtest-fixes.md`.
 65. **Known and left for the playtest to judge:** riding the rim fills the screen with the bank
    and shows little else; `setClock` past two boss times skips the earlier boss (test hook only).
+66. **Pause, as built.** A button top right; the game also pauses itself when the page is hidden
+   or the window loses focus, and stays paused and silent until RESUME. No pause button during
+   the lesson (its SKIP button is in that corner; leaving the page still pauses) or on the end
+   card. Pausing with cards up comes back to the cards.

@@ -94,11 +94,16 @@ export default {
     check(s3.kinds.shot > 0, 'the weapon firing schedules its voice', s3.kinds);
     await t.shot();
 
-    // Hidden: suspended; shown: running again.
+    // Hidden: paused and suspended; shown: still paused and silent until RESUME.
     await setHidden(page, true);
     check(await waitState(page, 'suspended'), 'hiding the page suspends the context', await sound(page));
     await setHidden(page, false);
-    check(await waitState(page, 'running'), 'showing it again resumes the context', await sound(page));
+    await page.waitForTimeout(400);
+    const shown = await sound(page);
+    check(shown.state === 'suspended', 'showing it again leaves it silent: the game is paused', shown);
+    check(await page.evaluate(() => window.__shmoove.paused()), 'and the game says it is paused');
+    await page.tap('.pause-resume');
+    check(await waitState(page, 'running'), 'RESUME wakes the context', await sound(page));
 
     // ?mute: a touch, a hop and a kill schedule nothing.
     await page.goto(page.url().replace(/\?.*$/, '?hook&nolesson&horde=80&mute'));

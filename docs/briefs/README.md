@@ -35,7 +35,7 @@ what to return. The verifier gets the same file.
 | `m5-juice.md` | M5 (the part a playtest needs) | sonnet | merged |
 | `m4-balance.md` | M4 | opus | out |
 | `playtest-verify.md` | before the first full playtest | opus (verifier) | done: works end to end; bosses unseen, no pause |
-| `playtest-fixes.md` | before the first full playtest | opus | out |
+| `playtest-fixes.md` | before the first full playtest | opus | merged |
 
 Verification: one opus verifier checked the five merged M0/M1 briefs together; its findings became
 `m1-verifier-fixes.md`. A second checked the four M2 briefs and the lead's M2 core; the core's
