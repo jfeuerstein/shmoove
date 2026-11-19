@@ -14,11 +14,10 @@ import {
   MAX_ZONES,
   rebuildGrid,
   ZONE_MINE,
-  ZONE_TAR,
-} from '../../../src/sim/world';
+  ZONE_TAR } from '../../../src/sim/world';
 import { FORWARD, TUCK } from '../fixtures';
 import { place } from '../world-fixtures';
-import { placeRising, rideThroughCrowd, rig, tick } from './rig';
+import { placeRising, rig, tick } from './rig';
 
 const SPEED = 10;
 
@@ -244,15 +243,5 @@ describe('going off', () => {
     const five = dealt(5);
     expect(one).toBe(0);
     expect(five).toBeGreaterThan(0);
-  });
-});
-
-describe('gears', () => {
-  it('the same ride in a higher gear kills more', () => {
-    const hp = CRUMBS.damage[2] * gearPower(2);
-    const low = rideThroughCrowd(rig(W_CRUMBS, 3), 2, 60 * 30, hp);
-    const high = rideThroughCrowd(rig(W_CRUMBS, 3), 4, 60 * 30, hp);
-    expect(low.kills).toBeGreaterThan(5);
-    expect(high.kills).toBeGreaterThan(low.kills * 1.2);
   });
 });

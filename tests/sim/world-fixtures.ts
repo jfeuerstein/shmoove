@@ -1,4 +1,6 @@
 /** Helpers for tests that put the mover among hand-placed enemies. */
+import { W_SEEKERS, W_WAKE } from '../../src/sim/arsenal';
+import { setWeaponLevel } from '../../src/sim/build';
 import { Sim } from '../../src/sim/sim';
 import { flatTerrain, type Terrain } from '../../src/sim/terrain';
 import type { InputFrame } from '../../src/sim/types';
@@ -11,6 +13,11 @@ import { FX_POP, SPAWN_TICKS, spawnEnemy, type World } from '../../src/sim/world
 export function arena(terrain: Terrain = flatTerrain()): Sim {
   const sim = new Sim(terrain, { seed: 7, horde: true, autoPick: true });
   sim.world.spawning = false;
+  // A run starts with the Seekers. These tests place enemies by hand and most want nothing
+  // shooting at them, so the arena starts with the Wake alone (it only hurts what is behind the
+  // mover or inside a loop); a test that wants a weapon sets it.
+  setWeaponLevel(sim.world, W_SEEKERS, 0);
+  setWeaponLevel(sim.world, W_WAKE, 1);
   return sim;
 }
 

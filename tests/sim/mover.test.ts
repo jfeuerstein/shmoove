@@ -89,7 +89,7 @@ describe('the stick', () => {
 });
 
 describe('tuck', () => {
-  it('holds speed on the flat far better than carving', () => {
+  it('holds speed on the flat, a little better than keeping the thumb down', () => {
     const tucked = new Sim(flatTerrain());
     launch(tucked, 25);
     run(tucked, TUCK, 180);
@@ -97,7 +97,9 @@ describe('tuck', () => {
     launch(carving, 25);
     run(carving, FORWARD, 180);
     expect(tucked.state.mover.speed).toBeGreaterThan(21);
-    expect(carving.state.mover.speed).toBeLessThan(tucked.state.mover.speed - 4);
+    // Steering straight costs something, but not so much that you are punished for holding on.
+    expect(carving.state.mover.speed).toBeLessThan(tucked.state.mover.speed);
+    expect(carving.state.mover.speed).toBeGreaterThan(tucked.state.mover.speed - 3.5);
   });
 
   it('gains speed down a slope: gear 3 on a gentle one, gear 5 on a steep one', () => {
@@ -149,7 +151,7 @@ describe('carving at speed', () => {
     launch(hard, 25);
     run(hard, steer(-1, 0), 60);
     expect(gentle.state.mover.speed).toBeLessThan(straight.state.mover.speed);
-    expect(hard.state.mover.speed).toBeLessThan(gentle.state.mover.speed - 1);
+    expect(hard.state.mover.speed).toBeLessThan(gentle.state.mover.speed - 0.2);
   });
 
   it('turns in a wider circle the faster you go', () => {

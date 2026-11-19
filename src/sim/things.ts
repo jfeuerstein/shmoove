@@ -52,8 +52,8 @@ export const THINGS = {
   /** A crate or totem is touched within this distance of its middle, m (and no higher above it). */
   touch: 1.4,
   /** The lowest gear (counting plow grace) that breaks a crate, and a gold crate. */
-  crateGear: 2,
-  goldGear: 4,
+  crateGear: 1,
+  goldGear: 1,
   /** A crate too slow to break rattles at most this often. */
   rattleTicks: 60,
   /** What a crate gives, as shares of the roll before luck: a card, a heal, every spark, a bomb. */
@@ -240,8 +240,8 @@ function stepCrate(w: World, s: SimState, i: number): void {
   const dx = m.x - t.x[i];
   const dz = m.z - t.z[i];
   if (dx * dx + dz * dz > THINGS.touch * THINGS.touch || m.y - t.y[i] > THINGS.touch) return;
-  const p = w.player;
-  const gear = p.graceGear > m.gear ? p.graceGear : m.gear;
+  // A crate opens to a touch. (The gear table is 1 for both kinds; kept so a later rule has a home.)
+  const gear = m.gear;
   const need = t.kind[i] === THING_GOLD_CRATE ? THINGS.goldGear : THINGS.crateGear;
   if (gear >= need) {
     openCrate(w, s, i);

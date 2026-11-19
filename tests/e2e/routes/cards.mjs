@@ -99,7 +99,8 @@ export default {
     await hook.step(40);
     const after = await hook.state();
     check(after.tick > taken.tick + 20, 'the world advances again', { taken, after });
-    check(after.speed > before.speed * 0.8, 'the mover still has its speed', { before: before.speed, after: after.speed });
+    // Its speed the moment play resumed, not 40 ticks of hillside later.
+    check(taken.speed > before.speed * 0.9, 'the mover still has its speed', { before: before.speed, taken: taken.speed });
 
     // Several levels fill the build bar.
     for (let i = 0; i < 4; i++) {

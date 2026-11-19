@@ -10,7 +10,7 @@ import { ORBIT, orbitDisc, stepOrbit } from '../../../src/sim/weapons/orbit';
 import { KIND_SHUFFLER, KINDS, rebuildGrid, WEAPON_MEM } from '../../../src/sim/world';
 import { FORWARD, TUCK } from '../fixtures';
 import { place } from '../world-fixtures';
-import { placeRising, rideThroughCrowd, rig, tick } from './rig';
+import { placeRising, rig, tick } from './rig';
 
 const SPEED = 10;
 const v: Vec3 = { x: 0, y: 0, z: 0 };
@@ -206,16 +206,5 @@ describe('what they hit', () => {
     for (let i = 0; i < sim.world.mem.length; i++) {
       if (Math.floor(i / WEAPON_MEM) !== W_ORBIT) expect(sim.world.mem[i]).toBe(0);
     }
-  });
-});
-
-describe('gears', () => {
-  it('the same ride in a higher gear kills more', () => {
-    const hp = ORBIT.damage[2] * gearPower(2) * 2;
-    const low = rideThroughCrowd(rig(W_ORBIT, 3), 2, 60 * 30, hp);
-    const high = rideThroughCrowd(rig(W_ORBIT, 3), 4, 60 * 30, hp);
-    expect(low.kills).toBeGreaterThan(5);
-    expect(high.kills).toBeGreaterThan(low.kills * 1.2);
-    expect(high.damage).toBeGreaterThan(low.damage);
   });
 });

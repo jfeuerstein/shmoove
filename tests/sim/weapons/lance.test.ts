@@ -6,9 +6,9 @@ import { setPassiveLevel } from '../../../src/sim/build';
 import type { Sim } from '../../../src/sim/sim';
 import { LANCE, lanceLength, stepLance } from '../../../src/sim/weapons/lance';
 import { KIND_BOLLARD, KIND_SHUFFLER, KINDS, MAX_FX, rebuildGrid } from '../../../src/sim/world';
-import { FORWARD, steer, TUCK } from '../fixtures';
+import { steer, TUCK } from '../fixtures';
 import { place } from '../world-fixtures';
-import { placeRising, pointAt, rideThroughCrowd, rig, tick } from './rig';
+import { placeRising, pointAt, rig, tick } from './rig';
 
 const STILL_CARVE = steer(0, 0);
 
@@ -149,29 +149,5 @@ describe('what it hits', () => {
       tick(sim, TUCK, { gear: 5 });
       expect(sim.world.fx.count).toBeLessThanOrEqual(MAX_FX);
     }
-  });
-});
-
-describe('gears', () => {
-  it('the same ride in a higher gear kills more', () => {
-    const hp = LANCE.dps[2] * gearPower(2);
-    const low = rideThroughCrowd(rig(W_LANCE, 3), 2, 60 * 30, hp);
-    const high = rideThroughCrowd(rig(W_LANCE, 3), 4, 60 * 30, hp);
-    expect(low.kills).toBeGreaterThan(5);
-    expect(high.kills).toBeGreaterThan(low.kills * 1.2);
-  });
-
-  it('riding tucked through a line of enemies burns them; carving the same line does not', () => {
-    const run = (input: typeof TUCK): number => {
-      const sim = rig(W_LANCE, 3);
-      for (let k = 0; k < 10; k++) {
-        const p = pointAt(sim, 6 + k * 4);
-        place(sim, KIND_SHUFFLER, p.x, p.z);
-      }
-      for (let t = 0; t < 300; t++) tick(sim, input, { speed: 12 });
-      return sim.world.player.kills;
-    };
-    expect(run(TUCK)).toBe(10);
-    expect(run(FORWARD)).toBe(0);
   });
 });

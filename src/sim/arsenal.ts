@@ -34,7 +34,7 @@ export interface WeaponInfo {
 export const WEAPON_INFO: readonly WeaponInfo[] = [
   { code: 'WK', name: 'Wake', blurb: 'A burning trail. Close a loop and everything inside pops.', fedBy: 'metres, loops' },
   { code: 'SK', name: 'Seekers', blurb: 'Homing darts at whatever is nearest.', fedBy: 'metres' },
-  { code: 'BU', name: 'Bumper', blurb: 'Ramming hits harder, and kills give speed back.', fedBy: 'speed at impact' },
+  { code: 'BU', name: 'Bumper', blurb: 'When you are hit, everything near you is hurt and thrown back.', fedBy: 'being hit' },
   { code: 'SL', name: 'Slam', blurb: 'A shockwave where you land.', fedBy: 'air time, impact' },
   { code: 'OR', name: 'Orbit', blurb: 'Discs circling you. They spin as fast as you move.', fedBy: 'speed' },
   { code: 'ST', name: 'Static', blurb: 'Charge builds as you travel, then arcs through a chain.', fedBy: 'metres' },
@@ -47,13 +47,13 @@ export const WEAPON_INFO: readonly WeaponInfo[] = [
 // ---- passives -------------------------------------------------------------------------------
 
 export const P_WAX = 0;
-export const P_EDGES = 1;
+export const P_HASTE = 1;
 export const P_SPRINGS = 2;
 export const P_WINGS = 3;
 export const P_MAGNET = 4;
 export const P_HEART = 5;
-export const P_SECOND_WIND = 6;
-export const P_OVERDRIVE = 7;
+export const P_REGEN = 6;
+export const P_MIGHT = 7;
 export const P_HIDE = 8;
 export const P_LUCK = 9;
 export const P_WIDE_LOAD = 10;
@@ -62,7 +62,8 @@ export const PASSIVE_COUNT = 11;
 /** The stats a passive can change. See `Stats` in stats.ts for what each means. */
 export type StatKey =
   | 'drag'
-  | 'scrub'
+  | 'haste'
+  | 'might'
   | 'hopWindow'
   | 'hopSpeed'
   | 'airTurn'
@@ -70,7 +71,6 @@ export type StatKey =
   | 'magnet'
   | 'maxHp'
   | 'regen'
-  | 'gearBonus'
   | 'armour'
   | 'luck'
   | 'area';
@@ -94,14 +94,14 @@ export const PASSIVE_INFO: readonly PassiveInfo[] = [
   {
     code: 'WX',
     name: 'Wax',
-    blurb: 'Less drag. Speed lasts longer.',
+    blurb: 'Less drag. You roll further and faster.',
     effects: [{ stat: 'drag', mode: 'mul', byLevel: [0.88, 0.78, 0.69, 0.61, 0.54] }],
   },
   {
-    code: 'ED',
-    name: 'Edges',
-    blurb: 'Carving costs less speed.',
-    effects: [{ stat: 'scrub', mode: 'mul', byLevel: [0.85, 0.72, 0.6, 0.5, 0.42] }],
+    code: 'HS',
+    name: 'Haste',
+    blurb: 'Everything you carry fires faster.',
+    effects: [{ stat: 'haste', mode: 'mul', byLevel: [0.92, 0.85, 0.79, 0.73, 0.68] }],
   },
   {
     code: 'SG',
@@ -134,16 +134,16 @@ export const PASSIVE_INFO: readonly PassiveInfo[] = [
     effects: [{ stat: 'maxHp', mode: 'add', byLevel: [20, 40, 60, 80, 100] }],
   },
   {
-    code: 'SW',
-    name: 'Second Wind',
-    blurb: 'Health comes back while you are in gear 3 or higher.',
-    effects: [{ stat: 'regen', mode: 'add', byLevel: [0.4, 0.8, 1.2, 1.6, 2] }],
+    code: 'RG',
+    name: 'Regen',
+    blurb: 'Health comes back slowly, all the time.',
+    effects: [{ stat: 'regen', mode: 'add', byLevel: [0.3, 0.6, 0.9, 1.2, 1.6] }],
   },
   {
-    code: 'OD',
-    name: 'Overdrive',
-    blurb: 'High gears hit even harder.',
-    effects: [{ stat: 'gearBonus', mode: 'add', byLevel: [0.06, 0.12, 0.18, 0.24, 0.3] }],
+    code: 'MT',
+    name: 'Might',
+    blurb: 'Everything you carry hits harder.',
+    effects: [{ stat: 'might', mode: 'mul', byLevel: [1.1, 1.2, 1.3, 1.4, 1.5] }],
   },
   {
     code: 'HD',

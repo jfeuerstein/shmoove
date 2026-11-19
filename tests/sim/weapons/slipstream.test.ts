@@ -1,6 +1,6 @@
 /** What a player would notice about the Slipstream: from gear 2 your draft pulls sparks and small fry into your line. */
 import { describe, expect, it } from 'vitest';
-import { P_WIDE_LOAD, W_SLIPSTREAM, W_WAKE } from '../../../src/sim/arsenal';
+import { P_WIDE_LOAD, W_SLIPSTREAM } from '../../../src/sim/arsenal';
 import { setPassiveLevel } from '../../../src/sim/build';
 import { DT } from '../../../src/sim/constants';
 import type { Sim } from '../../../src/sim/sim';
@@ -8,7 +8,7 @@ import { SLIPSTREAM, slipstreamLength, stepSlipstream } from '../../../src/sim/w
 import { KIND_BOLLARD, KIND_SHUFFLER, MAX_ENEMIES, MAX_SPARKS, rebuildGrid } from '../../../src/sim/world';
 import { FORWARD, TUCK } from '../fixtures';
 import { place } from '../world-fixtures';
-import { placeRising, pointAt, rideThroughCrowd, rig, tick } from './rig';
+import { placeRising, pointAt, rig, tick } from './rig';
 
 /** A point `back` m behind the mover and `side` m to its right. */
 function behind(sim: Sim, back: number, side: number): { x: number; z: number } {
@@ -188,32 +188,5 @@ describe('what it drags', () => {
       expect(sim.world.sparks.count).toBeLessThanOrEqual(MAX_SPARKS);
     }
     expect(sim.world.horde.count).toBe(400);
-  });
-});
-
-describe('gears', () => {
-  // It does no damage of its own: what it is worth is what the Wake kills with it.
-  const RIDE = 60 * 30;
-  // Tough enough that time in the burn, not just reaching it, decides a kill.
-  const HP = 40;
-
-  it('feeds the Wake: the Wake kills more with it than without it', () => {
-    const alone = rideThroughCrowd(rig(W_WAKE, 1), 2, RIDE, HP);
-    const fed = rig(W_SLIPSTREAM, 3, true);
-    const withIt = rideThroughCrowd(fed, 2, RIDE, HP);
-    expect(withIt.kills).toBeGreaterThan(alone.kills * 1.3);
-    expect(withIt.damage).toBeGreaterThan(alone.damage * 1.3);
-  });
-
-  it('the same ride in a higher gear kills more', () => {
-    const at = (gear: number): number => {
-      const sim = rig(W_SLIPSTREAM, 3, true);
-      return rideThroughCrowd(sim, gear, RIDE, HP).kills;
-    };
-    // (Gear 1 cannot be held at the ride's speed: the draft's own gate is tested standing still.)
-    const two = at(2);
-    const four = at(4);
-    expect(two).toBeGreaterThan(5);
-    expect(four).toBeGreaterThan(two * 1.3);
   });
 });

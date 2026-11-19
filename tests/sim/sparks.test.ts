@@ -1,6 +1,6 @@
 /** What a player would notice about sparks: the dead drop them, the magnet draws them, XP is levels. */
 import { describe, expect, it } from 'vitest';
-import { ELITE_XP, MAGNET_BASE, MAGNET_PER_GEAR, xpForLevel } from '../../src/sim/balance';
+import { ELITE_XP, MAGNET_BASE, xpForLevel } from '../../src/sim/balance';
 import { makeElite } from '../../src/sim/director';
 import { Sim } from '../../src/sim/sim';
 import { flatTerrain } from '../../src/sim/terrain';
@@ -16,8 +16,7 @@ import {
   MARK_SWEPT,
   PHASE_CHOOSE,
   PHASE_PLAY,
-  SPAWN_TICKS,
-} from '../../src/sim/world';
+  SPAWN_TICKS } from '../../src/sim/world';
 import { FORWARD, run, TUCK } from './fixtures';
 import { arena, place, root, stepCounting } from './world-fixtures';
 
@@ -112,19 +111,6 @@ describe('the magnet', () => {
     expect(sim.world.sparks.count).toBe(0);
     expect(sim.world.player.xp).toBe(2);
     expect(counts.get(FX_SPARK)).toBe(1);
-  });
-
-  it('is wider in a higher gear', () => {
-    const pulled = (gear: number): number => {
-      const sim = arena();
-      const at = pointAt(sim, MAGNET_BASE + MAGNET_PER_GEAR * 2 - 0.5);
-      addSpark(sim, at.x, at.z, 1);
-      sim.state.mover.gear = gear;
-      sim.step(TUCK);
-      return sim.world.sparks.pull[0];
-    };
-    expect(pulled(1)).toBe(0);
-    expect(pulled(3)).toBe(1);
   });
 
   it('a pulled spark keeps coming even if the mover moves out of magnet range', () => {

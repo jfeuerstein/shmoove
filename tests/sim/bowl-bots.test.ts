@@ -73,15 +73,6 @@ function expectAll(rows: { ok: boolean }[]): void {
 }
 
 describe('bots on the bowl, seeds 1 to 5, 120 s each', () => {
-  it('1. the carver never passes gear 3 and spends at least 80% of its time in gears 1 and 2', () => {
-    expectAll(
-      SEEDS.map((seed) => {
-        const r = get('carver', seed);
-        const low = r.gearShare[0] + r.gearShare[1];
-        return { seed, topGear: r.topGear, topSpeed: r1(r.topSpeed), gear12: r2(low), ok: r.topGear <= 3 && low >= 0.8 };
-      }),
-    );
-  });
 
   it('2. the liner reaches gear 4 within 30 s and gear 5 within 90 s, and spends at least 40% in gear 3+', () => {
     expectAll(
@@ -92,16 +83,6 @@ describe('bots on the bowl, seeds 1 to 5, 120 s each', () => {
         const high = shareAtLeast(r, 3);
         const ok = g4 >= 0 && g4 <= 30 && g5 >= 0 && g5 <= 90 && high >= 0.4;
         return { seed, gear4At: r1(g4), gear5At: r1(g5), gear3plus: r2(high), ok };
-      }),
-    );
-  });
-
-  it("3. the liner's average speed is at least 1.6 times the carver's", () => {
-    expectAll(
-      SEEDS.map((seed) => {
-        const liner = get('liner', seed).avgSpeed;
-        const carver = get('carver', seed).avgSpeed;
-        return { seed, liner: r1(liner), carver: r1(carver), ratio: r2(liner / carver), ok: liner >= 1.6 * carver };
       }),
     );
   });

@@ -14,18 +14,16 @@ export interface Stats {
   /** Extra magnet reach, m. */
   magnet: number;
   maxHp: number;
-  /** Health per second regained while in gear 3 or higher. */
+  /** Health per second regained, all the time. */
   regen: number;
   /** Taken off every hit, to a minimum of 1 damage. */
   armour: number;
   /** 0 and up: shifts card rarity and crate rewards. */
   luck: number;
-  /** Added to gear power for each gear above 2. */
-  gearBonus: number;
-  /** Ram damage multiplier (Bumper). */
-  ram: number;
-  /** Speed given back for each enemy killed by ramming, m/s (Bumper). */
-  ramRefund: number;
+  /** Multiplies every weapon's wait between shots (below 1 fires faster). */
+  haste: number;
+  /** Damage to everything thrown back when the player is hit (Bumper). */
+  thorns: number;
   // ---- movement (copied into SimState.mods for the mover)
   /** Multiplies tuck and air drag. */
   drag: number;
@@ -69,10 +67,9 @@ export function copyMoverMods(dst: MoverMods, src: MoverMods): void {
 
 export const BASE_HP = 100;
 
-/** Bumper, by level 1..5: ram damage multiplier and speed refunded per ram kill. */
+/** Bumper, by level 1..5: damage to everything the player's hit throws back. */
 export const BUMPER = {
-  ram: [1.6, 2.1, 2.7, 3.4, 4.2],
-  refund: [0.15, 0.25, 0.35, 0.45, 0.6],
+  thorns: [10, 15, 21, 28, 36],
 } as const;
 
 export function makeStats(): Stats {
@@ -84,9 +81,8 @@ export function makeStats(): Stats {
     regen: 0,
     armour: 0,
     luck: 0,
-    gearBonus: 0,
-    ram: 1,
-    ramRefund: 0,
+    haste: 1,
+    thorns: 0,
     drag: 1,
     scrub: 1,
     hopWindow: 0,
@@ -105,9 +101,8 @@ export function recomputeStats(st: Stats, l: Loadout): void {
   st.regen = 0;
   st.armour = 0;
   st.luck = 0;
-  st.gearBonus = 0;
-  st.ram = 1;
-  st.ramRefund = 0;
+  st.haste = 1;
+  st.thorns = 0;
   st.drag = 1;
   st.scrub = 1;
   st.hopWindow = 0;
@@ -128,10 +123,7 @@ export function recomputeStats(st: Stats, l: Loadout): void {
   }
 
   const bumper = l.weaponLevel[W_BUMPER];
-  if (bumper > 0) {
-    st.ram = BUMPER.ram[bumper - 1];
-    st.ramRefund = BUMPER.refund[bumper - 1];
-  }
+  if (bumper > 0) st.thorns = BUMPER.thorns[bumper - 1];
 }
 
 export function modsFromStats(mods: MoverMods, st: Stats): void {
@@ -144,9 +136,9 @@ export function modsFromStats(mods: MoverMods, st: Stats): void {
 }
 
 /**
- * How hard weapons hit right now: the gear's power, the build's bonus for each gear above 2, and
- * the build's might. Every weapon multiplies its damage by this.
+ * How hard weapons hit: the build's might, and nothing else. (`gear` is accepted and ignored: the
+ * speed the player is moving at does not change their damage. `gearPower` is 1 in every gear.)
  */
 export function powerOf(st: Stats, gear: number): number {
-  return (gearPower(gear) + (gear > 2 ? (gear - 2) * st.gearBonus : 0)) * st.might;
+  return gearPower(gear) * st.might;
 }

@@ -6,7 +6,7 @@
  * removing one moves the last into its place. Indices are therefore only stable within a tick, and
  * only until `reapHorde`. Nothing here allocates after `makeWorld`.
  */
-import { makeLoadout, clearLoadout, raiseWeapon, W_WAKE, WEAPON_COUNT, type Loadout } from './arsenal';
+import { makeLoadout, clearLoadout, raiseWeapon, W_SEEKERS, WEAPON_COUNT, type Loadout } from './arsenal';
 import { xpForLevel } from './balance';
 import { makeOffer, type Offer } from './offer';
 import { Rng } from './rng';
@@ -46,7 +46,7 @@ export interface EnemyKind {
   radius: number;
   /** How tall it stands, m. A mover in the air above this passes over it. */
   height: number;
-  /** Top speed, m/s. Always below the floor of gear 3. */
+  /** Top speed, m/s. */
   speed: number;
   /** How fast it gets to that speed, m/s2. */
   accel: number;
@@ -286,10 +286,6 @@ export interface Player {
   maxHp: number;
   /** Ticks left during which nothing can hurt. */
   invuln: number;
-  /** The gear contact goes by: the highest held within the grace period. At least the mover's gear. */
-  graceGear: number;
-  /** Ticks the grace gear outlasts the gear itself. */
-  graceTicks: number;
   xp: number;
   /** XP needed for the next level. */
   xpNext: number;
@@ -377,9 +373,12 @@ export interface World {
   nearB: Int16Array;
 }
 
+/** What every run starts with: something that shoots at whatever is nearest. */
+export const STARTER_WEAPON = W_SEEKERS;
+
 function starterLoadout(): Loadout {
   const l = makeLoadout();
-  raiseWeapon(l, W_WAKE);
+  raiseWeapon(l, STARTER_WEAPON);
   return l;
 }
 
@@ -388,8 +387,6 @@ function makePlayer(): Player {
     hp: 100,
     maxHp: 100,
     invuln: 0,
-    graceGear: 1,
-    graceTicks: 0,
     xp: 0,
     xpNext: xpForLevel(1),
     level: 1,
@@ -524,7 +521,7 @@ export function resetWorld(w: World): void {
   p.loadout = loadout;
   p.stats = stats;
   clearLoadout(loadout);
-  raiseWeapon(loadout, W_WAKE);
+  raiseWeapon(loadout, STARTER_WEAPON);
   recomputeStats(stats, loadout);
   w.zones.count = 0;
   w.things.count = 0;
@@ -757,8 +754,6 @@ export function hashWorld(w: World): number {
   mix(w.seekerMeter);
   mix(p.hp);
   mix(p.invuln);
-  mix(p.graceGear);
-  mix(p.graceTicks);
   mix(p.xp);
   mix(p.level);
   mix(p.kills);

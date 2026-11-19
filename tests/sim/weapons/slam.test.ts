@@ -11,11 +11,10 @@ import {
   KIND_BOLLARD,
   KIND_SHUFFLER,
   KINDS,
-  MAX_FX,
-} from '../../../src/sim/world';
+  MAX_FX } from '../../../src/sim/world';
 import { FORWARD, HOP, TUCK } from '../fixtures';
 import { place } from '../world-fixtures';
-import { countFx, placeRising, rideThroughCrowd, rig, tick } from './rig';
+import { countFx, placeRising, rig, tick } from './rig';
 
 interface Landing {
   x: number;
@@ -226,15 +225,6 @@ describe('its effect', () => {
     const five = bollardDamage(3, 5);
     expect(one).toBeGreaterThan(0);
     expect(five).toBeCloseTo((one * SLAM.damage[4]) / SLAM.damage[0], 3);
-  });
-
-  it('the same ride in a higher gear kills more', () => {
-    // Shufflers around as tough as a gear-2 slam from a hop, so the gear's power shows in kills.
-    const hp = SLAM.damage[2] * slamScale(34) * gearPower(2);
-    const low = rideThroughCrowd(rig(W_SLAM, 3), 2, 60 * 30, hp);
-    const high = rideThroughCrowd(rig(W_SLAM, 3), 4, 60 * 30, hp);
-    expect(low.kills).toBeGreaterThan(5);
-    expect(high.kills).toBeGreaterThan(low.kills * 1.3);
   });
 
   it('hopping clean as fast as possible in a packed crowd never overflows the effect queue', () => {

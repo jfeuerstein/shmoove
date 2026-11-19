@@ -251,29 +251,4 @@ describe('the loop', () => {
     expect(counts.get(FX_POP) ?? 0).toBe(0);
     expect(sim.world.player.pops).toBe(0);
   });
-
-  it('hits harder in a higher gear', () => {
-    const left = (gear: number): number => {
-      const sim = arena();
-      const b = place(sim, KIND_BOLLARD, c.cx, c.cz);
-      const counts = new Map<number, number>();
-      for (let t = 0; t < 60; t++) {
-        root(sim.world);
-        sim.step(FORWARD);
-      }
-      for (let t = 0; t < 420 && (counts.get(FX_POP) ?? 0) === 0; t++) {
-        root(sim.world);
-        // Hold the gear without changing the ride: the pop reads the gear, not the speed.
-        sim.state.mover.gear = gear;
-        sim.state.mover.gearHold = 0;
-        stepCounting(sim, CIRCLE, 1, counts);
-      }
-      expect(counts.get(FX_POP) ?? 0).toBe(1);
-      return sim.world.horde.hp[b];
-    };
-    const slow = KINDS[KIND_BOLLARD].hp - left(2);
-    const fast = KINDS[KIND_BOLLARD].hp - left(4);
-    expect(slow).toBeGreaterThan(20);
-    expect(fast).toBeGreaterThan(slow * 1.5);
-  });
 });

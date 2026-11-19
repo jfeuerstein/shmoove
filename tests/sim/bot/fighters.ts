@@ -12,7 +12,8 @@
  * the bots over seeds 1 to 5, not by feel.
  */
 import { W_WAKE } from '../../../src/sim/arsenal';
-import { PLOW_GEAR } from '../../../src/sim/balance';
+/** The gear that used to plow each weight. Nothing plows now; these bots are due to be rewritten. */
+const PLOW_GEAR: readonly number[] = [9, 9, 9];
 import type { Bowl } from '../../../src/sim/bowl';
 import { FEEL } from '../../../src/sim/constants';
 import { angleDiff, datan2, dcos, dsin, len2, PI, TAU } from '../../../src/sim/math';

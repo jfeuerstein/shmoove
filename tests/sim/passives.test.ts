@@ -1,29 +1,28 @@
 /** Each passive, taken in a real run, does what its card says. */
 import { describe, expect, it } from 'vitest';
 import {
-  P_EDGES,
+  P_HASTE,
   P_HEART,
   P_HIDE,
   P_LUCK,
   P_MAGNET,
-  P_OVERDRIVE,
-  P_SECOND_WIND,
+  P_MIGHT,
+  P_REGEN,
   P_SPRINGS,
   P_WAX,
   P_WIDE_LOAD,
   P_WINGS,
   PASSIVE_COUNT,
   PASSIVE_INFO,
-  W_BUMPER,
 } from '../../src/sim/arsenal';
-import { GEAR_REGEN, MAGNET_BASE, MAGNET_PER_GEAR } from '../../src/sim/balance';
-import { setPassiveLevel, setWeaponLevel } from '../../src/sim/build';
+import { MAGNET_BASE, MAGNET_PER_GEAR } from '../../src/sim/balance';
+import { setPassiveLevel } from '../../src/sim/build';
 import { FEEL } from '../../src/sim/constants';
 import { hurtPlayer } from '../../src/sim/contact';
 import type { Sim } from '../../src/sim/sim';
 import { powerOf } from '../../src/sim/stats';
 import { flatTerrain } from '../../src/sim/terrain';
-import { KIND_BOLLARD, KIND_SHUFFLER, KINDS } from '../../src/sim/world';
+import { KIND_BOLLARD, KINDS } from '../../src/sim/world';
 import { FORWARD, launch, run, steer, TUCK } from './fixtures';
 import { arena, place, root } from './world-fixtures';
 
@@ -40,17 +39,6 @@ describe('movement passives reach the mover', () => {
 
   it('Wax: a tuck holds its speed longer', () => {
     expect(coast((sim) => setPassiveLevel(sim.world, P_WAX, 5))).toBeGreaterThan(coast(() => {}) + 0.4);
-  });
-
-  it('Edges: a hard turn at speed costs less', () => {
-    const turn = (level: number): number => {
-      const sim = wide();
-      setPassiveLevel(sim.world, P_EDGES, level);
-      launch(sim, 25);
-      run(sim, steer(-1, 0), 60);
-      return sim.state.mover.speed;
-    };
-    expect(turn(5)).toBeGreaterThan(turn(0) + 1);
   });
 
   it('Springs: hops go higher', () => {
@@ -101,20 +89,19 @@ describe('the rest', () => {
     expect(sim.world.player.hp).toBe(100 - 5 - 1);
   });
 
-  it('Second Wind: more health back in gear 3 and up, none below', () => {
-    const after = (speed: number, level: number): number => {
-      const sim = wide();
-      setPassiveLevel(sim.world, P_SECOND_WIND, level);
-      sim.world.player.hp = 40;
-      for (let t = 0; t < 300; t++) {
-        launch(sim, speed);
-        sim.step(TUCK);
-      }
-      return sim.world.player.hp;
-    };
-    expect(after(9, 5)).toBe(40);
-    expect(after(15, 5) - after(15, 0)).toBeCloseTo(2 * 5, 0);
-    expect(after(15, 0)).toBeCloseTo(40 + GEAR_REGEN[2] * 5, 0);
+  it('Regen: health comes back all the time', () => {
+    const sim = wide();
+    setPassiveLevel(sim.world, P_REGEN, 5);
+    sim.world.player.hp = 40;
+    run(sim, TUCK, 300);
+    expect(sim.world.player.hp).toBeCloseTo(40 + 1.6 * 5, 0);
+  });
+
+  it('Haste: the stat every weapon waits by goes down', () => {
+    const sim = wide();
+    expect(sim.world.player.stats.haste).toBe(1);
+    setPassiveLevel(sim.world, P_HASTE, 5);
+    expect(sim.world.player.stats.haste).toBeCloseTo(0.68, 6);
   });
 
   it('Magnet: sparks come from further away', () => {
@@ -134,14 +121,14 @@ describe('the rest', () => {
     expect(taken(5)).toBe(1);
   });
 
-  it('Overdrive: high gears hit harder, low gears the same', () => {
+  it('Might: everything hits harder, in any gear', () => {
     const sim = wide();
     const st = sim.world.player.stats;
-    const g2 = powerOf(st, 2);
-    const g5 = powerOf(st, 5);
-    setPassiveLevel(sim.world, P_OVERDRIVE, 5);
-    expect(powerOf(st, 2)).toBe(g2);
-    expect(powerOf(st, 5)).toBeCloseTo(g5 + 3 * 0.3, 6);
+    expect(powerOf(st, 1)).toBe(1);
+    expect(powerOf(st, 5)).toBe(1);
+    setPassiveLevel(sim.world, P_MIGHT, 5);
+    expect(powerOf(st, 1)).toBeCloseTo(1.5, 6);
+    expect(powerOf(st, 5)).toBeCloseTo(1.5, 6);
   });
 
   it('Wide Load: the trail burns wider', () => {
@@ -165,26 +152,6 @@ describe('the rest', () => {
     const sim = wide();
     setPassiveLevel(sim.world, P_LUCK, 4);
     expect(sim.world.player.stats.luck).toBeCloseTo(0.4, 6);
-  });
-
-  it('the Bumper: a ram hits harder and a kill gives speed back', () => {
-    const ram = (level: number): { speed: number; kills: number } => {
-      const sim = wide();
-      setWeaponLevel(sim.world, W_BUMPER, level);
-      for (let k = 0; k < 8; k++) place(sim, KIND_SHUFFLER, 0, 8 + k * 2.5);
-      launch(sim, 13);
-      for (let t = 0; t < 120; t++) {
-        root(sim.world);
-        // Rooted enemies are harmless and cannot be plowed; give them back their feet where it matters.
-        for (let i = 0; i < sim.world.horde.count; i++) sim.world.horde.stun[i] = 0;
-        sim.step(TUCK);
-      }
-      return { speed: sim.state.mover.speed, kills: sim.world.player.kills };
-    };
-    const plain = ram(0);
-    const bumper = ram(5);
-    expect(bumper.kills).toBeGreaterThanOrEqual(plain.kills);
-    expect(bumper.speed).toBeGreaterThan(plain.speed + 1);
   });
 
   it('every passive changes at least one stat at every level', () => {

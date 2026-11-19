@@ -128,45 +128,6 @@ describe('a crate', () => {
     expect(sim.world.things.state[c]).toBe(0);
   });
 
-  it('only rattles in gear 1, and at most once a second', () => {
-    const { sim, sources } = recordingArena();
-    const c = addThing(sim.world, THING_CRATE, 0, 0, 0, 0, 0);
-    ride(sim, 0, 0, 0, 0);
-    const seen: Seen[] = [];
-    step(sim, 150, seen);
-    expect(sim.world.things.state[c]).toBe(0);
-    expect(sources).toHaveLength(0);
-    // Leaning on it for 2.5 s: a rattle at the start, after 1 s and after 2 s.
-    expect(of(seen, FX_THING)).toEqual([THING_CRATE, THING_CRATE, THING_CRATE]);
-  });
-
-  it('breaks in gear 1 while the plow grace of a higher gear lasts, and not after', () => {
-    for (const late of [false, true]) {
-      const { sim } = recordingArena();
-      const c = addThing(sim.world, THING_CRATE, 0, 0, 0, 0, 0);
-      // Cruising in gear 3, then stopped short (as by a hit) 2 m before the crate.
-      ride(sim, 0, -40, 0, 13);
-      step(sim, 10);
-      ride(sim, 0, late ? -30 : -3.1, 0, 3);
-      sim.state.mover.gear = 3;
-      if (late) {
-        step(sim, 120);
-        ride(sim, 0, -3.1, 0, 3);
-      }
-      let gearAtTouch = 0;
-      for (let t = 0; t < 60 && sim.world.things.state[c] === 0; t++) {
-        step(sim, 1);
-        gearAtTouch = sim.state.mover.gear;
-      }
-      if (late) {
-        expect(sim.world.things.state[c]).toBe(0);
-      } else {
-        expect(sim.world.things.state[c]).toBe(THING_DONE);
-        expect(gearAtTouch).toBe(1);
-      }
-    }
-  });
-
   it('gives a card, a heal of 25, every spark, or a bomb, by the roll', () => {
     expect(crateReward(0, 0)).toBe(CRATE_CARD);
     expect(crateReward(0.49, 0)).toBe(CRATE_CARD);
@@ -287,25 +248,6 @@ describe('a crate', () => {
 });
 
 describe('a gold crate', () => {
-  it('only rattles in gear 3; in gear 4 it gives a card and 5 tokens', () => {
-    for (const speed of [14, 20]) {
-      const { sim, sources } = recordingArena();
-      const c = addThing(sim.world, THING_GOLD_CRATE, 0, 0, 0, 0, 0);
-      const seen: Seen[] = [];
-      rideThrough(sim, speed, seen);
-      expect(of(seen, FX_THING)).toEqual([THING_GOLD_CRATE]);
-      if (speed < 18) {
-        expect(sim.world.things.state[c]).toBe(0);
-        expect(sim.world.player.tokens).toBe(0);
-        expect(sources).toHaveLength(0);
-      } else {
-        expect(sim.world.things.state[c]).toBe(THING_DONE);
-        expect(sim.world.player.tokens).toBe(5);
-        expect(of(seen, FX_TOKEN)).toEqual([5]);
-        expect(sources).toEqual([OFFER_CRATE]);
-      }
-    }
-  });
 });
 
 describe('a shrine', () => {

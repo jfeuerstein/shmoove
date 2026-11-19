@@ -32,9 +32,9 @@ const DEFS = {
   // carve
   turnMax: { v: 5.5, min: 2, max: 12, step: 0.1, group: 'carve', note: 'Fastest turn at low speed, rad/s' },
   grip: { v: 34, min: 10, max: 80, step: 1, group: 'carve', note: 'Sideways acceleration available for turning, m/s2. Sets the turning circle at speed' },
-  carveScrub: { v: 0.1, min: 0, max: 0.4, step: 0.01, group: 'carve', note: 'Share of speed lost per radian turned above run speed' },
-  carveSlopeGain: { v: 0.2, min: 0, max: 1, step: 0.05, group: 'carve', note: 'Share of a downhill\'s pull you keep above run speed with the thumb down. 1 = carving is as fast as tucking' },
-  carveDrag: { v: 0.4, min: 0, max: 2, step: 0.05, group: 'carve', note: 'How fast speed above run speed bleeds off while carving, 1/s' },
+  carveScrub: { v: 0.06, min: 0, max: 0.4, step: 0.01, group: 'carve', note: 'Share of speed lost per radian turned above run speed' },
+  carveSlopeGain: { v: 1, min: 0, max: 1, step: 0.05, group: 'carve', note: 'Share of a downhill\'s pull you keep above run speed with the thumb down. 1 = carving is as fast as tucking' },
+  carveDrag: { v: 0.12, min: 0, max: 2, step: 0.05, group: 'carve', note: 'How fast speed above run speed bleeds off while carving, 1/s' },
   slideAngle: { v: 1.9, min: 1.6, max: 3, step: 0.05, group: 'carve', note: 'Stick angle from straight up beyond which the turn is a powerslide, rad' },
   slideTurn: { v: 2.2, min: 1, max: 4, step: 0.1, group: 'carve', note: 'How much tighter a powerslide turns' },
   slideBrake: { v: 14, min: 0, max: 40, step: 1, group: 'carve', note: 'Braking in a powerslide, m/s2' },
@@ -82,15 +82,11 @@ const DEFS = {
   camZoomRate: { v: 2.2, min: 0.3, max: 10, step: 0.1, group: 'camera', note: 'How fast pull-back and field of view follow the gear, 1/s' },
   camLandKick: { v: 0.05, min: 0, max: 0.3, step: 0.01, group: 'camera', note: 'Camera dip per m/s of landing impact, m' },
   camGroundClear: { v: 1.2, min: 0.2, max: 5, step: 0.1, group: 'camera', note: 'Closest the camera gets to the ground, m' },
-  // combat (how contact with the horde feels; damage and health numbers live in balance.ts)
+  // combat (how being hit feels; damage and health numbers live in balance.ts)
   invulnTicks: { v: 48, min: 0, max: 120, step: 2, group: 'combat', note: 'How long nothing can hurt you after a hit, ticks' },
   hitShoveRadius: { v: 7, min: 0, max: 12, step: 0.5, group: 'combat', note: 'How far around you a hit throws the horde back, m' },
   hitShoveSpeed: { v: 12, min: 0, max: 25, step: 0.5, group: 'combat', note: 'How hard a hit throws the horde back, m/s' },
   hitStunTicks: { v: 44, min: 0, max: 120, step: 2, group: 'combat', note: 'How long a thrown enemy stays harmless, ticks' },
-  plowSpeedCost: { v: 0.25, min: 0, max: 2, step: 0.05, group: 'combat', note: 'Speed each plowed enemy costs you, m/s' },
-  plowShove: { v: 7, min: 0, max: 20, step: 0.5, group: 'combat', note: 'How hard a plowed enemy is knocked aside, m/s' },
-  plowGraceTicks: { v: 45, min: 0, max: 180, step: 5, group: 'combat', note: 'How long after losing a gear you still go through what that gear plowed, ticks. The way out of a crowd you rode into' },
-  bonkBounce: { v: 3, min: 0, max: 10, step: 0.5, group: 'combat', note: 'Speed you rebound with off something too heavy to plow, m/s' },
   // wake (the trail behind you and the loop that pops)
   wakeLength: { v: 34, min: 10, max: 80, step: 1, group: 'wake', note: 'Length of the trail in gear 1, m' },
   wakeLengthPerGear: { v: 5, min: 0, max: 20, step: 0.5, group: 'wake', note: 'Trail added per gear, m' },

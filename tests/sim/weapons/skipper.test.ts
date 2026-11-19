@@ -13,11 +13,10 @@ import {
   MAX_SHOTS,
   rebuildGrid,
   SHOT_DART,
-  SHOT_STONE,
-} from '../../../src/sim/world';
+  SHOT_STONE } from '../../../src/sim/world';
 import { FORWARD, HOP, steer, TUCK } from '../fixtures';
 import { place } from '../world-fixtures';
-import { placeRising, pointAt, rideThroughCrowd, rig, tick } from './rig';
+import { placeRising, pointAt, rig, tick } from './rig';
 
 const SPEED = 10;
 const HOP_FORWARD = steer(0, 1, true);
@@ -245,15 +244,5 @@ describe('the pool', () => {
     }
     expect(peak).toBeGreaterThan(1);
     expect(peak).toBeLessThan(MAX_SHOTS / 4);
-  });
-});
-
-describe('gears', () => {
-  it('the same ride in a higher gear kills more', () => {
-    const hp = SKIPPER.damage[2] * gearPower(2) * 1.5;
-    const low = rideThroughCrowd(rig(W_SKIPPER, 3), 2, 60 * 30, hp);
-    const high = rideThroughCrowd(rig(W_SKIPPER, 3), 4, 60 * 30, hp);
-    expect(low.kills).toBeGreaterThan(3);
-    expect(high.kills).toBeGreaterThan(low.kills * 1.2);
   });
 });

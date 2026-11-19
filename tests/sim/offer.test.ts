@@ -178,7 +178,7 @@ describe('the build', () => {
     recomputeStats(st, l);
     expect(st.maxHp).toBe(100);
     expect(st.drag).toBe(1);
-    expect(st.ram).toBe(1);
+    expect(st.thorns).toBe(0);
 
     raisePassive(l, P_HEART, 2);
     raisePassive(l, P_WAX, 1);
@@ -186,8 +186,7 @@ describe('the build', () => {
     recomputeStats(st, l);
     expect(st.maxHp).toBe(140);
     expect(st.drag).toBeLessThan(1);
-    expect(st.ram).toBe(BUMPER.ram[2]);
-    expect(st.ramRefund).toBe(BUMPER.refund[2]);
+    expect(st.thorns).toBe(BUMPER.thorns[2]);
 
     // Recomputing is not cumulative.
     recomputeStats(st, l);

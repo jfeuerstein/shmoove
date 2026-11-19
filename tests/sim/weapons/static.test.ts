@@ -7,7 +7,7 @@ import { STATIC, staticCharge, stepStatic } from '../../../src/sim/weapons/stati
 import { FX_ARC, KIND_BOLLARD, KIND_SHUFFLER, KINDS, MAX_FX, rebuildGrid, WEAPON_MEM } from '../../../src/sim/world';
 import { FORWARD, TUCK } from '../fixtures';
 import { place } from '../world-fixtures';
-import { placeRising, pointAt, rideThroughCrowd, rig, tick } from './rig';
+import { placeRising, pointAt, rig, tick } from './rig';
 
 const SPEED = 10;
 
@@ -214,15 +214,5 @@ describe('the chain', () => {
       expect(sim.world.fx.count).toBeLessThanOrEqual(MAX_FX);
       expect(arcs(sim).length).toBe(STATIC.chain[4]);
     }
-  });
-});
-
-describe('gears', () => {
-  it('the same ride in a higher gear kills more', () => {
-    const hp = STATIC.damage[2] * gearPower(2) * 1.5;
-    const low = rideThroughCrowd(rig(W_STATIC, 3), 2, 60 * 30, hp);
-    const high = rideThroughCrowd(rig(W_STATIC, 3), 4, 60 * 30, hp);
-    expect(low.kills).toBeGreaterThan(3);
-    expect(high.kills).toBeGreaterThan(low.kills * 1.2);
   });
 });

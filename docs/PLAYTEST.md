@@ -80,9 +80,9 @@ the clean-hop bonus, the speed limit) are not on this list.
 | --- | --- | --- | --- |
 | `turnMax` | 5.5 rad/s | slow, wide turns when slow | twitchy spins at walking pace |
 | `grip` | 34 m/s² | at speed you cannot turn, you slide wide | at speed you turn on a coin with no commitment |
-| `carveScrub` | 0.1 | hard turns at speed cost nothing | every correction at speed feels like braking |
-| `carveDrag` | 0.4 /s | you can hold the stick at speed for free, so there is no reason to tuck | touching the stick at speed feels like braking |
-| `carveSlopeGain` | 0.2 | downhills do nothing unless you let go | carving downhill builds speed like a tuck, so there is no reason to tuck |
+| `carveScrub` | 0.06 | hard turns at speed cost nothing | every correction at speed feels like braking |
+| `carveDrag` | 0.12 /s | you can hold the stick at speed for free, so there is no reason to tuck | touching the stick at speed feels like braking |
+| `carveSlopeGain` | 1 | downhills do nothing unless you let go | carving downhill builds speed like a tuck, so there is no reason to tuck |
 | `slideAngle` | 1.9 rad | pulling the stick a little back throws a U-turn | you have to pull straight back to get the U-turn |
 | `slideTurn` | 2.2 | the U-turn swings wide | the U-turn snaps round |
 | `slideBrake` | 14 m/s² | U-turns keep all your speed | U-turns stop you dead |
@@ -177,10 +177,6 @@ most useful thing this slice can tell us.
 | `hitShoveRadius` | 7 m | after a hit you are still touching the crowd | a hit clears the screen; getting hit is a tactic |
 | `hitShoveSpeed` | 12 m/s | the shove is a nudge; the crowd closes again at once | enemies fly away like ragdolls |
 | `hitStunTicks` | 44 ticks | thrown enemies come straight back at you | after a hit the crowd stands about harmless for too long |
-| `plowSpeedCost` | 0.25 m/s | plowing a crowd costs nothing; gear 3 is armour | plowing a few drops you out of gear 3, into the crowd |
-| `plowGraceTicks` | 45 ticks (0.75 s) | dropping out of gear 3 in a crowd is a trap: the next touch hurts | you plow through crowds long after you slowed down; gear 3 stops mattering |
-| `plowShove` | 7 m/s | plowed enemies stay in your path | plowed enemies fly off; no sense of mass |
-| `bonkBounce` | 3 m/s | a bollard is glue | a bollard is a trampoline |
 
 ### wake
 
