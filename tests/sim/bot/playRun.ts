@@ -5,10 +5,12 @@
  *
  * Lean on purpose: 25 of these run in one test file, so nothing here allocates per tick.
  */
+import { preferWeapons } from './picks';
+import { W_SEEKERS, W_WAKE } from '../../../src/sim/arsenal';
 import { RUN_TICKS } from '../../../src/sim/balance';
 import type { Bowl } from '../../../src/sim/bowl';
 import { TICK_HZ } from '../../../src/sim/constants';
-import { hashSimState, Sim } from '../../../src/sim/sim';
+import { hashSimState, Sim, type Picker } from '../../../src/sim/sim';
 import { makeInputFrame } from '../../../src/sim/types';
 import { FX_PLAYER_HIT, hashWorld, PHASE_DEAD, PHASE_PLAY, PHASE_WON } from '../../../src/sim/world';
 import type { Bot } from './steer';
@@ -20,6 +22,8 @@ export interface HordeRun {
   /** Seconds played when the run ended. */
   seconds: number;
   hp: number;
+  /** Maximum health at the end (the build can raise it). */
+  maxHp: number;
   kills: number;
   level: number;
   wakeLevel: number;
@@ -55,8 +59,14 @@ export function aliveAt(r: HordeRun, seconds: number): boolean {
  */
 export type RunHook = (sim: Sim) => void;
 
-export function playRun(bowl: Bowl, seed: number, bot: Bot, hook: RunHook | null = null): HordeRun {
-  const sim = new Sim(bowl, { seed, horde: true });
+export function playRun(
+  bowl: Bowl,
+  seed: number,
+  bot: Bot,
+  hook: RunHook | null = null,
+  picker: Picker = preferWeapons,
+): HordeRun {
+  const sim = new Sim(bowl, { seed, horde: true, autoPick: picker });
   const w = sim.world;
   const s = sim.state;
   const p = w.player;
@@ -95,10 +105,11 @@ export function playRun(bowl: Bowl, seed: number, bot: Bot, hook: RunHook | null
     end: dead ? 'dead' : 'won',
     seconds: ticks / TICK_HZ,
     hp: p.hp,
+    maxHp: p.maxHp,
     kills: p.kills,
     level: p.level,
-    wakeLevel: p.wakeLevel,
-    seekersLevel: p.seekersLevel,
+    wakeLevel: p.loadout.weaponLevel[W_WAKE],
+    seekersLevel: p.loadout.weaponLevel[W_SEEKERS],
     pops: p.pops,
     bestPop: p.bestPop,
     gear3plus: ticks > 0 ? high / ticks : 0,

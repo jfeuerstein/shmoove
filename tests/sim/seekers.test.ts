@@ -1,4 +1,6 @@
 /** What a player would notice about Seekers: distance travelled fires darts, and darts find enemies. */
+import { setWeaponLevel } from '../../src/sim/build';
+import { W_SEEKERS } from '../../src/sim/arsenal';
 import { describe, expect, it } from 'vitest';
 import { gearPower } from '../../src/sim/balance';
 import { DT } from '../../src/sim/constants';
@@ -17,13 +19,13 @@ function pointAt(sim: Sim, d: number, bearing = 0): { x: number; z: number } {
 
 /** Force the next step to fire if it can. */
 function charge(sim: Sim): void {
-  sim.world.seekerMeter = SEEKERS.interval[sim.world.player.seekersLevel - 1];
+  sim.world.seekerMeter = SEEKERS.interval[sim.world.player.loadout.weaponLevel[W_SEEKERS] - 1];
 }
 
 describe('the meter', () => {
   it('fires nothing at level 0, however far you ride', () => {
     const sim = arena();
-    sim.world.player.seekersLevel = 0;
+    setWeaponLevel(sim.world, W_SEEKERS, 0);
     const at = pointAt(sim, 15);
     place(sim, KIND_BOLLARD, at.x, at.z);
     const counts = new Map<number, number>();
@@ -37,7 +39,7 @@ describe('the meter', () => {
 
   it('fires nothing while standing still', () => {
     const sim = arena();
-    sim.world.player.seekersLevel = 3;
+    setWeaponLevel(sim.world, W_SEEKERS, 3);
     const at = pointAt(sim, 10);
     place(sim, KIND_BOLLARD, at.x, at.z);
     const counts = new Map<number, number>();
@@ -52,7 +54,7 @@ describe('the meter', () => {
   for (let level = 1; level <= 5; level++) {
     it(`level ${level}: volleys over a known distance match the interval`, () => {
       const sim = arena();
-      sim.world.player.seekersLevel = level;
+      setWeaponLevel(sim.world, W_SEEKERS, level);
       const e = place(sim, KIND_BOLLARD, 0, 0);
       const h = sim.world.horde;
       const counts = new Map<number, number>();
@@ -78,7 +80,7 @@ describe('the meter', () => {
 describe('a volley', () => {
   it('sends darts to different targets when there are enough', () => {
     const sim = arena();
-    sim.world.player.seekersLevel = 3;
+    setWeaponLevel(sim.world, W_SEEKERS, 3);
     const l = pointAt(sim, 12, -1.2);
     const r = pointAt(sim, 12, 1.2);
     const a = place(sim, KIND_BOLLARD, l.x, l.z);
@@ -101,7 +103,7 @@ describe('a volley', () => {
 
   it('a single dart goes to the nearest enemy', () => {
     const sim = arena();
-    sim.world.player.seekersLevel = 1;
+    setWeaponLevel(sim.world, W_SEEKERS, 1);
     const near = pointAt(sim, 8);
     const mid = pointAt(sim, 18, 1);
     const far = pointAt(sim, 25, -1);
@@ -121,7 +123,7 @@ describe('a volley', () => {
 
   it('a dart reaches and damages a target 20 m away, and a shuffler falls in the expected hits', () => {
     const sim = arena();
-    sim.world.player.seekersLevel = 1;
+    setWeaponLevel(sim.world, W_SEEKERS, 1);
     const at = pointAt(sim, 20);
     const e = place(sim, KIND_SHUFFLER, at.x, at.z);
     const hit = SEEKERS.damage[0] * gearPower(sim.state.mover.gear);
@@ -149,7 +151,7 @@ describe('a volley', () => {
 
   it('does not target enemies that are still rising', () => {
     const sim = arena();
-    sim.world.player.seekersLevel = 1;
+    setWeaponLevel(sim.world, W_SEEKERS, 1);
     const at = pointAt(sim, 10);
     const e = spawnEnemy(sim.world, KIND_SHUFFLER, at.x, 0, at.z);
     expect(sim.world.horde.age[e]).toBe(0);
@@ -161,7 +163,7 @@ describe('a volley', () => {
 
   it('waits with nothing in range and fires the moment something comes in', () => {
     const sim = arena();
-    sim.world.player.seekersLevel = 1;
+    setWeaponLevel(sim.world, W_SEEKERS, 1);
     run(sim, FORWARD, 60 * 6);
     expect(sim.world.shots.count).toBe(0);
     expect(sim.world.seekerMeter).toBe(SEEKERS.interval[0]);
@@ -177,7 +179,7 @@ describe('a volley', () => {
   it('hits harder in a higher gear', () => {
     const damageAt = (gear: number): number => {
       const sim = arena();
-      sim.world.player.seekersLevel = 2;
+      setWeaponLevel(sim.world, W_SEEKERS, 2);
       const at = pointAt(sim, 15);
       place(sim, KIND_BOLLARD, at.x, at.z);
       sim.state.mover.gear = gear;
@@ -194,7 +196,7 @@ describe('a volley', () => {
 describe('a dart', () => {
   it('that finds nothing expires', () => {
     const sim = arena();
-    sim.world.player.seekersLevel = 1;
+    setWeaponLevel(sim.world, W_SEEKERS, 1);
     const at = pointAt(sim, 25);
     const e = place(sim, KIND_SHUFFLER, at.x, at.z);
     charge(sim);
@@ -210,7 +212,7 @@ describe('a dart', () => {
 
   it('is gone once it hits', () => {
     const sim = arena();
-    sim.world.player.seekersLevel = 1;
+    setWeaponLevel(sim.world, W_SEEKERS, 1);
     const at = pointAt(sim, 10);
     place(sim, KIND_BOLLARD, at.x, at.z);
     charge(sim);
@@ -224,7 +226,7 @@ describe('a dart', () => {
 
   it('the shot pool never overflows under the fastest fire rate', () => {
     const sim = arena();
-    sim.world.player.seekersLevel = 5;
+    setWeaponLevel(sim.world, W_SEEKERS, 5);
     for (let i = 0; i < 8; i++) {
       const p = pointAt(sim, 26, -0.4 + i * 0.1);
       place(sim, KIND_BOLLARD, p.x, p.z);
@@ -245,7 +247,7 @@ describe('a dart', () => {
 describe('determinism', () => {
   function scripted(): number {
     const sim = arena();
-    sim.world.player.seekersLevel = 2;
+    setWeaponLevel(sim.world, W_SEEKERS, 2);
     for (let i = 0; i < 24; i++) {
       const a = i * 0.7;
       place(sim, i % 5 === 0 ? KIND_BOLLARD : KIND_SHUFFLER, Math.sin(a) * (14 + i), Math.cos(a) * (14 + i) + 30);

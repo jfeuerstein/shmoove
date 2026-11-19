@@ -7,7 +7,7 @@ import { makeInputFrame } from '../../src/sim/types';
 import { KIND_BOLLARD, KIND_GNAT, KIND_SHUFFLER, SPAWN_TICKS } from '../../src/sim/world';
 
 function crowd(seed: number, enemies: number, sparks = 0): Sim {
-  const sim = new Sim(makeBowl(seed), { seed, horde: true });
+  const sim = new Sim(makeBowl(seed), { seed, horde: true, autoPick: true });
   applyFixture(sim, enemies, sparks);
   return sim;
 }
@@ -35,7 +35,7 @@ describe('the crowd fixture', () => {
   it('keeps every enemy and spark 8 m clear of the spawn, within the disc and inside the map', () => {
     expect(FIXTURE_CLEAR).toBe(8);
     for (const terrain of [makeBowl(5), flatTerrain(BOWL_RADIUS)]) {
-      const sim = new Sim(terrain, { seed: 5, horde: true });
+      const sim = new Sim(terrain, { seed: 5, horde: true, autoPick: true });
       applyFixture(sim, 500, 600);
       const w = sim.world;
       const within = (x: number, z: number): void => {
@@ -81,7 +81,7 @@ describe('the crowd fixture', () => {
     expect(w.player.hp).toBe(FIXTURE_HP);
     expect(w.player.maxHp).toBe(FIXTURE_HP);
     // And a plain run is left alone.
-    const plain = new Sim(flatTerrain(BOWL_RADIUS), { seed: 4, horde: true });
+    const plain = new Sim(flatTerrain(BOWL_RADIUS), { seed: 4, horde: true, autoPick: true });
     applyFixture(plain, 0, 0);
     expect(plain.world.player.maxHp).toBeLessThan(FIXTURE_HP);
   });

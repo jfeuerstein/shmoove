@@ -11,6 +11,7 @@
  * climbs; the looper and the rider add what they want on top. Every number was chosen by running
  * the bots over seeds 1 to 5, not by feel.
  */
+import { W_WAKE } from '../../../src/sim/arsenal';
 import { PLOW_GEAR } from '../../../src/sim/balance';
 import type { Bowl } from '../../../src/sim/bowl';
 import { FEEL } from '../../../src/sim/constants';
@@ -275,7 +276,7 @@ export function makeLooper(): Bot {
     lastYaw = ty;
     // A crowd following behind is one that will follow the circle in; one ahead would be ridden into.
     const behind = (senses.cx - m.x) * dsin(ty) + (senses.cz - m.z) * dcos(ty) < 0;
-    if (!looping && senses.near12 >= LOOP.crowd && behind && w.player.wakeLevel > 0) {
+    if (!looping && senses.near12 >= LOOP.crowd && behind && w.player.loadout.weaponLevel[W_WAKE] > 0) {
       // Start a circle tangent to the current path, on the side the crowd is.
       const len = wakeLength(w, m.gear) * LOOP.fill;
       radius = Math.min(LOOP.maxR, Math.max(LOOP.minR, len / TAU));

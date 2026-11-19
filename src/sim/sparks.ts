@@ -2,7 +2,9 @@
  * Sparks: what the dead leave behind. They wait on the ground until the mover comes within magnet
  * range, then fly in and become XP; XP becomes levels, and levels raise the two weapons.
  */
-import { LEVEL_GRANTS, MAGNET_BASE, MAGNET_PER_GEAR, WEAPON_MAX_LEVEL, xpForLevel } from './balance';
+import { MAGNET_BASE, MAGNET_PER_GEAR, xpForLevel } from './balance';
+import { queueOffer } from './build';
+import { OFFER_LEVEL } from './offer';
 import { DT } from './constants';
 import type { Terrain } from './terrain';
 import type { SimState } from './types';
@@ -68,7 +70,7 @@ export function stepSparks(w: World, s: SimState, terrain: Terrain): void {
   const m = s.mover;
   const sp = w.sparks;
   const p = w.player;
-  const magnet = MAGNET_BASE + MAGNET_PER_GEAR * (m.gear - 1);
+  const magnet = MAGNET_BASE + MAGNET_PER_GEAR * (m.gear - 1) + p.stats.magnet;
   const magnet2 = magnet * magnet;
   const fly = Math.max(FLY_MIN, m.speed + FLY_BONUS) * DT;
   const ay = m.y + AIM_HEIGHT;
@@ -108,14 +110,8 @@ export function stepSparks(w: World, s: SimState, terrain: Terrain): void {
     p.xp -= p.xpNext;
     p.level++;
     p.xpNext = xpForLevel(p.level);
-    const g = p.level - 2;
-    if (g >= 0 && g < LEVEL_GRANTS.length) {
-      if (LEVEL_GRANTS[g] === 'wake') {
-        if (p.wakeLevel < WEAPON_MAX_LEVEL) p.wakeLevel++;
-      } else if (p.seekersLevel < WEAPON_MAX_LEVEL) {
-        p.seekersLevel++;
-      }
-    }
+    // Every level is a card to choose.
+    queueOffer(w, OFFER_LEVEL);
     emitFx(w, FX_LEVEL_UP, m.x, m.y, m.z, p.level);
   }
 }

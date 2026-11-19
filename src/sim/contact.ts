@@ -6,10 +6,11 @@
  * that gear the mover goes through it: the enemy takes the ram and is knocked aside, and it costs a
  * little speed. Something too heavy to plow is also a wall: the mover stops dead against it.
  */
-import { GEAR_REGEN, gearPower, PLAYER_RADIUS, PLOW_GEAR, RAM_DAMAGE_PER_SPEED } from './balance';
+import { GEAR_REGEN, PLAYER_RADIUS, PLOW_GEAR, RAM_DAMAGE_PER_SPEED } from './balance';
 import { DT, FEEL } from './constants';
 import { gearFloor, gearForSpeed } from './flow';
 import { dcos, dsin, len2, len3 } from './math';
+import { powerOf } from './stats';
 import { EV_GEAR_DOWN, type MoverState, type SimState } from './types';
 import {
   damageEnemy,
@@ -48,9 +49,11 @@ function scaleSpeed(m: MoverState, to: number): void {
 export function hurtPlayer(w: World, s: SimState, damage: number): void {
   const m = s.mover;
   const p = w.player;
-  p.hp -= damage;
+  // Armour takes a little off every hit, never all of it.
+  const taken = Math.max(1, damage - p.stats.armour);
+  p.hp -= taken;
   p.invuln = FEEL.invulnTicks;
-  emitFx(w, FX_PLAYER_HIT, m.x, m.y, m.z, damage);
+  emitFx(w, FX_PLAYER_HIT, m.x, m.y, m.z, taken);
 
   if (m.gear > 1) {
     scaleSpeed(m, Math.max(0, gearFloor(m.gear) - FEEL.gearHyst - 0.2));
@@ -83,9 +86,9 @@ export function stepContact(w: World, s: SimState): void {
   const h = w.horde;
   if (p.invuln > 0) p.invuln--;
 
-  // Health comes back with speed.
+  // Health comes back with speed; the build can add to it in gear 3 and up.
   if (p.hp > 0 && p.hp < p.maxHp) {
-    p.hp += GEAR_REGEN[m.gear - 1] * DT;
+    p.hp += (GEAR_REGEN[m.gear - 1] + (m.gear >= 3 ? p.stats.regen : 0)) * DT;
     if (p.hp > p.maxHp) p.hp = p.maxHp;
   }
 
@@ -123,7 +126,13 @@ export function stepContact(w: World, s: SimState): void {
     if (p.graceGear >= plowGear && speed >= need) {
       // Through it.
       const heavy = kind.weight === WEIGHT_HEAVY;
-      damageEnemy(w, i, heavy ? h.hp[i] : speed * RAM_DAMAGE_PER_SPEED * gearPower(m.gear));
+      damageEnemy(
+        w,
+        i,
+        heavy ? h.hp[i] : speed * RAM_DAMAGE_PER_SPEED * p.stats.ram * powerOf(p.stats, m.gear),
+      );
+      // A ram that kills gives some of its cost back (the Bumper).
+      const refund = h.hp[i] <= 0 ? p.stats.ramRefund : 0;
       if (hs > 1e-3) {
         // Knocked forward and to whichever side it was on.
         const fx = m.vx / hs;
@@ -131,7 +140,7 @@ export function stepContact(w: World, s: SimState): void {
         const side = dx * -fz + dz * fx >= 0 ? 1 : -1;
         shoveEnemy(w, i, fx * 0.6 - fz * side, fz * 0.6 + fx * side, FEEL.plowShove, PLOW_STUN_TICKS);
       }
-      scaleSpeed(m, Math.max(0, speed - FEEL.plowSpeedCost * (heavy ? SHATTER_COST : 1)));
+      scaleSpeed(m, Math.max(0, speed - FEEL.plowSpeedCost * (heavy ? SHATTER_COST : 1) + refund));
       emitFx(w, FX_PLOW, h.x[i], h.y[i], h.z[i], h.kind[i]);
       continue;
     }

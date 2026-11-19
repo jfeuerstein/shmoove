@@ -1,4 +1,5 @@
 import { RUN_TICKS } from './balance';
+import { applyBuildToMover, openOffer, pickCard } from './build';
 import { stepContact } from './contact';
 import { stepDirector } from './director';
 import { stepGear } from './flow';
@@ -7,10 +8,19 @@ import { makeMover, stepMover } from './mover';
 import { copyMoverMods, makeMoverMods } from './stats';
 import type { Terrain } from './terrain';
 import type { InputFrame, MoverState, SimState } from './types';
-import { stepSeekers } from './seekers';
 import { stepSparks } from './sparks';
-import { stepWake } from './wake';
-import { makeWorld, PHASE_PLAY, PHASE_WON, reapHorde, rebuildGrid, resetWorld, type World } from './world';
+import { builtWeapons, stepWeapons } from './weapons';
+import {
+  makeWorld,
+  PHASE_CHOOSE,
+  PHASE_DEAD,
+  PHASE_PLAY,
+  PHASE_WON,
+  reapHorde,
+  rebuildGrid,
+  resetWorld,
+  type World,
+} from './world';
 
 function copyMover(dst: MoverState, src: MoverState): void {
   dst.x = src.x;
@@ -61,7 +71,18 @@ export interface SimOptions {
   seed?: number;
   /** A run with the horde, health and a clock. Without it the sim is only the mover on the terrain. */
   horde?: boolean;
+  /**
+   * Answer every offer at once, without holding the world: `true` takes the first card, a function
+   * chooses (it is given the world, with the offer open, and returns the card's index). For bots
+   * and tests; the game leaves it off and sends `InputFrame.pick`.
+   */
+  autoPick?: boolean | Picker;
 }
+
+/** Chooses a card from `w.offer`. Must return an index below `w.offer.count`. */
+export type Picker = (w: World) => number;
+
+const firstCard: Picker = () => 0;
 
 /**
  * One tick of everything that is not the mover. The order matters: the horde moves, the grid is
@@ -81,10 +102,11 @@ function stepWorld(w: World, s: SimState, terrain: Terrain): void {
     reapHorde(w);
     return;
   }
-  stepWake(w, s);
-  stepSeekers(w, s, terrain);
+  stepWeapons(w, s, terrain);
   reapHorde(w);
   stepSparks(w, s, terrain);
+  // [things] the map's crates, shrines, gates, hoops and totems
+  openOffer(w);
 
   w.run.ticks++;
   if (w.run.ticks >= RUN_TICKS) w.run.phase = PHASE_WON;
@@ -111,6 +133,8 @@ export class Sim {
   readonly world: World;
   /** True for a run with the horde; false for the mover alone. */
   readonly horde: boolean;
+  /** See `SimOptions.autoPick`: who answers offers, or null to wait for `InputFrame.pick`. */
+  picker: Picker | null;
 
   constructor(terrain: Terrain, options: SimOptions = {}) {
     this.terrain = terrain;
@@ -118,24 +142,42 @@ export class Sim {
     this.prev = makeSimState(terrain);
     this.world = makeWorld(options.seed ?? 1);
     this.horde = options.horde === true;
+    const auto = options.autoPick;
+    this.picker = auto === true ? firstCard : typeof auto === 'function' ? auto : null;
+    builtWeapons(this.world.pool);
   }
 
   step(input: InputFrame): void {
     copySimState(this.prev, this.state);
     const s = this.state;
     s.events = 0;
-    if (this.horde && this.world.run.phase !== PHASE_PLAY) {
-      // The run is over: the world holds still until `reset`.
-      stopMover(s.mover);
-      this.world.fx.count = 0;
-      this.world.deaths.count = 0;
+    const w = this.world;
+    if (this.horde && w.run.phase === PHASE_CHOOSE) {
+      // Cards are on the table: nothing moves until one is taken, and then everything carries on
+      // exactly as it was, speed and heading included.
+      w.fx.count = 0;
+      w.deaths.count = 0;
+      const pick = this.picker ? this.picker(w) : (input.pick ?? -1);
+      if (pick >= 0 && !pickCard(w, s, pick) && this.picker) pickCard(w, s, 0);
       return;
     }
+    if (this.horde && w.run.phase !== PHASE_PLAY) {
+      // The run is over: the world holds still until `reset`.
+      stopMover(s.mover);
+      w.fx.count = 0;
+      w.deaths.count = 0;
+      return;
+    }
+    if (this.horde) applyBuildToMover(w, s);
     stepMover(s, input, this.terrain);
     stepGear(s);
     if (this.horde) {
-      stepWorld(this.world, s, this.terrain);
-      if (this.world.run.phase !== PHASE_PLAY) stopMover(s.mover);
+      stepWorld(w, s, this.terrain);
+      if (w.run.phase === PHASE_DEAD || w.run.phase === PHASE_WON) stopMover(s.mover);
+      // With auto-pick an offer never holds the world: answer it, and any queued behind it, now.
+      while (this.picker && w.run.phase === PHASE_CHOOSE) {
+        if (!pickCard(w, s, this.picker(w))) pickCard(w, s, 0);
+      }
     }
     s.tick++;
   }

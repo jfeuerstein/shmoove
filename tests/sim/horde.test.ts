@@ -1,4 +1,6 @@
 /** What a player would see the horde do: close in as a crowd, at the speed of its kind. */
+import { setWeaponLevel } from '../../src/sim/build';
+import { W_WAKE } from '../../src/sim/arsenal';
 import { describe, expect, it } from 'vitest';
 import { DT } from '../../src/sim/constants';
 import { HORDE } from '../../src/sim/horde';
@@ -123,7 +125,7 @@ describe('steering', () => {
 
   it('nothing ever steers faster than its kind allows (30 s among a moving mover)', () => {
     const sim = arena();
-    sim.world.player.wakeLevel = 0;
+    setWeaponLevel(sim.world, W_WAKE, 0);
     crowd(sim, 160, 6, 45, 11);
     const h = sim.world.horde;
     let worst = 0;
@@ -327,7 +329,7 @@ describe('far away', () => {
 describe('a big horde', () => {
   it('has no non-finite numbers after 60 s with 400 enemies', () => {
     const sim = arena();
-    sim.world.player.wakeLevel = 0;
+    setWeaponLevel(sim.world, W_WAKE, 0);
     crowd(sim, 400, 3, 60, 9);
     const h = sim.world.horde;
     for (let t = 0; t < 60 * 60; t++) {

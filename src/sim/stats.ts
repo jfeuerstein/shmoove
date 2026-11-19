@@ -3,6 +3,7 @@
  * out from the build whenever the build changes. Nothing else changes them.
  */
 import { MAX_LEVEL, PASSIVE_COUNT, PASSIVE_INFO, W_BUMPER, type Loadout } from './arsenal';
+import { gearPower } from './balance';
 
 export interface Stats {
   // ---- the fight
@@ -140,4 +141,12 @@ export function modsFromStats(mods: MoverMods, st: Stats): void {
   mods.hopSpeed = st.hopSpeed;
   mods.airTurn = st.airTurn;
   mods.hang = st.hang;
+}
+
+/**
+ * How hard weapons hit right now: the gear's power, the build's bonus for each gear above 2, and
+ * the build's might. Every weapon multiplies its damage by this.
+ */
+export function powerOf(st: Stats, gear: number): number {
+  return (gearPower(gear) + (gear > 2 ? (gear - 2) * st.gearBonus : 0)) * st.might;
 }

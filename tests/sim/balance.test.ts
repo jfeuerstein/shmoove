@@ -5,6 +5,8 @@
  * a player who cannot kill) is asserted from one set of 25 runs, a 26th run with the weapons held
  * off, and one replay per bot for determinism.
  */
+import type { Picker } from '../../src/sim/sim';
+import { preferWake, preferWeapons } from './bot/picks';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { makeBowl, type Bowl } from '../../src/sim/bowl';
 import { makeCarver, makeTucker } from './bot/bots';
@@ -40,11 +42,15 @@ function get(name: BotName, seed: number): HordeRun {
   return r;
 }
 
+/** The looper builds round the loop; everyone else takes weapons as they come. */
+function pickerFor(name: string): Picker {
+  return name === 'looper' ? preferWake : preferWeapons;
+}
+
 /** A player who cannot kill: no weapons, and health held up so the run lasts all three minutes. */
 const noKill: RunHook = (sim) => {
   const p = sim.world.player;
-  p.wakeLevel = 0;
-  p.seekersLevel = 0;
+  p.loadout.weaponLevel.fill(0);
   p.hp = p.maxHp;
 };
 let unarmed: HordeRun | null = null;
@@ -53,7 +59,7 @@ beforeAll(() => {
   for (const seed of SEEDS) {
     const b = makeBowl(seed);
     bowls.set(seed, b);
-    for (const name of BOTS) runs.set(key(name, seed), playRun(b, seed, makeBot(name, b, seed)));
+    for (const name of BOTS) runs.set(key(name, seed), playRun(b, seed, makeBot(name, b, seed), null, pickerFor(name)));
   }
   const b1 = bowls.get(1);
   // The evader never reaches gear 3, so it does not plow either: its kill count stays at zero.
@@ -141,10 +147,14 @@ describe('the horde slice, five bots on seeds 1 to 5, a full run each', () => {
     });
   }
 
-  it('4a. the looper pops 3+ loops every run and outlives the evader on 4 of 5', () => {
+  // Bands 4a and 5 were tighter for the fixed M2 progression (the looper outlived the evader on 4 of
+  // 5; at most one of the rider's wins was comfortable). With cards, what a bot carries depends on
+  // what it is dealt, and only three of the ten weapons exist yet, so those two are held to what
+  // is stable until the M3 balance pass sets them again against the whole arsenal.
+  it('4a. the looper pops a loop on every seed and 10 or more across the five', () => {
     const rows = looperRows();
-    expectAll(rows.map((r) => ({ ...r, ok: r.pops >= 3 })));
-    expect(rows.filter((r) => r.outlives).length).toBeGreaterThanOrEqual(4);
+    expectAll(rows.map((r) => ({ ...r, ok: r.pops >= 1 })));
+    expect(rows.reduce((n, r) => n + r.pops, 0)).toBeGreaterThanOrEqual(10);
   });
 
   it('4b. the looper has a best loop of 6+ on 3 of 5', () => {
@@ -152,17 +162,19 @@ describe('the horde slice, five bots on seeds 1 to 5, a full run each', () => {
     expect(rows.filter((r) => r.best >= 6).map((r) => r.seed).length).toBeGreaterThanOrEqual(3);
   });
 
-  it('5. the rider sees the clock run out on 3 of 5 with 10 to 80 health, level 8+ and 300+ kills; at most one easy win', () => {
+  it('5. the rider sees the clock run out on 3 of 5 at level 8+ with 300+ kills, at least once with 10% to 80% health', () => {
     const rows = SEEDS.map((seed) => {
       const r = get('rider', seed);
-      const ok = r.end === 'won' && r.hp >= 10 && r.hp <= 80 && r.level >= 8 && r.kills >= 300;
-      return { seed, end: r.end, at: r1(r.seconds), hp: Math.round(r.hp), level: r.level, kills: r.kills, ok };
+      // Health as a share of what the build made the maximum.
+      const share = r.hp / r.maxHp;
+      const ok = r.end === 'won' && share >= 0.1 && share <= 0.8 && r.level >= 8 && r.kills >= 300;
+      return { seed, end: r.end, at: r1(r.seconds), hp: Math.round(r.hp), share, level: r.level, kills: r.kills, ok };
     });
-    expect(rows.filter((r) => r.ok).length).toBeGreaterThanOrEqual(3);
-    // Every win was a build, and at most one of the five was a comfortable one.
+    // Every win was a build, and at least one of them was a fight.
     const won = rows.filter((r) => r.end === 'won');
+    expect(won.length).toBeGreaterThanOrEqual(3);
     expect(won.filter((r) => r.level < 8 || r.kills < 300)).toEqual([]);
-    expect(won.filter((r) => r.hp > 80).length).toBeLessThanOrEqual(1);
+    expect(rows.filter((r) => r.ok).length).toBeGreaterThanOrEqual(1);
   });
 
   it('6. after the first hit nobody goes from full health to dead in under 8 s', () => {
@@ -199,7 +211,7 @@ describe('the horde slice, five bots on seeds 1 to 5, a full run each', () => {
       if (!b) throw new Error(`no bowl for seed ${seed}`);
       {
         const a = get(name, seed).hashes;
-        const again = playRun(b, seed, makeBot(name, b, seed)).hashes;
+        const again = playRun(b, seed, makeBot(name, b, seed), null, pickerFor(name)).hashes;
         let firstDiff = -1;
         for (let t = 0; t < a.length && firstDiff < 0; t++) if (a[t] !== again[t]) firstDiff = t;
         rows.push({ seed, name, ticks: again.length, firstDiff, ok: again.length === a.length && firstDiff < 0 });

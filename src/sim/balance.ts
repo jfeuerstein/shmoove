@@ -37,15 +37,6 @@ export function xpForLevel(level: number): number {
   return 2 + level * 3;
 }
 
-/**
- * What each level gives until there are cards to choose from (M3): the weapon to raise on reaching
- * level 2, 3, 4 and so on. Past the end, nothing.
- */
-export const LEVEL_GRANTS: readonly ('wake' | 'seekers')[] = [
-  'seekers', 'wake', 'seekers', 'wake', 'seekers', 'wake', 'seekers', 'wake',
-];
-export const WEAPON_MAX_LEVEL = 5;
-
 /** The Wake, by level 1..5. */
 export const WAKE = {
   /** Damage per second to anything standing in the trail, before gear power. */

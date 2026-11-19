@@ -2,7 +2,7 @@
  * Seekers: darts that fire themselves every few metres travelled. Standing still fires nothing;
  * speed is the fire rate, and the gear at the moment of firing is the damage.
  */
-import { gearPower } from './balance';
+import { powerOf } from './stats';
 import { DT } from './constants';
 import { dcos, dsin } from './math';
 import type { Terrain } from './terrain';
@@ -87,7 +87,7 @@ function fire(w: World, s: SimState, level: number): boolean {
   const want = SEEKERS.darts[level - 1];
   const got = pickTargets(w, m.x, m.z, want);
   if (got === 0) return false;
-  const dmg = SEEKERS.damage[level - 1] * gearPower(m.gear);
+  const dmg = SEEKERS.damage[level - 1] * powerOf(w.player.stats, m.gear);
   const sh = w.shots;
   for (let q = 0; q < want; q++) {
     if (sh.count >= MAX_SHOTS) break;
@@ -208,9 +208,8 @@ function steer(w: World, i: number, dx: number, dy: number, dz: number): void {
 }
 
 /** Fill the meter from distance, fire volleys, and fly the darts already out. */
-export function stepSeekers(w: World, s: SimState, terrain: Terrain): void {
+export function stepSeekers(w: World, s: SimState, terrain: Terrain, level: number): void {
   const m = s.mover;
-  const level = w.player.seekersLevel > 5 ? 5 : w.player.seekersLevel;
 
   if (level <= 0) {
     w.seekerMeter = 0;

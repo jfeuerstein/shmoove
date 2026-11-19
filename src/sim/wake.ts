@@ -6,7 +6,9 @@
  * closed loop: everything inside it and on its ring takes the pop, sparks inside fly to the player, and the trail
  * starts again. Circling the horde is the attack.
  */
-import { gearPower, WAKE } from './balance';
+import { W_WAKE } from './arsenal';
+import { WAKE } from './balance';
+import { powerOf } from './stats';
 import { FEEL, TICK_HZ } from './constants';
 import type { SimState } from './types';
 import {
@@ -51,7 +53,7 @@ function drop(k: Wake, n: number): void {
 
 /** How long the trail is now, m. */
 export function wakeLength(w: World, gear: number): number {
-  const level = w.player.wakeLevel;
+  const level = w.player.loadout.weaponLevel[W_WAKE];
   if (level <= 0) return 0;
   return FEEL.wakeLength + FEEL.wakeLengthPerGear * (gear - 1) + WAKE.extraLength[level - 1];
 }
@@ -137,10 +139,10 @@ function pop(w: World, from: number, power: number): void {
   const radius = Math.sqrt(r2);
 
   const h = w.horde;
-  const damage = WAKE.popDamage[w.player.wakeLevel - 1] * power;
+  const damage = WAKE.popDamage[w.player.loadout.weaponLevel[W_WAKE] - 1] * power;
   // The pop takes what is inside the loop and what is on the ring itself: the horde that chased
   // the mover round is strung along the trail, not standing in the middle.
-  const edge = FEEL.wakePopEdge;
+  const edge = FEEL.wakePopEdge * w.player.stats.area;
   const n = queryEnemies(w, cx, cz, radius + edge + MAX_ENEMY_RADIUS, w.nearA);
   let killed = 0;
   for (let q = 0; q < n; q++) {
@@ -172,14 +174,14 @@ function pop(w: World, from: number, power: number): void {
 
 /** Lay trail, burn what stands in it, and pop a loop if the mover has just closed one. */
 export function stepWake(w: World, s: SimState): void {
-  const level = w.player.wakeLevel;
+  const level = w.player.loadout.weaponLevel[W_WAKE];
   const k = w.wake;
   if (level <= 0) {
     k.count = 0;
     return;
   }
   const m = s.mover;
-  const power = gearPower(m.gear);
+  const power = powerOf(w.player.stats, m.gear);
   const now = w.run.ticks;
 
   // Lay.
@@ -221,15 +223,16 @@ export function stepWake(w: World, s: SimState): void {
   const h = w.horde;
   const burn = (WAKE.burnDps[level - 1] * power * BURN_EVERY) / TICK_HZ;
   const last = k.count - WAKE_SKIP_HEAD;
+  const width = FEEL.wakeWidth * w.player.stats.area;
   burnt.fill(0, 0, h.count);
   for (let p = 0; p < last; p++) {
     const px = k.x[p];
     const pz = k.z[p];
-    const n = queryEnemies(w, px, pz, FEEL.wakeWidth + MAX_ENEMY_RADIUS, w.nearA);
+    const n = queryEnemies(w, px, pz, width + MAX_ENEMY_RADIUS, w.nearA);
     for (let q = 0; q < n; q++) {
       const i = w.nearA[q];
       if (burnt[i] !== 0 || h.hp[i] <= 0 || h.age[i] < SPAWN_TICKS) continue;
-      const reach = FEEL.wakeWidth + KINDS[h.kind[i]].radius;
+      const reach = width + KINDS[h.kind[i]].radius;
       const dx = h.x[i] - px;
       const dz = h.z[i] - pz;
       if (dx * dx + dz * dz > reach * reach) continue;

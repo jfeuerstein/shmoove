@@ -1,4 +1,6 @@
 /** What a player would notice about the Wake: the trail burns, and a closed loop pops. */
+import { setWeaponLevel } from '../../src/sim/build';
+import { W_WAKE } from '../../src/sim/arsenal';
 import { describe, expect, it } from 'vitest';
 import { gearPower, WAKE } from '../../src/sim/balance';
 import { FEEL } from '../../src/sim/constants';
@@ -14,7 +16,7 @@ const CIRCLE = steer(-0.6, 0.8);
 /** Run the circle with nothing in it and report its centre and radius. */
 function traceCircle(): { cx: number; cz: number; r: number } {
   const sim = arena();
-  sim.world.player.wakeLevel = 0;
+  setWeaponLevel(sim.world, W_WAKE, 0);
   run(sim, FORWARD, 60);
   run(sim, CIRCLE, 240);
   let minX = Infinity;
@@ -226,7 +228,7 @@ describe('the loop', () => {
     expect(h.count).toBe(1);
     expect(h.hp[b]).toBeGreaterThan(0);
     // Later, and far from the player, it dies to something else.
-    sim.world.player.wakeLevel = 0;
+    setWeaponLevel(sim.world, W_WAKE, 0);
     const m = sim.state.mover;
     h.x[b] = m.x + 40;
     h.z[b] = m.z;

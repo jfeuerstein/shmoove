@@ -69,7 +69,7 @@ function boot(): void {
   settings.applySaved();
 
   const terrain = makeTerrain(params);
-  const sim = new Sim(terrain, { seed: params.seed, horde: !params.flat && !params.solo });
+  const sim = new Sim(terrain, { seed: params.seed, horde: !params.flat && !params.solo, autoPick: true });
   if (params.horde > 0 || params.sparks > 0) applyFixture(sim, params.horde, params.sparks);
   const hookInput = new HookInput();
   const frameInput = makeInputFrame();

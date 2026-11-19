@@ -207,7 +207,7 @@ describe('ThreatView glow', () => {
     const root = new FakeEl();
     const view = new ThreatView(root as unknown as HTMLElement);
     const glow = root.children[0].children[0];
-    const sim = new Sim(flatTerrain(170), { seed: 1, horde: true });
+    const sim = new Sim(flatTerrain(170), { seed: 1, horde: true, autoPick: true });
     sim.world.spawning = false;
     const camera = new PerspectiveCamera(74, W / H, 0.1, 400);
     camera.position.set(0, 5.5, -7);

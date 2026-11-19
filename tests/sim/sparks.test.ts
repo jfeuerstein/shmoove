@@ -1,9 +1,21 @@
 /** What a player would notice about sparks: the dead drop them, the magnet draws them, XP is levels. */
 import { describe, expect, it } from 'vitest';
-import { LEVEL_GRANTS, MAGNET_BASE, MAGNET_PER_GEAR, WEAPON_MAX_LEVEL, xpForLevel } from '../../src/sim/balance';
-import type { Sim } from '../../src/sim/sim';
+import { MAGNET_BASE, MAGNET_PER_GEAR, xpForLevel } from '../../src/sim/balance';
+import { Sim } from '../../src/sim/sim';
+import { flatTerrain } from '../../src/sim/terrain';
 import { SPARK_CAP } from '../../src/sim/sparks';
-import { FX_LEVEL_UP, FX_SPARK, KIND_BOLLARD, KIND_SHUFFLER, KINDS, MARK_SWEPT, SPAWN_TICKS } from '../../src/sim/world';
+import {
+  FX_CARD,
+  FX_LEVEL_UP,
+  FX_SPARK,
+  KIND_BOLLARD,
+  KIND_SHUFFLER,
+  KINDS,
+  MARK_SWEPT,
+  PHASE_CHOOSE,
+  PHASE_PLAY,
+  SPAWN_TICKS,
+} from '../../src/sim/world';
 import { FORWARD, run, TUCK } from './fixtures';
 import { arena, place, root, stepCounting } from './world-fixtures';
 
@@ -160,32 +172,57 @@ describe('levels', () => {
     expect(counts.get(FX_LEVEL_UP)).toBe(1);
   });
 
-  it('grant the weapons in LEVEL_GRANTS order', () => {
+  it('each level is a card: the build grows by one thing', () => {
     const sim = arena();
     const p = sim.world.player;
-    let seekers = p.seekersLevel;
-    let wake = p.wakeLevel;
-    for (let lvl = 2; lvl <= 5; lvl++) {
+    const built = (): number =>
+      p.loadout.weaponLevel.reduce((a, b) => a + b, 0) + p.loadout.passiveLevel.reduce((a, b) => a + b, 0);
+    let cards = 0;
+    for (let lvl = 2; lvl <= 6; lvl++) {
+      const before = built();
       p.xp = p.xpNext;
-      sim.step(TUCK);
+      const counts = new Map<number, number>();
+      stepCounting(sim, TUCK, 1, counts);
       expect(p.level).toBe(lvl);
-      if (LEVEL_GRANTS[lvl - 2] === 'seekers') seekers++;
-      else wake++;
-      expect(p.seekersLevel).toBe(seekers);
-      expect(p.wakeLevel).toBe(wake);
+      cards += counts.get(FX_CARD) ?? 0;
+      // One card taken, worth one level or (a rare one) two.
+      expect(built() - before).toBeGreaterThanOrEqual(1);
+      expect(built() - before).toBeLessThanOrEqual(2);
     }
+    expect(cards).toBe(5);
+    // The first card for a player with one weapon is a second weapon.
+    expect(p.loadout.weapons[1]).toBeGreaterThanOrEqual(0);
   });
 
-  it('stop raising a weapon at the maximum', () => {
-    const sim = arena();
+  it('without anyone to choose, a level holds the world until a card is taken', () => {
+    const sim = new Sim(flatTerrain(), { seed: 7, horde: true });
+    sim.world.spawning = false;
     const p = sim.world.player;
-    p.seekersLevel = WEAPON_MAX_LEVEL;
-    p.wakeLevel = WEAPON_MAX_LEVEL;
-    p.xp = 100000;
-    sim.step(TUCK);
-    expect(p.seekersLevel).toBe(WEAPON_MAX_LEVEL);
-    expect(p.wakeLevel).toBe(WEAPON_MAX_LEVEL);
-    expect(p.level).toBeGreaterThan(LEVEL_GRANTS.length + 1);
+    run(sim, FORWARD, 30);
+    p.xp = p.xpNext;
+    sim.step(FORWARD);
+    expect(sim.world.run.phase).toBe(PHASE_CHOOSE);
+    expect(sim.world.offer.open).toBe(true);
+    expect(sim.world.offer.count).toBe(3);
+
+    // Nothing moves while the cards are up, and the speed is still there.
+    const tick = sim.state.tick;
+    const z = sim.state.mover.z;
+    const speed = sim.state.mover.speed;
+    run(sim, FORWARD, 20);
+    expect(sim.state.tick).toBe(tick);
+    expect(sim.state.mover.z).toBe(z);
+    expect(sim.state.mover.speed).toBe(speed);
+
+    // A choice that is not on the table changes nothing; a real one starts the world again.
+    sim.step({ ...FORWARD, pick: 7 });
+    expect(sim.world.run.phase).toBe(PHASE_CHOOSE);
+    sim.step({ ...FORWARD, pick: 1 });
+    expect(sim.world.run.phase).toBe(PHASE_PLAY);
+    expect(sim.world.offer.open).toBe(false);
+    run(sim, FORWARD, 10);
+    expect(sim.state.mover.z).toBeGreaterThan(z);
+    expect(sim.state.mover.speed).toBeGreaterThan(speed * 0.9);
   });
 
   it('several levels from one big spark all happen', () => {
@@ -200,8 +237,7 @@ describe('levels', () => {
     expect(p.level).toBe(5);
     expect(counts.get(FX_LEVEL_UP)).toBe(4);
     expect(p.xp).toBeCloseTo(big - four, 4);
-    expect(p.seekersLevel).toBe(2);
-    expect(p.wakeLevel).toBe(3);
+    expect(counts.get(FX_CARD)).toBe(4);
   });
 
   it('a risen enemy placed on top of nothing does not disturb xp', () => {

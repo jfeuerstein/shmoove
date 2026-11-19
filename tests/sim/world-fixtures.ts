@@ -4,9 +4,12 @@ import { flatTerrain, type Terrain } from '../../src/sim/terrain';
 import type { InputFrame } from '../../src/sim/types';
 import { FX_POP, SPAWN_TICKS, spawnEnemy, type World } from '../../src/sim/world';
 
-/** A run on level ground with no spawn director: the only enemies are the ones a test places. */
+/**
+ * A run on level ground with no spawn director: the only enemies are the ones a test places. Cards
+ * are taken automatically (the first of each offer), so a level-up never holds the world.
+ */
 export function arena(terrain: Terrain = flatTerrain()): Sim {
-  const sim = new Sim(terrain, { seed: 7, horde: true });
+  const sim = new Sim(terrain, { seed: 7, horde: true, autoPick: true });
   sim.world.spawning = false;
   return sim;
 }

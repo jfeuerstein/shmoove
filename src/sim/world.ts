@@ -6,13 +6,20 @@
  * removing one moves the last into its place. Indices are therefore only stable within a tick, and
  * only until `reapHorde`. Nothing here allocates after `makeWorld`.
  */
+import { makeLoadout, clearLoadout, raiseWeapon, W_WAKE, WEAPON_COUNT, type Loadout } from './arsenal';
 import { xpForLevel } from './balance';
+import { makeOffer, type Offer } from './offer';
 import { Rng } from './rng';
+import { makeStats, recomputeStats, type Stats } from './stats';
 
 export const MAX_ENEMIES = 512;
 export const MAX_SPARKS = 640;
 export const MAX_SHOTS = 96;
 export const MAX_FX = 192;
+export const MAX_ZONES = 96;
+export const MAX_THINGS = 64;
+/** Numbers each weapon may keep between ticks (meters, angles, cooldowns). */
+export const WEAPON_MEM = 8;
 
 // ---- enemies --------------------------------------------------------------------------------
 
@@ -74,7 +81,21 @@ export interface Horde {
   phase: Float32Array;
   /** MARK_* flags; cleared at spawn, carried to `deaths` if it dies. */
   mark: Uint8Array;
+  /** ELITE_* : 0 for an ordinary enemy. Set by whoever spawns it, after `spawnEnemy`. */
+  elite: Uint8Array;
+  /** For the kind's own use (a clinger holding on, a lobber winding up). 0 at spawn. */
+  state: Uint8Array;
+  /** For the kind's own use, ticks. 0 at spawn. */
+  timer: Uint16Array;
 }
+
+export const ELITE_NONE = 0;
+/** Enemies near it move faster. */
+export const ELITE_HASTE = 1;
+/** Enemies near it take half damage. */
+export const ELITE_SHIELD = 2;
+/** Sparks near it do not fly to the player. */
+export const ELITE_JAM = 3;
 
 /** Caught inside a popped loop: if it dies this tick, its sparks fly straight to the player. */
 export const MARK_SWEPT = 1;
@@ -102,7 +123,68 @@ export interface Shots {
   /** Ticks left. */
   life: Uint8Array;
   damage: Float32Array;
+  /** SHOT_* : whose it is and how it flies. */
+  kind: Uint8Array;
+  /** For the kind's own use (skips left, a target). */
+  aux: Float32Array;
 }
+
+export const SHOT_DART = 0;
+export const SHOT_STONE = 1;
+
+/**
+ * Things on the ground with a place, a size and a lifetime: mines, tar, the ring where a lobbed
+ * shot will land. Dense like everything else; whoever makes a zone steps and removes it.
+ */
+export interface Zones {
+  count: number;
+  /** ZONE_* */
+  kind: Uint8Array;
+  x: Float32Array;
+  y: Float32Array;
+  z: Float32Array;
+  r: Float32Array;
+  /** Ticks left. */
+  life: Uint16Array;
+  /** Ticks since it was made. */
+  age: Uint16Array;
+  /** Damage or strength, as the kind uses it. */
+  power: Float32Array;
+}
+
+export const ZONE_MINE = 0;
+export const ZONE_TAR = 1;
+export const ZONE_LOB = 2;
+
+/**
+ * Things on the map the player rides through: crates, shrines, gates, hoops, totems. Placed from
+ * the bowl's sites when a run starts.
+ */
+export interface Things {
+  count: number;
+  /** THING_* */
+  kind: Uint8Array;
+  x: Float32Array;
+  y: Float32Array;
+  z: Float32Array;
+  yaw: Float32Array;
+  /** 0 waiting, then as the kind uses it; THING_DONE when spent. */
+  state: Uint8Array;
+  /** As the kind uses it (laps, gates cleared). */
+  progress: Float32Array;
+  /** Ticks, as the kind uses it. */
+  timer: Uint16Array;
+  /** Things that belong together (the gates of one slalom) share a group; 0 for none. */
+  group: Uint8Array;
+}
+
+export const THING_CRATE = 0;
+export const THING_GOLD_CRATE = 1;
+export const THING_SHRINE = 2;
+export const THING_GATE = 3;
+export const THING_HOOP = 4;
+export const THING_TOTEM = 5;
+export const THING_DONE = 255;
 
 // ---- one-tick queues ------------------------------------------------------------------------
 
@@ -126,6 +208,14 @@ export const FX_POP = 6; // at the loop's centre, a = its radius
 export const FX_SPARK = 7; // a spark was taken, a = value
 export const FX_LEVEL_UP = 8; // a = new level
 export const FX_SHOT = 9; // a seeker left the player
+export const FX_SLAM = 10; // a shockwave on the ground, a = its radius
+export const FX_ARC = 11; // one link of a chain: at the enemy struck, a = its place in the chain (0 first)
+export const FX_BLAST = 12; // a mine or bomb went off, a = its radius
+export const FX_HEAL = 13; // a = health given
+export const FX_CARD = 14; // a card was taken, a = its type
+export const FX_THING = 15; // something on the map was used, a = its kind
+export const FX_TOKEN = 16; // a = tokens gained
+export const FX_STONE = 17; // a skipping stone left the player
 
 /** Things that happened this tick, for drawing and sound. Overflow is dropped. */
 export interface Fx {
@@ -180,9 +270,12 @@ export interface Player {
   xpNext: number;
   level: number;
   kills: number;
-  /** Weapon levels; 0 means not owned. */
-  wakeLevel: number;
-  seekersLevel: number;
+  /** The build: what is carried and at what level. Change it only through build.ts. */
+  loadout: Loadout;
+  /** Worked out from the build; read by everything, written only by build.ts. */
+  stats: Stats;
+  /** Meta currency picked up this run. */
+  tokens: number;
   /** Loops popped and the most enemies killed by one. */
   pops: number;
   bestPop: number;
@@ -191,6 +284,8 @@ export interface Player {
 export const PHASE_PLAY = 0;
 export const PHASE_DEAD = 1;
 export const PHASE_WON = 2;
+/** An offer is open: the world holds still until a card is taken. */
+export const PHASE_CHOOSE = 3;
 
 export interface Run {
   /** Ticks played. */
@@ -226,12 +321,29 @@ export interface World {
   player: Player;
   run: Run;
   wake: Wake;
+  zones: Zones;
+  things: Things;
+  /** The cards on the table, if any. */
+  offer: Offer;
+  /** Offers waiting their turn: the source of each, oldest first. */
+  offerQueue: Uint8Array;
+  offerQueued: number;
+  /** Which weapons can be offered at all (built and unlocked), by weapon id. */
+  pool: Uint8Array;
+  /** WEAPON_MEM numbers per weapon id, for the weapon's own use. Zeroed at the start of a run. */
+  mem: Float64Array;
   /** Metres travelled toward the next volley of seekers. */
   seekerMeter: number;
   grid: Grid;
   /** Two result buffers for `queryEnemies`, so a query can run inside a loop over another's result. */
   nearA: Int16Array;
   nearB: Int16Array;
+}
+
+function starterLoadout(): Loadout {
+  const l = makeLoadout();
+  raiseWeapon(l, W_WAKE);
+  return l;
 }
 
 function makePlayer(): Player {
@@ -245,8 +357,9 @@ function makePlayer(): Player {
     xpNext: xpForLevel(1),
     level: 1,
     kills: 0,
-    wakeLevel: 1,
-    seekersLevel: 0,
+    loadout: starterLoadout(),
+    stats: makeStats(),
+    tokens: 0,
     pops: 0,
     bestPop: 0,
   };
@@ -274,6 +387,9 @@ export function makeWorld(seed: number): World {
       stun: new Uint8Array(E),
       phase: new Float32Array(E),
       mark: new Uint8Array(E),
+      elite: new Uint8Array(E),
+      state: new Uint8Array(E),
+      timer: new Uint16Array(E),
     },
     sparks: {
       count: 0,
@@ -293,6 +409,31 @@ export function makeWorld(seed: number): World {
       vz: new Float32Array(H),
       life: new Uint8Array(H),
       damage: new Float32Array(H),
+      kind: new Uint8Array(H),
+      aux: new Float32Array(H),
+    },
+    zones: {
+      count: 0,
+      kind: new Uint8Array(MAX_ZONES),
+      x: new Float32Array(MAX_ZONES),
+      y: new Float32Array(MAX_ZONES),
+      z: new Float32Array(MAX_ZONES),
+      r: new Float32Array(MAX_ZONES),
+      life: new Uint16Array(MAX_ZONES),
+      age: new Uint16Array(MAX_ZONES),
+      power: new Float32Array(MAX_ZONES),
+    },
+    things: {
+      count: 0,
+      kind: new Uint8Array(MAX_THINGS),
+      x: new Float32Array(MAX_THINGS),
+      y: new Float32Array(MAX_THINGS),
+      z: new Float32Array(MAX_THINGS),
+      yaw: new Float32Array(MAX_THINGS),
+      state: new Uint8Array(MAX_THINGS),
+      progress: new Float32Array(MAX_THINGS),
+      timer: new Uint16Array(MAX_THINGS),
+      group: new Uint8Array(MAX_THINGS),
     },
     deaths: { count: 0, kind: new Uint8Array(E), mark: new Uint8Array(E), x: new Float32Array(E), y: new Float32Array(E), z: new Float32Array(E) },
     fx: {
@@ -306,6 +447,11 @@ export function makeWorld(seed: number): World {
     player: makePlayer(),
     run: { ticks: 0, phase: PHASE_PLAY },
     wake: makeWake(),
+    offer: makeOffer(),
+    offerQueue: new Uint8Array(8),
+    offerQueued: 0,
+    pool: new Uint8Array(WEAPON_COUNT).fill(1),
+    mem: new Float64Array(WEAPON_COUNT * WEAPON_MEM),
     seekerMeter: 0,
     grid: {
       start: new Int32Array(GRID_DIM * GRID_DIM + 1),
@@ -325,7 +471,22 @@ export function resetWorld(w: World): void {
   w.shots.count = 0;
   w.deaths.count = 0;
   w.fx.count = 0;
-  Object.assign(w.player, makePlayer());
+  const p = w.player;
+  const loadout = p.loadout;
+  const stats = p.stats;
+  Object.assign(p, makePlayer());
+  // Keep the same build objects (views hold on to them); put them back to the start.
+  p.loadout = loadout;
+  p.stats = stats;
+  clearLoadout(loadout);
+  raiseWeapon(loadout, W_WAKE);
+  recomputeStats(stats, loadout);
+  w.zones.count = 0;
+  w.things.count = 0;
+  w.offer.open = false;
+  w.offer.count = 0;
+  w.offerQueued = 0;
+  w.mem.fill(0);
   w.run.ticks = 0;
   w.run.phase = PHASE_PLAY;
   w.wake.count = 0;
@@ -362,6 +523,9 @@ export function spawnEnemy(w: World, kind: number, x: number, y: number, z: numb
   h.stun[i] = 0;
   h.phase[i] = w.rng.next();
   h.mark[i] = 0;
+  h.elite[i] = 0;
+  h.state[i] = 0;
+  h.timer[i] = 0;
   return i;
 }
 
@@ -382,6 +546,9 @@ export function removeEnemy(w: World, i: number): void {
   h.stun[i] = h.stun[j];
   h.phase[i] = h.phase[j];
   h.mark[i] = h.mark[j];
+  h.elite[i] = h.elite[j];
+  h.state[i] = h.state[j];
+  h.timer[i] = h.timer[j];
 }
 
 const FLASH_TICKS = 6;
@@ -549,8 +716,20 @@ export function hashWorld(w: World): number {
   mix(p.xp);
   mix(p.level);
   mix(p.kills);
-  mix(p.wakeLevel);
-  mix(p.seekersLevel);
+  for (let i = 0; i < p.loadout.weaponLevel.length; i++) mix(p.loadout.weaponLevel[i]);
+  for (let i = 0; i < p.loadout.passiveLevel.length; i++) mix(p.loadout.passiveLevel[i]);
+  for (let i = 0; i < w.mem.length; i++) mix(w.mem[i]);
+  for (let i = 0; i < w.zones.count; i++) {
+    mix(w.zones.x[i]);
+    mix(w.zones.z[i]);
+    mix(w.zones.life[i]);
+  }
+  for (let i = 0; i < w.things.count; i++) {
+    mix(w.things.state[i]);
+    mix(w.things.progress[i]);
+  }
+  mix(w.offerQueued);
+  mix(p.tokens);
   mix(p.pops);
   mix(w.run.ticks);
   mix(w.run.phase);
