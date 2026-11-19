@@ -85,8 +85,10 @@ export interface TestHook {
   hold(frame: Partial<InputFrame> | null): void;
   /** A hop on the next step. */
   hop(): void;
-  /** Stop (true) or restart (false) the real-time clock. */
+  /** Stop (true) or restart (false) the real-time clock. No overlay: this is the scripts' clock. */
   pause(on: boolean): void;
+  /** Is the game paused by the player (its PAUSED overlay up)? */
+  paused(): boolean;
   /** Advance n ticks now and render one frame. */
   step(n: number): void;
   /** The player takes a hit of this much damage now (as `hurtPlayer`). */
@@ -170,6 +172,8 @@ export interface HookHost {
   sim: Sim;
   input: HookInput;
   pause(on: boolean): void;
+  /** Is the PAUSED overlay up? */
+  paused?: () => boolean;
   /** Run n sim steps now and draw one frame of the result. */
   stepNow(n: number): void;
   /** Start a new run. */
@@ -248,6 +252,9 @@ export function installTestHook(host: HookHost): TestHook {
     },
     pause(on) {
       host.pause(on);
+    },
+    paused() {
+      return host.paused ? host.paused() : false;
     },
     step(n) {
       const k = Math.floor(n);
