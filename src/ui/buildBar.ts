@@ -1,16 +1,21 @@
 /**
  * The build at a glance: four weapon tiles then four passive tiles just above the XP bar, each the
- * two-letter code with level pips under it. Empty slots are faint outlines. Tiles are about 34 px so
- * all eight fit at 390 px. A tile is rewritten only when its slot's item or level changes, so a
- * frame in which the build did not change writes nothing.
+ * thing's icon with level pips under it. Empty slots are faint outlines. Tiles are 38 px wide with a
+ * 28 px icon, so all eight fit at 360 px. A tile is rewritten only when its slot's item or level
+ * changes, so a frame in which the build did not change writes nothing.
+ *
+ * `BuildRow` is the same build, written once, for the end card: what was carried, as icons with levels.
  */
 import { PALETTE } from '../render/look';
 import { MAX_LEVEL, PASSIVE_INFO, SLOTS, WEAPON_INFO, type Loadout } from '../sim/arsenal';
+import { cssHex, iconSvg } from './icons';
 import './buildBar.css';
 
 export interface TileState {
-  /** Two letters, or empty for an empty slot. */
-  code: string;
+  /** The icon's SVG markup, or empty for an empty slot. */
+  icon: string;
+  /** What it is, for assistive tech; empty for an empty slot. */
+  name: string;
   /** 0 for an empty slot, else 1..5. */
   level: number;
 }
@@ -18,23 +23,53 @@ export interface TileState {
 /** What slot `slot` of the weapons (`passive` false) or passives shows. Pure. */
 export function tileOf(l: Loadout, passive: boolean, slot: number): TileState {
   const id = passive ? l.passives[slot] : l.weapons[slot];
-  if (id < 0) return { code: '', level: 0 };
+  if (id < 0) return { icon: '', name: '', level: 0 };
   return passive
-    ? { code: PASSIVE_INFO[id].code, level: l.passiveLevel[id] }
-    : { code: WEAPON_INFO[id].code, level: l.weaponLevel[id] };
-}
-
-function cssHex(c: number): string {
-  return `#${c.toString(16).padStart(6, '0')}`;
+    ? { icon: iconSvg('passive', id), name: PASSIVE_INFO[id].name, level: l.passiveLevel[id] }
+    : { icon: iconSvg('weapon', id), name: WEAPON_INFO[id].name, level: l.weaponLevel[id] };
 }
 
 interface TileEls {
   root: HTMLElement;
-  code: HTMLElement;
+  icon: HTMLElement;
   pips: HTMLElement[];
 }
 
 const TILES = SLOTS * 2;
+
+/** One tile: an icon box with a row of level pips under it. */
+function makeTile(doc: Document, parent: HTMLElement): TileEls {
+  const root = doc.createElement('div');
+  root.className = 'bb-tile';
+  const icon = doc.createElement('div');
+  icon.className = 'bb-icon';
+  const pipRow = doc.createElement('div');
+  pipRow.className = 'bb-pips';
+  const pips: HTMLElement[] = [];
+  for (let p = 0; p < MAX_LEVEL; p++) {
+    const pip = doc.createElement('div');
+    pip.className = 'bb-pip';
+    pipRow.appendChild(pip);
+    pips.push(pip);
+  }
+  root.appendChild(icon);
+  root.appendChild(pipRow);
+  parent.appendChild(root);
+  return { root, icon, pips };
+}
+
+function paint(t: TileEls, state: TileState, passive: boolean): void {
+  const kind = passive ? 'bb-passive' : 'bb-weapon';
+  t.root.className = state.level === 0 ? `bb-tile bb-empty ${kind}` : `bb-tile ${kind}`;
+  t.icon.innerHTML = state.icon;
+  t.icon.setAttribute('aria-label', state.name);
+  for (let p = 0; p < t.pips.length; p++) t.pips[p].className = p < state.level ? 'bb-pip on' : 'bb-pip';
+}
+
+/** Weapons in their colour, passives in theirs, read from the palette when the view is built. */
+function tint(el: HTMLElement): void {
+  el.setAttribute('style', `--bb-weapon: ${cssHex(PALETTE.accent)}; --bb-passive: ${cssHex(PALETTE.pad)}`);
+}
 
 export class BuildBar {
   readonly element: HTMLElement;
@@ -47,31 +82,14 @@ export class BuildBar {
   constructor(root: HTMLElement, doc: Document = document) {
     const el = doc.createElement('div');
     el.className = 'bb';
-    el.style.setProperty('--bb-weapon', cssHex(PALETTE.accent));
-    el.style.setProperty('--bb-passive', cssHex(PALETTE.pad));
+    tint(el);
     for (let i = 0; i < TILES; i++) {
       if (i === SLOTS) {
         const gap = doc.createElement('div');
         gap.className = 'bb-gap';
         el.appendChild(gap);
       }
-      const tile = doc.createElement('div');
-      tile.className = 'bb-tile';
-      const code = doc.createElement('div');
-      code.className = 'bb-code';
-      const pips = doc.createElement('div');
-      pips.className = 'bb-pips';
-      const pipEls: HTMLElement[] = [];
-      for (let p = 0; p < MAX_LEVEL; p++) {
-        const pip = doc.createElement('div');
-        pip.className = 'bb-pip';
-        pips.appendChild(pip);
-        pipEls.push(pip);
-      }
-      tile.appendChild(code);
-      tile.appendChild(pips);
-      el.appendChild(tile);
-      this.tiles.push({ root: tile, code, pips: pipEls });
+      this.tiles.push(makeTile(doc, el));
     }
     root.appendChild(el);
     this.element = el;
@@ -87,12 +105,38 @@ export class BuildBar {
       if (id === this.shownId[i] && level === this.shownLevel[i]) continue;
       this.shownId[i] = id;
       this.shownLevel[i] = level;
-      const t = this.tiles[i];
-      const state = tileOf(l, passive, slot);
-      const kind = passive ? 'bb-passive' : 'bb-weapon';
-      t.root.className = id < 0 ? `bb-tile bb-empty ${kind}` : `bb-tile ${kind}`;
-      t.code.textContent = state.code;
-      for (let p = 0; p < t.pips.length; p++) t.pips[p].className = p < state.level ? 'bb-pip on' : 'bb-pip';
+      paint(this.tiles[i], tileOf(l, passive, slot), passive);
     }
+  }
+}
+
+/**
+ * The build as a row of icons with level pips, written once when asked (the end card). Only what
+ * was carried is shown: weapons first, then passives, each in the order taken.
+ */
+export class BuildRow {
+  readonly element: HTMLElement;
+  private readonly tiles: TileEls[] = [];
+
+  constructor(parent: HTMLElement, doc: Document = document) {
+    const el = doc.createElement('div');
+    el.className = 'bb-row';
+    tint(el);
+    for (let i = 0; i < TILES; i++) this.tiles.push(makeTile(doc, el));
+    parent.appendChild(el);
+    this.element = el;
+  }
+
+  show(l: Loadout): void {
+    let carried = 0;
+    for (let i = 0; i < TILES; i++) {
+      const passive = i >= SLOTS;
+      const state = tileOf(l, passive, passive ? i - SLOTS : i);
+      const t = this.tiles[i];
+      paint(t, state, passive);
+      t.root.hidden = state.level === 0;
+      if (state.level > 0) carried++;
+    }
+    this.element.hidden = carried === 0;
   }
 }

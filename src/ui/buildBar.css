@@ -1,8 +1,5 @@
-.bb {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: calc(env(safe-area-inset-bottom, 0px) + 22px);
+.bb,
+.bb-row {
   display: flex;
   justify-content: center;
   align-items: flex-end;
@@ -10,61 +7,87 @@
   pointer-events: none;
   user-select: none;
   -webkit-user-select: none;
-  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   color: #fff;
   line-height: 1;
+}
+
+.bb {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 22px);
   z-index: 10;
 }
 
+.bb-row[hidden],
+.bb-tile[hidden] {
+  display: none;
+}
+
 .bb-gap {
-  width: 10px;
+  width: 8px;
 }
 
 .bb-tile {
-  width: 34px;
-  height: 34px;
-  box-sizing: border-box;
+  width: 38px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 4px;
-  border-radius: 8px;
-  border: 2px solid var(--bb-weapon);
-  background: rgba(27, 22, 48, 0.72);
+  gap: 3px;
+  color: var(--bb-weapon);
 }
 
 .bb-tile.bb-passive {
-  border-color: var(--bb-passive);
+  color: var(--bb-passive);
 }
 
-.bb-tile.bb-empty {
-  border: 2px solid rgba(255, 255, 255, 0.16);
+/* The icon box: a 28 px icon inside a frame in the kind's colour. */
+.bb-icon {
+  width: 38px;
+  height: 34px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9px;
+  border: 2px solid currentColor;
+  background: rgba(27, 22, 48, 0.72);
+}
+
+.bb-icon .icon {
+  display: block;
+  width: 28px;
+  height: 28px;
+}
+
+.bb-empty .bb-icon {
+  border-color: rgba(255, 255, 255, 0.16);
   background: rgba(27, 22, 48, 0.25);
-}
-
-.bb-code {
-  font-size: 12px;
-  font-weight: 900;
-  letter-spacing: 0.02em;
 }
 
 .bb-pips {
   display: flex;
-  gap: 1px;
+  gap: 2px;
 }
 
 .bb-pip {
-  width: 4px;
+  width: 5px;
   height: 3px;
   border-radius: 1px;
   background: rgba(255, 255, 255, 0.22);
 }
 
-.bb-weapon .bb-pip.on {
-  background: var(--bb-weapon);
+.bb-pip.on {
+  background: currentColor;
 }
 
-.bb-passive .bb-pip.on {
-  background: var(--bb-passive);
+.bb-empty .bb-pips {
+  visibility: hidden;
+}
+
+/* On the end card the row sits in the card's flow and wraps if it must. */
+.bb-row {
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 4px 0 2px;
 }

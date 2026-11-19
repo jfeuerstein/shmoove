@@ -5,7 +5,6 @@ import {
   P_LUCK,
   P_WAX,
   P_WIDE_LOAD,
-  PASSIVE_INFO,
   raisePassive,
   raiseWeapon,
   W_BUMPER,
@@ -14,11 +13,13 @@ import {
   W_WAKE,
   WEAPON_INFO,
 } from '../../src/sim/arsenal';
-import { BuildBar, tileOf } from '../../src/ui/buildBar';
+import { BuildBar, BuildRow, tileOf } from '../../src/ui/buildBar';
+import { iconSvg } from '../../src/ui/icons';
 
 /** An element that counts every write to its text and class. */
 class CountingEl {
   hidden = false;
+  innerHTML = '';
   writes = 0;
   classWrites = 0;
   readonly children: CountingEl[] = [];
@@ -76,24 +77,25 @@ describe('BuildBar', () => {
     for (const t of tiles) {
       expect(t.className).toContain('bb-empty');
       expect(t.children[0].textContent).toBe('');
+      expect(t.children[0].innerHTML).toBe('');
       expect(pipsOn(t)).toBe(0);
     }
   });
 
-  it('shows a partial loadout: code and pips for what is carried, outlines for the rest', () => {
+  it('shows a partial loadout: icon and pips for what is carried, outlines for the rest', () => {
     const { bar, tiles } = build();
     const l = makeLoadout();
     raiseWeapon(l, W_WAKE, 1);
     raiseWeapon(l, W_SLAM, 3);
     raisePassive(l, P_HEART, 2);
     bar.update(l);
-    expect(tiles[0].children[0].textContent).toBe(WEAPON_INFO[W_WAKE].code);
+    expect(tiles[0].children[0].innerHTML).toBe(iconSvg('weapon', W_WAKE));
     expect(pipsOn(tiles[0])).toBe(1);
-    expect(tiles[1].children[0].textContent).toBe(WEAPON_INFO[W_SLAM].code);
+    expect(tiles[1].children[0].innerHTML).toBe(iconSvg('weapon', W_SLAM));
     expect(pipsOn(tiles[1])).toBe(3);
     expect(tiles[2].className).toContain('bb-empty');
     expect(tiles[3].className).toContain('bb-empty');
-    expect(tiles[4].children[0].textContent).toBe(PASSIVE_INFO[P_HEART].code);
+    expect(tiles[4].children[0].innerHTML).toBe(iconSvg('passive', P_HEART));
     expect(tiles[4].className).toContain('bb-passive');
     expect(pipsOn(tiles[4])).toBe(2);
     expect(tiles[4].className).not.toContain('bb-empty');
@@ -141,8 +143,47 @@ describe('BuildBar', () => {
   it('tileOf reports the slot order and level', () => {
     const l = makeLoadout();
     raiseWeapon(l, W_BUMPER, 2);
-    expect(tileOf(l, false, 0)).toEqual({ code: WEAPON_INFO[W_BUMPER].code, level: 2 });
-    expect(tileOf(l, false, 1)).toEqual({ code: '', level: 0 });
-    expect(tileOf(l, true, 0)).toEqual({ code: '', level: 0 });
+    expect(tileOf(l, false, 0)).toEqual({ icon: iconSvg('weapon', W_BUMPER), name: WEAPON_INFO[W_BUMPER].name, level: 2 });
+    expect(tileOf(l, false, 1)).toEqual({ icon: '', name: '', level: 0 });
+    expect(tileOf(l, true, 0)).toEqual({ icon: '', name: '', level: 0 });
+  });
+
+  it('never shows a two-letter code, only icons', () => {
+    const { bar, all } = build();
+    const l = makeLoadout();
+    for (const id of [W_WAKE, W_SEEKERS, W_BUMPER, W_SLAM]) raiseWeapon(l, id, 2);
+    for (const id of [P_HEART, P_WAX, P_LUCK, P_WIDE_LOAD]) raisePassive(l, id, 2);
+    bar.update(l);
+    const text = all.map((e) => e.textContent).join('');
+    expect(text).toBe('');
+    const icons = all.map((e) => e.innerHTML).filter((h) => h !== '');
+    expect(icons).toHaveLength(8);
+    expect(icons.every((h) => h.startsWith('<svg'))).toBe(true);
+    expect(icons.join('')).not.toMatch(/>\s*[A-Z]{2}\s*</);
+  });
+});
+
+describe('BuildRow (the end card)', () => {
+  it('shows only what was carried, weapons then passives, with their levels', () => {
+    const doc = { createElement: () => new CountingEl() } as unknown as Document;
+    const root = new CountingEl();
+    const row = new BuildRow(root as unknown as HTMLElement, doc);
+    const el = root.children[0];
+    row.show(makeLoadout());
+    expect(el.hidden).toBe(true);
+    const l = makeLoadout();
+    raiseWeapon(l, W_SLAM, 3);
+    raiseWeapon(l, W_WAKE, 1);
+    raisePassive(l, P_LUCK, 5);
+    row.show(l);
+    expect(el.hidden).toBe(false);
+    const shown = el.children.filter((t) => !t.hidden);
+    expect(shown.map((t) => t.children[0].innerHTML)).toEqual([
+      iconSvg('weapon', W_SLAM),
+      iconSvg('weapon', W_WAKE),
+      iconSvg('passive', P_LUCK),
+    ]);
+    expect(shown.map(pipsOn)).toEqual([3, 1, 5]);
+    expect(shown[2].className).toContain('bb-passive');
   });
 });
