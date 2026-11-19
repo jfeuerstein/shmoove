@@ -171,6 +171,10 @@ describe("ParkView", () => {
     expect(
       (view.dressingCount + view.unfoggedCount) * 12 + view.decalTriangles,
     ).toBeLessThan(20000);
+    // The double-sided decals are drawn in one pass: one draw call.
+    expect((view.decals.material as MeshLambertMaterial).forceSinglePass).toBe(
+      true,
+    );
   });
 
   it("paints chevrons on every pad, pointing down its fall line, and lights them in turn along it", () => {

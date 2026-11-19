@@ -319,6 +319,8 @@ describe('ThingsView', () => {
     expect(beam(gold).fade).toBeGreaterThan(beam(crate).fade);
     // Seen through the fog.
     expect((view.beacons.material as MeshLambertMaterial).fog).toBe(false);
+    // Double-sided but drawn in one pass: one draw call.
+    expect((view.beacons.material as MeshLambertMaterial).forceSinglePass).toBe(true);
     // The slalom: one beacon, over the next gate.
     expect(gates.filter((g) => view.beaconOf[g] >= 0)).toEqual([gates[0]]);
     for (const g of gates) w.things.state[g] = 3;

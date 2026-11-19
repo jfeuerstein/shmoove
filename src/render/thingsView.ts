@@ -254,6 +254,8 @@ export class ThingsView {
     this.beaconFade = addInstanceFloat(beam, 'aFade', MAX_THINGS);
     const beamMat = fadeMaterial(0xffffff, true);
     beamMat.side = DoubleSide;
+    // Additive, so the order of its faces does not matter: one pass, not one per side.
+    beamMat.forceSinglePass = true;
     // A beacon is for finding the thing from anywhere in the bowl: the fog does not take it.
     beamMat.fog = false;
     this.beacons = makeInstanced(beam, beamMat, MAX_THINGS, 'things-beacons');

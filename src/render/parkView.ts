@@ -245,6 +245,8 @@ export class ParkView {
   private decalMaterial(): MeshLambertMaterial {
     const m = fadeMaterial(0xffffff, true);
     m.side = DoubleSide;
+    // Additive, so the order of its faces does not matter: one pass, not one per side.
+    m.forceSinglePass = true;
     m.polygonOffset = true;
     m.polygonOffsetFactor = -2;
     m.polygonOffsetUnits = -2;
