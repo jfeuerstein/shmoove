@@ -399,7 +399,7 @@ function boot(): void {
     things.update(w, now);
     park.update(b, now);
     weapons.update(w, sim.prev, sim.state, alpha, now);
-    wake.update(w.wake, mx, mz, groundAt);
+    wake.update(w.wake, mx, mz, groundAt, w.player.stats.area);
     fx.update(dt);
     threat.update(w, sim.state, view.camera, dt, fx.hitTint, window.innerWidth, window.innerHeight);
     hud.update(sim);

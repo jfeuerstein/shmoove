@@ -39,7 +39,7 @@ what to return. The verifier gets the same file.
 | `playtest-report.md` | playtest | sonnet | merged |
 | `art-common.md` | art pass | - | shared rules for the four below |
 | `art-figures.md` | art pass | opus | merged |
-| `art-weapons.md` | art pass | opus | out |
+| `art-weapons.md` | art pass | opus | merged |
 | `art-park.md` | art pass | opus | merged |
 | `art-icons.md` | art pass | opus | merged |
 

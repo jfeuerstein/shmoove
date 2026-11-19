@@ -1,5 +1,18 @@
+import { Color } from 'three';
 import { describe, expect, it } from 'vitest';
-import { HEAD_CORE_ALPHA, HEAD_EDGE_ALPHA, RIBBON_POINTS, WAKE_CORE, WAKE_LIFT, WakeView, writeWakeRibbon } from '../../src/render/wakeView';
+import { PALETTE } from '../../src/render/look';
+import {
+  flameShape,
+  HEAD_CORE_ALPHA,
+  HEAD_EDGE_ALPHA,
+  POP_LIFE,
+  RIBBON_POINTS,
+  UNBURNT_HEAD,
+  WAKE_CORE,
+  WAKE_LIFT,
+  WakeView,
+  writeWakeRibbon,
+} from '../../src/render/wakeView';
 import { FEEL } from '../../src/sim/constants';
 import { makeWake, WAKE_STEP, type Wake } from '../../src/sim/wake';
 
@@ -137,5 +150,79 @@ describe('WakeView', () => {
     view.update(trail(pts), 0, RIBBON_POINTS * WAKE_STEP, ground);
     expect(view.points).toBe(RIBBON_POINTS);
     expect(view.mesh.geometry.drawRange.count).toBe((RIBBON_POINTS - 1) * 3 * 6);
+  });
+});
+
+describe('WakeView flames and the pop', () => {
+  it('stands a flame on every trail point that burns, none on the newest under the board', () => {
+    const k = trail([0, 1, 2, 3, 4, 5, 6, 7].map((j) => [0, j * WAKE_STEP] as [number, number]));
+    const view = new WakeView();
+    view.update(k, 0, 7 * WAKE_STEP + 0.5, ground, 1, 0);
+    expect(view.trailFlames).toBe(8 - UNBURNT_HEAD);
+    expect(view.flames.count).toBe(8 - UNBURNT_HEAD);
+    const m = view.flames.instanceMatrix.array;
+    for (let j = 0; j < view.trailFlames; j++) {
+      // On its point, on the ground, standing up.
+      expect(m[j * 16 + 12]).toBeCloseTo(0, 5);
+      expect(m[j * 16 + 14]).toBeCloseTo(j * WAKE_STEP, 5);
+      expect(m[j * 16 + 13]).toBeCloseTo(2, 5);
+      expect(m[j * 16 + 5]).toBeGreaterThan(0.1);
+    }
+    // They flicker.
+    const h0 = m[5];
+    view.update(k, 0, 7 * WAKE_STEP + 0.5, ground, 1, 0.137);
+    expect(view.flames.instanceMatrix.array[5]).not.toBeCloseTo(h0, 4);
+    // Fullest most of the way along, lower at the tail and under the board.
+    expect(flameShape(0.7)).toBeGreaterThan(flameShape(0));
+    expect(flameShape(0.7)).toBeGreaterThan(flameShape(1));
+  });
+
+  it('burns as wide as the build makes it', () => {
+    const k = trail([0, 1, 2, 3].map((j) => [0, j * WAKE_STEP] as [number, number]));
+    const view = new WakeView();
+    view.update(k, 0, 3 * WAKE_STEP + 1, ground, 1.5, 0);
+    const p = view.mesh.geometry.getAttribute('position');
+    expect(Math.abs(p.getX(0) - p.getX(3))).toBeCloseTo(2 * FEEL.wakeWidth * 1.5, 5);
+  });
+
+  it('flashes the loop when the trail is cut back to the board by a pop, and only then', () => {
+    // A loop: round a circle of radius 5, back to where it started.
+    const pts: [number, number][] = [];
+    const n = Math.ceil((2 * Math.PI * 5) / WAKE_STEP);
+    for (let j = 0; j < n; j++) pts.push([5 * Math.sin((j / n) * Math.PI * 2), 5 - 5 * Math.cos((j / n) * Math.PI * 2)]);
+    const k = trail(pts);
+    const view = new WakeView();
+    view.update(k, pts[n - 1][0], pts[n - 1][1], ground, 1, 0);
+    expect(view.popping).toBe(false);
+    // The sim pops it: only the newest point is left, back near the start.
+    const after = trail([[0.3, 0.1]]);
+    view.update(after, 0.3, 0.1, ground, 1, 0.02);
+    expect(view.popping).toBe(true);
+    view.update(after, 0.3, 0.1, ground, 1, 0.1);
+    expect(view.popFlames).toBeGreaterThan(n / 2);
+    expect(view.mesh.visible).toBe(true);
+    // Its flames stand round the loop, in the pop's colour.
+    const m = view.flames.instanceMatrix.array;
+    for (let i = view.trailFlames; i < view.flames.count; i++) {
+      const r = Math.hypot(m[i * 16 + 12], m[i * 16 + 14] - 5);
+      expect(r).toBeGreaterThan(4.5);
+      expect(r).toBeLessThan(5.5);
+    }
+    const c = view.flames.instanceColor;
+    if (!c) throw new Error('no colours');
+    expect(c.getZ(view.trailFlames)).toBeCloseTo(new Color(PALETTE.pop).b, 5);
+    for (let t = 0.2; t < 0.2 + POP_LIFE + 0.2; t += 0.1) view.update(after, 0.3, 0.1, ground, 1, t);
+    expect(view.popping).toBe(false);
+    expect(view.mesh.visible).toBe(false);
+
+    // A trail that only ages away, or a rider put somewhere else (a restart), does not pop.
+    const again = new WakeView();
+    again.update(k, pts[n - 1][0], pts[n - 1][1], ground, 1, 0);
+    again.update(trail([[60, 60]]), 60, 60, ground, 1, 0.02);
+    expect(again.popping).toBe(false);
+    const short = trail(pts.slice(n - 10));
+    again.update(k, pts[n - 1][0], pts[n - 1][1], ground, 1, 0.04);
+    again.update(short, pts[n - 1][0], pts[n - 1][1], ground, 1, 0.06);
+    expect(again.popping).toBe(false);
   });
 });
