@@ -3,11 +3,13 @@ import thingsSource from '../../src/sim/things.ts?raw';
 import { describe, expect, it } from 'vitest';
 import { P_LUCK } from '../../src/sim/arsenal';
 import { PLAYER_RADIUS } from '../../src/sim/balance';
-import { setPassiveLevel } from '../../src/sim/build';
+import { makeBowl } from '../../src/sim/bowl';
+import { refreshBuild, setPassiveLevel } from '../../src/sim/build';
 import { gearForSpeed } from '../../src/sim/flow';
+import { angleDiff } from '../../src/sim/math';
 import { OFFER_CRATE, OFFER_SHRINE, OFFER_TOTEM } from '../../src/sim/offer';
 import { Rng } from '../../src/sim/rng';
-import type { Sim } from '../../src/sim/sim';
+import { hashSimState, Sim } from '../../src/sim/sim';
 import { powerOf } from '../../src/sim/stats';
 import {
   addThing,
@@ -19,12 +21,13 @@ import {
   HOOP_TAKEN,
   SLALOM_MISSED,
 } from '../../src/sim/things';
-import { makeInputFrame } from '../../src/sim/types';
+import { makeInputFrame, type InputFrame } from '../../src/sim/types';
 import {
   FX_BLAST,
   FX_HEAL,
   FX_THING,
   FX_TOKEN,
+  hashWorld,
   KIND_BOLLARD,
   KIND_SHUFFLER,
   MARK_PACK,
@@ -38,6 +41,7 @@ import {
   THING_TOTEM,
   type World,
 } from '../../src/sim/world';
+import { letGo, stickToward, travelYaw, yawTo, type Bot } from './bot/steer';
 import { arena, place, root } from './world-fixtures';
 
 const TUCK = makeInputFrame();
@@ -627,5 +631,335 @@ describe('the step', () => {
     expect(body).not.toMatch(/[=(,:]\s*\[/);
     expect(body).not.toMatch(/[=(,:]\s*\{/);
     expect(body).not.toMatch(/\.(map|filter|slice|concat|push|splice|reduce)\(/);
+  });
+});
+
+// ---- on a real bowl -----------------------------------------------------------------------------
+
+/** How the seeker rides each kind of thing. Chosen by running it over seeds 1 to 3, not by feel. */
+const SEEK = {
+  /** Height a run at a gold crate starts above it, m, and how far it looks for that, m. */
+  goldDrop: 14,
+  goldLook: 90,
+  /** A run starts once the mover is this close to where it starts, m. */
+  runInReach: 6,
+  /** Tuck on a run while the line is within this, rad; carve to correct beyond it. */
+  runAim: 0.05,
+  /** Orbit radius round a shrine, m, how hard it steers back to it per metre off, and the most. */
+  orbitR: 4.7,
+  orbitGain: 0.35,
+  orbitMax: 0.7,
+  /** A slalom is entered from this far behind its first gate, m. */
+  slalomRunIn: 14,
+  /** On a run at a hoop, hop this far before the kicker's top, m. */
+  hopBefore: 4,
+  /** Give up on a thing after this long, and leave it alone for this long, ticks. */
+  patience: 45 * 60,
+  rest: 90 * 60,
+} as const;
+
+type SeekMode = 'go' | 'runIn' | 'run' | 'orbit' | 'gates';
+
+/**
+ * Rides at the nearest unspent thing whose kind `wanted` asks for, and uses it the way a player
+ * would: rams crates and totems at run speed; climbs above a gold crate and tucks down onto it;
+ * rides round a shrine; enters a slalom from behind its first gate and steers gate to gate; climbs
+ * the line behind a hoop's kicker and tucks down it, hopping off the lip. A thing it cannot get
+ * after a while is left alone for a while.
+ */
+function makeSeeker(wanted: (w: World, kind: number) => boolean): Bot {
+  let target = -1;
+  let mode: SeekMode = 'go';
+  let since = 0;
+  /** Where a run starts and the point it aims through, and the line's direction. */
+  let rx = 0;
+  let rz = 0;
+  let tx = 0;
+  let tz = 0;
+  let lineYaw = 0;
+  let hopped = false;
+  let orbitDir = 1;
+  const restUntil = new Map<number, number>();
+
+  function spent(w: World, i: number): boolean {
+    const t = w.things;
+    return t.state[i] === THING_DONE || (t.kind[i] === THING_HOOP && t.state[i] === HOOP_TAKEN);
+  }
+
+  /** The first gate of the slalom gate `i` belongs to. */
+  function firstGate(w: World, i: number): number {
+    const t = w.things;
+    while (i > 0 && t.kind[i - 1] === THING_GATE && t.group[i - 1] === t.group[i]) i--;
+    return i;
+  }
+
+  function choose(sim: Sim): void {
+    const w = sim.world;
+    const t = w.things;
+    const m = sim.state.mover;
+    let best = Infinity;
+    target = -1;
+    for (let i = 0; i < t.count; i++) {
+      if (spent(w, i) || !wanted(w, t.kind[i]) || (restUntil.get(i) ?? 0) > w.run.ticks) continue;
+      if (t.kind[i] === THING_GATE && firstGate(w, i) !== i) continue;
+      const d = Math.hypot(t.x[i] - m.x, t.z[i] - m.z);
+      if (d < best) {
+        best = d;
+        target = i;
+      }
+    }
+    since = w.run.ticks;
+    mode = 'go';
+    if (target < 0) return;
+    const kind = t.kind[target];
+    if (kind === THING_GOLD_CRATE) planUphill(sim, t.x[target], t.z[target]);
+    else if (kind === THING_HOOP) planKicker(sim, target);
+    else if (kind === THING_GATE) planSlalom(sim, target);
+  }
+
+  /** A run onto (x, z) from the ground `goldDrop` above it, climbing the slope from it. */
+  function planUphill(sim: Sim, x: number, z: number): void {
+    const n = { x: 0, y: 1, z: 0 };
+    const h0 = sim.terrain.heightAt(x, z);
+    let px = x;
+    let pz = z;
+    for (let d = 0; d < SEEK.goldLook; d += 2) {
+      if (sim.terrain.heightAt(px, pz) - h0 >= SEEK.goldDrop || Math.hypot(px, pz) > 150) break;
+      sim.terrain.normalAt(px, pz, n);
+      const g = Math.hypot(n.x, n.z);
+      if (g < 1e-3) break;
+      px -= (n.x / g) * 2;
+      pz -= (n.z / g) * 2;
+    }
+    rx = px;
+    rz = pz;
+    tx = x;
+    tz = z;
+    lineYaw = Math.atan2(x - px, z - pz);
+    mode = 'runIn';
+  }
+
+  /** A run down the line behind a hoop's kicker, from where the most height is. */
+  function planKicker(sim: Sim, i: number): void {
+    const t = sim.world.things;
+    const fx = Math.sin(t.yaw[i]);
+    const fz = Math.cos(t.yaw[i]);
+    const kx = t.x[i] - fx * 5;
+    const kz = t.z[i] - fz * 5;
+    const top = sim.terrain.heightAt(kx, kz);
+    let best = -Infinity;
+    let back = 30;
+    for (let d = 20; d <= 70; d += 2) {
+      const px = kx - fx * d;
+      const pz = kz - fz * d;
+      if (Math.hypot(px, pz) > 150) break;
+      const h = sim.terrain.heightAt(px, pz) - top;
+      if (h > best) {
+        best = h;
+        back = d;
+      }
+    }
+    rx = kx - fx * back;
+    rz = kz - fz * back;
+    tx = kx;
+    tz = kz;
+    lineYaw = t.yaw[i];
+    hopped = false;
+    mode = 'runIn';
+  }
+
+  function planSlalom(sim: Sim, first: number): void {
+    const t = sim.world.things;
+    const fx = Math.sin(t.yaw[first]);
+    const fz = Math.cos(t.yaw[first]);
+    rx = t.x[first] - fx * SEEK.slalomRunIn;
+    rz = t.z[first] - fz * SEEK.slalomRunIn;
+    mode = 'runIn';
+  }
+
+  /** Down a line through (tx, tz) along lineYaw: tuck while on it, carve back onto it. */
+  function runLine(sim: Sim, out: InputFrame, along: number): void {
+    const m = sim.state.mover;
+    const fx = Math.sin(lineYaw);
+    const fz = Math.cos(lineYaw);
+    const ahead = along + Math.max(8, m.speed * 0.6);
+    const want = yawTo(m, tx + fx * ahead, tz + fz * ahead);
+    const err = Math.abs(angleDiff(want, travelYaw(m)));
+    if (!m.grounded || err > SEEK.runAim || m.speed < 4) stickToward(sim, want, 1, out);
+    else letGo(out);
+  }
+
+  return (sim, out) => {
+    const w = sim.world;
+    const t = w.things;
+    const m = sim.state.mover;
+    out.hop = false;
+    if (target >= 0 && (spent(w, target) || !wanted(w, t.kind[target]))) target = -1;
+    if (target >= 0 && w.run.ticks - since > SEEK.patience) {
+      restUntil.set(target, w.run.ticks + SEEK.rest);
+      target = -1;
+    }
+    if (target < 0) choose(sim);
+    if (target < 0) {
+      letGo(out);
+      return;
+    }
+    const kind = t.kind[target];
+    const x = t.x[target];
+    const z = t.z[target];
+
+    if (kind === THING_SHRINE) {
+      const ox = m.x - x;
+      const oz = m.z - z;
+      const r = Math.hypot(ox, oz);
+      if (mode !== 'orbit' && r < 11) {
+        mode = 'orbit';
+        orbitDir = ox * m.vz - oz * m.vx < 0 ? 1 : -1;
+      }
+      if (mode !== 'orbit') {
+        // Toward the edge of the orbit, the side the mover is already turning.
+        const off = Math.asin(Math.min(1, SEEK.orbitR / r));
+        const to = yawTo(m, x, z);
+        const a = angleDiff(travelYaw(m), to) >= 0 ? off : -off;
+        stickToward(sim, to + a, 1, out);
+        return;
+      }
+      if (r > 13) {
+        mode = 'go';
+        return;
+      }
+      const around = Math.atan2(ox, oz);
+      const pull = Math.max(-SEEK.orbitMax, Math.min(SEEK.orbitMax, SEEK.orbitGain * (r - SEEK.orbitR)));
+      stickToward(sim, around + orbitDir * (Math.PI / 2 + pull), 1, out);
+      return;
+    }
+
+    if (kind === THING_GATE) {
+      const state = t.state[target];
+      if (state === SLALOM_MISSED) mode = 'runIn';
+      if (mode === 'runIn') {
+        stickToward(sim, yawTo(m, rx, rz), 1, out);
+        if (Math.hypot(m.x - rx, m.z - rz) < SEEK.runInReach && state === 0) mode = 'gates';
+        return;
+      }
+      const g = target + Math.min(state, 4);
+      const fx = Math.sin(t.yaw[g]);
+      const fz = Math.cos(t.yaw[g]);
+      stickToward(sim, yawTo(m, t.x[g] + fx * 2, t.z[g] + fz * 2), 1, out);
+      return;
+    }
+
+    if (kind === THING_GOLD_CRATE || kind === THING_HOOP) {
+      const fx = Math.sin(lineYaw);
+      const fz = Math.cos(lineYaw);
+      const along = (m.x - tx) * fx + (m.z - tz) * fz;
+      if (mode === 'runIn') {
+        stickToward(sim, yawTo(m, rx, rz), 1, out);
+        if (Math.hypot(m.x - rx, m.z - rz) < SEEK.runInReach) {
+          mode = 'run';
+          hopped = false;
+        }
+        return;
+      }
+      runLine(sim, out, along);
+      if (kind === THING_HOOP && !hopped && m.grounded && along > -SEEK.hopBefore) {
+        out.hop = true;
+        hopped = true;
+      }
+      // Past it without it: back up the line for another go.
+      if (along > 25 || (kind === THING_GOLD_CRATE && along > 4)) mode = 'runIn';
+      return;
+    }
+
+    // Crates and totems: straight at them, at run speed.
+    stickToward(sim, yawTo(m, x, z), 1, out);
+  };
+}
+
+/** Which kinds of thing a run has used, and when each was first used, s. */
+function usedKinds(w: World, firstUse: Map<number, number>): void {
+  const t = w.things;
+  for (let i = 0; i < t.count; i++) {
+    const k = t.kind[i];
+    if (firstUse.has(k)) continue;
+    if (t.state[i] === THING_DONE || (k === THING_HOOP && t.state[i] === HOOP_TAKEN)) firstUse.set(k, w.run.ticks / 60);
+  }
+}
+
+const KIND_NAMES = ['crate', 'gold crate', 'shrine', 'slalom', 'hoop', 'totem'];
+
+describe('on a real bowl', () => {
+  it('a bot riding at the nearest unspent thing uses every kind of thing within 3 minutes on seeds 1 to 3', () => {
+    for (const seed of [1, 2, 3]) {
+      const sim = new Sim(makeBowl(seed), { seed, horde: true, autoPick: true });
+      sim.world.spawning = false;
+      const firstUse = new Map<number, number>();
+      const bot = makeSeeker((_w, kind) => !firstUse.has(kind));
+      const input = makeInputFrame();
+      for (let tick = 0; tick < 180 * 60 && firstUse.size < KIND_NAMES.length; tick++) {
+        bot(sim, input);
+        sim.step(input);
+        usedKinds(sim.world, firstUse);
+      }
+      const unused = KIND_NAMES.filter((_, k) => !firstUse.has(k));
+      expect({ seed, unused }).toEqual({ seed, unused: [] });
+    }
+  });
+
+  /** 60 s of a full run (the horde on) with the seeker riding things: the fingerprint each tick. */
+  function fingerprints(sim: Sim): number[] {
+    // After the quick things, so that a minute among the horde uses several.
+    const bot = makeSeeker((_w, k) => k === THING_CRATE || k === THING_TOTEM || k === THING_SHRINE);
+    // The seeker does not fight: enough health that it lives the whole minute among the horde.
+    sim.world.player.boonMaxHp = 1900;
+    refreshBuild(sim.world);
+    const input = makeInputFrame();
+    const out: number[] = [];
+    for (let tick = 0; tick < 60 * 60; tick++) {
+      bot(sim, input);
+      sim.step(input);
+      out.push(hashWorld(sim.world) ^ hashSimState(sim.state));
+    }
+    return out;
+  }
+
+  it('places every site as a waiting thing, and again on reset', () => {
+    const b = makeBowl(1);
+    const sim = new Sim(b, { seed: 1, horde: true, autoPick: true });
+    const t = sim.world.things;
+    const kinds = [THING_CRATE, THING_GOLD_CRATE, THING_SHRINE, THING_GATE, THING_HOOP, THING_TOTEM];
+    const names = ['crate', 'gold', 'shrine', 'gate', 'hoop', 'totem'];
+    const check = (): void => {
+      expect(t.count).toBe(b.features.sites.length);
+      b.features.sites.forEach((s, i) => {
+        expect(t.kind[i]).toBe(kinds[names.indexOf(s.kind)]);
+        expect([t.x[i], t.z[i], t.group[i]]).toEqual([Math.fround(s.x), Math.fround(s.z), s.group]);
+        expect(t.state[i]).toBe(0);
+        // On the ground, except a hoop: 3 m over the top of its kicker.
+        const ground = s.kind === 'hoop' ? b.heightAt(s.x - Math.sin(s.yaw) * 5, s.z - Math.cos(s.yaw) * 5) + 3 : b.heightAt(s.x, s.z);
+        expect(t.y[i]).toBeCloseTo(ground, 4);
+      });
+    };
+    check();
+    fingerprints(sim);
+    let spentAny = false;
+    for (let i = 0; i < t.count; i++) if (t.state[i] === THING_DONE) spentAny = true;
+    expect(spentAny).toBe(true);
+    sim.reset();
+    check();
+  });
+
+  it('is deterministic: two 60 s runs that use things are identical tick by tick, and so is one after a reset', () => {
+    const b = makeBowl(1);
+    const a = new Sim(b, { seed: 1, horde: true, autoPick: true });
+    const first = fingerprints(a);
+    const tokens = a.world.player.tokens;
+    let spent = 0;
+    for (let i = 0; i < a.world.things.count; i++) if (a.world.things.state[i] === THING_DONE) spent++;
+    expect(spent).toBeGreaterThanOrEqual(5);
+    expect(fingerprints(new Sim(b, { seed: 1, horde: true, autoPick: true }))).toEqual(first);
+    a.reset();
+    expect(fingerprints(a)).toEqual(first);
+    expect(a.world.player.tokens).toBe(tokens);
   });
 });
