@@ -97,7 +97,8 @@ describe('grinding', () => {
     const endSpeed = (fall: number): number => {
       const h = (_x: number, z: number): number => -fall * z;
       const sim = new Sim(park(h, [[0, 10, 0, 40]]));
-      hopOnto(sim, 12, 14, 20);
+      // Uphill the hop leaves the ground rising faster, so it is caught a little later.
+      hopOnto(sim, 12, 14, 28);
       expect(sim.state.mover.rail, `fall ${fall}`).toBe(0);
       run(sim, TUCK, 60);
       return sim.state.mover.speed;

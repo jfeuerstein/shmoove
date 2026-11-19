@@ -42,7 +42,7 @@ const DEFS = {
   tuckDrag: { v: 0.03, min: 0, max: 0.3, step: 0.005, group: 'tuck', note: 'Drag while tucked, 1/s. Lower holds speed longer on the flat' },
   rollFriction: { v: 0.4, min: 0, max: 4, step: 0.1, group: 'tuck', note: 'Constant slowing while tucked, m/s2. Also the gentlest slope that still rolls' },
   // hop
-  hopSpeed: { v: 7, min: 3, max: 14, step: 0.25, group: 'hop', note: 'Upward speed of a hop, m/s' },
+  hopSpeed: { v: 8.5, min: 3, max: 14, step: 0.25, group: 'hop', note: 'Upward speed of a hop, m/s' },
   hopBufferTicks: { v: 9, min: 0, max: 20, step: 1, group: 'hop', note: 'How early a tap before landing still counts, ticks' },
   cleanWindowTicks: { v: 7, min: 1, max: 20, step: 1, group: 'hop', note: 'How long after landing a hop is clean, ticks' },
   cleanHopBonus: { v: 1.4, min: 0, max: 4, step: 0.1, group: 'hop', note: 'Speed a clean hop adds at low speed, m/s' },
@@ -72,7 +72,7 @@ const DEFS = {
   gear2: { v: 7, min: 2, max: 15, step: 0.5, group: 'gears', note: 'Speed where gear 2 starts, m/s' },
   gear3: { v: 12, min: 8, max: 20, step: 0.5, group: 'gears', note: 'Speed where gear 3 starts, m/s' },
   gear4: { v: 18, min: 12, max: 30, step: 0.5, group: 'gears', note: 'Speed where gear 4 starts, m/s' },
-  gear5: { v: 25, min: 18, max: 40, step: 0.5, group: 'gears', note: 'Speed where gear 5 starts, m/s' },
+  gear5: { v: 24, min: 18, max: 40, step: 0.5, group: 'gears', note: 'Speed where gear 5 starts, m/s' },
   gearHyst: { v: 1, min: 0, max: 4, step: 0.1, group: 'gears', note: 'How far below a gear you can dip before it is at risk, m/s' },
   gearDropTicks: { v: 12, min: 0, max: 60, step: 1, group: 'gears', note: 'How long you can stay below a gear before losing it, ticks' },
   // view (the frame the stick is read in; the camera sits behind it)

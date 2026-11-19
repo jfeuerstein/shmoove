@@ -171,7 +171,7 @@ director, the bosses) are not here: report how those feel in words.
 
 | Constant | Now | Too low feels like | Too high feels like |
 | --- | --- | --- | --- |
-| `hopSpeed` | 7 m/s | an ollie barely clears a gnat or a ring | floaty; long waits before you can steer again |
+| `hopSpeed` | 8.5 m/s | an ollie barely clears a gnat or a ring | floaty; long waits before you can steer again |
 | `hopBufferTicks` | 9 ticks (0.15 s) | early taps are eaten | taps well before landing still count |
 | `cleanWindowTicks` | 7 ticks (0.12 s) | clean hops (and shaking off a clinger) need perfect timing | clean hops are free |
 
