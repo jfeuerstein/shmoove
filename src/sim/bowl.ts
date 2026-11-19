@@ -26,6 +26,25 @@ export interface BowlFeatures {
   pipes: { x0: number; z0: number; x1: number; z1: number; halfWidth: number }[];
   /** The middle of each kicker's flat top; yaw = the direction to ride it. */
   kickers: { x: number; z: number; yaw: number }[];
+  /** Where the things on the map go (see `chooseSites`). Chosen after the ground is final. */
+  sites: Site[];
+}
+
+/** What stands at a site. */
+export type SiteKind = 'crate' | 'gold' | 'shrine' | 'gate' | 'hoop' | 'totem';
+
+/**
+ * A place for one thing on the map. `yaw` is the way a gate faces (along its slalom's line) or a
+ * hoop's kicker rides; 0 for the rest. The gates of one slalom share a `group` (1, 2, ...) and are
+ * listed in the order they are ridden; everything else has group 0. A hoop's height is not here: it
+ * hangs `HOOP_RISE` m above the top of the kicker `HOOP_AHEAD` m behind it.
+ */
+export interface Site {
+  kind: SiteKind;
+  x: number;
+  z: number;
+  yaw: number;
+  group: number;
 }
 
 export interface Bowl extends Terrain {
@@ -658,6 +677,7 @@ function layout(seed: number, attempt: number): Layout | null {
       const c = kickCrest(k);
       return { x: c.x, z: c.z, yaw: datan2(k.fx, k.fz) };
     }),
+    sites: [],
   };
   return { shape: sh, pads, features, spawnX: bx, spawnZ: bz, spawnYaw: datan2(sh.sfx, sh.sfz) };
 }
@@ -828,6 +848,271 @@ export function spawnRunDrop(t: Terrain): number {
   return t.heightAt(t.spawnX, t.spawnZ) - t.heightAt(x, z);
 }
 
+// ---------------------------------------------------------------------------------------------
+// Sites: where the things on the map stand.
+
+/** A hoop hangs this far above its kicker's top, m, and this far past the top along the kicker. */
+export const HOOP_RISE = 3;
+export const HOOP_AHEAD = 5;
+
+/** Where sites are chosen, and the rules every one of them keeps. Map design, not feel. */
+const SITE = {
+  /** On the floor: inside this radius, m. */
+  floorR: 125,
+  /** Steepest ground a site may stand on. */
+  maxSlope: 0.35,
+  /** Least distance from the spawn, a boost pad and any other site, m (gates of one slalom excepted). */
+  apart: 14,
+  /** Things other than hoops keep this far from a kicker's top, so none stands on a ramp, m. */
+  kickerClear: 18,
+  crates: 12,
+  golds: 2,
+  /** Least distance between any two crates, gold or not, m. */
+  crateApart: 25,
+  /** Crates placed off the circuits first: farther than `offCircuit` from a pipe axis and the crater. */
+  offCrates: 8,
+  offCircuit: 20,
+  shrines: 2,
+  /** The ring a shrine is orbited in: its ground must be open and gentle this far out, m. */
+  shrineRoom: 7,
+  /** Steepest ground within the shrine's room: tried strict first, then relaxed. */
+  shrineSlope: [0.18, 0.26, 0.34],
+  slaloms: 2,
+  gates: 5,
+  /** Along the line between gates, and to either side of it, m. */
+  gateStep: 18,
+  gateSide: 3,
+  /**
+   * What a slalom's line must be, tried strict first, then relaxed: the least height lost from the
+   * first gate to the last (m), how far it may turn from straight down the slope at the first gate
+   * (rad), the most it climbs from one gate to the next (m), the steepest ground along it, and how
+   * far it keeps from a kicker's top, the crater's edge and a pipe's axis (m). The gates themselves
+   * always keep the rules of every site.
+   */
+  slalom: [
+    { drop: 3.5, skew: 1.1, climb: 0.6, slope: 0.3, kicker: 12, crater: CRATER_LIP_HALF, pipe: PIPE_HALF },
+    { drop: 2, skew: 1.3, climb: 0.8, slope: 0.3, kicker: 12, crater: 0, pipe: PIPE_HALF / 2 },
+    { drop: 0.5, skew: 1.45, climb: 1.2, slope: 0.34, kicker: 8, crater: -PIPE_HALF, pipe: 0 },
+    { drop: 0.1, skew: 1.5, climb: 2, slope: 0.6, kicker: 6, crater: -BOWL_RADIUS, pipe: 0 },
+  ],
+  hoops: 4,
+  /** Least drop behind a kicker for a hoop over it, m, looked for this far back along its line. */
+  hoopRunIn: 6,
+  hoopLookBack: 70,
+  totems: 2,
+  /** Least distance between the two totems, m. */
+  totemApart: 60,
+  /** Candidates drawn for each site before the rules are relaxed. */
+  tries: 600,
+} as const;
+
+/** Slope of the finished terrain at one point. */
+function siteSlope(t: Terrain, x: number, z: number): number {
+  t.normalAt(x, z, RUN_N);
+  return Math.sqrt(RUN_N.x * RUN_N.x + RUN_N.z * RUN_N.z) / RUN_N.y;
+}
+
+/** Distance from (x, z) to the nearest pipe axis or the crater's edge (0 inside the crater). */
+function circuitDist(sh: Shape, x: number, z: number): number {
+  let d = dist(x, z, sh.cx, sh.cz) - sh.cr;
+  if (d < 0) d = 0;
+  for (const p of sh.pipes) {
+    const a = pipeAxisDist(p, x, z);
+    if (a < d) d = a;
+  }
+  return d;
+}
+
+type SlalomRules = (typeof SITE.slalom)[number];
+
+/**
+ * The most height there is to drop onto a kicker straight back along its line, within
+ * `hoopLookBack` metres and short of the top of the rim, m.
+ */
+function kickerRunIn(bowl: Bowl, x: number, z: number, yaw: number): number {
+  const top = bowl.heightAt(x, z);
+  const fx = dsin(yaw);
+  const fz = dcos(yaw);
+  let best = -Infinity;
+  for (let d = 2; d <= SITE.hoopLookBack; d += 2) {
+    const px = x - fx * d;
+    const pz = z - fz * d;
+    if (px * px + pz * pz > (BOWL_RADIUS - 20) * (BOWL_RADIUS - 20)) break;
+    const h = bowl.heightAt(px, pz) - top;
+    if (h > best) best = h;
+  }
+  return best;
+}
+
+/**
+ * True if a slalom line from (x, z) along (dx, dz), from a few metres before its first gate to a
+ * few past its last, stays on gentle floor clear of the kickers, the crater and the pipes, never
+ * climbs much from one gate to the next, and loses height overall.
+ */
+function slalomFits(bowl: Bowl, sh: Shape, x: number, z: number, dx: number, dz: number, rules: SlalomRules): boolean {
+  const span = SITE.gateStep * (SITE.gates - 1);
+  const run = 4;
+  for (let q = -run; q <= span + run; q += 3) {
+    const px = x + dx * q;
+    const pz = z + dz * q;
+    if (px * px + pz * pz >= (SITE.floorR - 3) * (SITE.floorR - 3)) return false;
+    if (siteSlope(bowl, px, pz) >= rules.slope) return false;
+    if (dist(px, pz, sh.cx, sh.cz) < sh.cr + rules.crater) return false;
+    for (const p of sh.pipes) if (pipeAxisDist(p, px, pz) < rules.pipe) return false;
+    for (const k of bowl.features.kickers) if (dist(px, pz, k.x, k.z) < rules.kicker) return false;
+  }
+  let prev = bowl.heightAt(x, z);
+  for (let k = 1; k < SITE.gates; k++) {
+    const h = bowl.heightAt(x + dx * SITE.gateStep * k, z + dz * SITE.gateStep * k);
+    if (h > prev + rules.climb) return false;
+    prev = h;
+  }
+  return bowl.heightAt(x, z) - prev >= rules.drop;
+}
+
+/**
+ * Choose the sites from the finished terrain: up to four hoops over kickers, two slaloms, two
+ * shrines, two totems, two gold crates and twelve crates, in that order (the hardest to fit first).
+ * Every site is on the floor, on gentle ground, clear of the spawn, the pads and every other site.
+ * Over seeds 1 to 300 every seed gets the full set; one that does not throws rather than hand back
+ * a map short of its things.
+ */
+function chooseSites(bowl: Bowl, sh: Shape, rng: Rng): void {
+  const sites = bowl.features.sites;
+  const kickers = bowl.features.kickers;
+
+  /**
+   * The rules every site keeps. Sites of the same nonzero `group` ignore each other. A hoop hangs
+   * in the air over a kicker's landing, so the slope it answers for is its kicker's top (checked
+   * where hoops are chosen), not the landing under it.
+   */
+  const fits = (x: number, z: number, group: number, hoop: boolean): boolean => {
+    if (x * x + z * z >= SITE.floorR * SITE.floorR) return false;
+    if (dist(x, z, bowl.spawnX, bowl.spawnZ) < SITE.apart) return false;
+    for (const p of bowl.pads) if (dist(x, z, p.x, p.z) < SITE.apart) return false;
+    for (const o of sites) {
+      if (group !== 0 && o.group === group) continue;
+      if (dist(x, z, o.x, o.z) < SITE.apart) return false;
+    }
+    if (!hoop) for (const k of kickers) if (dist(x, z, k.x, k.z) < SITE.kickerClear) return false;
+    return hoop || siteSlope(bowl, x, z) < SITE.maxSlope;
+  };
+  const add = (kind: SiteKind, x: number, z: number, yaw: number, group: number): void => {
+    sites.push({ kind, x, z, yaw, group });
+  };
+  // A candidate point on the floor, uniform over the disc.
+  let cx = 0;
+  let cz = 0;
+  const draw = (): void => {
+    const r = (SITE.floorR - 3) * Math.sqrt(rng.next());
+    const a = rng.range(0, TAU);
+    cx = r * dsin(a);
+    cz = r * dcos(a);
+  };
+
+  // Hoops: a hoop takes speed to reach, so they hang over the kickers with the longest drop behind
+  // them (a kicker ridden out of a pipe or the crater climbs to its ramp and gets none).
+  const runIn = kickers.map((k) => kickerRunIn(bowl, k.x, k.z, k.yaw));
+  const order = kickers.map((_, i) => i).sort((a, b) => runIn[b] - runIn[a] || a - b);
+  // If no kicker has the drop, the one with the most still gets a hoop: every map has one.
+  let hoops = 0;
+  for (let pass = 0; pass < 2 && hoops === 0; pass++) {
+    for (const i of order) {
+      const k = kickers[i];
+      if (hoops >= (pass === 0 ? SITE.hoops : 1) || (pass === 0 && runIn[i] < SITE.hoopRunIn)) break;
+      const x = k.x + dsin(k.yaw) * HOOP_AHEAD;
+      const z = k.z + dcos(k.yaw) * HOOP_AHEAD;
+      if (!fits(x, z, 0, true) || siteSlope(bowl, k.x, k.z) >= SITE.maxSlope) continue;
+      add('hoop', x, z, k.yaw, 0);
+      hoops++;
+    }
+  }
+
+  // Slaloms: five gates down a line that falls, alternating either side of it.
+  for (let g = 1; g <= SITE.slaloms; g++) {
+    let placed = false;
+    for (let level = 0; level < SITE.slalom.length && !placed; level++) {
+      const rules = SITE.slalom[level];
+      for (let i = 0; i < SITE.tries && !placed; i++) {
+        draw();
+        // The line leaves the first gate across the fall line, within `skew` of straight down.
+        bowl.normalAt(cx, cz, RUN_N);
+        if (Math.sqrt(RUN_N.x * RUN_N.x + RUN_N.z * RUN_N.z) < 0.02) continue;
+        const yaw = datan2(RUN_N.x, RUN_N.z) + rng.range(-rules.skew, rules.skew);
+        const dx = dsin(yaw);
+        const dz = dcos(yaw);
+        if (!slalomFits(bowl, sh, cx, cz, dx, dz, rules)) continue;
+        let ok = true;
+        for (let k = 0; k < SITE.gates && ok; k++) {
+          const side = k % 2 === 0 ? SITE.gateSide : -SITE.gateSide;
+          ok = fits(cx + dx * SITE.gateStep * k + dz * side, cz + dz * SITE.gateStep * k - dx * side, g, false);
+        }
+        if (!ok) continue;
+        for (let k = 0; k < SITE.gates; k++) {
+          const side = k % 2 === 0 ? SITE.gateSide : -SITE.gateSide;
+          add('gate', cx + dx * SITE.gateStep * k + dz * side, cz + dz * SITE.gateStep * k - dx * side, yaw, g);
+        }
+        placed = true;
+      }
+    }
+    if (!placed) throw new Error(`makeBowl(${bowl.seed}): no room for slalom ${g}`);
+  }
+
+  // Shrines: open, gentle ground with room to ride round them.
+  for (let n = 0; n < SITE.shrines; n++) {
+    let placed = false;
+    for (let level = 0; level < SITE.shrineSlope.length && !placed; level++) {
+      for (let i = 0; i < SITE.tries && !placed; i++) {
+        draw();
+        if (!fits(cx, cz, 0, false)) continue;
+        if (circuitDist(sh, cx, cz) < SITE.shrineRoom + PIPE_HALF / 2) continue;
+        let roomy = true;
+        for (const p of bowl.pads) if (dist(cx, cz, p.x, p.z) < SITE.shrineRoom + p.radius) roomy = false;
+        if (!roomy) continue;
+        if (terrainDiscSlope(bowl, cx, cz, SITE.shrineRoom) >= SITE.shrineSlope[level]) continue;
+        add('shrine', cx, cz, 0, 0);
+        placed = true;
+      }
+    }
+    if (!placed) throw new Error(`makeBowl(${bowl.seed}): no room for a shrine`);
+  }
+
+  // Totems, well apart.
+  for (let n = 0; n < SITE.totems; n++) {
+    let placed = false;
+    for (let i = 0; i < SITE.tries * 2 && !placed; i++) {
+      draw();
+      if (!fits(cx, cz, 0, false)) continue;
+      let far = true;
+      for (const o of sites) if (o.kind === 'totem' && dist(cx, cz, o.x, o.z) < SITE.totemApart) far = false;
+      if (!far) continue;
+      add('totem', cx, cz, 0, 0);
+      placed = true;
+    }
+    if (!placed) throw new Error(`makeBowl(${bowl.seed}): no room for a totem`);
+  }
+
+  // Crates: the gold ones and most of the rest off the circuits, the others anywhere.
+  for (let n = 0; n < SITE.golds + SITE.crates; n++) {
+    const kind: SiteKind = n < SITE.golds ? 'gold' : 'crate';
+    const off = n < SITE.offCrates;
+    let placed = false;
+    for (let i = 0; i < SITE.tries * 2 && !placed; i++) {
+      draw();
+      if (!fits(cx, cz, 0, false)) continue;
+      if (off && circuitDist(sh, cx, cz) <= SITE.offCircuit) continue;
+      let far = true;
+      for (const o of sites) {
+        if ((o.kind === 'crate' || o.kind === 'gold') && dist(cx, cz, o.x, o.z) < SITE.crateApart) far = false;
+      }
+      if (!far) continue;
+      add(kind, cx, cz, 0, 0);
+      placed = true;
+    }
+    if (!placed) throw new Error(`makeBowl(${bowl.seed}): no room for a crate`);
+  }
+}
+
 /**
  * Build the bowl for a seed. Same seed, bit-identical terrain.
  *
@@ -847,7 +1132,11 @@ export function makeBowl(seed: number): Bowl {
     if (terrainDiscSlope(bowl, bowl.spawnX, bowl.spawnZ, 6) >= 0.05) continue;
     let padsOk = true;
     for (const p of bowl.pads) if (terrainDiscSlope(bowl, p.x, p.z, p.radius) >= 0.15) padsOk = false;
-    if (padsOk && spawnRunDrop(bowl) >= SPAWN_RUN_DROP) return bowl;
+    if (padsOk && spawnRunDrop(bowl) >= SPAWN_RUN_DROP) {
+      // The ground is final; what stands on it is chosen from its own stream, so it never moves it.
+      chooseSites(bowl, lay.shape, new Rng(seed).fork('sites'));
+      return bowl;
+    }
   }
   throw new Error(`makeBowl(${seed}): no layout passed its checks`);
 }

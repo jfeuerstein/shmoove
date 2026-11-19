@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BOWL_RADIUS, makeBowl, type Bowl } from '../../src/sim/bowl';
+import { BOWL_RADIUS, makeBowl, type Bowl, type Site, type SiteKind } from '../../src/sim/bowl';
 import type { Vec3 } from '../../src/sim/types';
 
 const SEEDS = [1, 2, 3, 4, 5];
@@ -385,6 +385,183 @@ describe('makeBowl', () => {
       }
       // And most of the floor has the drop right there.
       expect(lowerClose / total).toBeGreaterThan(0.8);
+    }
+  });
+});
+
+/**
+ * Heights recorded from the generator before the map's sites were added to it, at the points
+ * `heightProbe(i)` for i in 0..59. Choosing the sites must never move the ground.
+ */
+const HEIGHTS_BEFORE_SITES: Record<number, number[]> = {
+  1: [52.44522476489648, 9.157420155727749, 76.73865856335338, 35.17226142255189, 6.272539509467918, 38.58981090373135, 5.110287607705434, 28.03319867735187, 89.1996706117119, 10.598258706254459, 34.764148202706515, 2.670743566551963, 13.628396703529479, 86.979408016386, 15.145223724398328, 40.36434312658092, 3.1836606251440385, 3.4747400461687628, 48.03129767494965, 39.085895000236434, 57.96356099974565, 5.021047518940769, 5.170187470154703, 28.796189694627632, 18.894664297402137, 93.1124977150139, 8.874010857484082, 3.335324374442836, 21.790859419468756, 6.8540061067161675, 143.4596283824314, 15.957672342116135, 5.820231711026023, 21.608879132111714, 1.7958357700537593, 67.95424236105123, 42.5462976422025, 6.741915854492586, 28.05922553502793, 1.5763479053847775, 27.138742598485535, 70.08687926911524, 14.396085266535042, 46.293875375838454, -0.9560739868786078, 15.016959181048867, 31.632137974883555, 31.995587428684942, 83.76522151962686, 2.017316270916097, 10.362857038132985, 16.834175678163906, 29.632416843547187, 134.91911709645402, 1.6608346689762545, 8.967571494062055, 13.440580361158931, 12.819884854057092, 191.5402042757769, 7.6617964151569975],
+  2: [52.44522476489648, 8.606160556589407, 76.73865856335338, 35.17226142255189, 3.5462303790236955, 38.58981090373135, -0.42020517058200735, 28.03319867735187, 89.1996706117119, 9.010744751716796, 34.764148202706515, 2.804463132654458, 10.677583172742915, 86.979408016386, 15.127306176563147, 40.36434312658092, 2.9076505367819765, 8.278639422060763, 48.03129767494965, 39.085895000236434, 57.96356099974565, 3.737079350647747, 5.751337492026768, 28.796189694627632, 18.894664297402137, 93.1124977150139, 9.539557015479208, 1.7798184936412107, 21.790859419468756, 10.399733132186025, 143.4596283824314, 15.839956617933094, 3.1372285776019204, 21.608879132111714, -0.8656786171057235, 67.95424236105123, 42.5462976422025, 3.1943060681235793, 28.05922553502793, 2.6154933082194107, 27.138742598485535, 70.08687926911524, 14.426019394653858, 46.293875375838454, -1.7447330854041732, 14.545591341537925, 31.632137974883555, 31.995587428684942, 83.76522151962686, 2.27851940686396, 11.309113526105238, 16.834175678163906, 29.632416843547187, 134.91911709645402, 7.084300044661608, 10.854534429920673, 13.396808543864001, 13.050203661630787, 191.5402042757769, 11.920703793192075],
+  3: [52.44522476489648, 9.382563632723736, 76.73865856335338, 35.17226142255189, 1.4838422142983594, 38.58981090373135, 5.582479359600622, 28.03319867735187, 89.1996706117119, 8.632308038099882, 34.764148202706515, 5.848173430948424, 13.741637255734254, 86.979408016386, 14.665040544251063, 40.36434312658092, 2.7478578652106083, 9.784875997931834, 48.03129767494965, 39.085895000236434, 57.96356099974565, -1.7799210490626949, 7.106707891127648, 28.796189694627632, 18.894664297402137, 93.1124977150139, 9.832291870812819, 5.513060279134749, 21.790859419468756, 10.20188009199911, 143.4596283824314, 15.957672415925922, 5.347182094839294, 21.608879132111714, 3.4386338013844986, 67.95424236105123, 42.5462976422025, 10.125202506978443, 28.05922553502793, 1.7634633010558527, 27.138742598485535, 70.08687926911524, 14.442286426982136, 46.293875375838454, -0.6748670708951814, 14.598915240918483, 31.632137974883555, 31.995587428684942, 83.76522151962686, 1.723517482542804, 8.606322891495717, 16.834175678163906, 29.632416843547187, 134.91911709645402, 0.9683016968918786, 8.772990199824543, 12.980483245534018, 12.996186158947172, 191.5402042757769, 11.710436403013558],
+  4: [52.44522476489648, 5.729919558599242, 76.73865856335338, 35.17226142255189, 8.412896720772876, 38.58981090373135, 4.714100719646899, 28.03319867735187, 89.1996706117119, 9.419644096591854, 34.764148202706515, 2.950710232171909, 13.622366397344912, 86.979408016386, 14.740497006589965, 40.36434312658092, 2.996362925133412, -1.4734600648076526, 48.03129767494965, 39.085895000236434, 57.96356099974565, 0.5371324266182166, 5.085192806276905, 28.796189694627632, 18.894664297402137, 93.1124977150139, 9.444983730813425, 3.3921437307972697, 21.790859419468756, 12.461112908190243, 143.4596283824314, 15.957671999427832, 4.3257955724022255, 21.608879132111714, 7.066076822808234, 67.95424236105123, 42.5462976422025, 9.117690027552387, 28.05922553502793, 2.55643672843064, 27.138742598485535, 70.08687926911524, 14.442286426982136, 46.293875375838454, -1.637619307717412, 14.545591242698872, 31.632137974883555, 31.995587428684942, 83.76522151962686, 3.374068422030973, 10.347781028955282, 16.834175678163906, 29.632416843547187, 134.91911709645402, 0.7780679913728589, 8.883200601936496, 13.582435781842602, 12.994786904585549, 191.5402042757769, 11.254376603837871],
+  5: [52.44522476489648, 8.16058915023228, 76.73865856335338, 35.17226142255189, 3.148997646536616, 38.58981090373135, -0.0292908351958089, 28.03319867735187, 89.1996706117119, 5.382373673088764, 34.764148202706515, 2.786659518818063, 9.190125977548503, 86.979408016386, 15.133577335451864, 40.36434312658092, 3.4705524288825482, 8.2537212808884, 48.03129767494965, 39.085895000236434, 57.96356099974565, 5.165246061930859, 8.788022755353975, 28.796189694627632, 18.894664297402137, 93.1124977150139, 11.427114692199478, 4.19590696706931, 21.790859419468756, 10.3635741186466, 143.4596283824314, 15.957672381036838, 2.1897307213402613, 21.608879132111714, -1.0144407023306994, 67.95424236105123, 42.5462976422025, 9.508876320919349, 28.05922553502793, 3.3173857582864548, 27.138742598485535, 70.08687926911524, 14.443005597510114, 46.293875375838454, -2.0348928378834663, 14.545591242698872, 31.632137974883555, 31.995587428684942, 83.76522151962686, 3.3583180078248263, 11.969905451649115, 16.834175678163906, 29.632416843547187, 134.91911709645402, 4.539784736898148, 8.748848628132423, 13.386604663444718, 13.008942695412578, 191.5402042757769, 10.687270096008632],
+};
+
+function heightProbe(i: number): [number, number] {
+  return [((i * 7907) % 3300) / 10 - 165 + 0.37, ((i * 6007 + 1301) % 3300) / 10 - 165 + 0.61];
+}
+
+function sitesOf(b: Bowl, kind: SiteKind): Site[] {
+  return b.features.sites.filter((s) => s.kind === kind);
+}
+
+/** Distance from a point to the nearest pipe axis or the crater's edge. */
+function offCircuit(b: Bowl, x: number, z: number): number {
+  const c = b.features.crater;
+  let d = Math.hypot(x - c.x, z - c.z) - c.radius;
+  for (const p of b.features.pipes) d = Math.min(d, segDist(x, z, p.x0, p.z0, p.x1, p.z1));
+  return d;
+}
+
+describe('the sites of the things on the map', () => {
+  it('leave the ground exactly as it was before there were sites', () => {
+    for (const seed of SEEDS) {
+      const b = bowl(seed);
+      const want = HEIGHTS_BEFORE_SITES[seed];
+      expect(want).toHaveLength(60);
+      for (let i = 0; i < want.length; i++) {
+        const [x, z] = heightProbe(i);
+        expect(Object.is(b.heightAt(x, z), want[i])).toBe(true);
+      }
+    }
+  });
+
+  it('are the same for the same seed and differ between seeds', () => {
+    for (const seed of SEEDS) expect(makeBowl(seed).features.sites).toEqual(bowl(seed).features.sites);
+    expect(bowl(1).features.sites).not.toEqual(bowl(2).features.sites);
+  });
+
+  it('come in the right numbers: 12 crates, 2 gold, 2 shrines, 2 slaloms of 5 gates, a hoop for each of up to 4 kickers, 2 totems', () => {
+    for (const seed of SEEDS) {
+      const b = bowl(seed);
+      expect(sitesOf(b, 'crate')).toHaveLength(12);
+      expect(sitesOf(b, 'gold')).toHaveLength(2);
+      expect(sitesOf(b, 'shrine')).toHaveLength(2);
+      expect(sitesOf(b, 'totem')).toHaveLength(2);
+      const gates = sitesOf(b, 'gate');
+      expect(gates).toHaveLength(10);
+      const groups = [...new Set(gates.map((g) => g.group))];
+      expect(groups).toHaveLength(2);
+      for (const g of groups) {
+        expect(g).toBeGreaterThan(0);
+        expect(gates.filter((s) => s.group === g)).toHaveLength(5);
+      }
+      const hoops = sitesOf(b, 'hoop').length;
+      expect(hoops).toBeGreaterThanOrEqual(1);
+      expect(hoops).toBeLessThanOrEqual(Math.min(4, b.features.kickers.length));
+      // Only gates belong to a group.
+      for (const s of b.features.sites) if (s.kind !== 'gate') expect(s.group).toBe(0);
+    }
+  });
+
+  it('stand on the floor, on slope under 0.35, at least 14 m from the spawn, the pads and each other', () => {
+    for (const seed of SEEDS) {
+      const b = bowl(seed);
+      const sites = b.features.sites;
+      for (let i = 0; i < sites.length; i++) {
+        const s = sites[i];
+        expect(Math.hypot(s.x, s.z)).toBeLessThan(125);
+        // A hoop hangs in the air over a kicker's landing: the ground it answers for is the kicker's top.
+        const [gx, gz] = s.kind === 'hoop' ? [s.x - Math.sin(s.yaw) * 5, s.z - Math.cos(s.yaw) * 5] : [s.x, s.z];
+        expect(slope(b, gx, gz)).toBeLessThan(0.35);
+        expect(Math.hypot(s.x - b.spawnX, s.z - b.spawnZ)).toBeGreaterThanOrEqual(14);
+        for (const p of b.pads) expect(Math.hypot(s.x - p.x, s.z - p.z)).toBeGreaterThanOrEqual(14);
+        for (let j = i + 1; j < sites.length; j++) {
+          const o = sites[j];
+          if (s.group !== 0 && s.group === o.group) continue;
+          expect({ seed, a: s.kind, b: o.kind, apart: Math.hypot(s.x - o.x, s.z - o.z) >= 14 }).toEqual({
+            seed,
+            a: s.kind,
+            b: o.kind,
+            apart: true,
+          });
+        }
+      }
+    }
+  });
+
+  it('keep crates 25 m apart, at least half of them more than 20 m off the pipes and the crater', () => {
+    for (const seed of SEEDS) {
+      const b = bowl(seed);
+      const crates = [...sitesOf(b, 'crate'), ...sitesOf(b, 'gold')];
+      for (let i = 0; i < crates.length; i++) {
+        for (let j = i + 1; j < crates.length; j++) {
+          expect(Math.hypot(crates[i].x - crates[j].x, crates[i].z - crates[j].z)).toBeGreaterThanOrEqual(25);
+        }
+      }
+      const off = crates.filter((c) => offCircuit(b, c.x, c.z) > 20).length;
+      expect(off).toBeGreaterThanOrEqual(crates.length / 2);
+    }
+  });
+
+  it('give each shrine open ground with room for a 7 m circle round it', () => {
+    for (const seed of SEEDS) {
+      const b = bowl(seed);
+      for (const s of sitesOf(b, 'shrine')) {
+        expect(discSlope(b, s.x, s.z, 7)).toBeLessThan(0.35);
+        for (const p of b.pads) expect(Math.hypot(s.x - p.x, s.z - p.z)).toBeGreaterThan(7 + p.radius);
+        for (const k of b.features.kickers) expect(Math.hypot(s.x - k.x, s.z - k.z)).toBeGreaterThan(7);
+        // Not in a pipe nor on the crater's lip.
+        expect(offCircuit(b, s.x, s.z)).toBeGreaterThan(7);
+      }
+    }
+  });
+
+  it('lay each slalom as 5 gates 18 m apart down a line that falls on average, alternating 3 m either side, facing along it', () => {
+    for (const seed of SEEDS) {
+      const b = bowl(seed);
+      const gates = sitesOf(b, 'gate');
+      for (const g of new Set(gates.map((s) => s.group))) {
+        const line = gates.filter((s) => s.group === g);
+        const yaw = line[0].yaw;
+        const fx = Math.sin(yaw);
+        const fz = Math.cos(yaw);
+        // The line's own points: each gate's centre moved back across onto the line.
+        const across = line.map((s) => (s.x - line[0].x) * fz - (s.z - line[0].z) * fx);
+        const along = line.map((s) => (s.x - line[0].x) * fx + (s.z - line[0].z) * fz);
+        for (let k = 0; k < line.length; k++) {
+          expect(line[k].yaw).toBe(yaw);
+          expect(along[k]).toBeCloseTo(18 * k, 6);
+          // Alternating: every other gate 6 m across from the one before, back and forth.
+          if (k > 0) expect(Math.abs(across[k] - across[k - 1])).toBeCloseTo(6, 6);
+          if (k > 1) expect(across[k]).toBeCloseTo(across[k - 2], 6);
+        }
+        const mid = across[1] / 2;
+        const onLine = (k: number): [number, number] => [line[0].x + fz * mid + fx * 18 * k, line[0].z - fx * mid + fz * 18 * k];
+        for (let k = 0; k < line.length; k++) {
+          expect(Math.abs(across[k] - mid)).toBeCloseTo(3, 6);
+        }
+        const [x0, z0] = onLine(0);
+        const [x4, z4] = onLine(4);
+        expect(b.heightAt(x0, z0)).toBeGreaterThan(b.heightAt(x4, z4));
+      }
+    }
+  });
+
+  it('hang each hoop over a kicker: 5 m past its top along its line, facing the way it is ridden', () => {
+    for (const seed of SEEDS) {
+      const b = bowl(seed);
+      const used = new Set<number>();
+      for (const h of sitesOf(b, 'hoop')) {
+        const k = b.features.kickers.findIndex(
+          (kk) => Math.hypot(kk.x + Math.sin(kk.yaw) * 5 - h.x, kk.z + Math.cos(kk.yaw) * 5 - h.z) < 1e-6,
+        );
+        expect(k).toBeGreaterThanOrEqual(0);
+        expect(used.has(k)).toBe(false);
+        used.add(k);
+        expect(h.yaw).toBe(b.features.kickers[k].yaw);
+      }
+    }
+  });
+
+  it('keep the two totems at least 60 m apart', () => {
+    for (const seed of SEEDS) {
+      const [a, c] = sitesOf(bowl(seed), 'totem');
+      expect(Math.hypot(a.x - c.x, a.z - c.z)).toBeGreaterThanOrEqual(60);
     }
   });
 });
