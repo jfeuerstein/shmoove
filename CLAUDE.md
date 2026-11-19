@@ -3,9 +3,10 @@
 Portrait-mode, one-thumb 3D survivor where speed is the build. Pitch and design: `docs/PITCH.md`.
 Milestones and status: `docs/PLAN.md`.
 
-**State of the repo:** M0 and M1 are built; M2 (the horde slice) is assembled and being balanced: a
-three-minute run on the bowl with enemies, contact by gear, the Wake and its loop pop, Seekers,
-sparks, XP and levels, a HUD and an end card. No cards, bosses or meta yet (M3 on).
+**State of the repo:** M0 to M2 are built (a three-minute run with a horde, the Wake, Seekers,
+sparks and levels). M3 is in progress: the build system is in (loadout, stats, card offers, a
+weapon registry, all eleven passives, the Bumper); the other seven weapons, four more enemies and
+elites, the map's drive-through objects and the card screen are being built. No bosses or meta yet.
 
 ## Stack
 
@@ -34,9 +35,12 @@ hook), `?perf`.
 
 - `src/sim/` deterministic simulation. Pure TypeScript. Fixed 60 Hz step, seeded RNG.
   `mover.ts` (carve, tuck, hop), `flow.ts` (gears), `bowl.ts` (the map), `constants.ts` (`FEEL`:
-  how it feels), `balance.ts` (how strong things are), `world.ts` (the horde, sparks, shots, player
-  and run state, as dense arrays), `contact.ts` (hurt, plow, bonk), `wake.ts`, `seekers.ts`,
-  `sparks.ts`, `horde.ts` (movement), `director.ts` (spawning), `sim.ts` (the tick order).
+  how it feels), `balance.ts` (how strong things are), `world.ts` (the horde, sparks, shots, zones,
+  map things, player and run state, as dense arrays), `arsenal.ts` (weapon and passive ids and
+  card text), `stats.ts` (the player's stats, from the build), `build.ts` (the only place the
+  loadout changes; offers), `offer.ts` (what is on a card), `weapons/` (one file per weapon and
+  the registry), `contact.ts` (hurt, plow, bonk), `wake.ts`, `seekers.ts`, `sparks.ts`, `horde.ts`
+  (movement), `director.ts` (spawning), `sim.ts` (the tick order).
 - `src/input/` touch gestures -> `InputFrame`. `gestures.ts` is pure; `touch.ts` binds the DOM.
 - `src/render/` Three.js. Reads sim state, never writes it. `camera.ts`, `look.ts` (palette), one
   view per kind of thing; the horde, sparks and shots are instanced.
@@ -72,7 +76,8 @@ Fable is the scarce resource; Opus does the bulk of the work.
 
 - **Fable (lead):** architecture and plan, interface contracts, the movement controller
   (`src/sim/mover.ts`), gears, contact and Wake loop logic (`src/sim/flow.ts`, `src/sim/contact.ts`,
-  `src/sim/wake.ts`), the shared world state (`src/sim/world.ts`), the camera
+  `src/sim/wake.ts`), the shared world state and the build system (`src/sim/world.ts`,
+  `arsenal.ts`, `stats.ts`, `build.ts`, `offer.ts`), the camera
   (`src/render/camera.ts`), the core look (`src/render/look.ts`), integration, and debugging anything
   Opus has failed at twice.
 - **Opus subagents:** contract-bound work that needs design judgement: bowl generation, the app

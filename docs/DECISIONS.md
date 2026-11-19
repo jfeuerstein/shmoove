@@ -90,3 +90,17 @@ Things decided without the owner, newest last. Overrule any of them.
 28. **Round-1 tuning kept:** shuffler speed 4.5 to 4, first level at 5 XP (it grants Seekers, the
    first thing that hurts what is in front of you), Seekers a little stronger, invulnerability
    after a hit 0.6 to 0.8 s, and a harder, wider shove of the horde when you are hit.
+29. **Choosing a card is an input.** While an offer is open the sim holds still (`PHASE_CHOOSE`)
+   and the choice arrives as `InputFrame.pick`, so a run with its choices replays exactly. Slow
+   motion and the ramp back to speed are the app's, not the sim's.
+30. **A player with one weapon is always offered a second.** The first card of the run would
+   otherwise sometimes be three passives, and nothing in front of the player would hurt.
+31. **Rare cards give two levels at once** (6% of cards, more with Luck, always from a totem). The
+   pitch has rarity only by implication ("a guaranteed rare card").
+32. **Shrine boons are three of five and last the run**: a third of health back, three tokens,
+   +8% might, +20 maximum health, +2 m of magnet. The pitch says only "pick one of three boons".
+33. **The Bumper has no step of its own.** It is two stats (ram damage and speed back on a ram
+   kill) read by contact.
+34. **Three balance bands are loose while M3 is being built.** With cards, what a bot carries
+   depends on what it is dealt, and the arsenal is changing weekly. The looper's "outlives the
+   evader" and the rider's "at most one comfortable win" wait for the M3 balance pass.
