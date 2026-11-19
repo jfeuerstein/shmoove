@@ -215,24 +215,28 @@ export function makeEvader(): Bot {
 }
 
 const LOOP = {
-  /** A loop is started when at least this many risen enemies are within 12 m. */
-  crowd: 3,
+  /** A loop is started when at least this many risen enemies are within 12 m, behind the mover. */
+  crowd: 4,
   /** The circle's length as a share of the trail: room to close it before the tail fades. */
-  fill: 0.78,
+  fill: 0.9,
   /** Smallest and largest circle radius, m. */
   minR: 3.6,
-  maxR: 7,
+  maxR: 8,
   /** How hard the bot pulls back onto the circle per metre off it, rad. */
   pull: 0.35,
-  /** Cost per radian away from the circle's heading. */
-  follow: 1.2,
+  /** Cost per radian away from the circle's heading: careful, and bold while health is above boldHp. */
+  follow: 0.6,
+  followBold: 2,
+  boldHp: 85,
   /** Give up a loop after this many laps without a pop. */
   maxLaps: 1.6,
 } as const;
 
 /**
- * The evader, but when a cluster is close it rides a circle beside it, tight enough to fit in the
- * trail, and closes the loop round whatever followed it in. One loop per circle; then it looks again.
+ * The evader, but when a crowd is following close behind it rides a circle beside it, tight enough
+ * to fit in the trail, and closes the loop round whatever followed it in. While healthy it holds the
+ * circle boldly; when hurt it lets the evader's caution pull it off. One loop per circle; then it
+ * looks again.
  */
 export function makeLooper(): Bot {
   const senses = new Senses();
@@ -249,9 +253,10 @@ export function makeLooper(): Bot {
 
   const orbit: Extra = (yaw) => {
     if (!looping) return 0;
-    return Math.abs(angleDiff(yaw, orbitYaw)) * LOOP.follow;
+    return Math.abs(angleDiff(yaw, orbitYaw)) * followNow;
   };
   let orbitYaw = 0;
+  let followNow: number = LOOP.follow;
 
   return (sim, out) => {
     const m = sim.state.mover;
@@ -261,13 +266,16 @@ export function makeLooper(): Bot {
       pops = w.player.pops;
       looping = false;
     }
+    followNow = w.player.hp > LOOP.boldHp ? LOOP.followBold : LOOP.follow;
     const ty = travelYaw(m);
     if (looping) {
       turned += Math.abs(angleDiff(ty, lastYaw));
       if (turned > TAU * LOOP.maxLaps) looping = false;
     }
     lastYaw = ty;
-    if (!looping && senses.near12 >= LOOP.crowd && w.player.wakeLevel > 0) {
+    // A crowd following behind is one that will follow the circle in; one ahead would be ridden into.
+    const behind = (senses.cx - m.x) * dsin(ty) + (senses.cz - m.z) * dcos(ty) < 0;
+    if (!looping && senses.near12 >= LOOP.crowd && behind && w.player.wakeLevel > 0) {
       // Start a circle tangent to the current path, on the side the crowd is.
       const len = wakeLength(w, m.gear) * LOOP.fill;
       radius = Math.min(LOOP.maxR, Math.max(LOOP.minR, len / TAU));

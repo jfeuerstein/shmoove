@@ -49,7 +49,13 @@ export function aliveAt(r: HordeRun, seconds: number): boolean {
   return r.end === 'won' || r.seconds > seconds;
 }
 
-export function playRun(bowl: Bowl, seed: number, bot: Bot): HordeRun {
+/**
+ * Something a test does to the world before every tick, after the bot has chosen (to hold a
+ * weapon at level 0, say, or health up).
+ */
+export type RunHook = (sim: Sim) => void;
+
+export function playRun(bowl: Bowl, seed: number, bot: Bot, hook: RunHook | null = null): HordeRun {
   const sim = new Sim(bowl, { seed, horde: true });
   const w = sim.world;
   const s = sim.state;
@@ -67,6 +73,7 @@ export function playRun(bowl: Bowl, seed: number, bot: Bot): HordeRun {
 
   while (w.run.phase === PHASE_PLAY && ticks < RUN_TICKS) {
     bot(sim, input);
+    if (hook) hook(sim);
     sim.step(input);
     hashes[ticks] = Math.imul(hashWorld(w) ^ 0x9e3779b9, 0x01000193) ^ hashSimState(s);
     ticks++;
