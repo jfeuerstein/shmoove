@@ -215,6 +215,15 @@ export class ThreatView {
     root.appendChild(this.element);
   }
 
+  /** Forget the last run: the glow and the wash start from nothing. */
+  reset(): void {
+    this.strength = 0;
+    this.glow.style.opacity = '0';
+    this.hit.style.opacity = '0';
+    this.glowShown = 0;
+    this.hitShown = 0;
+  }
+
   /**
    * `dt` real seconds since the last frame; `hitTint` 0..1 from the effects view; `width` and
    * `height` the screen in CSS px. Call after the camera has been placed for this frame.

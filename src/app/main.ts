@@ -100,6 +100,9 @@ function boot(): void {
   const stepper = new FixedStepper(DT);
   const restart = (): void => {
     sim.reset();
+    if (params.horde > 0 || params.sparks > 0) applyFixture(sim, params.horde, params.sparks);
+    fx.reset();
+    threat.reset();
     chase.reset();
     endScreen.reset();
     stepper.reset();
