@@ -47,6 +47,10 @@ function copyMover(dst: MoverState, src: MoverState): void {
   dst.impact = src.impact;
   dst.lastAir = src.lastAir;
   dst.padCooldown = src.padCooldown;
+  dst.rail = src.rail;
+  dst.railT = src.railT;
+  dst.railDir = src.railDir;
+  dst.railCooldown = src.railCooldown;
   dst.gear = src.gear;
   dst.gearHold = src.gearHold;
   dst.nx = src.nx;

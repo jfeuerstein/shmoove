@@ -92,9 +92,10 @@ export function stepContact(w: World, s: SimState): void {
       continue;
     }
 
-    if (kind.weight === WEIGHT_HEAVY) {
+    if (kind.weight === WEIGHT_HEAVY && m.rail < 0) {
       // Too heavy to push past: the mover is put back outside it and loses what speed it had
-      // into it. It keeps the rest, so a glancing touch slides round.
+      // into it. It keeps the rest, so a glancing touch slides round. (On a rail the rail holds
+      // the board: it scrapes past and only takes the hit.)
       const d = Math.sqrt(d2);
       const hs = len2(m.vx, m.vz);
       let nx: number;

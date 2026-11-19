@@ -13,7 +13,7 @@ export interface FeelDef {
   min: number;
   max: number;
   step: number;
-  group: 'input' | 'run' | 'carve' | 'tuck' | 'hop' | 'air' | 'ground' | 'gears' | 'view' | 'camera' | 'combat' | 'wake';
+  group: 'input' | 'run' | 'carve' | 'tuck' | 'hop' | 'air' | 'ground' | 'gears' | 'view' | 'camera' | 'combat' | 'wake' | 'rail';
   note: string;
 }
 
@@ -59,6 +59,15 @@ const DEFS = {
   boostPadSpeed: { v: 7, min: 0, max: 20, step: 0.5, group: 'ground', note: 'Speed a boost pad adds, m/s' },
   boostCap: { v: 32, min: 20, max: 50, step: 1, group: 'ground', note: 'Speed above which a boost pad adds nothing, m/s' },
   maxSpeed: { v: 42, min: 25, max: 80, step: 1, group: 'ground', note: 'Hard speed limit, m/s' },
+  // rail (grinding)
+  railSnap: { v: 1.1, min: 0.3, max: 3, step: 0.1, group: 'rail', note: 'How near a rail, sideways, an airborne rider catches it, m' },
+  railReachUp: { v: 0.5, min: 0, max: 2, step: 0.1, group: 'rail', note: 'How far below a rail the rider can be and still catch it, m' },
+  railReachDown: { v: 1.2, min: 0.2, max: 3, step: 0.1, group: 'rail', note: 'How far above a rail the rider can be and still catch it, m' },
+  railAlong: { v: 0.45, min: 0, max: 0.95, step: 0.05, group: 'rail', note: 'How much of your speed must point along the rail to catch it (0 any angle, 1 dead straight)' },
+  railMinSpeed: { v: 4, min: 0, max: 12, step: 0.5, group: 'rail', note: 'Slowest you can catch or stay on a rail, m/s' },
+  grindPush: { v: 1.5, min: 0, max: 8, step: 0.1, group: 'rail', note: 'Speed a grind adds each second, m/s2' },
+  grindDrag: { v: 0.02, min: 0, max: 0.5, step: 0.01, group: 'rail', note: 'Drag on a rail, 1/s' },
+  railExitPop: { v: 2, min: 0, max: 8, step: 0.25, group: 'rail', note: 'Upward speed leaving the end of a rail, m/s' },
   // gears
   gear2: { v: 7, min: 2, max: 15, step: 0.5, group: 'gears', note: 'Speed where gear 2 starts, m/s' },
   gear3: { v: 12, min: 8, max: 20, step: 0.5, group: 'gears', note: 'Speed where gear 3 starts, m/s' },

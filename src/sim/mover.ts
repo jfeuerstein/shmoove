@@ -12,6 +12,8 @@ import {
   EV_BOOST,
   EV_CHAIN_LOST,
   EV_CLEAN_HOP,
+  EV_GRIND_END,
+  EV_GRIND_START,
   EV_HOP,
   EV_LAND,
   type InputFrame,
@@ -24,6 +26,8 @@ const N: Vec3 = { x: 0, y: 1, z: 0 };
 /** Below this speed the direction of travel means nothing and the stick sets it outright. */
 const STILL = 0.5;
 const PAD_COOLDOWN_TICKS = 30;
+/** Ticks after leaving a rail before another can be caught (so stepping off does not step back on). */
+const RAIL_COOLDOWN_TICKS = 18;
 /** A powerslide is over when the mover is within this of where the stick points, rad. */
 const SLIDE_DONE = 0.3;
 
@@ -51,6 +55,10 @@ export function makeMover(terrain: Terrain): MoverState {
     impact: 0,
     lastAir: 0,
     padCooldown: 0,
+    rail: -1,
+    railT: 0,
+    railDir: 1,
+    railCooldown: 0,
     gear: 1,
     gearHold: 0,
     nx: 0,
@@ -314,6 +322,7 @@ function stepAir(m: MoverState, s: SimState, input: InputFrame, terrain: Terrain
   m.z += m.vz * DT;
   holdInside(m, terrain);
   m.airTicks++;
+  if (catchRail(m, s, terrain)) return;
 
   const h = terrain.heightAt(m.x, m.z);
   if (m.y > h) return;
@@ -339,6 +348,127 @@ function stepAir(m: MoverState, s: SimState, input: InputFrame, terrain: Terrain
   m.airTicks = 0;
 }
 
+/**
+ * An airborne rider coming down near a rail, and going mostly along it, catches it: the board
+ * locks on and all of its speed goes along the rail.
+ */
+function catchRail(m: MoverState, s: SimState, terrain: Terrain): boolean {
+  if (m.railCooldown > 0 || m.vy > 1) return false;
+  const rails = terrain.rails;
+  const hs = len2(m.vx, m.vz);
+  if (hs < FEEL.railMinSpeed) return false;
+  for (let i = 0; i < rails.length; i++) {
+    const r = rails[i];
+    const dx = r.x1 - r.x0;
+    const dz = r.z1 - r.z0;
+    const l2 = dx * dx + dz * dz;
+    if (l2 < 1e-6) continue;
+    const t = ((m.x - r.x0) * dx + (m.z - r.z0) * dz) / l2;
+    if (t < 0 || t > 1) continue;
+    const px = r.x0 + dx * t;
+    const pz = r.z0 + dz * t;
+    const ox = m.x - px;
+    const oz = m.z - pz;
+    if (ox * ox + oz * oz > FEEL.railSnap * FEEL.railSnap) continue;
+    const ry = r.y0 + (r.y1 - r.y0) * t;
+    if (m.y < ry - FEEL.railReachUp || m.y > ry + FEEL.railReachDown) continue;
+    const l = Math.sqrt(l2);
+    const along = (m.vx * dx + m.vz * dz) / l;
+    if (Math.abs(along) < FEEL.railAlong * hs) continue;
+
+    m.rail = i;
+    m.railT = t;
+    m.railDir = along >= 0 ? 1 : -1;
+    m.x = px;
+    m.y = ry;
+    m.z = pz;
+    setRailVelocity(m, r, hs);
+    m.landPending = false;
+    m.sliding = false;
+    m.latched = false;
+    s.events |= EV_GRIND_START;
+    return true;
+  }
+  return false;
+}
+
+/** Point the velocity along the rail, in the direction of travel, at `speed`. */
+function setRailVelocity(m: MoverState, r: Terrain['rails'][number], speed: number): void {
+  const dx = r.x1 - r.x0;
+  const dy = r.y1 - r.y0;
+  const dz = r.z1 - r.z0;
+  const k = (m.railDir * speed) / len3(dx, dy, dz);
+  m.vx = dx * k;
+  m.vy = dy * k;
+  m.vz = dz * k;
+}
+
+/** Let go of the rail: the rider is in the air with whatever velocity it has. */
+function leaveRail(m: MoverState, s: SimState): void {
+  m.rail = -1;
+  m.railCooldown = RAIL_COOLDOWN_TICKS;
+  m.grounded = false;
+  // Long enough in the air that the landing that follows counts as one.
+  m.airTicks = FEEL.minAirTicks;
+  s.events |= EV_GRIND_END;
+}
+
+/**
+ * On a rail. No steering: the rail decides where the board goes. Its slope pulls, the grind adds
+ * a little, and a tap hops off with everything kept. Riding off the end is a small pop into the air.
+ */
+function stepGrind(m: MoverState, s: SimState, input: InputFrame, terrain: Terrain): void {
+  const r = terrain.rails[m.rail];
+  const dx = r.x1 - r.x0;
+  const dy = r.y1 - r.y0;
+  const dz = r.z1 - r.z0;
+  const l = len3(dx, dy, dz);
+  m.tucked = !input.carve;
+
+  let speed = len3(m.vx, m.vy, m.vz);
+  // Gravity along the rail, in the direction of travel: downhill is negative dy for railDir +1.
+  speed += ((-FEEL.gravity * dy * m.railDir) / l + FEEL.grindPush - (FEEL.grindDrag * s.mods.drag + s.mods.cling) * speed) * DT;
+  if (speed > FEEL.maxSpeed) speed = FEEL.maxSpeed;
+
+  if (m.hopBuffer > 0) {
+    // Off with a hop. It counts as a clean one: a grind is a landing you never stopped making.
+    setRailVelocity(m, r, speed);
+    m.vy += FEEL.hopSpeed * s.mods.hopSpeed;
+    m.hopBuffer = 0;
+    m.chain++;
+    s.events |= EV_HOP | EV_CLEAN_HOP;
+    leaveRail(m, s);
+    m.airTicks = 0;
+    return;
+  }
+
+  if (speed < FEEL.railMinSpeed * 0.5) {
+    // Too slow to stay on: it drops off where it is.
+    setRailVelocity(m, r, speed < 0 ? 0 : speed);
+    leaveRail(m, s);
+    return;
+  }
+
+  m.railT += (m.railDir * speed * DT) / l;
+  if (m.railT <= 0 || m.railT >= 1) {
+    // Off the end, with a little pop.
+    const t = m.railT <= 0 ? 0 : 1;
+    m.x = r.x0 + dx * t;
+    m.y = r.y0 + dy * t;
+    m.z = r.z0 + dz * t;
+    setRailVelocity(m, r, speed);
+    m.vy += FEEL.railExitPop;
+    leaveRail(m, s);
+    return;
+  }
+  m.x = r.x0 + dx * m.railT;
+  m.y = r.y0 + dy * m.railT;
+  m.z = r.z0 + dz * m.railT;
+  setRailVelocity(m, r, speed);
+  m.heading = datan2(m.vx, m.vz);
+  m.airTicks++;
+}
+
 /** Advance the mover one tick. */
 export function stepMover(s: SimState, input: InputFrame, terrain: Terrain): void {
   const m = s.mover;
@@ -348,12 +478,17 @@ export function stepMover(s: SimState, input: InputFrame, terrain: Terrain): voi
 
   // A tap stays live for a few ticks so one made just before touchdown still hops on landing.
   if (input.hop) m.hopBuffer = FEEL.hopBufferTicks + 1;
-  if (m.grounded && m.hopBuffer > 0) hop(m, s);
+  if (m.railCooldown > 0) m.railCooldown--;
+  if (m.rail >= 0) {
+    stepGrind(m, s, input, terrain);
+  } else {
+    if (m.grounded && m.hopBuffer > 0) hop(m, s);
+    if (m.grounded) stepGround(m, s, input, terrain);
+    else stepAir(m, s, input, terrain);
+  }
   if (m.hopBuffer > 0) m.hopBuffer--;
-  if (m.grounded) stepGround(m, s, input, terrain);
-  else stepAir(m, s, input, terrain);
 
-  m.speed = m.grounded ? len3(m.vx, m.vy, m.vz) : len2(m.vx, m.vz);
+  m.speed = m.grounded || m.rail >= 0 ? len3(m.vx, m.vy, m.vz) : len2(m.vx, m.vz);
   s.distance += len3(m.x - px, m.y - py, m.z - pz);
 
   // The view swings behind the direction of travel; the stick is read against it.

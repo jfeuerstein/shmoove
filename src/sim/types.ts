@@ -38,6 +38,8 @@ export const EV_GEAR_UP = 8;
 export const EV_GEAR_DOWN = 16;
 export const EV_BOOST = 32;
 export const EV_CHAIN_LOST = 64;
+export const EV_GRIND_START = 128;
+export const EV_GRIND_END = 256;
 
 export interface MoverState {
   x: number;
@@ -77,6 +79,14 @@ export interface MoverState {
   lastAir: number;
   /** Ticks until a boost pad can fire again. */
   padCooldown: number;
+  /** The rail being ground (an index into `terrain.rails`), or -1. While on one the mover is not grounded. */
+  rail: number;
+  /** How far along that rail, 0 at its first end to 1 at its second. */
+  railT: number;
+  /** Which way along it: +1 toward the second end, -1 toward the first. */
+  railDir: number;
+  /** Ticks until the mover can catch a rail again after leaving one. */
+  railCooldown: number;
   /** 1..5. */
   gear: number;
   /** Ticks spent below the current gear's floor. */

@@ -14,7 +14,7 @@
  */
 import { dcos, dsin, datan2, PI, smoothstep, TAU } from './math';
 import { Rng } from './rng';
-import type { BoostPad, Terrain } from './terrain';
+import type { BoostPad, Rail, Terrain } from './terrain';
 import type { Vec3 } from './types';
 
 export const BOWL_RADIUS = 170;
@@ -721,6 +721,8 @@ class BowlTerrain implements Bowl {
   readonly spawnZ: number;
   readonly spawnYaw: number;
   readonly pads: readonly BoostPad[];
+  /** Rails to grind. None yet: the generator places them in a later task. */
+  readonly rails: readonly Rail[] = [];
   private readonly grid: Float32Array;
   /** Slope from the last `sample` call. */
   private gx = 0;

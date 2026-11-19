@@ -31,6 +31,7 @@ function startAt(b: Bowl, x: number, z: number, yaw: number): Terrain {
     spawnZ: z,
     spawnYaw: yaw,
     pads: b.pads,
+    rails: b.rails,
     heightAt: (px, pz) => b.heightAt(px, pz),
     normalAt: (px, pz, out) => b.normalAt(px, pz, out),
   };

@@ -8,6 +8,31 @@ export interface BoostPad {
 }
 
 /**
+ * A rail to grind: a straight bar between two points in the air. The ends are absolute positions
+ * (use `railOver` to stand one on a height function).
+ */
+export interface Rail {
+  x0: number;
+  y0: number;
+  z0: number;
+  x1: number;
+  y1: number;
+  z1: number;
+}
+
+/** A rail `lift` metres above the ground at both ends. */
+export function railOver(
+  heightAt: (x: number, z: number) => number,
+  x0: number,
+  z0: number,
+  x1: number,
+  z1: number,
+  lift: number,
+): Rail {
+  return { x0, y0: heightAt(x0, z0) + lift, z0, x1, y1: heightAt(x1, z1) + lift, z1 };
+}
+
+/**
  * The ground. A heightfield: one height for every (x, z).
  *
  * `heightAt` must be continuous with a continuous slope (no creases): the mover rides the surface
@@ -21,6 +46,7 @@ export interface Terrain {
   /** Heading at spawn; forward(yaw) = (sin yaw, 0, cos yaw). */
   readonly spawnYaw: number;
   readonly pads: readonly BoostPad[];
+  readonly rails: readonly Rail[];
   heightAt(x: number, z: number): number;
   /** Unit normal, y up. Writes into and returns `out`. */
   normalAt(x: number, z: number, out: Vec3): Vec3;
@@ -51,6 +77,7 @@ export function terrainFromHeight(
   spawnX = 0,
   spawnZ = 0,
   spawnYaw = 0,
+  rails: readonly Rail[] = [],
 ): Terrain {
   return {
     radius,
@@ -58,6 +85,7 @@ export function terrainFromHeight(
     spawnZ,
     spawnYaw,
     pads,
+    rails,
     heightAt,
     normalAt: (x, z, out) => normalFromHeights(heightAt, x, z, 0.25, out),
   };
