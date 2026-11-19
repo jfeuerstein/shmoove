@@ -203,9 +203,9 @@ export function tarGeometry(tar: number): BufferGeometry {
   const centre = new Float32Array(3);
   const mid = new Float32Array(3);
   const edge = new Float32Array(3);
-  rgbInto(centre, 0, tone(tar, -0.25));
-  rgbInto(mid, 0, tar);
-  rgbInto(edge, 0, tone(tar, 0.32));
+  rgbInto(centre, 0, tone(tar, -0.3));
+  rgbInto(mid, 0, tone(tar, 0.08));
+  rgbInto(edge, 0, tone(tar, 0.5));
   const b = new ShapeBuilder();
   const at = (j: number, k: number): [number, number] => {
     const a = ((j % seg) / seg) * Math.PI * 2;

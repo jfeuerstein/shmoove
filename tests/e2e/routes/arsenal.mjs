@@ -8,7 +8,8 @@
 //
 // Then, each in a page of its own:
 // - the zones beside the row of things, close (zones.png): a spiked mine, tar, a lob ring;
-// - the sparks of a crowd of 400 being pulled in (sparks.png), and a level-up (level-up.png);
+// - the sparks of a crowd of 400 being pulled in (sparks.png), and a level-up as its card is taken
+//   (level-up.png);
 // - the arsenal at its loudest: the four slotted weapons raised to level 5 with 400 around
 //   (arsenal-loud.png). (The fixture puts the other six outside the four slots, where the hook
 //   cannot raise them.)
@@ -259,8 +260,8 @@ export default {
           const yaw = s.viewYaw;
           const fx = Math.sin(yaw);
           const fz = Math.cos(yaw);
-          // Back a little and over toward the zones' side.
-          h.place(s.x + fx * 6 - fz * 2, s.z + fz * 6 + fx * 2, yaw, 0);
+          // Just short of them, and over toward their side.
+          h.place(s.x + fx * 10 - fz * 1.5, s.z + fz * 10 + fx * 1.5, yaw, 0);
           h.step(30);
         });
         await screenshot(z, 'zones');
@@ -280,14 +281,24 @@ export default {
           h.setWeapon(7, 5);
           h.setPassive(4, 5);
         });
-        await l.evaluate(() => window.__shmoove.step(20));
+        await stepThrough(l, 20);
+        await l.evaluate(() => {
+          const h = window.__shmoove;
+          if (h.state().phase === 3) {
+            h.pick(0);
+            h.step(1);
+          }
+        });
         await screenshot(l, 'sparks');
+        // The burst goes off as the ride resumes, once the level's card is taken.
         await l.evaluate(() => {
           const h = window.__shmoove;
           h.giveXp(h.state().xpNext);
+          h.step(2);
+          h.pick(0);
           h.step(3);
         });
-        await screenshot(l, 'level-up');
+        await screenshot(l, 'level-up', true);
       } finally {
         await context.close();
       }

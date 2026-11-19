@@ -22,7 +22,8 @@
  * - `FX_HEAL`: a plus rising from the rider and rings of `PALETTE.hp` climbing round it;
  *   `FX_TOKEN`: a plus in the token colour.
  * - `FX_LEVEL_UP`: rings of `PALETTE.spark` climbing round the rider, a ring out over the ground
- *   and a fountain of spark-coloured glints.
+ *   and a fountain of spark-coloured glints. A level-up opens its cards at once and the world holds
+ *   under them, so the burst waits for the cards to close and goes off as the ride resumes.
  * - `FX_SPARK`: a spark taken: a small pop of its colour where it went in.
  * - `FX_PLAYER_HIT`: `hitTint` jumps up and decays; the UI overlay draws it as a red wash. With the
  *   Bumper carried, its ring is thrown out at hip height to the hit's shove radius
@@ -74,6 +75,7 @@ import {
   KIND_BRUISER,
   KIND_COUNT,
   KINDS,
+  PHASE_PLAY,
   type World,
 } from '../sim/world';
 import { PALETTE, flatMaterial, tone } from './look';
@@ -485,9 +487,9 @@ const SHARD_GRAVITY = 22;
 /** Share of its life a shard spends shrinking away at the end. */
 const SHARD_SHRINK = 0.35;
 /** A death's splat on the ground: times the enemy's radius, its life and strength. */
-const SPLAT_SCALE = 1.7;
+const SPLAT_SCALE = 1.4;
 const SPLAT_LIFE = 0.9;
-const SPLAT_PEAK = 0.45;
+const SPLAT_PEAK = 0.3;
 /** A hit's chips: how many, how fast, their life and size (share of a shard's). */
 const HIT_CHIPS = 3;
 const HIT_SPEED = 7;
@@ -689,6 +691,8 @@ export class FxView {
 
   /** The sim tick grind sparks were last thrown for. */
   private grindTick = -1;
+  /** A level-up waiting for its cards to close. */
+  private levelPending = false;
 
   /** Cheap deterministic noise for shard directions and bolt jags. */
   private seed = 0x9e3779b9;
@@ -794,6 +798,7 @@ export class FxView {
   reset(): void {
     this.hitTint = 0;
     this.grindTick = -1;
+    this.levelPending = false;
     this.gAge.fill(-1);
     this.glowNext = 0;
     this.smallNext = 0;
@@ -883,7 +888,7 @@ export class FxView {
       } else if (type === FX_TOKEN) {
         this.mark(MARK_TOKEN, x, y, z);
       } else if (type === FX_LEVEL_UP) {
-        this.levelUp(x, y, z);
+        this.levelPending = true;
       } else if (type === FX_SPARK) {
         this.up();
         const r = SPARK_POP * (0.8 + 0.2 * Math.sqrt(a > 0 ? a : 0));
@@ -895,6 +900,10 @@ export class FxView {
       }
     }
     this.boltOpen = -1;
+    if (this.levelPending && w.run.phase === PHASE_PLAY && !w.offer.open && w.offerQueued === 0) {
+      this.levelPending = false;
+      this.levelUp(mx, my, mz);
+    }
   }
 
   /**

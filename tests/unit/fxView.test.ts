@@ -28,6 +28,8 @@ import {
   KIND_SHUFFLER,
   KIND_STANDSTILL,
   makeWorld,
+  PHASE_CHOOSE,
+  PHASE_PLAY,
   THING_CRATE,
 } from '../../src/sim/world';
 
@@ -437,6 +439,31 @@ describe('FxView: hits, deaths and the weapons that show on the ground', () => {
     const c = fx.glows.instanceColor;
     if (!c) throw new Error('no colours');
     expect(c.getZ(0)).toBeCloseTo(new Color(PALETTE.spark).b, 5);
+  });
+
+  it('holds a level-up\'s burst while its cards are open, and lets it go as the ride resumes', () => {
+    const w = makeWorld(1);
+    emitFx(w, FX_LEVEL_UP, 0, 0, 0, 2);
+    w.offer.open = true;
+    w.run.phase = PHASE_CHOOSE;
+    const fx = new FxView(flatTerrain(100));
+    fx.ingest(w, 1, 0, 2);
+    expect(fx.liveGlows).toBe(0);
+    // Ticks under the cards: still nothing.
+    w.fx.count = 0;
+    fx.ingest(w, 1, 0, 2);
+    expect(fx.liveGlows).toBe(0);
+    // The card is taken: the burst, round the rider where it is now.
+    w.offer.open = false;
+    w.run.phase = PHASE_PLAY;
+    fx.ingest(w, 3, 0, 4);
+    expect(fx.liveBigGlows).toBeGreaterThanOrEqual(3);
+    fx.update(0.01);
+    expect(fx.glows.instanceMatrix.array[12]).toBeCloseTo(3, 5);
+    // Once only.
+    const n = fx.liveBigGlows;
+    fx.ingest(w, 3, 0, 4);
+    expect(fx.liveBigGlows).toBe(n);
   });
 
   it('throws the Bumper\'s ring out to the shove radius at hip height when a hit lands, only if it is carried', () => {

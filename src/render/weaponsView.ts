@@ -12,8 +12,8 @@
  *   Lance's wait times Haste) and narrows as it charges for the next, with a charge gathering at the
  *   muzzle and embers rising off the line. Thicker at higher levels.
  * - Slipstream: streaks of air drawn in through the draft's cone behind the mover, as long as
- *   `slipstreamLength`, each curving in toward the line behind the board as it flows forward, with
- *   bright glints riding them, only while the draft is up.
+ *   `slipstreamLength`, each curving in toward the line behind the board as it flows forward and
+ *   brightening as it nears the board, with bright glints riding them, only while the draft is up.
  *
  * Everything follows the mover as drawn (interpolated between the last two ticks), so nothing lags
  * it by a tick. Two draw calls: the solids (blades and hoop, one kit), and the beams, streaks and
@@ -115,7 +115,18 @@ const STREAK_CURL = 0.35;
 export const DRAFT_GLINTS = 3;
 const GLINT_SIZE = 0.16;
 const GLINT_FADE = 0.55;
+/** The draft's light, times its colour. */
+const DRAFT_BRIGHT = 2.5;
 const MAX_BEAMS = 2 + 1 + LANCE_EMBERS + STREAKS + DRAFT_GLINTS + MAX_DISCS * DISC_TRAIL_SEGS;
+
+/**
+ * How strongly a draft streak shows as it flows in (0 far back, 1 at the board): brighter the nearer
+ * it is drawn in, so the rush into the board is what the eye catches; it fades fast at the very end.
+ */
+export function drawIn(flow: number): number {
+  const f = flow < 0 ? 0 : flow > 1 ? 1 : flow;
+  return f < 0.85 ? f / 0.85 : (1 - f) / 0.15;
+}
 
 function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;
@@ -252,7 +263,8 @@ export class WeaponsView {
     rgbInto(this.hoopRgb, 0, PALETTE.accent);
     rgbInto(this.lanceRgb, 0, PALETTE.lance);
     rgbInto(this.emberRgb, 0, tone(PALETTE.lance, -0.15));
-    rgbInto(this.draftRgb, 0, PALETTE.spark);
+    // Air is thin: the streaks stay see-through, but bright where they are.
+    rgbInto(this.draftRgb, 0, PALETTE.spark, DRAFT_BRIGHT);
 
     const kit = weaponsKit(PALETTE.orbit, PALETTE.accent).build();
     this.solidShape = addInstanceFloat(kit, 'aShape', MAX_SOLIDS);
@@ -341,7 +353,7 @@ export class WeaponsView {
         // Far end out at the cone's edge, near end curled in toward the line behind the board.
         const side = ((k % 2 === 0 ? 1 : -1) * (0.45 + 0.55 * (((k * 7) % STREAK_LINES) / (STREAK_LINES - 1)))) * half * STREAK_SPREAD;
         const head = draft * (0.95 - STREAK_SHARE) * (1 - flow * 0.85);
-        const strength = STREAK_FADE * Math.sin(flow * Math.PI);
+        const strength = STREAK_FADE * drawIn(flow);
         let px = 0;
         let pz = 0;
         for (let j = 0; j <= STREAK_SEGS; j++) {
@@ -371,7 +383,7 @@ export class WeaponsView {
         const qz = mz + Math.cos(ang) * d;
         segmentMatrix(bm, beams, qx - fx * GLINT_SIZE, y, qz - fz * GLINT_SIZE, qx + fx * GLINT_SIZE, y, qz + fz * GLINT_SIZE, GLINT_SIZE, GLINT_SIZE);
         this.beamColor(beams, this.draftRgb);
-        fade[beams++] = GLINT_FADE * Math.sin(flow * Math.PI);
+        fade[beams++] = GLINT_FADE * drawIn(flow);
       }
     }
 

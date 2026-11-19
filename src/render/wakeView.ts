@@ -52,7 +52,7 @@ const FLICKER_B = 17;
 const LEAN = 0.22;
 /** The pop's flash: how long, s, how tall its flames get, m, and how long the flash takes to run round. */
 export const POP_LIFE = 0.55;
-const POP_HEIGHT = 2.4;
+const POP_HEIGHT = 1.7;
 const POP_RUN = 0.14;
 /** A trail that collapses from at least this many points to at most `POP_LEFT` has popped. */
 const POP_FROM = 6;
@@ -319,9 +319,9 @@ export class WakeView {
           const rise = t < 0.2 ? t / 0.2 : 1 - (t - 0.2) / 0.8;
           const x = this.popX[j];
           const z = this.popZ[j];
-          this.flame(fm, f, x, heightAt(x, z), z, half * FLAME_WIDE * 1.2, POP_HEIGHT * (0.25 + 0.75 * rise), j * 2.1, time * 9 + j);
+          this.flame(fm, f, x, heightAt(x, z), z, half * FLAME_WIDE, POP_HEIGHT * (0.25 + 0.75 * rise), j * 2.1, time * 9 + j);
           this.flameColor(f, this.popRgb);
-          fade[f++] = 0.95 * (1 - t);
+          fade[f++] = 0.8 * (1 - t);
           this.popFlames++;
         }
       }
