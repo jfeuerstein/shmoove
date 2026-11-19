@@ -9,6 +9,7 @@ import { copyMoverMods, makeMoverMods } from './stats';
 import type { Terrain } from './terrain';
 import type { InputFrame, MoverState, SimState } from './types';
 import { stepSparks } from './sparks';
+import { placeThings, stepThings } from './things';
 import { builtWeapons, stepWeapons } from './weapons';
 import {
   makeWorld,
@@ -106,7 +107,7 @@ function stepWorld(w: World, s: SimState, terrain: Terrain): void {
   stepWeapons(w, s, terrain);
   reapHorde(w);
   stepSparks(w, s, terrain);
-  // [things] the map's crates, shrines, gates, hoops and totems
+  stepThings(w, s, terrain);
   openOffer(w);
 
   w.run.ticks++;
@@ -146,6 +147,7 @@ export class Sim {
     const auto = options.autoPick;
     this.picker = auto === true ? firstCard : typeof auto === 'function' ? auto : null;
     builtWeapons(this.world.pool);
+    placeThings(this.world, terrain);
   }
 
   step(input: InputFrame): void {
@@ -189,6 +191,7 @@ export class Sim {
     copySimState(this.state, fresh);
     copySimState(this.prev, fresh);
     resetWorld(this.world);
+    placeThings(this.world, this.terrain);
   }
 }
 
