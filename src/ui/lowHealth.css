@@ -1,0 +1,13 @@
+/* Above the threat glow (z-index 5); edges only, the middle is clear. */
+.low-health {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 6;
+  will-change: opacity;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(var(--low-rgb), 0) 55%,
+    rgba(var(--low-rgb), 0.55) 100%
+  );
+}

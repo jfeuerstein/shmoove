@@ -11,6 +11,7 @@ import { HordeView } from '../render/hordeView';
 import { PALETTE } from '../render/look';
 import { MoverView } from '../render/moverView';
 import { RailsView } from '../render/railsView';
+import { Shake } from '../render/shake';
 import { GameScene } from '../render/scene';
 import { ShotsView } from '../render/shotsView';
 import { SparksView } from '../render/sparksView';
@@ -34,17 +35,20 @@ import { DebugPanel } from '../ui/debugPanel';
 import { EndScreen } from '../ui/endScreen';
 import { Hud } from '../ui/hud';
 import { HowTo } from '../ui/howTo';
+import { LowHealthView } from '../ui/lowHealth';
 import { LessonView } from '../ui/lessonView';
 import { Numbers } from '../ui/numbers';
 import { StickView } from '../ui/stickView';
 import { ThreatView } from '../ui/threat';
 import { applyArsenal, applyFixture } from './fixtures';
+import { Haptics } from './haptics';
+import { HitStop } from './hitstop';
 import { Lesson, LESSON, lessonWanted, makeLessonSample } from './lesson';
 import { FixedStepper, FrameStats, RafDriver, TimeRamp } from './loop';
 import { parseParams, type Params } from './params';
 import { setupPlatform } from './platform';
 import { registerPwa } from './pwa';
-import { browserStorage, Settings } from './settings';
+import { browserStorage, prefersReducedMotion, Settings } from './settings';
 import { HookInput, installTestHook, type TestHook } from './testHook';
 
 /** The one place the terrain is made. */
@@ -102,7 +106,7 @@ function boot(): void {
   setThemeColour(PALETTE.sky);
   setupPlatform();
 
-  const settings = new Settings(browserStorage(), window.location.search, params.scheme);
+  const settings = new Settings(browserStorage(), window.location.search, params.scheme, undefined, prefersReducedMotion());
   settings.applySaved();
 
   const terrain = makeTerrain(params);
@@ -148,6 +152,10 @@ function boot(): void {
   const hud = new Hud(hudRoot, { run: sim.horde, debug: params.debug });
   const stick = new StickView(hudRoot, touch.gestures);
   const threat = new ThreatView(hudRoot);
+  const lowHealth = new LowHealthView(hudRoot);
+  const shake = new Shake();
+  const hitStop = new HitStop();
+  const haptics = Haptics.browser();
   const numbers = sim.horde ? new Numbers(hudRoot) : null;
   const buildBar = sim.horde ? new BuildBar(hudRoot) : null;
   const cards = sim.horde ? new Cards(hudRoot, (i) => picks.set(i)) : null;
@@ -244,6 +252,9 @@ function boot(): void {
     applyFixtures();
     fx.reset();
     threat.reset();
+    lowHealth.reset();
+    shake.reset();
+    hitStop.reset();
     chase.reset();
     endScreen.reset();
     numbers?.reset();
@@ -272,6 +283,9 @@ function boot(): void {
     const m = sim.state.mover;
     fx.ingest(sim.world, m.x, m.y, m.z, sim.state);
     numbers?.ingest(sim.world);
+    shake.ingest(sim.world, sim.state);
+    hitStop.ingest(sim.world);
+    haptics.ingest(sim.world, sim.state);
     const nowChoosing = sim.world.run.phase === PHASE_CHOOSE;
     if (choosing && !nowChoosing) ramp.begin();
     choosing = nowChoosing;
@@ -282,6 +296,8 @@ function boot(): void {
   const draw = (alpha: number, dt: number): void => {
     mover.update(sim.prev, sim.state, alpha, terrain, dt);
     chase.update(sim.prev, sim.state, alpha, dt, terrain);
+    shake.update(dt);
+    shake.apply(view.camera);
     const w = sim.world;
     const a = sim.prev.mover;
     const b = sim.state.mover;
@@ -303,6 +319,7 @@ function boot(): void {
     fx.update(dt);
     threat.update(w, sim.state, view.camera, dt, fx.hitTint, window.innerWidth, window.innerHeight);
     hud.update(sim);
+    lowHealth.update(w.player.maxHp > 0 ? w.player.hp / w.player.maxHp : 1, dt);
     numbers?.updateCamera(dt, view.camera, window.innerWidth, window.innerHeight);
     buildBar?.update(w.player.loadout);
     cards?.update(w, dt);
@@ -322,8 +339,15 @@ function boot(): void {
     const t0 = performance.now();
     stepMs = 0;
     steps = 0;
+    // Settings are read each frame so the panel's switches take hold at once.
+    const reduced = settings.reducedMotion;
+    shake.enabled = !reduced;
+    hitStop.enabled = !reduced;
+    lowHealth.reduced = reduced;
+    haptics.enabled = settings.haptics;
     ramp.update(dt);
-    stepper.scale = ramp.scale;
+    hitStop.update(dt);
+    stepper.scale = ramp.scale * hitStop.scale;
     const alpha = stepper.advance(dt, tick);
     draw(alpha, dt);
     finishFrame(t0);

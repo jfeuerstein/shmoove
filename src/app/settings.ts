@@ -28,6 +28,10 @@ export interface Stored {
   autoPick: boolean;
   /** The first-run lesson has been finished or skipped. */
   lessonDone: boolean;
+  /** The phone buzzes on hits, hops, levels and bosses. On unless switched off. */
+  haptics: boolean;
+  /** No shake, no hit-stop, a steady low-health tint. Null: never chosen, follow the browser. */
+  reducedMotion: boolean | null;
 }
 
 function isScheme(v: unknown): v is Scheme {
@@ -46,7 +50,7 @@ export function clampFeel(key: FeelKey, v: number): number {
 
 /** Read saved text: anything wrong with it gives the empty settings, never a throw. */
 export function parseStored(raw: string | null): Stored {
-  const empty: Stored = { scheme: null, feel: {}, autoPick: false, lessonDone: false };
+  const empty: Stored = { scheme: null, feel: {}, autoPick: false, lessonDone: false, haptics: true, reducedMotion: null };
   if (raw === null) return empty;
   let data: unknown;
   try {
@@ -57,7 +61,7 @@ export function parseStored(raw: string | null): Stored {
   if (typeof data !== 'object' || data === null) return empty;
   const rec = data as Record<string, unknown>;
   if (rec.v !== VERSION) return empty;
-  const out: Stored = { scheme: isScheme(rec.scheme) ? rec.scheme : null, feel: {}, autoPick: rec.autoPick === true, lessonDone: rec.lessonDone === true };
+  const out: Stored = { scheme: isScheme(rec.scheme) ? rec.scheme : null, feel: {}, autoPick: rec.autoPick === true, lessonDone: rec.lessonDone === true, haptics: rec.haptics !== false, reducedMotion: typeof rec.reducedMotion === 'boolean' ? rec.reducedMotion : null };
   const feel = rec.feel;
   if (typeof feel === 'object' && feel !== null) {
     for (const [k, v] of Object.entries(feel as Record<string, unknown>)) {
@@ -75,11 +79,28 @@ export function collectOverrides(feel: Readonly<FeelValues>): FeelOverrides {
   return out;
 }
 
-export function serialize(scheme: Scheme | null, feel: Readonly<FeelValues>, autoPick = false, lessonDone = false): string {
-  const body: { v: number; scheme?: Scheme; feel: FeelOverrides; autoPick?: boolean; lessonDone?: boolean } = { v: VERSION, feel: collectOverrides(feel) };
+export function serialize(
+  scheme: Scheme | null,
+  feel: Readonly<FeelValues>,
+  autoPick = false,
+  lessonDone = false,
+  haptics = true,
+  reducedMotion: boolean | null = null,
+): string {
+  const body: {
+    v: number;
+    scheme?: Scheme;
+    feel: FeelOverrides;
+    autoPick?: boolean;
+    lessonDone?: boolean;
+    haptics?: boolean;
+    reducedMotion?: boolean;
+  } = { v: VERSION, feel: collectOverrides(feel) };
   if (scheme !== null) body.scheme = scheme;
   if (autoPick) body.autoPick = true;
   if (lessonDone) body.lessonDone = true;
+  if (!haptics) body.haptics = false;
+  if (reducedMotion !== null) body.reducedMotion = reducedMotion;
   return JSON.stringify(body);
 }
 
@@ -121,6 +142,15 @@ export function browserStorage(): StorageLike | null {
   }
 }
 
+/** Whether the browser asks for less motion. */
+export function prefersReducedMotion(): boolean {
+  try {
+    return typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  } catch (_err) {
+    return false;
+  }
+}
+
 export class Settings {
   /** The scheme in force: `?scheme=` if given, else the saved one, else `fallback`. */
   scheme: Scheme;
@@ -138,7 +168,23 @@ export class Settings {
     return this.stored.lessonDone;
   }
 
-  constructor(storage: StorageLike | null, search: string, fallback: Scheme, feel: FeelValues = FEEL) {
+  /** Buzz on hits, hops, levels and bosses. */
+  get haptics(): boolean {
+    return this.stored.haptics;
+  }
+
+  /** Reduced motion: the saved choice, else what the browser asked for at first run. */
+  get reducedMotion(): boolean {
+    return this.stored.reducedMotion ?? this.prefersReduced;
+  }
+
+  constructor(
+    storage: StorageLike | null,
+    search: string,
+    fallback: Scheme,
+    feel: FeelValues = FEEL,
+    private readonly prefersReduced = false,
+  ) {
     this.storage = storage;
     this.feel = feel;
     let raw: string | null = null;
@@ -169,6 +215,18 @@ export class Settings {
     this.save();
   }
 
+  /** The owner switched haptics on or off. */
+  chooseHaptics(on: boolean): void {
+    this.stored.haptics = on;
+    this.save();
+  }
+
+  /** The owner switched reduced motion on or off. */
+  chooseReducedMotion(on: boolean): void {
+    this.stored.reducedMotion = on;
+    this.save();
+  }
+
   /** The lesson ended (true), or the player asked to see it again (false). */
   chooseLessonDone(done: boolean): void {
     this.stored.lessonDone = done;
@@ -188,7 +246,7 @@ export class Settings {
   private save(): void {
     if (!this.storage) return;
     try {
-      this.storage.setItem(STORAGE_KEY, serialize(this.stored.scheme, this.feel, this.stored.autoPick, this.stored.lessonDone));
+      this.storage.setItem(STORAGE_KEY, serialize(this.stored.scheme, this.feel, this.stored.autoPick, this.stored.lessonDone, this.stored.haptics, this.stored.reducedMotion));
     } catch (_err) {
       // Full or refused: the settings last for this visit only.
     }

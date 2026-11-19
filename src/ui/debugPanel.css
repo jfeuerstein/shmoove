@@ -50,7 +50,8 @@
   display: none;
 }
 
-.dbg-autopick {
+.dbg-autopick,
+.dbg-toggle-row {
   display: block;
   width: 100%;
   min-height: 44px;
@@ -64,7 +65,8 @@
   touch-action: manipulation;
 }
 
-.dbg-autopick.on {
+.dbg-autopick.on,
+.dbg-toggle-row.on {
   background: var(--dbg-accent);
   border-color: var(--dbg-accent);
 }

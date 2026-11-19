@@ -66,6 +66,8 @@ export class DebugPanel {
   private readonly copyText: HTMLTextAreaElement;
   private readonly copyBtn: HTMLButtonElement;
   private readonly autoPickBtn: HTMLButtonElement;
+  private readonly hapticsBtn: HTMLButtonElement;
+  private readonly motionBtn: HTMLButtonElement;
   private open = false;
 
   constructor(
@@ -104,6 +106,22 @@ export class DebugPanel {
       this.syncAutoPick();
     });
     this.sheet.appendChild(this.autoPickBtn);
+
+    // Haptics and reduced motion; the main loop reads them from the settings each frame.
+    this.hapticsBtn = el('button', 'dbg-toggle-row', 'Haptics');
+    this.hapticsBtn.type = 'button';
+    this.hapticsBtn.addEventListener('click', () => {
+      this.settings.chooseHaptics(!this.settings.haptics);
+      this.syncToggles();
+    });
+    this.motionBtn = el('button', 'dbg-toggle-row', 'Reduced motion');
+    this.motionBtn.type = 'button';
+    this.motionBtn.addEventListener('click', () => {
+      this.settings.chooseReducedMotion(!this.settings.reducedMotion);
+      this.syncToggles();
+    });
+    this.sheet.appendChild(this.hapticsBtn);
+    this.sheet.appendChild(this.motionBtn);
 
     const head = el('div', 'dbg-head');
     const resetAll = el('button', 'dbg-btn', 'Reset all');
@@ -170,6 +188,7 @@ export class DebugPanel {
     this.element = wrap;
     this.syncScheme();
     this.syncAutoPick();
+    this.syncToggles();
     this.sync();
   }
 
@@ -272,6 +291,17 @@ export class DebugPanel {
       b.classList.toggle('on', on);
       b.setAttribute('aria-pressed', String(on));
     }
+  }
+
+  private syncToggles(): void {
+    const h = this.settings.haptics;
+    this.hapticsBtn.classList.toggle('on', h);
+    this.hapticsBtn.setAttribute('aria-pressed', String(h));
+    this.hapticsBtn.textContent = h ? 'Haptics: ON' : 'Haptics: off';
+    const r = this.settings.reducedMotion;
+    this.motionBtn.classList.toggle('on', r);
+    this.motionBtn.setAttribute('aria-pressed', String(r));
+    this.motionBtn.textContent = r ? 'Reduced motion: ON' : 'Reduced motion: off';
   }
 
   private syncAutoPick(): void {
