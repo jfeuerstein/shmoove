@@ -25,6 +25,7 @@ import {
   CARD_PASSIVE,
   CARD_WEAPON,
   makeOffer,
+  OFFER_BOSS,
   OFFER_CRATE,
   OFFER_LEVEL,
   OFFER_SHRINE,
@@ -131,6 +132,7 @@ describe('card text', () => {
     expect(sourceHeader(OFFER_CRATE)).toBe('CRATE');
     expect(sourceHeader(OFFER_SHRINE)).toBe('SHRINE');
     expect(sourceHeader(OFFER_TOTEM)).toBe('TOTEM');
+    expect(sourceHeader(OFFER_BOSS)).toBe('BOSS DOWN');
   });
 
   it('describes a whole offer in order, only as many cards as it has', () => {

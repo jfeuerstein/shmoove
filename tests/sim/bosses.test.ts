@@ -9,7 +9,7 @@ import { hurtPlayer } from '../../src/sim/contact';
 import { DIRECTOR, stepDirector } from '../../src/sim/director';
 import { stepHazards } from '../../src/sim/hazards';
 import { stepHorde } from '../../src/sim/horde';
-import { OFFER_TOTEM } from '../../src/sim/offer';
+import { OFFER_BOSS } from '../../src/sim/offer';
 import { makeSimState, Sim } from '../../src/sim/sim';
 import { flatTerrain, railOver, terrainFromHeight, type Rail } from '../../src/sim/terrain';
 import { type InputFrame } from '../../src/sim/types';
@@ -667,7 +667,7 @@ describe('every boss', () => {
       expect(types).toContain(FX_HEAL);
       expect(w.player.hp).toBeCloseTo(30 + 0.4 * w.player.maxHp, 4);
       expect(value() - before).toBeCloseTo(30, 4);
-      expect(sources).toContain(OFFER_TOTEM);
+      expect(sources).toContain(OFFER_BOSS);
       expect(w.boss.felled).toBe(1);
       expect(w.run.phase).toBe(PHASE_PLAY);
     }

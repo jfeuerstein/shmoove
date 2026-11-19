@@ -19,6 +19,7 @@ import {
   BOON_VIGOUR,
   BOON_VIGOUR_HP,
   CARD_BOON,
+  OFFER_BOSS,
   OFFER_SHRINE,
   OFFER_TOTEM,
   rollBoons,
@@ -98,7 +99,7 @@ export function openOffer(w: World): void {
   w.offerQueue.copyWithin(0, 1, w.offerQueued);
   w.offerQueued--;
   if (source === OFFER_SHRINE) rollBoons(w.offer, w.rng);
-  else rollOffer(w.offer, w.player.loadout, w.pool, w.player.stats.luck, w.rng, source, source === OFFER_TOTEM);
+  else rollOffer(w.offer, w.player.loadout, w.pool, w.player.stats.luck, w.rng, source, source === OFFER_TOTEM || source === OFFER_BOSS);
   w.run.phase = PHASE_CHOOSE;
 }
 

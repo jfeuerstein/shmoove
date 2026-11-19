@@ -19,8 +19,8 @@ const BOSSES = [
   { kind: 8, at: 360, name: 'THE MORTAR', shot: 'boss-mortar', wait: 36 + 240 + 30 },
   { kind: 9, at: 540, name: 'THE STANDSTILL', shot: null, wait: 36 + 210 + 100 },
 ];
-/** OFFER_TOTEM: the rare card. */
-const OFFER_TOTEM = 2;
+/** OFFER_BOSS: the rare card a fallen boss gives. */
+const OFFER_BOSS = 4;
 
 const call = (page, method, ...args) => page.evaluate(([m, a]) => window.__shmoove[m](...a), [method, args]);
 const shown = (page, sel) =>
@@ -137,7 +137,7 @@ export default {
       check((await shown(page, '.hud-boss')) === false, 'the bar is gone');
 
       if (b.kind !== 9) {
-        check(s.phase === 3 && s.offer !== null && s.offer.source === OFFER_TOTEM, 'a rare card is on the table', s.offer);
+        check(s.phase === 3 && s.offer !== null && s.offer.source === OFFER_BOSS, 'a rare card is on the table', s.offer);
         await hook.step(1);
         check((await cardsUp(page)) === true, 'the cards are on screen');
         // Take it with a real touch, and any card queued behind it.

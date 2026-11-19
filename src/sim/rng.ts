@@ -15,6 +15,11 @@ export class Rng {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   }
 
+  /** The stream's position as a number, for hashing. Does not advance it. */
+  peek(): number {
+    return this.s / 4294967296;
+  }
+
   /** Float in [lo, hi). */
   range(lo: number, hi: number): number {
     return lo + (hi - lo) * this.next();

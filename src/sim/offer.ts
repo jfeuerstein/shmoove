@@ -52,6 +52,8 @@ export const OFFER_LEVEL = 0;
 export const OFFER_CRATE = 1;
 export const OFFER_TOTEM = 2;
 export const OFFER_SHRINE = 3;
+/** A boss fell: a rare card, as a totem's. */
+export const OFFER_BOSS = 4;
 
 export interface Offer {
   open: boolean;

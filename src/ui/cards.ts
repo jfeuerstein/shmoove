@@ -14,6 +14,7 @@ import {
   BOON_INFO,
   CARD_PASSIVE,
   CARD_WEAPON,
+  OFFER_BOSS,
   OFFER_CRATE,
   OFFER_LEVEL,
   OFFER_SHRINE,
@@ -56,6 +57,7 @@ export function sourceHeader(source: number): string {
   if (source === OFFER_CRATE) return 'CRATE';
   if (source === OFFER_SHRINE) return 'SHRINE';
   if (source === OFFER_TOTEM) return 'TOTEM';
+  if (source === OFFER_BOSS) return 'BOSS DOWN';
   return 'CHOOSE';
 }
 

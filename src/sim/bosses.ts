@@ -26,7 +26,7 @@ import { hurtPlayer } from './contact';
 import { DIRECTOR, makeElite } from './director';
 import { lob } from './hazards';
 import { dcos, dsin, PI, TAU } from './math';
-import { OFFER_TOTEM } from './offer';
+import { OFFER_BOSS } from './offer';
 import type { Terrain } from './terrain';
 import type { SimState, Vec3 } from './types';
 import {
@@ -150,33 +150,6 @@ function lcm(a: number, b: number): number {
   return (a / x) * b;
 }
 
-/** What the bosses remember between ticks for one world. */
-interface BossBrain {
-  /** The run tick last stepped, to notice a fresh run or a clock that was set. */
-  lastTick: number;
-  /** Index in `BOSS_TIMES` of the next boss to come. */
-  next: number;
-  /** The Bruiser's aim (a unit vector) and where its charge began. */
-  aimX: number;
-  aimZ: number;
-  fromX: number;
-  fromZ: number;
-  /** The mover's position at the last step, for the rings' crossing test. */
-  moverX: number;
-  moverZ: number;
-}
-
-const brains = new WeakMap<World, BossBrain>();
-
-function brainOf(w: World, s: SimState): BossBrain {
-  let b = brains.get(w);
-  if (b === undefined) {
-    b = { lastTick: -2, next: 0, aimX: 0, aimZ: 1, fromX: 0, fromZ: 0, moverX: s.mover.x, moverZ: s.mover.z };
-    brains.set(w, b);
-  }
-  return b;
-}
-
 /** Index of the boss in the horde, or -1. */
 export function findBoss(w: World): number {
   const h = w.horde;
@@ -275,7 +248,7 @@ function fell(w: World, s: SimState, kind: number, x: number, y: number, z: numb
     p.hp += give;
     emitFx(w, FX_HEAL, m.x, m.y, m.z, give);
   }
-  queueOffer(w, OFFER_TOTEM);
+  queueOffer(w, OFFER_BOSS);
   if (kind === KIND_STANDSTILL && w.run.phase === PHASE_PLAY) w.run.phase = PHASE_WON;
 }
 
@@ -299,7 +272,8 @@ function walk(w: World, s: SimState, i: number, speed: number): void {
  * after the tell meets it, if the mover keeps its line. Solves |o + v t| = charge (t - tell) for the
  * first t after the tell; a mover it cannot catch is aimed at where it will be when the tell ends.
  */
-function aimBruiser(w: World, s: SimState, i: number, b: BossBrain): void {
+function aimBruiser(w: World, s: SimState, i: number): void {
+  const b = w.boss;
   const h = w.horde;
   const m = s.mover;
   const ox = m.x - h.x[i];
@@ -329,7 +303,8 @@ function aimBruiser(w: World, s: SimState, i: number, b: BossBrain): void {
   }
 }
 
-function stepBruiser(w: World, s: SimState, i: number, b: BossBrain): void {
+function stepBruiser(w: World, s: SimState, i: number): void {
+  const b = w.boss;
   const h = w.horde;
   const st = h.state[i];
   const t = h.timer[i] + 1;
@@ -370,7 +345,7 @@ function stepBruiser(w: World, s: SimState, i: number, b: BossBrain): void {
     if (t >= BRUISER_EVERY) {
       h.state[i] = BRUISER_TELL;
       h.timer[i] = 0;
-      aimBruiser(w, s, i, b);
+      aimBruiser(w, s, i);
       h.vx[i] = b.aimX * B.lean;
       h.vz[i] = b.aimZ * B.lean;
     } else {
@@ -463,7 +438,8 @@ function stepStandstill(w: World, s: SimState, terrain: Terrain, i: number): voi
  * Spread the rings and hurt a mover on the ground as a front crosses it. A front crosses when the
  * mover was outside it last tick and is inside it now. In the air or on a rail it passes under.
  */
-function stepRings(w: World, s: SimState, b: BossBrain): void {
+function stepRings(w: World, s: SimState): void {
+  const b = w.boss;
   const zn = w.zones;
   const m = s.mover;
   const p = w.player;
@@ -504,7 +480,7 @@ function report(w: World, i: number): void {
 
 /** One tick of the bosses. Call after `reapHorde`, before the sparks. */
 export function stepBosses(w: World, s: SimState, terrain: Terrain): void {
-  const b = brainOf(w, s);
+  const b = w.boss;
   const tick = w.run.ticks;
   if (tick !== b.lastTick + 1) {
     // A new run, or the clock was set: the next boss is the first whose time is still to come.
@@ -530,11 +506,11 @@ export function stepBosses(w: World, s: SimState, terrain: Terrain): void {
     // Nothing throws a boss.
     h.stun[i] = 0;
     const kind = h.kind[i];
-    if (kind === KIND_BRUISER) stepBruiser(w, s, i, b);
+    if (kind === KIND_BRUISER) stepBruiser(w, s, i);
     else if (kind === KIND_MORTAR) stepMortar(w, s, terrain, i);
     else stepStandstill(w, s, terrain, i);
   }
-  stepRings(w, s, b);
+  stepRings(w, s);
   b.moverX = s.mover.x;
   b.moverZ = s.mover.z;
   report(w, i);

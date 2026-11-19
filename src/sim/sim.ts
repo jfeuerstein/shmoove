@@ -205,9 +205,10 @@ export class Sim {
 /** A cheap fingerprint of the state, for determinism tests. */
 export function hashSimState(s: SimState): number {
   const m = s.mover;
-  const f = new Float64Array([m.x, m.y, m.z, m.vx, m.vy, m.vz, s.viewYaw, s.distance]);
+  const f = new Float64Array([m.x, m.y, m.z, m.vx, m.vy, m.vz, s.viewYaw, s.distance, m.heading, m.railT]);
   const b = new Uint32Array(f.buffer);
   let h = (0x811c9dc5 ^ s.tick ^ (m.gear << 20) ^ (m.chain << 24)) >>> 0;
+  h = Math.imul(h ^ ((m.grounded ? 1 : 0) | (m.tucked ? 2 : 0) | ((m.rail + 1) << 2) | (m.airTicks << 12)), 0x01000193) >>> 0;
   for (let i = 0; i < b.length; i++) h = Math.imul(h ^ b[i], 0x01000193) >>> 0;
   return h;
 }

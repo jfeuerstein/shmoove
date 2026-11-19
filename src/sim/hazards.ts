@@ -68,23 +68,6 @@ export const HAZARDS = {
   shakeDamage: 6,
 } as const;
 
-/** What the hazards remember between ticks for one world. */
-interface HazardState {
-  /** `w.player.pops` as last seen: a rise means a loop popped since. */
-  pops: number;
-}
-
-const states = new WeakMap<World, HazardState>();
-
-function stateOf(w: World): HazardState {
-  let st = states.get(w);
-  if (st === undefined) {
-    st = { pops: w.player.pops };
-    states.set(w, st);
-  }
-  return st;
-}
-
 /** Lob a shot that lands at (x, z) after `ticks` (a lobber's `HAZARDS.lobTicks` by default). */
 export function lob(w: World, terrain: Terrain, x: number, z: number, ticks: number = HAZARDS.lobTicks): void {
   const H = HAZARDS;
@@ -128,12 +111,10 @@ export function stepHazards(w: World, s: SimState, terrain: Terrain): void {
   const h = w.horde;
   const p = w.player;
   const m = s.mover;
-  const st = stateOf(w);
 
   // A pop happens among the weapons, after this step: it is seen here on the next tick.
-  if (p.pops < st.pops) st.pops = p.pops;
-  const popped = p.pops > st.pops;
-  st.pops = p.pops;
+  const popped = p.pops > w.popsSeen;
+  w.popsSeen = p.pops;
   const ev = s.events;
   const all = popped || ((ev & EV_LAND) !== 0 && m.impact >= H.shakeImpact);
   let one = !all && (ev & EV_CLEAN_HOP) !== 0;

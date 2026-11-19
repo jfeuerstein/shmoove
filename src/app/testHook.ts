@@ -71,7 +71,7 @@ export interface HookItem {
 }
 
 export interface HookOffer {
-  /** OFFER_LEVEL 0, OFFER_CRATE 1, OFFER_TOTEM 2, OFFER_SHRINE 3. */
+  /** OFFER_LEVEL 0, OFFER_CRATE 1, OFFER_TOTEM 2, OFFER_SHRINE 3, OFFER_BOSS 4. */
   source: number;
   /** `type` is CARD_WEAPON 0, CARD_PASSIVE 1 or CARD_BOON 2; `by` the levels it gives. */
   cards: { type: number; id: number; by: number }[];

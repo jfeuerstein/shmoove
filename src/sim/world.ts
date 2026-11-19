@@ -340,6 +340,44 @@ export interface BossState {
   z: number;
   /** How many bosses have fallen this run. */
   felled: number;
+  /** Index in `BOSS_TIMES` of the next boss to come. */
+  next: number;
+  /** The run tick the bosses last stepped (-2 before the first), to notice a clock that was set. */
+  lastTick: number;
+  /** The Bruiser's aim, a unit vector along the ground: set when its tell starts, held through the charge. */
+  aimX: number;
+  aimZ: number;
+  /** Where the Bruiser's charge began. */
+  fromX: number;
+  fromZ: number;
+  /** The mover's position at the bosses' last step, for the rings' crossing test. */
+  moverX: number;
+  moverZ: number;
+}
+
+/** What the spawn director remembers between ticks. */
+export interface DirectorState {
+  /** False until the director's first step of a run, which sets the rest. */
+  ready: boolean;
+  /** Gnats still to come in the cloud being spawned, and where. */
+  cloudLeft: number;
+  cloudX: number;
+  cloudZ: number;
+  /** Run ticks from which the next bollard, lobber, sludge and elite may come. */
+  nextBollard: number;
+  nextLobber: number;
+  nextSludge: number;
+  nextElite: number;
+  /** Spawns paid for and not yet made. */
+  budget: number;
+}
+
+function makeBoss(): BossState {
+  return { kind: -1, hp: 0, maxHp: 0, x: 0, z: 0, felled: 0, next: 0, lastTick: -2, aimX: 0, aimZ: 1, fromX: 0, fromZ: 0, moverX: 0, moverZ: 0 };
+}
+
+function makeDirector(): DirectorState {
+  return { ready: false, cloudLeft: 0, cloudX: 0, cloudZ: 0, nextBollard: 0, nextLobber: 0, nextSludge: 0, nextElite: 0, budget: 0 };
 }
 
 export const PHASE_PLAY = 0;
@@ -397,6 +435,9 @@ export interface World {
   seekerMeter: number;
   /** The boss on the field, for the HUD and the camera. `kind` is -1 when there is none. */
   boss: BossState;
+  director: DirectorState;
+  /** `player.pops` as the hazards last saw it: a rise means a loop popped since. */
+  popsSeen: number;
   /** Places a totem has asked for an elite pack, waiting for the director: [0, packs). */
   packs: number;
   packX: Float32Array;
@@ -526,7 +567,9 @@ export function makeWorld(seed: number): World {
     pool: new Uint8Array(WEAPON_COUNT).fill(1),
     mem: new Float64Array(WEAPON_COUNT * WEAPON_MEM),
     seekerMeter: 0,
-    boss: { kind: -1, hp: 0, maxHp: 0, x: 0, z: 0, felled: 0 },
+    boss: makeBoss(),
+    director: makeDirector(),
+    popsSeen: 0,
     packs: 0,
     packX: new Float32Array(4),
     packZ: new Float32Array(4),
@@ -565,10 +608,9 @@ export function resetWorld(w: World): void {
   w.offerQueued = 0;
   w.mem.fill(0);
   w.packs = 0;
-  w.boss.kind = -1;
-  w.boss.hp = 0;
-  w.boss.maxHp = 0;
-  w.boss.felled = 0;
+  Object.assign(w.boss, makeBoss());
+  Object.assign(w.director, makeDirector());
+  w.popsSeen = 0;
   w.run.ticks = 0;
   w.run.phase = PHASE_PLAY;
   w.wake.count = 0;
@@ -769,6 +811,9 @@ export function hashWorld(w: World): number {
     mix(h.age[i]);
     mix(h.stun[i]);
     mix(h.mark[i]);
+    mix(h.elite[i]);
+    mix(h.state[i]);
+    mix(h.timer[i]);
   }
   for (let i = 0; i < sp.count; i++) {
     mix(sp.x[i]);
@@ -801,18 +846,46 @@ export function hashWorld(w: World): number {
   for (let i = 0; i < p.loadout.passiveLevel.length; i++) mix(p.loadout.passiveLevel[i]);
   for (let i = 0; i < w.mem.length; i++) mix(w.mem[i]);
   for (let i = 0; i < w.zones.count; i++) {
+    mix(w.zones.kind[i]);
     mix(w.zones.x[i]);
     mix(w.zones.z[i]);
+    mix(w.zones.r[i]);
     mix(w.zones.life[i]);
+    mix(w.zones.power[i]);
   }
   for (let i = 0; i < w.things.count; i++) {
     mix(w.things.state[i]);
     mix(w.things.progress[i]);
   }
+  const o = w.offer;
+  mix(o.open ? 1 + o.source : 0);
+  for (let i = 0; i < o.count; i++) {
+    mix(o.type[i]);
+    mix(o.id[i]);
+    mix(o.by[i]);
+  }
   mix(w.offerQueued);
-  mix(w.boss.kind);
-  mix(w.boss.hp);
-  mix(w.boss.felled);
+  for (let i = 0; i < w.offerQueued; i++) mix(w.offerQueue[i]);
+  const b = w.boss;
+  mix(b.kind);
+  mix(b.hp);
+  mix(b.x);
+  mix(b.z);
+  mix(b.felled);
+  mix(b.next);
+  mix(b.aimX);
+  mix(b.aimZ);
+  const dr = w.director;
+  mix(dr.cloudLeft);
+  mix(dr.nextBollard);
+  mix(dr.nextLobber);
+  mix(dr.nextSludge);
+  mix(dr.nextElite);
+  mix(dr.budget);
+  mix(w.popsSeen);
+  mix(w.packs);
+  // Where the dice stand: one draw, from a copy.
+  mix(w.rng.peek());
   mix(p.tokens);
   mix(p.pops);
   mix(w.run.ticks);

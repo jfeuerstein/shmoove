@@ -32,6 +32,7 @@ import {
   MARK_PACK,
   removeEnemy,
   spawnEnemy,
+  type DirectorState,
   type World,
 } from './world';
 
@@ -127,33 +128,6 @@ export const DIRECTOR = {
   recycleBehindMin: 30,
   recycleBehindMinSpeed: 18,
 } as const;
-
-/** What the director remembers between ticks for one world. */
-interface DirectorState {
-  /** Gnats of the current cloud still to come up, and its centre. */
-  cloudLeft: number;
-  cloudX: number;
-  cloudZ: number;
-  /** Run tick from which the next bollard may come. */
-  nextBollard: number;
-  /** Run ticks from which the next lobber, sludge and elite may come. */
-  nextLobber: number;
-  nextSludge: number;
-  nextElite: number;
-  /** Spawns paid for and not yet made. */
-  budget: number;
-}
-
-const states = new WeakMap<World, DirectorState>();
-
-function stateOf(w: World): DirectorState {
-  let st = states.get(w);
-  if (st === undefined) {
-    st = { cloudLeft: 0, cloudX: 0, cloudZ: 0, nextBollard: 0, nextLobber: 0, nextSludge: 0, nextElite: 0, budget: 0 };
-    states.set(w, st);
-  }
-  return st;
-}
 
 /** Make enemy i an elite with `aura` (ELITE_*): more health; its aura is the horde's business. */
 export function makeElite(w: World, i: number, aura: number): void {
@@ -423,16 +397,14 @@ export function stepDirector(w: World, s: SimState, terrain: Terrain): void {
   if (w.packs > 0) servePacks(w, terrain);
   if (!w.spawning) return;
   const D = DIRECTOR;
-  const st = stateOf(w);
+  const st = w.director;
   const tick = w.run.ticks;
-  if (tick === 0) {
-    // A fresh run (or a reset one): nothing carried over.
-    st.cloudLeft = 0;
-    st.nextBollard = 0;
+  if (!st.ready) {
+    // The first step of a run, whatever the clock says.
+    st.ready = true;
     st.nextLobber = Math.round(D.lobberFrom / DT);
     st.nextSludge = Math.round(D.sludgeFrom / DT);
     st.nextElite = Math.round(D.eliteFrom / DT);
-    st.budget = 0;
   }
 
   const taken = recycle(w, s);
