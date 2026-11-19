@@ -4,6 +4,10 @@
 // JS in dist/. Compares with tests/perf/budgets.json, writes artifacts/perf.json, and exits non-zero
 // over budget or if the run did not really go anywhere.
 //
+// Two measurements, each in a fresh page: the empty bowl (`?hook&perf`; keys frameMs, stepMs,
+// drawCalls, triangles) and the crowd fixture of 400 enemies and 600 sparks
+// (`?hook&perf&horde=400&sparks=600`; the same keys prefixed with `horde`).
+//
 // "Frame work" is the JS time of a frame: the sim steps it carried, the views, and render submission.
 // Headless Chromium rasterises in software, so frames are slow to appear; that is not counted.
 import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
@@ -31,14 +35,24 @@ function jsGzipKb() {
   return bytes / 1000;
 }
 
-async function measure({ url, browser }, problems) {
+/** The measurements: a label, the query, and the prefix of its keys in budgets.json. */
+const RUNS = [
+  { label: 'bowl', query: '?hook&perf', prefix: '' },
+  { label: 'horde', query: '?hook&perf&horde=400&sparks=600', prefix: 'horde' },
+];
+
+function key(prefix, name) {
+  return prefix ? prefix + name[0].toUpperCase() + name.slice(1) : name;
+}
+
+async function measure({ url, browser }, query, problems) {
   const context = await newPhoneContext(browser);
   const page = await context.newPage();
   watchProblems(page, problems);
   try {
     const cdp = await context.newCDPSession(page);
     await cdp.send('Emulation.setCPUThrottlingRate', { rate: CPU_THROTTLE });
-    await page.goto(`${url}/?hook&perf`);
+    await page.goto(`${url}/${query}`);
     await waitForHook(page, 60_000);
     const start = await page.evaluate(() => {
       const h = window.__shmoove;
@@ -76,21 +90,27 @@ async function measure({ url, browser }, problems) {
 
 async function main() {
   const problems = [];
-  const run = await withAppAndBrowser((env) => measure(env, problems));
-  const { stats, start, end, frames, elapsedMs } = run;
-  const travel = Math.hypot(end.x - start.x, end.z - start.z);
-  const ticks = end.tick - start.tick;
-  const measured = {
-    frameMs: stats.frameMs,
-    stepMs: stats.stepMs,
-    drawCalls: stats.drawCalls,
-    triangles: stats.triangles,
-    jsGzipKb: jsGzipKb(),
-  };
-
-  if (ticks < MIN_TICKS) problems.push(`the sim advanced only ${ticks} ticks in ${(elapsedMs / 1000).toFixed(1)} s (cap hit, ${CAP_MS / 1000} s)`);
-  if (travel < MIN_TRAVEL_M) problems.push(`the mover travelled only ${travel.toFixed(1)} m`);
-  if (frames < MIN_FRAMES) problems.push(`only ${frames} frames were drawn in ${(elapsedMs / 1000).toFixed(1)} s (cap hit, ${CAP_MS / 1000} s)`);
+  const measured = { jsGzipKb: jsGzipKb() };
+  const runs = {};
+  await withAppAndBrowser(async (env) => {
+    for (const r of RUNS) {
+      const runProblems = [];
+      const { stats, start, end, frames, elapsedMs } = await measure(env, r.query, runProblems);
+      const travel = Math.hypot(end.x - start.x, end.z - start.z);
+      const ticks = end.tick - start.tick;
+      measured[key(r.prefix, 'frameMs')] = stats.frameMs;
+      measured[key(r.prefix, 'stepMs')] = stats.stepMs;
+      measured[key(r.prefix, 'drawCalls')] = stats.drawCalls;
+      measured[key(r.prefix, 'triangles')] = stats.triangles;
+      const secs = (elapsedMs / 1000).toFixed(1);
+      if (ticks < MIN_TICKS) runProblems.push(`the sim advanced only ${ticks} ticks in ${secs} s (cap hit, ${CAP_MS / 1000} s)`);
+      if (travel < MIN_TRAVEL_M) runProblems.push(`the mover travelled only ${travel.toFixed(1)} m`);
+      if (frames < MIN_FRAMES) runProblems.push(`only ${frames} frames were drawn in ${secs} s (cap hit, ${CAP_MS / 1000} s)`);
+      for (const p of runProblems) problems.push(`${r.label}: ${p}`);
+      runs[r.label] = { query: r.query, runMs: elapsedMs, frames, ticks, travelM: travel };
+      console.log(`[perf] ${r.label}: ${secs} s at ${CPU_THROTTLE}x CPU throttle: ${frames} frames, ${ticks} ticks, ${travel.toFixed(1)} m`);
+    }
+  });
 
   const rows = [];
   for (const [key, budget] of Object.entries(budgets)) {
@@ -104,19 +124,15 @@ async function main() {
     if (!ok) problems.push(`${key} ${value.toFixed(2)} is over its budget of ${budget}`);
   }
 
-  console.log(`[perf] ${(elapsedMs / 1000).toFixed(1)} s at ${CPU_THROTTLE}x CPU throttle: ${frames} frames, ${ticks} ticks, ${travel.toFixed(1)} m`);
   for (const r of rows) {
-    console.log(`  ${r.key.padEnd(10)} ${r.value.toFixed(r.value < 10 ? 3 : 1).padStart(10)}  budget ${String(r.budget).padStart(7)}  ${r.ok ? 'ok' : 'OVER'}`);
+    console.log(`  ${r.key.padEnd(15)} ${r.value.toFixed(r.value < 10 ? 3 : 1).padStart(10)}  budget ${String(r.budget).padStart(7)}  ${r.ok ? 'ok' : 'OVER'}`);
   }
 
   mkdirSync(join(ROOT, 'artifacts'), { recursive: true });
   const report = {
     when: new Date().toISOString(),
     cpuThrottle: CPU_THROTTLE,
-    runMs: elapsedMs,
-    frames,
-    ticks,
-    travelM: travel,
+    runs,
     measured,
     budgets,
     problems,
