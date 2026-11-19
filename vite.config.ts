@@ -2,12 +2,12 @@ import { defineConfig } from 'vite';
 import pkg from './package.json' with { type: 'json' };
 
 export default defineConfig(({ command }) => ({
-  // Relative base: dist/ works from any sub-path (GitHub Pages project sites) or inside a Capacitor shell.
+  // Relative base: dist/ works from any sub-path (GitHub Pages project sites).
   base: './',
   define: {
-    __SKITCH_VERSION__: JSON.stringify(pkg.version),
+    __SHMOOVE_VERSION__: JSON.stringify(pkg.version),
     // Only a production build registers the service worker (see src/app/pwa.ts).
-    __SKITCH_BUILD__: JSON.stringify(command === 'build'),
+    __SHMOOVE_BUILD__: JSON.stringify(command === 'build'),
   },
   build: {
     target: 'es2022',

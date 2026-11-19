@@ -1,199 +1,101 @@
 /**
- * Every feel constant in the game. Nothing feel-related is hard-coded elsewhere.
- * `FEEL` is mutable so the debug panel can tune it live; tests call `resetFeel()`.
- * Tuple: [default, min, max, group, what it controls].
+ * Every feel constant in the game. Nothing feel-related is hard-coded anywhere else.
+ *
+ * `FEEL` is mutable on purpose: the debug panel edits it live. Each entry carries the range the
+ * panel offers and a note saying what a thumb would notice.
  */
-type Def = readonly [value: number, min: number, max: number, group: string, note: string];
 
-export const FEEL_DEFS = {
-  // --- Ground
-  GRAVITY: [20, 5, 40, 'Ground', 'Gravity, m/s^2. Drives downhill acceleration and air arcs'],
-  ROLL_RESIST: [0.3, 0, 2, 'Ground', 'Constant rolling deceleration, m/s^2'],
-  AIR_DRAG: [0.006, 0, 0.02, 'Ground', 'Quadratic drag; sets terminal speed on a slope'],
-  MAX_SPEED: [34, 10, 60, 'Ground', 'Hard speed limit, m/s'],
-  TURN_RATE_MAX: [2.4, 0.5, 6, 'Ground', 'Carve turn rate at low speed, rad/s'],
-  LAT_ACCEL_MAX: [10, 4, 40, 'Ground', 'Grip: max lateral acceleration; widens turns at speed'],
-  STEER_SMOOTH: [16, 2, 60, 'Ground', 'How fast steer input reaches the board, 1/s'],
-  CARVE_SCRUB: [0.06, 0, 0.5, 'Ground', 'Speed lost per second at full carve (fraction)'],
-  FALLLINE_GAIN: [1.1, 0, 4, 'Ground', 'How strongly a slow board swings toward downhill'],
-  FALLLINE_SPEED: [5, 0.5, 15, 'Ground', 'Above this speed the fall-line drift is gone, m/s'],
-  PUMP_GAIN: [0.55, 0, 3, 'Ground', 'Tic-tac: speed gained per unit of steer change'],
-  PUMP_SPEED_CAP: [2.6, 0, 8, 'Ground', 'Tic-tac stops adding speed above this, m/s'],
-  STAIR_DRAG: [0.85, 0, 4, 'Ground', 'Linear drag on stairs, 1/s (terminal speed = slope accel / this)'],
-  ROUGH_DRAG: [0.3, 0, 2, 'Ground', 'Linear drag on dirt and grass, 1/s'],
-  STEP_UP: [0.4, 0.05, 1, 'Ground', 'Tallest ledge the board rolls up onto, m'],
-  GROUND_STICK: [0.05, 0, 0.5, 'Ground', 'Gap under the wheels before a crest launches you, m'],
-  PLAYER_RADIUS: [0.35, 0.1, 1, 'Ground', 'Collision radius, m'],
-  PLAYER_HEIGHT: [1.7, 0.5, 2.5, 'Ground', 'Collision height, m'],
-  WALL_SCRUB: [0.5, 0, 1, 'Ground', 'Speed lost sliding along a wall (fraction at head-on)'],
-  WALL_BOUNCE: [0.35, 0, 1, 'Ground', 'Speed kept bouncing off a wall head-on'],
-  WALL_HEAD_ON: [0.8, 0.3, 1, 'Ground', 'How square a wall hit must be (cos) to bounce back rather than slide'],
-  WALL_SLIDE_SPEED: [3, 0, 12, 'Ground', 'Below this speed a square hit turns you along the wall instead of bouncing, m/s'],
-  WALL_BAIL_SPEED: [12, 3, 40, 'Ground', 'Speed into a wall that bails you, m/s'],
-
-  // --- Air
-  AIR_STEER: [1.3, 0, 5, 'Air', 'Turn rate of horizontal velocity in the air, rad/s'],
-  HOP_V: [7.6, 2, 16, 'Air', 'Hop launch speed, m/s'],
-  HOP_SPEED_BONUS: [0.07, 0, 0.4, 'Air', 'Extra hop speed per m/s of roll speed'],
-  HOP_BONUS_MAX: [2, 0, 8, 'Air', 'Cap on the speed-based hop bonus, m/s'],
-  HOP_COOLDOWN: [0.25, 0, 1, 'Air', 'Minimum time between hops, s'],
-  HOP_BUFFER: [0.14, 0, 0.5, 'Air', 'A swipe this long before landing still hops, s'],
-  COYOTE_TIME: [0.12, 0, 0.5, 'Air', 'Can still hop this long after rolling off an edge, s'],
-  BAIL_IMPACT: [19, 5, 60, 'Air', 'Landing speed into the surface that bails you, m/s'],
-  AWNING_BOUNCE: [11, 2, 25, 'Air', 'Minimum bounce speed off an awning, m/s'],
-  AWNING_NUDGE: [2.5, 0, 8, 'Air', 'Least horizontal speed leaving an awning, so nobody bounces on the spot, m/s'],
-  AWNING_KEEP: [0.75, 0, 1.2, 'Air', 'Fraction of fall speed returned by an awning'],
-  AWNING_ROLL_THROW: [0.6, 0, 1.5, 'Air', 'Rolling onto an awning throws you up at AWNING_BOUNCE x this'],
-  AIR_BONK: [1.2, 1, 2, 'Air', 'Bonk off a wall in the air or mid-wallride: speed into it is reversed x (this - 1)'],
-
-  // --- Grind
-  RAIL_SNAP: [0.9, 0.2, 3, 'Grind', 'Horizontal magnet radius onto a rail, m'],
-  RAIL_SNAP_UP: [0.7, 0.1, 2, 'Grind', 'Can be this far above the rail and still snap, m'],
-  RAIL_SNAP_DOWN: [0.4, 0, 1.5, 'Grind', 'Can be this far below the rail and still snap, m'],
-  RAIL_ENTRY_VY: [2.5, -5, 10, 'Grind', 'Must be rising slower than this to snap, m/s'],
-  GRIND_ALIGN: [0.25, 0, 0.95, 'Grind', 'Minimum alignment (cos) between velocity and rail'],
-  GRIND_MIN_SPEED: [4, 0, 12, 'Grind', 'Speed floor on entering a rail, m/s'],
-  GRIND_ENTRY_BOOST: [1, 0, 6, 'Grind', 'Speed added on entering a rail, m/s'],
-  GRIND_FRICTION: [0.5, 0, 5, 'Grind', 'Rail deceleration, m/s^2'],
-  GRIND_EXIT_POP: [2.6, 0, 8, 'Grind', 'Upward speed leaving the end of a rail, m/s'],
-  GRIND_HOP_SIDE: [2.8, 0, 8, 'Grind', 'Sideways speed from steer when hopping off a rail, m/s'],
-  GRIND_STALL_SPEED: [0.6, 0, 3, 'Grind', 'Below this speed on a flat rail you step off, m/s'],
-  GRIND_COOLDOWN: [0.3, 0, 1, 'Grind', 'Time before the same rail can be re-snapped, s'],
-  GRIND_FLAT_SLOPE: [0.03, 0, 0.2, 'Grind', 'A rail flatter than this (rise per metre) is flat: stall on it and you step off'],
-
-  // --- Wall
-  WALL_ALIGN: [0.5, 0, 0.95, 'Wall', 'Minimum alignment (cos) with the wall to wallride'],
-  WALL_MIN_SPEED: [5, 0, 15, 'Wall', 'Minimum speed to wallride, m/s'],
-  WALL_TIME: [1.0, 0.2, 3, 'Wall', 'Longest wallride, s'],
-  WALL_GRAVITY: [5, 0, 20, 'Wall', 'Gravity while wallriding, m/s^2'],
-  WALL_KEEP: [0.97, 0.5, 1.1, 'Wall', 'Speed kept on wallride entry'],
-  WALL_ENTRY_UP: [3, 0, 10, 'Wall', 'Minimum upward speed on wallride entry, m/s'],
-  WALL_JUMP_OUT: [5.5, 0, 12, 'Wall', 'Wall-jump speed away from the wall, m/s'],
-  WALL_JUMP_UP: [7, 0, 14, 'Wall', 'Wall-jump upward speed, m/s'],
-  WALL_EXIT_PUSH: [1.2, 0, 6, 'Wall', 'Push away from the wall when a wallride runs out, m/s'],
-  WALL_COOLDOWN: [0.35, 0, 1.5, 'Wall', 'Time before another wallride, s'],
-
-  // --- Hitch
-  HITCH_REACH: [4.5, 1, 10, 'Hitch', 'Hand-to-strap distance that latches, m'],
-  HITCH_REACH_Y: [2.6, 0.5, 8, 'Hitch', 'Vertical reach to a strap, m'],
-  HITCH_AHEAD: [0.8, -2, 6, 'Hitch', 'How far ahead of a bumper you can be and still grab it, m'],
-  HAND_HEIGHT: [1.0, 0.3, 2, 'Hitch', 'Height of the grabbing hand above the board, m'],
-  RELATCH_COOLDOWN: [0.7, 0, 3, 'Hitch', 'Time before the same vehicle can be re-caught, s'],
-  FOOT_SPEED: [7, 0, 20, 'Hitch', 'Holding still with no ride near plants a foot below this speed, m/s'],
-  FOOT_STEER: [0.12, 0, 1, 'Hitch', 'Carve beyond this keeps the foot up: a still finger stops you, a dragging one rides on'],
-  FOOT_STAND: [0.6, 0, 3, 'Hitch', 'Slower than this you are standing: the foot stays down even as a ride comes near, m/s'],
-  FOOT_BRAKE: [4, 0, 12, 'Hitch', 'How hard the planted foot brakes, m/s^2 (also the steepest ground it holds on)'],
-  FOOT_NEAR: [25, 0, 60, 'Hitch', 'A ride you could grab within this distance, ahead of where you are rolling, keeps the foot up so you coast into it, m'],
-  HITCH_COOLDOWN: [0.12, 0, 1, 'Hitch', 'Time after a release before anything can be caught, s'],
-  HITCH_MIN_TIME: [0.18, 0, 1, 'Hitch', 'Shortest hitch before a release registers, s (never shorter than YANK_TIME)'],
-  YANK_TIME: [0.28, 0, 1, 'Hitch', 'Time the strap takes to pull you into line, s'],
-  REEL_RATE: [3.5, 0.5, 15, 'Hitch', 'How fast the strap shortens to its length, m/s'],
-  SWING_FREQ: [2.8, 0.5, 8, 'Hitch', 'Pendulum rate at reference ride speed, rad/s'],
-  SWING_REF_SPEED: [8, 2, 20, 'Hitch', 'Ride speed at which SWING_FREQ applies, m/s'],
-  SWING_DAMP: [0.9, 0, 3, 'Hitch', 'Swing damping, 1/s'],
-  SWING_SETTLE_TIME: [0.7, 0, 3, 'Hitch', 'Time after latching during which the swing is extra damped, s'],
-  SWING_SETTLE_DAMP: [5, 0, 20, 'Hitch', 'Extra swing damping right after latching, 1/s'],
-  SWING_MIN_AMP: [0.75, 0, 1.4, 'Hitch', 'Swing the game keeps alive for you, rad'],
-  SWING_PUMP: [4, 0, 12, 'Hitch', 'Strength of the self-sustaining swing, rad/s^2'],
-  SWING_STEER: [9, 0, 25, 'Hitch', 'Lean torque from steer while hitched, rad/s^2'],
-  SWING_OMEGA_MAX: [3.2, 1, 8, 'Hitch', 'Fastest swing rate; caps the whip, rad/s'],
-  SWING_LATCH_MAX: [2.5, 0.5, 8, 'Hitch', 'Most swing rate a catch can start with, rad/s'],
-  SWING_REST_RATE: [5, 0.5, 20, 'Hitch', 'How fast "straight behind" follows a ride that turns, rad/s'],
-  SWING_STOP: [60, 5, 200, 'Hitch', 'Stiffness of the soft stop at SWING_MAX, 1/s^2'],
-  SWING_MAX: [1.3, 0.3, 1.55, 'Hitch', 'Widest swing angle, rad'],
-  HITCH_Y_RATE: [11, 1, 40, 'Hitch', 'How fast height follows the strap, 1/s'],
-  STRAP_SLIP: [4.5, 0.5, 15, 'Hitch', 'A wall dragging you this far past the strap length makes it slip, m'],
-  HITCH_WALL_BOUNCE: [0.3, 0, 1, 'Hitch', 'Swing rate kept, reversed, when the towed skater hits a wall'],
-  SWING_REF_MIN: [0.15, 0, 1, 'Hitch', 'Least share of SWING_FREQ^2 a slow ride swings with'],
-  SWING_REF_MAX: [1.6, 1, 4, 'Hitch', 'Most share of SWING_FREQ^2 a fast ride swings with'],
-  TOW_SNAP_HEIGHT: [0.5, 0, 2, 'Hitch', 'Behind a ground ride, within this of the ground you are held on it, m'],
-
-  // --- Slingshot and chain
-  SLING_GAIN: [1.14, 0.8, 2, 'Sling', 'Exit speed = release speed x this'],
-  SLING_MIN: [6.5, 0, 15, 'Sling', 'Floor for the base exit speed, m/s'],
-  LINK_BONUS: [2.2, 0, 8, 'Sling', 'Exit speed added per chain link, m/s'],
-  SLING_CAP: [29, 10, 60, 'Sling', 'Cap on exit speed, m/s'],
-  SLING_POP: [4.6, 0, 12, 'Sling', 'Upward pop on release, m/s'],
-  SLING_VY_CARRY: [6, 0, 15, 'Sling', 'Most upward speed from the tow that carries into a release, m/s'],
-  SLING_HOP_POP: [5.5, 0, 12, 'Sling', 'Extra upward pop when releasing with a swipe up, m/s'],
-  CHAIN_GROUND_GRACE: [0.6, 0, 3, 'Sling', 'Ground time a chain survives after release, s (0 = strict)'],
-
-  // --- Bail
-  RIDE_BAIL_SPEED: [13, 3, 40, 'Bail', 'Closing speed with a vehicle body that bails you, m/s'],
-  RIDE_SIDE_BOUNCE: [0.5, 0, 1, 'Bail', 'Speed kept bouncing off the side of a vehicle'],
-  RIDE_SIDE_NUDGE: [1.5, 0, 6, 'Bail', 'Least speed a vehicle flank pushes you away with, m/s'],
-  RIDE_SIDE_DRAG: [0.35, 0, 1, 'Bail', 'Share of a vehicle\'s speed it brushes onto you on side contact'],
-  RIDE_ROOF_BOUNCE: [8.5, 0, 20, 'Bail', 'Bounce speed off a vehicle roof, m/s'],
-  AIR_BONK_BAIL: [1.3, 1, 2, 'Bail', 'Hitting a wall hard enough in the air to bail knocks you back: speed into it reversed x (this - 1)'],
-  BAIL_KNOCK_CARRY: [0.6, 0, 1.5, 'Bail', "Share of a vehicle's velocity it knocks you on with when it bails you"],
-  BAIL_KNOCK_SIDE: [4, 0, 12, 'Bail', 'Sideways speed a vehicle knocks you clear with when it bails you, m/s'],
-  BAIL_KNOCK_UP: [3, 0, 10, 'Bail', 'Upward speed a vehicle knocks you with when it bails you, m/s'],
-  SAFE_MARGIN: [6, 0, 20, 'Bail', 'A respawn point must be this far from water, m'],
-  BAIL_TIME: [1.3, 0.3, 4, 'Bail', 'Length of the tumble, s'],
-  BAIL_FRICTION: [10, 1, 40, 'Bail', 'Slide deceleration while bailed, m/s^2'],
-
-  // --- Touch
-  HOLD_ARM_TIME: [0.11, 0, 0.5, 'Touch', 'Still-finger time before a touch arms the hitch, s'],
-  DRAG_DEADZONE_PX: [14, 2, 60, 'Touch', 'Movement that turns a touch into a pure carve, px'],
-  STEER_RANGE_PX: [86, 20, 300, 'Touch', 'Drag distance for full steer, px'],
-  SWIPE_UP_PX: [64, 20, 300, 'Touch', 'Upward travel that counts as a swipe, px'],
-  SWIPE_UP_TIME: [0.2, 0.05, 0.6, 'Touch', 'Window in which that travel must happen, s'],
-
-  // --- Camera
-  CAM_DIST: [6.4, 2, 20, 'Camera', 'Distance behind the skater, m'],
-  CAM_HEIGHT: [4.2, 0.5, 12, 'Camera', 'Height above the skater, m'],
-  CAM_LOOK_AHEAD: [10, 0, 20, 'Camera', 'Look target distance ahead of the skater, m'],
-  CAM_LOOK_UP: [0.2, -2, 5, 'Camera', 'Look target height above the board, m'],
-  CAM_LOOK_FAR: [32, 5, 80, 'Camera', 'How far ahead the camera reads the ground to decide its tilt, m'],
-  CAM_LOOK_SLOPE: [0.6, 0, 1.5, 'Camera', 'How much of the rise or fall ahead goes into the look target'],
-  CAM_LOOK_TILT_MAX: [5, 0, 12, 'Camera', 'Most the look target moves up or down for the ground ahead, m'],
-  CAM_FRAME_MAX: [22, 5, 40, 'Camera', 'Most the skater may sit below the centre of the view, degrees: the camera pitches down to keep them in frame'],
-  CAM_FOV: [76, 40, 100, 'Camera', 'Vertical field of view at rest, degrees'],
-  CAM_FOV_SPEED: [12, 0, 40, 'Camera', 'Extra field of view at top speed, degrees'],
-  CAM_SPEED_DIST: [3, 0, 12, 'Camera', 'Extra distance at top speed, m'],
-  CAM_YAW_RATE: [3.2, 0.5, 15, 'Camera', 'How fast the camera swings behind your direction, 1/s'],
-  CAM_POS_RATE: [9, 1, 40, 'Camera', 'How tightly the camera follows position, 1/s'],
-  CAM_HITCH_DIST: [3.5, 0, 12, 'Camera', 'Extra distance while hitched, m'],
-  CAM_HITCH_HEIGHT: [1.6, 0, 8, 'Camera', 'Extra height while hitched, m'],
-  CAM_AIR_HEIGHT: [1.2, 0, 8, 'Camera', 'Extra height while airborne, m'],
-  CAM_UPHILL_HEIGHT: [2.5, 0, 10, 'Camera', 'Extra height when heading uphill, m'],
-  CAM_MIN_CLEAR: [1.2, 0.2, 5, 'Camera', 'Minimum camera height above ground and roofs, m'],
-  CAM_TOP_SPEED: [28, 10, 50, 'Camera', 'Speed at which the speed effects are at full, m/s'],
-  CAM_SHAKE: [0.12, 0, 1, 'Camera', 'Shake scale on stairs, landings and bails'],
-  CAM_AIR_FOLLOW: [0.45, 0.05, 1, 'Camera', 'Height follow in the air and on walls, as a share of CAM_POS_RATE (hops read as hops)'],
-  CAM_CLIMB_RATE: [2.5, 0.2, 15, 'Camera', 'How fast the measured climb settles, 1/s'],
-  CAM_UPHILL_GAIN: [5, 0, 20, 'Camera', 'Climb (rise per metre) x this = share of CAM_UPHILL_HEIGHT added'],
-  CAM_EXTRA_RATE: [2.2, 0.2, 15, 'Camera', 'How fast the extra distance and height (speed, hitch, air, uphill) ease in and out, 1/s'],
-  CAM_PULL_IN_RATE: [14, 1, 60, 'Camera', 'How fast the camera pulls in when something blocks the view, 1/s'],
-  CAM_PULL_OUT_RATE: [2.5, 0.2, 15, 'Camera', 'How fast it backs out again once the view is clear, 1/s'],
-  CAM_PULL_MIN: [0.22, 0.05, 1, 'Camera', 'Closest it pulls in, as a share of its distance'],
-  CAM_PULL_DROP: [0.55, 0, 1, 'Camera', 'Share of its height the camera drops by when fully pulled in'],
-  CAM_SHAKE_DECAY: [7, 0.5, 30, 'Camera', 'How fast an impact shake dies away, 1/s'],
-  CAM_STAIR_RATTLE: [0.35, 0, 1.5, 'Camera', 'Shake on stairs at full rattle (before CAM_SHAKE)'],
-  CAM_STAIR_SPEED: [6, 0.5, 20, 'Camera', 'Speed on stairs at which the rattle is full, m/s'],
-  CAM_TILT_RATE: [2, 0.2, 15, 'Camera', 'How fast the look target tilts for the ground ahead, 1/s'],
-  CAM_FOV_RATE: [3, 0.2, 15, 'Camera', 'How fast the field of view follows speed, 1/s'],
-} as const satisfies Record<string, Def>;
-
-export type FeelKey = keyof typeof FEEL_DEFS;
-export type Feel = Record<FeelKey, number>;
-
-function defaults(): Feel {
-  const out = {} as Feel;
-  for (const k of Object.keys(FEEL_DEFS) as FeelKey[]) out[k] = FEEL_DEFS[k][0];
-  return out;
-}
-
-export const FEEL: Feel = defaults();
-
-export function resetFeel(): void {
-  Object.assign(FEEL, defaults());
-}
-
-/** Sim clock. */
 export const TICK_HZ = 60;
 export const DT = 1 / TICK_HZ;
-/** One day is 12 minutes. */
-export const DAY_TICKS = 12 * 60 * TICK_HZ;
-/** A new game starts in the morning. */
-export const START_DAY_FRAC = 0.3;
+
+export interface FeelDef {
+  v: number;
+  min: number;
+  max: number;
+  step: number;
+  group: 'input' | 'run' | 'carve' | 'tuck' | 'hop' | 'air' | 'ground' | 'gears' | 'view' | 'camera';
+  note: string;
+}
+
+const DEFS = {
+  // input (read by src/input, never by the sim)
+  stickRadiusPx: { v: 56, min: 20, max: 140, step: 2, group: 'input', note: 'Thumb travel for full stick, CSS px' },
+  stickDeadPx: { v: 8, min: 0, max: 30, step: 1, group: 'input', note: 'Thumb travel that still reads as centred, CSS px' },
+  tapMaxMs: { v: 180, min: 60, max: 400, step: 10, group: 'input', note: 'Longest touch that is still a tap, ms' },
+  tapSlopPx: { v: 12, min: 2, max: 40, step: 1, group: 'input', note: 'Furthest a tap may wander, CSS px' },
+  swipeSpeed: { v: 1.2, min: 0.3, max: 4, step: 0.1, group: 'input', note: 'Upward thumb speed that is a flick, CSS px per ms (swipe scheme)' },
+  swipeMinPx: { v: 28, min: 8, max: 80, step: 2, group: 'input', note: 'Shortest flick, CSS px (swipe scheme)' },
+  // run
+  runSpeed: { v: 10, min: 4, max: 16, step: 0.5, group: 'run', note: 'Top speed from the stick alone on the flat, m/s' },
+  runAccel: { v: 22, min: 5, max: 60, step: 1, group: 'run', note: 'How hard the stick pushes below run speed, m/s2' },
+  idleBrake: { v: 5, min: 0, max: 20, step: 0.5, group: 'run', note: 'Thumb down, stick centred: gentle brake, m/s2' },
+  // carve
+  turnMax: { v: 5.5, min: 2, max: 12, step: 0.1, group: 'carve', note: 'Fastest turn at low speed, rad/s' },
+  grip: { v: 34, min: 10, max: 80, step: 1, group: 'carve', note: 'Sideways acceleration available for turning, m/s2. Sets the turning circle at speed' },
+  carveScrub: { v: 0.1, min: 0, max: 0.4, step: 0.01, group: 'carve', note: 'Share of speed lost per radian turned above run speed' },
+  carveSlopeGain: { v: 0.2, min: 0, max: 1, step: 0.05, group: 'carve', note: 'Share of a downhill\'s pull you keep above run speed with the thumb down. 1 = carving is as fast as tucking' },
+  carveDrag: { v: 0.4, min: 0, max: 2, step: 0.05, group: 'carve', note: 'How fast speed above run speed bleeds off while carving, 1/s' },
+  slideAngle: { v: 1.9, min: 1.6, max: 3, step: 0.05, group: 'carve', note: 'Stick angle from straight up beyond which the turn is a powerslide, rad' },
+  slideTurn: { v: 2.2, min: 1, max: 4, step: 0.1, group: 'carve', note: 'How much tighter a powerslide turns' },
+  slideBrake: { v: 14, min: 0, max: 40, step: 1, group: 'carve', note: 'Braking in a powerslide, m/s2' },
+  // tuck
+  tuckDrag: { v: 0.03, min: 0, max: 0.3, step: 0.005, group: 'tuck', note: 'Drag while tucked, 1/s. Lower holds speed longer on the flat' },
+  rollFriction: { v: 0.4, min: 0, max: 4, step: 0.1, group: 'tuck', note: 'Constant slowing while tucked, m/s2. Also the gentlest slope that still rolls' },
+  // hop
+  hopSpeed: { v: 7, min: 3, max: 14, step: 0.25, group: 'hop', note: 'Upward speed of a hop, m/s' },
+  hopBufferTicks: { v: 9, min: 0, max: 20, step: 1, group: 'hop', note: 'How early a tap before landing still counts, ticks' },
+  cleanWindowTicks: { v: 7, min: 1, max: 20, step: 1, group: 'hop', note: 'How long after landing a hop is clean, ticks' },
+  cleanHopBonus: { v: 1.4, min: 0, max: 4, step: 0.1, group: 'hop', note: 'Speed a clean hop adds at low speed, m/s' },
+  cleanHopFade: { v: 28, min: 12, max: 40, step: 1, group: 'hop', note: 'Speed at which a clean hop adds nothing, m/s' },
+  landScrub: { v: 0.08, min: 0, max: 0.4, step: 0.01, group: 'hop', note: 'Share of speed lost to a hard landing that is not hopped out of' },
+  landScrubImpact: { v: 8, min: 2, max: 20, step: 0.5, group: 'hop', note: 'Speed into the ground at which the landing scrub is full, m/s. Softer landings lose less' },
+  minAirTicks: { v: 4, min: 1, max: 12, step: 1, group: 'hop', note: 'Shortest time off the ground that counts as a landing, ticks' },
+  // air
+  gravity: { v: 25, min: 10, max: 50, step: 1, group: 'air', note: 'Gravity, m/s2. Also how hard slopes pull' },
+  airTurn: { v: 1.2, min: 0, max: 4, step: 0.1, group: 'air', note: 'Air-steer, rad/s' },
+  airDrag: { v: 0.01, min: 0, max: 0.2, step: 0.005, group: 'air', note: 'Drag in the air, 1/s' },
+  // ground
+  stickAccel: { v: 18, min: 0, max: 60, step: 1, group: 'ground', note: 'How hard the mover clings over crests before it flies, m/s2' },
+  boostPadSpeed: { v: 7, min: 0, max: 20, step: 0.5, group: 'ground', note: 'Speed a boost pad adds, m/s' },
+  boostCap: { v: 32, min: 20, max: 50, step: 1, group: 'ground', note: 'Speed above which a boost pad adds nothing, m/s' },
+  maxSpeed: { v: 42, min: 25, max: 80, step: 1, group: 'ground', note: 'Hard speed limit, m/s' },
+  // gears
+  gear2: { v: 7, min: 2, max: 15, step: 0.5, group: 'gears', note: 'Speed where gear 2 starts, m/s' },
+  gear3: { v: 12, min: 8, max: 20, step: 0.5, group: 'gears', note: 'Speed where gear 3 starts, m/s' },
+  gear4: { v: 18, min: 12, max: 30, step: 0.5, group: 'gears', note: 'Speed where gear 4 starts, m/s' },
+  gear5: { v: 25, min: 18, max: 40, step: 0.5, group: 'gears', note: 'Speed where gear 5 starts, m/s' },
+  gearHyst: { v: 1, min: 0, max: 4, step: 0.1, group: 'gears', note: 'How far below a gear you can dip before it is at risk, m/s' },
+  gearDropTicks: { v: 12, min: 0, max: 60, step: 1, group: 'gears', note: 'How long you can stay below a gear before losing it, ticks' },
+  // view (the frame the stick is read in; the camera sits behind it)
+  viewFollow: { v: 3.2, min: 0.5, max: 10, step: 0.1, group: 'view', note: 'How fast the view swings behind your direction of travel, 1/s' },
+  viewMinSpeed: { v: 2, min: 0, max: 8, step: 0.25, group: 'view', note: 'Below this speed the view stops swinging, m/s' },
+  // camera
+  camDist: { v: 7, min: 3, max: 20, step: 0.25, group: 'camera', note: 'Distance behind the mover in gear 1, m' },
+  camHeight: { v: 5.5, min: 1, max: 15, step: 0.2, group: 'camera', note: 'Height above the mover in gear 1, m' },
+  camDistPerGear: { v: 1.0, min: 0, max: 4, step: 0.1, group: 'camera', note: 'Pull-back per gear, m' },
+  camHeightPerGear: { v: 0.75, min: 0, max: 3, step: 0.1, group: 'camera', note: 'Rise per gear, m' },
+  camLookAhead: { v: 4, min: 0, max: 30, step: 0.5, group: 'camera', note: 'How far ahead of the mover the camera aims, m' },
+  camLookAheadPerGear: { v: 1.2, min: 0, max: 6, step: 0.1, group: 'camera', note: 'Extra aim-ahead per gear, m. More shows more of the line and puts the mover lower on screen' },
+  camFov: { v: 74, min: 40, max: 110, step: 1, group: 'camera', note: 'Vertical field of view in gear 1, degrees' },
+  camFovPerGear: { v: 3, min: 0, max: 10, step: 0.5, group: 'camera', note: 'Field of view added per gear, degrees' },
+  camPosRate: { v: 9, min: 1, max: 30, step: 0.5, group: 'camera', note: 'How tightly the camera tracks the mover, 1/s' },
+  camZoomRate: { v: 2.2, min: 0.3, max: 10, step: 0.1, group: 'camera', note: 'How fast pull-back and field of view follow the gear, 1/s' },
+  camLandKick: { v: 0.05, min: 0, max: 0.3, step: 0.01, group: 'camera', note: 'Camera dip per m/s of landing impact, m' },
+  camGroundClear: { v: 1.2, min: 0.2, max: 5, step: 0.1, group: 'camera', note: 'Closest the camera gets to the ground, m' },
+} as const satisfies Record<string, FeelDef>;
+
+export type FeelKey = keyof typeof DEFS;
+
+export const FEEL_DEFS: Readonly<Record<FeelKey, FeelDef>> = DEFS;
+export const FEEL_KEYS = Object.keys(DEFS) as FeelKey[];
+
+export const FEEL = {} as Record<FeelKey, number>;
+for (const k of FEEL_KEYS) FEEL[k] = DEFS[k].v;
+
+/** Put every constant back to its shipped value. */
+export function resetFeel(): void {
+  for (const k of FEEL_KEYS) FEEL[k] = DEFS[k].v;
+}
+
+export const GEAR_COUNT = 5;
+export const GEAR_NAMES = ['Shuffle', 'Roll', 'Cruise', 'Rip', 'SHMOOVE'] as const;

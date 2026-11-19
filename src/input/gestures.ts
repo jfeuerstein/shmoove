@@ -1,186 +1,230 @@
-/**
- * One thumb -> InputFrame.
- *
- * - Drag left/right: steer, measured from where the finger went down (the anchor follows a finger
- *   that drags past full lock, so reversing responds at once).
- * - A touch that stays within the dead zone for HOLD_ARM_TIME arms `hold`. A touch that moves
- *   sideways first is a pure carve and never arms. Dragging after arming still steers.
- * - A fast upward flick is a hop (one tick). It does not end or disarm the touch.
- *
- * The recogniser is clocked by sim ticks (call `sample()` once per tick), so scripted touches
- * replay identically in the e2e harness. Pointer events only feed positions in.
- */
-import { DT, FEEL } from '../sim/constants';
+import { FEEL } from '../sim/constants';
 import type { InputFrame } from '../sim/types';
+import type { Scheme } from './source';
 
-interface Sample {
-  t: number;
+/** For drawing the floating stick: where the thumb landed (or was dragged to) and where it is now. */
+export interface StickView {
+  active: boolean;
+  ox: number;
+  oy: number;
+  x: number;
   y: number;
 }
 
+/** How far back a flick is measured, ms. */
+const FLICK_WINDOW_MS = 120;
+/** Ring capacity. Plenty for 120 ms even from a 1 kHz pointer; the oldest sample is dropped when full. */
+const RING = 128;
+const NO_POINTER = -1;
+
+/**
+ * Pure gesture logic: pointer events with explicit times in, one `InputFrame` per tick out.
+ * No DOM, no clocks. Tunables are read from `FEEL` at use so the debug panel edits them live.
+ */
 export class Gestures {
-  private now = 0;
-  private touching = false;
-  private downT = 0;
+  readonly stick: StickView = { active: false, ox: 0, oy: 0, x: 0, y: 0 };
+
+  private scheme: Scheme;
+  private thumb = NO_POINTER;
   private downX = 0;
   private downY = 0;
-  private anchorX = 0;
-  private x = 0;
-  private armed = false;
-  private carveOnly = false;
+  private downT = 0;
+  private lastT = 0;
+  /** tuck and swipe: the touch has stopped being a possible tap and is a carve. */
+  private decided = false;
   private hopQueued = false;
-  private trail: Sample[] = [];
+  /** swipe: ready to detect a flick. Cleared by a flick, restored when the upward speed fades. */
+  private armed = true;
 
-  // Keyboard (desktop and debugging).
-  private keyLeft = false;
-  private keyRight = false;
-  private keyHold = false;
-  private keyHop = false;
+  private readonly ringX = new Float64Array(RING);
+  private readonly ringY = new Float64Array(RING);
+  private readonly ringT = new Float64Array(RING);
+  private ringHead = 0;
+  private ringLen = 0;
 
-  private readonly frame: InputFrame = { steer: 0, hold: false, hop: false };
-
-  /** True while a finger is on the glass (for UI hints). */
-  get isTouching(): boolean {
-    return this.touching;
+  constructor(scheme: Scheme) {
+    this.scheme = scheme;
   }
 
-  /** True once the current touch can hitch. */
-  get isArmed(): boolean {
-    return (this.touching && this.armed) || this.keyHold;
+  setScheme(scheme: Scheme): void {
+    if (scheme === this.scheme) return;
+    this.scheme = scheme;
+    // Carve is derived from the live thumb state on every sample, so nothing latched can stick.
+    // Only the swipe tracker restarts from where the thumb is now.
+    this.armed = true;
+    this.ringLen = 0;
+    if (this.thumb !== NO_POINTER) this.pushSample(this.stick.x, this.stick.y, this.lastT);
   }
 
-  down(x: number, y: number): void {
-    this.touching = true;
-    this.downT = this.now;
+  down(id: number, x: number, y: number, t: number): void {
+    this.lastT = t;
+    if (this.thumb !== NO_POINTER) {
+      if (id !== this.thumb) this.hopQueued = true;
+      return;
+    }
+    this.thumb = id;
     this.downX = x;
     this.downY = y;
-    this.anchorX = x;
-    this.x = x;
-    this.armed = false;
-    this.carveOnly = false;
-    this.trail.length = 0;
-    this.trail.push({ t: this.now, y });
+    this.downT = t;
+    this.decided = false;
+    this.armed = true;
+    this.ringLen = 0;
+    this.pushSample(x, y, t);
+    const s = this.stick;
+    s.active = true;
+    s.ox = x;
+    s.oy = y;
+    s.x = x;
+    s.y = y;
   }
 
-  move(x: number, y: number): void {
-    if (!this.touching) return;
-    this.x = x;
-    // Sideways travel before arming makes this touch a pure carve. A mostly-vertical flick does
-    // not: swipe-up-and-hold has to stay able to arm.
-    const dx = Math.abs(x - this.downX);
-    if (!this.armed && dx > FEEL.DRAG_DEADZONE_PX && dx > Math.abs(y - this.downY)) this.carveOnly = true;
-    const range = FEEL.STEER_RANGE_PX;
-    if (x - this.anchorX > range) this.anchorX = x - range;
-    else if (x - this.anchorX < -range) this.anchorX = x + range;
+  move(id: number, x: number, y: number, t: number): void {
+    if (id !== this.thumb) return;
+    this.lastT = t;
+    const s = this.stick;
+    const dx = x - s.x;
+    const dy = y - s.y;
+    s.x = x;
+    s.y = y;
+    this.updateDecided(t);
 
-    // Swipe up: enough upward travel inside the time window.
-    this.trail.push({ t: this.now, y });
-    // Keep one sample from before the window: where the finger was when the window opened.
-    while (this.trail.length > 2 && this.now - this.trail[1].t > FEEL.SWIPE_UP_TIME) this.trail.shift();
-    let top = this.trail[0].y;
-    for (const s of this.trail) if (s.y > top) top = s.y;
-    if (top - y >= FEEL.SWIPE_UP_PX) {
-      this.hopQueued = true;
-      // Start measuring again from here, so a second flick on the same touch counts.
-      this.trail.length = 0;
-      this.trail.push({ t: this.now, y });
+    let shifted = false;
+    if (this.scheme === 'swipe') {
+      this.pushSample(x, y, t);
+      shifted = this.trackFlick(x, y, t, dx, dy);
     }
+    if (!shifted) this.dragOrigin();
   }
 
-  up(): void {
-    this.touching = false;
-    this.armed = false;
-    this.carveOnly = false;
-    this.trail.length = 0;
+  up(id: number, t: number): void {
+    if (id !== this.thumb) return;
+    this.lastT = t;
+    this.updateDecided(t);
+    if (this.scheme === 'lift' || (this.scheme === 'tuck' && !this.decided)) this.hopQueued = true;
+    this.release();
   }
 
-  key(code: string, pressed: boolean): boolean {
-    switch (code) {
-      case 'ArrowLeft':
-      case 'KeyA':
-        this.keyLeft = pressed;
-        return true;
-      case 'ArrowRight':
-      case 'KeyD':
-        this.keyRight = pressed;
-        return true;
-      case 'Space':
-        this.keyHold = pressed;
-        return true;
-      case 'ArrowUp':
-      case 'KeyW':
-        if (pressed) this.keyHop = true;
-        return true;
-      default:
-        return false;
+  cancelAll(): void {
+    this.release();
+    this.hopQueued = false;
+  }
+
+  sample(out: InputFrame, t: number): void {
+    this.lastT = t;
+    out.hop = this.hopQueued;
+    this.hopQueued = false;
+    if (this.thumb === NO_POINTER) {
+      out.steerX = 0;
+      out.steerY = 0;
+      out.carve = false;
+      return;
     }
-  }
-
-  /** Advance one sim tick and return the input for it. The returned object is reused. */
-  sample(): InputFrame {
-    this.now += DT;
-    if (this.touching && !this.armed && !this.carveOnly && this.now - this.downT >= FEEL.HOLD_ARM_TIME) {
+    this.updateDecided(t);
+    if (this.scheme === 'swipe' && !this.armed && this.upwardSpeed(t) < FEEL.swipeSpeed * 0.5) {
       this.armed = true;
     }
-    let steer = 0;
-    if (this.touching) steer = (this.x - this.anchorX) / FEEL.STEER_RANGE_PX;
-    if (this.keyLeft) steer -= 1;
-    if (this.keyRight) steer += 1;
-    this.frame.steer = steer < -1 ? -1 : steer > 1 ? 1 : steer;
-    this.frame.hold = (this.touching && this.armed) || this.keyHold;
-    this.frame.hop = this.hopQueued || this.keyHop;
-    this.hopQueued = false;
-    this.keyHop = false;
-    return this.frame;
-  }
-}
 
-/** Wire pointer and key events on `el` into a recogniser. Returns a function that unhooks them. */
-export function attachGestures(el: HTMLElement, g: Gestures): () => void {
-  let active = -1;
-  const onDown = (e: PointerEvent): void => {
-    if (active !== -1) return;
-    active = e.pointerId;
-    g.down(e.clientX, e.clientY);
-    e.preventDefault();
-  };
-  const onMove = (e: PointerEvent): void => {
-    if (e.pointerId !== active) return;
-    g.move(e.clientX, e.clientY);
-    e.preventDefault();
-  };
-  const onUp = (e: PointerEvent): void => {
-    if (e.pointerId !== active) return;
-    active = -1;
-    g.up();
-    e.preventDefault();
-  };
-  const onKeyDown = (e: KeyboardEvent): void => {
-    if (!e.repeat && g.key(e.code, true)) e.preventDefault();
-  };
-  const onKeyUp = (e: KeyboardEvent): void => {
-    if (g.key(e.code, false)) e.preventDefault();
-  };
-  const onBlur = (): void => {
-    active = -1;
-    g.up();
-    for (const c of ['ArrowLeft', 'ArrowRight', 'Space']) g.key(c, false);
-  };
-  const opts: AddEventListenerOptions = { passive: false };
-  el.addEventListener('pointerdown', onDown, opts);
-  window.addEventListener('pointermove', onMove, opts);
-  window.addEventListener('pointerup', onUp, opts);
-  window.addEventListener('pointercancel', onUp, opts);
-  window.addEventListener('keydown', onKeyDown);
-  window.addEventListener('keyup', onKeyUp);
-  window.addEventListener('blur', onBlur);
-  return () => {
-    el.removeEventListener('pointerdown', onDown);
-    window.removeEventListener('pointermove', onMove);
-    window.removeEventListener('pointerup', onUp);
-    window.removeEventListener('pointercancel', onUp);
-    window.removeEventListener('keydown', onKeyDown);
-    window.removeEventListener('keyup', onKeyUp);
-    window.removeEventListener('blur', onBlur);
-  };
+    const s = this.stick;
+    const rx = s.x - s.ox;
+    const ry = s.oy - s.y;
+    const len = Math.sqrt(rx * rx + ry * ry);
+    const outside = len > FEEL.stickDeadPx;
+    if (outside) {
+      const k = (len > FEEL.stickRadiusPx ? FEEL.stickRadiusPx : len) / FEEL.stickRadiusPx / len;
+      out.steerX = rx * k;
+      out.steerY = ry * k;
+    } else {
+      out.steerX = 0;
+      out.steerY = 0;
+    }
+    out.carve = this.scheme === 'lift' ? outside : this.decided;
+  }
+
+  private release(): void {
+    this.thumb = NO_POINTER;
+    this.decided = false;
+    this.armed = true;
+    this.ringLen = 0;
+    this.stick.active = false;
+  }
+
+  /** Beyond the stick radius the origin trails the thumb, so reversing is immediate. */
+  private dragOrigin(): void {
+    const s = this.stick;
+    const rx = s.x - s.ox;
+    const ry = s.y - s.oy;
+    const len = Math.sqrt(rx * rx + ry * ry);
+    const r = FEEL.stickRadiusPx;
+    if (len > r) {
+      const k = (len - r) / len;
+      s.ox += rx * k;
+      s.oy += ry * k;
+    }
+  }
+
+  private updateDecided(t: number): void {
+    if (this.decided || this.thumb === NO_POINTER) return;
+    const dx = this.stick.x - this.downX;
+    const dy = this.stick.y - this.downY;
+    const slop = FEEL.tapSlopPx;
+    if (dx * dx + dy * dy > slop * slop || t - this.downT > FEEL.tapMaxMs) this.decided = true;
+  }
+
+  private pushSample(x: number, y: number, t: number): void {
+    if (this.ringLen === RING) {
+      this.ringHead = (this.ringHead + 1) % RING;
+      this.ringLen--;
+    }
+    const i = (this.ringHead + this.ringLen) % RING;
+    this.ringX[i] = x;
+    this.ringY[i] = y;
+    this.ringT[i] = t;
+    this.ringLen++;
+  }
+
+  /** Greatest upward speed, px/ms, from any sample in the window to the thumb's position now. */
+  private upwardSpeed(t: number): number {
+    let best = 0;
+    const y = this.stick.y;
+    for (let n = 0; n < this.ringLen; n++) {
+      const i = (this.ringHead + n) % RING;
+      const dt = t - this.ringT[i];
+      if (dt > FLICK_WINDOW_MS || dt <= 0) continue;
+      const v = (this.ringY[i] - y) / dt;
+      if (v > best) best = v;
+    }
+    return best;
+  }
+
+  /**
+   * Swipe: detect a flick, and keep the stick origin moving with it so the deflection after the flick
+   * is what it was before. Returns true when it moved the origin (so it is not also dragged).
+   */
+  private trackFlick(x: number, y: number, t: number, dx: number, dy: number): boolean {
+    const s = this.stick;
+    if (!this.armed) {
+      if (this.upwardSpeed(t) < FEEL.swipeSpeed * 0.5) {
+        this.armed = true;
+      } else {
+        s.ox += dx;
+        s.oy += dy;
+        return true;
+      }
+    }
+    for (let n = 0; n < this.ringLen; n++) {
+      const i = (this.ringHead + n) % RING;
+      const dt = t - this.ringT[i];
+      if (dt > FLICK_WINDOW_MS || dt <= 0) continue;
+      const up = this.ringY[i] - y;
+      if (up >= FEEL.swipeMinPx && up / dt > FEEL.swipeSpeed) {
+        this.hopQueued = true;
+        this.armed = false;
+        // Put the origin back where it would be had the thumb never flicked.
+        s.ox += x - this.ringX[i];
+        s.oy += y - this.ringY[i];
+        return true;
+      }
+    }
+    return false;
+  }
 }

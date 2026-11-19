@@ -1,9 +1,8 @@
 // App icons, drawn procedurally and encoded as PNG by hand (zlib is in Node), so the repo holds no
-// binary assets. Run before `vite build`: writes public/icon-192.png, icon-512.png,
+// binary assets. Run before `vite build` and `vite`: writes public/icon-192.png, icon-512.png,
 // icon-maskable-512.png and apple-touch-icon.png. Deterministic: same bytes on every run.
 //
-// The mark: a mango skateboard seen from above on ink, a pink strap looping off its nose (the
-// hitch), a halftone dot shadow, and the cobalt plate printed a pixel off-register.
+// The mark: two nested yellow chevrons pointing up and a speed streak, on the dark palette ground.
 //   node scripts/make-icons.mjs [outDir]
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -13,11 +12,8 @@ import { deflateSync } from 'node:zlib';
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 export const PALETTE = {
-  ink: [0x1b, 0x1a, 0x2e],
-  mango: [0xff, 0xae, 0x1a],
-  pink: [0xff, 0x2e, 0x88],
-  cobalt: [0x1f, 0x3f, 0xbf],
-  paper: [0xf3, 0xeb, 0xdd],
+  dark: [0x1b, 0x16, 0x30],
+  yellow: [0xff, 0xd2, 0x3f],
 };
 
 /** The icons the manifest and index.html declare. */
@@ -28,155 +24,73 @@ export const ICONS = [
   { file: 'apple-touch-icon.png', size: 180, kind: 'apple' },
 ];
 
-/** Fraction of the icon (from the centre, as a radius over half the size) the maskable mark keeps inside. */
-export const MASKABLE_SAFE_RADIUS = 0.8;
+/** The maskable mark stays inside this share of half the icon (the spec's safe zone is a circle of 0.8). */
+export const MASKABLE_SAFE_RADIUS = 0.72;
+/** The plain mark fills this share of half the icon. */
+const ANY_FILL = 0.84;
 
 // ---------------------------------------------------------------------------------------------
-// The mark, in unit coordinates: x right, y down. MARK_RADIUS (measured below) holds all of it.
+// The mark, in unit coordinates: x right, y down. A chevron is a thick V on its side, apex up.
 
-const DECK = { cx: -0.1, cy: 0.16, angle: -0.6, half: 0.4, r: 0.18 };
-const DECK_DIR = [Math.cos(DECK.angle), Math.sin(DECK.angle)];
-const NOSE = [DECK.cx + DECK_DIR[0] * DECK.half, DECK.cy + DECK_DIR[1] * DECK.half];
-/** The strap leaves the nose, swings out and loops back over itself, like a tow rope with a handle. */
-const STRAP_POINTS = [
-  NOSE,
-  [0.36, -0.1],
-  [0.52, -0.26],
-  [0.56, -0.48],
-  [0.42, -0.62],
-  [0.24, -0.56],
-  [0.22, -0.38],
-  [0.38, -0.3],
-  [0.6, -0.36],
-  [0.74, -0.5],
-];
-const STRAP_WIDTH = 0.1;
-const SHADOW = { dx: 0.08, dy: 0.11, pitch: 0.06, dot: 0.0125 };
+const HALF_WIDTH = 0.5;
+const RISE = 0.3;
+const THICK = 0.17;
 
-function capsuleDist(x, y, cx, cy, dir, half, r) {
-  const px = x - cx;
-  const py = y - cy;
-  let t = px * dir[0] + py * dir[1];
-  t = Math.max(-half, Math.min(half, t));
-  const qx = px - dir[0] * t;
-  const qy = py - dir[1] * t;
-  return Math.sqrt(qx * qx + qy * qy) - r;
+/** A chevron's outline, apex at (0, apexY). */
+function chevron(apexY) {
+  return [
+    [0, apexY],
+    [HALF_WIDTH, apexY + RISE],
+    [HALF_WIDTH, apexY + RISE + THICK],
+    [0, apexY + THICK],
+    [-HALF_WIDTH, apexY + RISE + THICK],
+    [-HALF_WIDTH, apexY + RISE],
+  ];
 }
 
-function segmentDist(x, y, ax, ay, bx, by) {
-  const vx = bx - ax;
-  const vy = by - ay;
-  let t = ((x - ax) * vx + (y - ay) * vy) / (vx * vx + vy * vy);
-  t = Math.max(0, Math.min(1, t));
-  const dx = x - ax - vx * t;
-  const dy = y - ay - vy * t;
-  return Math.sqrt(dx * dx + dy * dy);
-}
+/** A tall bar under the chevrons, as thick as they are: the streak they leave behind. */
+const STREAK = { x0: -THICK / 2, x1: THICK / 2, y0: 0.42, y1: 0.78 };
 
-/** A Catmull-Rom curve through the points, as a dense polyline. */
-function smooth(pts, per) {
-  const out = [];
-  for (let i = 0; i < pts.length - 1; i++) {
-    const p0 = pts[Math.max(0, i - 1)];
-    const p1 = pts[i];
-    const p2 = pts[i + 1];
-    const p3 = pts[Math.min(pts.length - 1, i + 2)];
-    for (let k = 0; k < per; k++) {
-      const t = k / per;
-      const t2 = t * t;
-      const t3 = t2 * t;
-      const f = (a, b, c, d) => 0.5 * (2 * b + (-a + c) * t + (2 * a - 5 * b + 4 * c - d) * t2 + (-a + 3 * b - 3 * c + d) * t3);
-      out.push([f(p0[0], p1[0], p2[0], p3[0]), f(p0[1], p1[1], p2[1], p3[1])]);
-    }
+const SHAPES = [chevron(-0.46), chevron(-0.16)];
+
+function inPolygon(x, y, pts) {
+  let inside = false;
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    const [xi, yi] = pts[i];
+    const [xj, yj] = pts[j];
+    if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
   }
-  out.push(pts[pts.length - 1]);
-  return out;
+  return inside;
 }
 
-const STRAP = smooth(STRAP_POINTS, 12);
+function inMark(x, y) {
+  for (const s of SHAPES) if (inPolygon(x, y, s)) return true;
+  return x >= STREAK.x0 && x <= STREAK.x1 && y >= STREAK.y0 && y <= STREAK.y1;
+}
 
-const deck = (x, y) => capsuleDist(x, y, DECK.cx, DECK.cy, DECK_DIR, DECK.half, DECK.r);
-
-function strapDist(x, y) {
-  let d = Infinity;
-  for (let i = 0; i < STRAP.length - 1; i++) {
-    const a = STRAP[i];
-    const b = STRAP[i + 1];
-    // Cheap reject: both ends far away.
-    if (Math.abs(x - a[0]) > 0.2 && Math.abs(x - b[0]) > 0.2) continue;
-    d = Math.min(d, segmentDist(x, y, a[0], a[1], b[0], b[1]));
+/** The mark's centre and the radius around it that holds all of it, measured from the shapes. */
+const BOUNDS = (() => {
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minY = Infinity;
+  let maxY = -Infinity;
+  const take = (x, y) => {
+    minX = Math.min(minX, x);
+    maxX = Math.max(maxX, x);
+    minY = Math.min(minY, y);
+    maxY = Math.max(maxY, y);
+  };
+  for (const s of SHAPES) for (const [x, y] of s) take(x, y);
+  take(STREAK.x0, STREAK.y0);
+  take(STREAK.x1, STREAK.y1);
+  const cx = (minX + maxX) / 2;
+  const cy = (minY + maxY) / 2;
+  let radius = 0;
+  for (const [x, y] of [[minX, minY], [minX, maxY], [maxX, minY], [maxX, maxY]]) {
+    radius = Math.max(radius, Math.hypot(x - cx, y - cy));
   }
-  return d - STRAP_WIDTH / 2;
-}
-
-/** Halftone dot shadow of the deck, on a 45-degree screen. */
-function shadowDot(x, y) {
-  if (deck(x - SHADOW.dx, y - SHADOW.dy) >= 0) return false;
-  const u = (x + y) / SHADOW.pitch;
-  const v = (x - y) / SHADOW.pitch;
-  const fu = u - Math.round(u);
-  const fv = v - Math.round(v);
-  return Math.sqrt(fu * fu + fv * fv) * SHADOW.pitch * Math.SQRT1_2 < SHADOW.dot;
-}
-
-/**
- * Colour at a unit point for the full mark, with the cobalt plate offset by `reg` (unit units) and
- * the strap printed in pink.
- */
-function sample(x, y, reg) {
-  let col = shadowDot(x, y) ? PALETTE.cobalt : null;
-  // Cobalt plate: the deck, off-register down-left.
-  if (deck(x + reg, y - reg) < 0) col = PALETTE.cobalt;
-  // Mango deck on top, with ink truck bars and paper bolts.
-  const dk = deck(x, y);
-  if (dk < 0) {
-    col = PALETTE.mango;
-    const px = x - DECK.cx;
-    const py = y - DECK.cy;
-    const along = px * DECK_DIR[0] + py * DECK_DIR[1];
-    const across = -px * DECK_DIR[1] + py * DECK_DIR[0];
-    for (const at of [-0.24, 0.24]) {
-      if (Math.abs(along - at) < 0.035 && Math.abs(across) < DECK.r * 0.78) col = PALETTE.ink;
-    }
-    // Grip tape line near the edge: a thin ink rule inset from the outline.
-    if (dk > -0.03 && dk < -0.018) col = PALETTE.ink;
-  }
-  if (strapDist(x, y) < 0) col = PALETTE.pink;
-  return col;
-}
-
-/**
- * Radius of a circle around the origin that holds every inked point of the mark (measured on a
- * fine grid, plus the off-register shift and a margin), so each icon can size the mark to fit.
- */
-const MEASURED = (() => {
-  const N = 600;
-  const inked = [];
-  let x0 = Infinity;
-  let x1 = -Infinity;
-  let y0 = Infinity;
-  let y1 = -Infinity;
-  for (let j = 0; j <= N; j++) {
-    for (let i = 0; i <= N; i++) {
-      const x = -1.2 + (2.4 * i) / N;
-      const y = -1.2 + (2.4 * j) / N;
-      if (sample(x, y, 0) === null) continue;
-      inked.push(x, y);
-      x0 = Math.min(x0, x);
-      x1 = Math.max(x1, x);
-      y0 = Math.min(y0, y);
-      y1 = Math.max(y1, y);
-    }
-  }
-  const cx = (x0 + x1) / 2;
-  const cy = (y0 + y1) / 2;
-  let r = 0;
-  for (let k = 0; k < inked.length; k += 2) r = Math.max(r, Math.hypot(inked[k] - cx, inked[k + 1] - cy));
-  return { cx, cy, r: r + 0.03 };
+  return { cx, cy, radius };
 })();
-/** Centre of the mark's bounding box, in unit coordinates: icons put it at their centre. */
-export const MARK_CENTRE = [MEASURED.cx, MEASURED.cy];
-export const MARK_RADIUS = MEASURED.r;
 
 /**
  * Render an icon into an RGBA buffer. kind: 'any' (rounded square plate, transparent corners),
@@ -184,11 +98,8 @@ export const MARK_RADIUS = MEASURED.r;
  */
 export function renderIcon(size, kind) {
   const out = new Uint8Array(size * size * 4);
-  // Scale from unit mark coordinates to pixels: the mark's radius maps to this share of half the size.
-  const fill = kind === 'maskable' ? (MASKABLE_SAFE_RADIUS - 0.04) : 0.98;
-  const scale = (fill / MARK_RADIUS) * (size / 2);
-  // One printer's pixel off-register: about a hundredth of the icon.
-  const reg = Math.max(1, Math.round(size / 100)) / scale;
+  const fill = kind === 'maskable' ? MASKABLE_SAFE_RADIUS : ANY_FILL;
+  const scale = (fill / BOUNDS.radius) * (size / 2);
   const corner = kind === 'any' ? size * 0.2 : 0;
   const SS = 4;
   const half = size / 2;
@@ -203,7 +114,7 @@ export function renderIcon(size, kind) {
           const fx = px + (sx + 0.5) / SS;
           const fy = py + (sy + 0.5) / SS;
           if (corner > 0 && !insideRoundedSquare(fx, fy, size, corner)) continue;
-          const col = sample((fx - half) / scale + MEASURED.cx, (fy - half) / scale + MEASURED.cy, reg) ?? PALETTE.ink;
+          const col = inMark((fx - half) / scale + BOUNDS.cx, (fy - half) / scale + BOUNDS.cy) ? PALETTE.yellow : PALETTE.dark;
           r += col[0];
           g += col[1];
           b += col[2];
@@ -265,9 +176,6 @@ export function encodePng(width, height, rgba) {
   ihdr.writeUInt32BE(height, 4);
   ihdr[8] = 8; // bit depth
   ihdr[9] = 6; // RGBA
-  ihdr[10] = 0;
-  ihdr[11] = 0;
-  ihdr[12] = 0;
   const stride = width * 4;
   const raw = Buffer.alloc(height * (stride + 1));
   for (let y = 0; y < height; y++) {

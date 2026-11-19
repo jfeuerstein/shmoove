@@ -1,81 +1,81 @@
-/**
- * The simulation: one world, one clock, one skater. Advances only through step().
- */
-import { DAY_TICKS, START_DAY_FRAC } from './constants';
-import { dayFrac } from './lines';
-import { createPlayer, placePlayer, stepPlayer } from './player';
-import { Rng } from './rng';
-import type { InputFrame, PlayerState, SimCtx, SimEvent } from './types';
-import type { World } from './world';
+import { stepGear } from './flow';
+import { makeMover, stepMover } from './mover';
+import type { Terrain } from './terrain';
+import type { InputFrame, MoverState, SimState } from './types';
 
-export interface SimOpts {
-  seed?: number;
-  /** Day fraction at tick zero of this session (0 = midnight). */
-  startDayFrac?: number;
+function copyMover(dst: MoverState, src: MoverState): void {
+  dst.x = src.x;
+  dst.y = src.y;
+  dst.z = src.z;
+  dst.vx = src.vx;
+  dst.vy = src.vy;
+  dst.vz = src.vz;
+  dst.heading = src.heading;
+  dst.speed = src.speed;
+  dst.grounded = src.grounded;
+  dst.tucked = src.tucked;
+  dst.sliding = src.sliding;
+  dst.latched = src.latched;
+  dst.latchYaw = src.latchYaw;
+  dst.airTicks = src.airTicks;
+  dst.groundTicks = src.groundTicks;
+  dst.hopBuffer = src.hopBuffer;
+  dst.chain = src.chain;
+  dst.landPending = src.landPending;
+  dst.landSpeed = src.landSpeed;
+  dst.impact = src.impact;
+  dst.padCooldown = src.padCooldown;
+  dst.gear = src.gear;
+  dst.gearHold = src.gearHold;
+  dst.nx = src.nx;
+  dst.ny = src.ny;
+  dst.nz = src.nz;
 }
 
-export class Sim implements SimCtx {
-  readonly world: World;
-  readonly seed: number;
-  readonly rng: Rng;
-  /** Absolute tick. tick % DAY_TICKS is the time of day. */
-  tick: number;
-  player: PlayerState;
-  /** Events from the most recent step. */
-  events: SimEvent[] = [];
+export function copySimState(dst: SimState, src: SimState): void {
+  dst.tick = src.tick;
+  dst.viewYaw = src.viewYaw;
+  dst.events = src.events;
+  dst.distance = src.distance;
+  copyMover(dst.mover, src.mover);
+}
 
-  constructor(world: World, opts: SimOpts = {}) {
-    if (!world.finalized) throw new Error('Sim needs a finalized world');
-    this.world = world;
-    this.seed = opts.seed ?? 1;
-    this.rng = new Rng(this.seed);
-    this.tick = Math.round((opts.startDayFrac ?? START_DAY_FRAC) * DAY_TICKS);
-    this.player = createPlayer();
-    placePlayer(world, this.player, world.spawn.x, world.spawn.z, world.spawn.heading);
+function makeState(terrain: Terrain): SimState {
+  return { tick: 0, viewYaw: terrain.spawnYaw, events: 0, distance: 0, mover: makeMover(terrain) };
+}
+
+/**
+ * The whole game state and the only way to advance it. One step is 1/60 s.
+ *
+ * `prev` is the state before the last step, kept so the renderer can interpolate.
+ */
+export class Sim {
+  readonly terrain: Terrain;
+  readonly state: SimState;
+  readonly prev: SimState;
+
+  constructor(terrain: Terrain) {
+    this.terrain = terrain;
+    this.state = makeState(terrain);
+    this.prev = makeState(terrain);
   }
 
   step(input: InputFrame): void {
-    this.events.length = 0;
-    this.tick++;
-    stepPlayer(this, input);
-  }
-
-  /** Advance the clock one tick without stepping the skater (countdowns: the city moves, they wait). */
-  tickOnly(): void {
-    this.events.length = 0;
-    this.tick++;
-  }
-
-  get dayFrac(): number {
-    return dayFrac(this.tick);
-  }
-
-  /** Move the clock to a day fraction (keeps the day count). */
-  setDayFrac(f: number): void {
-    const day = Math.floor(this.tick / DAY_TICKS);
-    this.tick = day * DAY_TICKS + Math.round((f - Math.floor(f)) * DAY_TICKS);
-  }
-
-  hash(): number {
-    return hashPlayer(this.player, this.tick);
+    copySimState(this.prev, this.state);
+    const s = this.state;
+    s.events = 0;
+    stepMover(s, input, this.terrain);
+    stepGear(s);
+    s.tick++;
   }
 }
 
-const _f64 = new Float64Array(1);
-const _u32 = new Uint32Array(_f64.buffer);
-
-/** Bit-exact checksum of a skater and the clock. Equal hashes mean identical state. */
-export function hashPlayer(p: PlayerState, tick: number): number {
-  let h = 0x811c9dc5 ^ (tick | 0);
-  const rec = p as unknown as Record<string, number>;
-  for (const k in rec) {
-    _f64[0] = rec[k];
-    h = Math.imul(h ^ _u32[0], 0x01000193);
-    h = Math.imul(h ^ _u32[1], 0x01000193);
-  }
-  return h >>> 0;
-}
-
-export function clonePlayer(p: PlayerState): PlayerState {
-  return { ...p };
+/** A cheap fingerprint of the state, for determinism tests. */
+export function hashSimState(s: SimState): number {
+  const m = s.mover;
+  const f = new Float64Array([m.x, m.y, m.z, m.vx, m.vy, m.vz, s.viewYaw, s.distance]);
+  const b = new Uint32Array(f.buffer);
+  let h = (0x811c9dc5 ^ s.tick ^ (m.gear << 20) ^ (m.chain << 24)) >>> 0;
+  for (let i = 0; i < b.length; i++) h = Math.imul(h ^ b[i], 0x01000193) >>> 0;
+  return h;
 }

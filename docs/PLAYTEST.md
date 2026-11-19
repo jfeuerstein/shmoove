@@ -1,180 +1,152 @@
-# Playtest list
+# Playtest: what only a thumb can judge
 
-What only a human thumb (or eye, or ear) can judge, and what controls it. Constants in capitals are
-`FEEL` entries in `src/sim/constants.ts` unless a file is named. Open the game with `?debug` to tune
-every `FEEL` entry live; `COPY` exports the changed values. Automated tests only prove the mechanics
-work; they cannot say whether they feel good.
+The bots already check what a machine can: the stick alone stays slow, a good line reaches gear 5,
+sloppy hopping costs speed, letting go never leaves you stuck, and every run replays exactly. This
+list is the rest. It is the M1 go / no-go: play each scheme for five minutes, then pick one or send
+it back with notes.
 
-## Play these first
+Open the game link with `?debug` on the end (for example `.../?debug`). A round button at the top
+right opens the feel panel over the right of the screen; the game keeps running on the left. The
+scheme buttons are at the top of the panel, then one section per group with a slider for every
+number. Changes stick between visits. **Reset all** puts everything back.
 
-The ten things most likely to be wrong, most likely first.
+To start on a scheme straight away: `?debug&scheme=tuck`, `?debug&scheme=lift`,
+`?debug&scheme=swipe`. `&seed=2` (any whole number) gives a different bowl.
 
-1. **Frame time on a real phone.** The gate measures main-thread work in headless Chrome, which
-   rasterises on the CPU, so nobody has seen the GPU cost. On a mid-range phone (2021-class), ride
-   the city for ten minutes: is it a steady 60 fps, and does the phone get hot? If the GPU is the
-   limit, the print pass is the first thing to drop (Settings → Print pass, `view.riso.enabled`),
-   then the pixel-ratio cap of 2 in `src/render/view.ts`.
-2. **The first minute.** New game, hints on, hand it to someone who has never played. From the
-   lookout they should carve down the Mercado steps and catch a handcart or a moped at Rellano 410
-   within about a minute. Bots that see only the hint finish the lesson (medians 95–100 s), but
-   their first ride comes at 35–55 s, not the 24 s the clock was chosen for. Does anyone get lost,
-   frustrated or thrown off? `NEW_GAME_DAY_FRAC` in `src/app/newGame.ts`; the hint timings in
-   `src/sim/game/onboarding.ts` (`CARVE_SPEED`, `LEAD_NEAR`, `LEAD_SLOW` and the rest).
-3. **Catching a ride.** Press and hold beside a passing tram. Does the grab happen when you expect?
-   Reach too stingy or too generous → `HITCH_REACH`, `HITCH_REACH_Y`, `HITCH_AHEAD`. Does the catch
-   yank or glide → `YANK_TIME`, `SWING_SETTLE_TIME`, `SWING_SETTLE_DAMP`. Do you ever grab a ride
-   when you only meant to steer, or fail to grab when you meant to? → `HOLD_ARM_TIME`,
-   `DRAG_DEADZONE_PX`.
-4. **The sling.** Hitch the tram, carve hard to one side, crack back and let go mid-swing. Does the
-   release feel like a throw? Too violent or too weak → `SWING_OMEGA_MAX` (caps the whip),
-   `SWING_STEER` (how hard a carve drives the swing), `SLING_GAIN`, `SLING_POP`, `SLING_MIN`.
-5. **The camera on stairs and under awnings.** Ride the spine staircase, the stair alleys under the
-   market awnings and the lookout pillars. Does the skater stay in view and comfortably above your
-   thumb, does the camera duck under an awning with you rather than showing its roof, and does it
-   back out calmly? `CAM_PULL_IN_RATE`, `CAM_PULL_OUT_RATE`, `CAM_PULL_MIN`, `CAM_PULL_DROP`,
-   `CAM_FRAME_MAX`, `CAM_MIN_CLEAR`, `CAM_STAIR_RATTLE`; the sight-line sampling (`CAM_PROBE_STEP`,
-   `CAM_CHEST`, `CAM_BOARD`, `CAM_PULL_TRIES`, `CAM_DUCK_HEIGHT`) in `src/render/camera.ts`. Under the
-   Mercado's low awnings the camera ducks to the skater's shoulder: is that readable or lurching?
-6. **Waiting at a stop with a planted foot.** Holding a still finger plants a foot and stops you
-   (below `FOOT_SPEED`, braking at `FOOT_BRAKE`, unless a ride you could grab is ahead of you within
-   `FOOT_NEAR` or you are carving past `FOOT_STEER`; once slower than `FOOT_STAND` you stay put as the ride
-   comes). Does stopping feel like a choice or an accident? Does pressing early while chasing a ride
-   from behind ever brake you out of a catch? Standing beside the lane, does the ride pick you up
-   cleanly, and how close is too close (`RIDE_SIDE_BOUNCE`)?
-7. **Night readability.** Night prints in cobalt with lit windows and signs carrying the picture
-   (`KEYS` in `src/render/look.ts`, the night `tint`). On a phone outdoors, can you still read a
-   rail, a stair edge and an approaching ride at speed at night? If not, raise the night tint toward
-   0.5.
-8. **Release timing.** Hang on without steering and release at different points of the swing. Can
-   you predict the exit angle from the aim arrow? Swing too slow or fast to time → `SWING_FREQ`;
-   swing too small to matter → `SWING_MIN_AMP`, `SWING_PUMP`; too wide → `SWING_MAX`.
-9. **Carving.** Roll down the hill weaving. Twitchy or sluggish → `STEER_RANGE_PX`, `STEER_SMOOTH`,
-   `TURN_RATE_MAX` (slow speed), `LAT_ACCEL_MAX` (high speed), `CARVE_SCRUB`. Is the lower half of
-   the screen enough room to drag full lock both ways?
-10. **The summit chain.** Lower cable car → summit cable car → kite → king kite → the Needle. A
-    verifier measured 0.3–1.2 s of slack on each of three releases, with two windows a day (0.5125
-    and 0.6375). Is it a satisfying secret or impossible by hand? Phases and heights in
-    `src/sim/city/lines.ts` and `routes.ts`; `CHAIN_GROUND_GRACE`, `HITCH_REACH`, `HITCH_REACH_Y`.
+## The three schemes, five minutes each
 
-## Movement
+Play them in this order, on the same bowl, holding the phone in one hand.
 
-| Question | Constants |
-| --- | --- |
-| Is top speed on a long hill exciting but controllable? | `AIR_DRAG`, `GRAVITY`, `MAX_SPEED`, `ROLL_RESIST` |
-| Do grass and dirt slow you the right amount next to paving? | `ROUGH_DRAG` |
-| Does a slow board find the fall line without fighting you? | `FALLLINE_GAIN`, `FALLLINE_SPEED` |
-| Is tic-tac on the flat a usable last resort without being a push button? | `PUMP_GAIN`, `PUMP_SPEED_CAP` |
-| Is the hop high enough for rails and awnings, with a forgiving window? | `HOP_V`, `HOP_SPEED_BONUS`, `HOP_BONUS_MAX`, `HOP_BUFFER`, `COYOTE_TIME`, `HOP_COOLDOWN` |
-| Is there enough control in the air without it feeling like flying? | `AIR_STEER` |
-| Is the swipe-up recognised every time, and never by accident while carving? | `SWIPE_UP_PX`, `SWIPE_UP_TIME` |
-| Do crests and ledges launch you when they should and not when they shouldn't? | `GROUND_STICK`, `STEP_UP` |
-| Are stairs unpleasant enough to make the rail the obvious line? | `STAIR_DRAG`, `CAM_SHAKE` |
-| Does the rail magnet catch honest attempts and ignore near misses? | `RAIL_SNAP`, `RAIL_SNAP_UP`, `RAIL_SNAP_DOWN`, `RAIL_ENTRY_VY`, `GRIND_ALIGN` |
-| Is a grind fast and does it throw you off the end nicely? | `GRIND_MIN_SPEED`, `GRIND_ENTRY_BOOST`, `GRIND_FRICTION`, `GRIND_EXIT_POP`, `GRIND_HOP_SIDE` |
-| Do wallrides trigger when you mean them and last long enough to use? | `WALL_ALIGN`, `WALL_MIN_SPEED`, `WALL_TIME`, `WALL_GRAVITY`, `WALL_ENTRY_UP`, `WALL_KEEP`, `WALL_EXIT_PUSH`, `WALL_JUMP_OUT`, `WALL_JUMP_UP` |
-| Do awnings feel like trampolines, and does a straight drop onto one send you on your way? | `AWNING_BOUNCE`, `AWNING_KEEP`, `AWNING_ROLL_THROW`, `AWNING_NUDGE` |
-| Are bails rare, fair and short? | `WALL_BAIL_SPEED`, `BAIL_IMPACT`, `RIDE_BAIL_SPEED`, `BAIL_TIME`, `BAIL_FRICTION` |
-| Does a bail by a vehicle or a wall throw you clear without looking silly? | `BAIL_KNOCK_CARRY`, `BAIL_KNOCK_SIDE`, `BAIL_KNOCK_UP`, `AIR_BONK_BAIL` |
-| Does brushing a wall cost the right amount of speed? | `WALL_SCRUB`, `WALL_BOUNCE` |
-| Does clipping a wall in the air (or another wall mid-wallride) feel like a bonk, not a stop or a launch? | `AIR_BONK` |
-| Does stalling on a nearly flat rail step you off when it should? | `GRIND_STALL_SPEED`, `GRIND_FLAT_SLOPE` |
-| Does brushing a vehicle's flank push you off without dragging you along? | `RIDE_SIDE_NUDGE`, `RIDE_SIDE_DRAG`, `RIDE_SIDE_BOUNCE` |
+### Tuck (the pitch's scheme)
 
-## Hitching and chains
+Thumb down and drag to carve; lift the thumb to tuck and coast; a quick tap to hop.
 
-| Question | Constants |
-| --- | --- |
-| Is the tow rope the right length to carve behind a ride? | per-line `rope` (ride data), `REEL_RATE` |
-| Is the window to chain into a second ride fair? | `CHAIN_GROUND_GRACE`, `SLING_POP`, `SLING_HOP_POP`, `RELATCH_COOLDOWN`, `HITCH_COOLDOWN` |
-| Do links make you feel faster without breaking the city? | `LINK_BONUS`, `SLING_CAP`, `SLING_MIN` |
-| Does letting go of a climbing ride (a cable car, the funicular) carry its climb? | `SLING_VY_CARRY` |
-| Can a quick tap-and-release catch and drop a ride, or does it feel unresponsive? | `HITCH_MIN_TIME`, `YANK_TIME` |
-| Does hanging under an overhead ride feel like flying? | `HITCH_Y_RATE`, per-line `hang` |
-| Does bouncing off a vehicle roof feel deliberate? | `RIDE_ROOF_BOUNCE` |
-| Does the swing feel alive behind slow rides and not frantic behind fast ones? | `SWING_REF_SPEED`, `SWING_REF_MIN`, `SWING_REF_MAX`, `SWING_DAMP` |
-| Does getting towed into a wall feel fair: a knock, and a slip only when really dragged round a corner? | `HITCH_WALL_BOUNCE`, `STRAP_SLIP` |
-| Behind a ground ride, do small bumps keep you on the ground instead of floating? | `TOW_SNAP_HEIGHT` |
+- Spend the first minute just carving on the floor. Then find a downhill, lift your thumb, and
+  feel the speed build. Then tap right as you land and try to keep a chain of clean hops going (the
+  chain count shows under the gear).
+- Notice: does a tap ever carve, or a short drag ever hop? Does lifting to tuck feel like letting
+  go of the brakes, or like losing control? Can you tap within the landing window without staring?
+  Does reaching gear 4 or 5 feel earned?
 
-## Camera
+### Lift
 
-| Question | Constants |
-| --- | --- |
-| Can you see far enough down the hill in portrait? | `CAM_HEIGHT`, `CAM_DIST`, `CAM_LOOK_AHEAD`, `CAM_LOOK_UP`, `CAM_FOV`, `CAM_LOOK_FAR`, `CAM_LOOK_SLOPE`, `CAM_LOOK_TILT_MAX` |
-| Does speed feel fast? | `CAM_FOV_SPEED`, `CAM_SPEED_DIST`, `CAM_TOP_SPEED` |
-| Does the camera turn with you without making you seasick? | `CAM_YAW_RATE`, `CAM_POS_RATE` |
-| Can you read the swing and the aim arrow while hitched? | `CAM_HITCH_DIST`, `CAM_HITCH_HEIGHT` |
-| Can you see where you will land, and the hill while climbing? | `CAM_AIR_HEIGHT`, `CAM_UPHILL_HEIGHT`, `CAM_UPHILL_GAIN`, `CAM_CLIMB_RATE`, `CAM_AIR_FOLLOW`, `CAM_MIN_CLEAR` |
-| Do the camera's moves (pulling back for speed or a hitch, tilting for the ground, widening the view) ease rather than lurch? | `CAM_EXTRA_RATE`, `CAM_TILT_RATE`, `CAM_FOV_RATE` |
-| When a wall or roof blocks the view, does the camera duck in quickly and back out calmly? | `CAM_PULL_IN_RATE`, `CAM_PULL_OUT_RATE`, `CAM_PULL_MIN`, `CAM_PULL_DROP` |
-| Squeezed against a wall, coming off stairs or towed up a steep street, is the skater still comfortably above your thumb? | `CAM_FRAME_MAX` |
-| Do stairs rattle and do hits shake for about the right time? | `CAM_STAIR_RATTLE`, `CAM_STAIR_SPEED`, `CAM_SHAKE_DECAY`, `CAM_SHAKE` |
+Drag to carve; hold still with the thumb down to tuck; lift the thumb to hop.
 
-## Not a thumb's call
+- Same minute of carving, then try hopping by lifting at each landing.
+- Notice: does every lift becoming a hop cause hops you did not want (say, when you just wanted to
+  rest your thumb)? Is holding still a natural way to tuck? Is it easier to time landings than with
+  taps?
 
-These `FEEL` entries are in the debug panel but are rules or geometry that tests pin down, not
-things a playtest should tune: `PLAYER_RADIUS`, `PLAYER_HEIGHT`, `HAND_HEIGHT` (the skater's body
-and where the hand is), `WALL_HEAD_ON`, `WALL_SLIDE_SPEED` (the no-trap rule for slow wall hits),
-`GRIND_COOLDOWN`, `WALL_COOLDOWN` (debounce, so one rail or wall is not re-entered every tick),
-`SWING_LATCH_MAX`, `SWING_REST_RATE`, `SWING_STOP` (keep the pendulum stable through a catch and a
-corner), `SAFE_MARGIN` (how far from water a respawn point must be).
+### Swipe
 
-## Only on a real phone
+Drag to carve; flick up while your thumb is down to hop; taps do nothing.
 
-- Halftone dot size on a high-density screen (`3.6 * pixelRatio` in `createRiso().setSize`,
-  `src/render/look.ts`).
-- Misregistration strength: readable as print, not as blur (`offPink` and `offCobalt` in the print
-  shader in `src/render/look.ts`).
-- Safe areas on a notched phone: do the boards and corner buttons clear the notch and the home bar?
+- Carve, then flick up at each landing without lifting.
+- Notice: do flicks ever fail, or do fast pushes up the screen hop when you only meant to steer
+  forward? Does keeping the thumb down the whole time tire it? Does the stick still steer where you
+  expect right after a flick?
 
-## Sound (nobody has heard it yet)
+For every scheme: is the floating stick under your thumb where you expect it, and does the ring
+show and hide at the right moments?
 
-The audio was written and verified by measurement only: levels, timing, voice counts, chord charts.
-An ear has to judge the rest. Mute with `?mute`.
+## The numbers to judge by thumb
 
-- Does each district sound like its style: cumbia (Docks), funk (Mercado), highlife (Terraces), city
-  pop (Antenna Hill)? Does a lone stem still groove when it is the only one in?
-- Balance between stems, and of music against wheel noise (`setVolumes` in `src/audio/index.ts`; stem
-  levels in `src/audio/tracks/*.ts`).
-- The stem fade-in on a hitch (starts on the next beat), the one-beat cross-fade between district
-  tracks at different tempos, and the two-bar fade after landing.
-- Is the hard cut on a bail satisfying or just abrupt?
-- City pop bar 2: the lead's sigh now lands on E over C7 (it held F, a minor ninth against the E).
-  Does the hook still read? Funk bars 2 and 6 and highlife bars 3, 7 and 8 have the harmony voiced
-  under the horns: does the clav or guitar sound too thin or too low there?
-- Wheel noise character, the stairs clatter rate, wind, the three motor timbres, the grind scrape.
-- CPU cost of the synth on a real phone.
+Grouped as in the panel. Each shows its value as shipped. If one feels wrong, move its slider, play
+a minute, and keep the value that feels right. The numbers the bots pin (gear speeds, boost pads,
+the clean-hop bonus, the speed limit) are not on this list.
 
-## Haptics and shell (phone only)
+### input
 
-- Vibration patterns in `src/app/haptics.ts` (`HOP`, `GRIND`, `RELEASE`, `BAIL` and the rest, built
-  with `P(name, priority, ...pattern)`): is the hitch a firm tap, the release a snap, the grind tick
-  (`GRIND_TICK_MS`) too busy, the bail too long? Android only; iOS Safari has no vibration API.
-- Install flow: Android Chrome's INSTALL button on the title screen; iOS "Share → Add to Home
-  Screen". Does it launch fullscreen and portrait, and does it start offline?
-- The "NEW TIMETABLE" update ticket after a redeploy.
-- Reduced motion: does it remove everything that bothers you (camera shake, flips, slides)?
+| Constant | Now | Too low feels like | Too high feels like |
+| --- | --- | --- | --- |
+| `stickRadiusPx` | 56 px | the stick slams to full with a twitch; no fine steering | a long thumb reach before you turn hard |
+| `stickDeadPx` | 8 px | resting thumb jitter steers you | small corrections do nothing |
+| `tapMaxMs` | 180 ms | quick taps sometimes carve instead of hopping (tuck scheme) | a short press-and-drag hops when you meant to carve |
+| `tapSlopPx` | 12 px | taps that wander a little become carves | small deliberate drags become hops |
+| `swipeSpeed` | 1.2 px/ms | steering forward fires hops (swipe scheme) | flicks fail unless violent |
+| `swipeMinPx` | 28 px | tiny twitches hop (swipe scheme) | flicks need a long stroke |
 
-## Rides in the city
+### run
 
-- Distance haze runs 190–350 m (`FOG_NEAR`, `FOG_FAR` in `src/render/look.ts`). Does the hill feel
-  big enough from the summit, and does anything visibly appear out of the haze?
-- Tram 5 runs at 13 m/s and the night bus at 18 m/s (`src/sim/city/lines.ts`). Is being towed that
-  fast up or down the switchbacks fun or uncontrollable? Per-line `cruise`, `rope`.
-- The king kite's ride after the chain is long (about 55 s: out, 5 s perched over the needle, the
-  whole circuit back). Is holding on that long a reward or a chore? Letting go while it perches
-  slings you off the needle at chain speed: does anyone try it, and is it clear they should hold
-  on? S3 `dwell`, `cruise` in `src/sim/city/lines.ts`.
-- The needle's guy wire: 34 m/s at the bottom (`MAX_SPEED`). A thrill, or a blur? Do players find
-  it (roll off the south edge)? Does the landing on the lawn feel right? `NEEDLE_WIRE` in
-  `src/sim/city/layout.ts`; `RAIL_SNAP`, `GRIND_FRICTION`.
-- The hill station's run-in steps: coming down from the summit at speed, do the steps slow you
-  enough to stop on the deck with a held finger, and does it read as a way onto the platform?
-  `HILL_STATION_RUNIN` in `src/sim/city/terrain.ts`; `STAIR_DRAG`, `FOOT_BRAKE`.
-- The blimp: on the hill station platform at dusk (0.76) it waits 5 s with its ladder 4.2 m over the
-  deck; hop to it. Is that a fair hop? Its lap takes nearly three minutes before it drops you 3 m
-  back onto the deck: too long to hang on? `HOP_V`, `HITCH_REACH_Y`; S2 `cruise`.
-- Catching overhead rides that need a hop (crane, cable cars, kites): is the swipe-up-and-hold
-  natural?
-- Is a wait of up to two minutes for tram 5, or up to four for a handcart or fish truck, too long?
-- Errand offers: holding still in a giver's spot fills the offer in 0.6 s (`OFFER_FILL_TICKS` in
-  `src/sim/game/errands.ts`). Do players take offers by accident while waiting nearby, or miss them?
+| Constant | Now | Too low feels like | Too high feels like |
+| --- | --- | --- | --- |
+| `runSpeed` | 10 m/s | the stick is sluggish, carving feels pointless | the stick alone is fast enough; tuck and terrain stop mattering |
+| `runAccel` | 22 m/s² | slow to get going, heavy | instant top speed, no weight |
+| `idleBrake` | 5 m/s² | thumb down with no drag keeps rolling | thumb down with no drag stops you like a wall |
+
+### carve
+
+| Constant | Now | Too low feels like | Too high feels like |
+| --- | --- | --- | --- |
+| `turnMax` | 5.5 rad/s | slow, wide turns when slow | twitchy spins at walking pace |
+| `grip` | 34 m/s² | at speed you cannot turn, you slide wide | at speed you turn on a coin with no commitment |
+| `carveScrub` | 0.1 | hard turns at speed cost nothing | every correction at speed feels like braking |
+| `carveDrag` | 0.4 /s | you can hold the stick at speed for free, so there is no reason to tuck | touching the stick at speed feels like braking |
+| `carveSlopeGain` | 0.2 | downhills do nothing unless you let go | carving downhill builds speed like a tuck, so there is no reason to tuck |
+| `slideAngle` | 1.9 rad | pulling the stick a little back throws a U-turn | you have to pull straight back to get the U-turn |
+| `slideTurn` | 2.2 | the U-turn swings wide | the U-turn snaps round |
+| `slideBrake` | 14 m/s² | U-turns keep all your speed | U-turns stop you dead |
+
+### tuck
+
+| Constant | Now | Too low feels like | Too high feels like |
+| --- | --- | --- | --- |
+| `tuckDrag` | 0.03 /s | a tuck on the flat never slows | a tuck on the flat dies quickly |
+| `rollFriction` | 0.4 m/s² | gentle slopes roll you forever; hard to stop | you stall on slopes that look downhill |
+
+### hop
+
+| Constant | Now | Too low feels like | Too high feels like |
+| --- | --- | --- | --- |
+| `hopSpeed` | 7 m/s | a hop barely leaves the ground | floaty; long waits for the next landing |
+| `hopBufferTicks` | 9 ticks (0.15 s) | early taps are eaten | taps well before landing still count; feels automatic |
+| `cleanWindowTicks` | 7 ticks (0.12 s) | clean hops need perfect timing | chains are free, no skill |
+| `landScrub` | 0.08 | missing a hop costs nothing | missing a hop feels like a crash |
+| `minAirTicks` | 4 ticks | tiny bumps count as landings (hop prompts everywhere) | small kicker landings do not count for a chain |
+
+### air
+
+| Constant | Now | Too low feels like | Too high feels like |
+| --- | --- | --- | --- |
+| `gravity` | 25 m/s² | moon jumps; slopes pull weakly | short hops; slopes yank you |
+| `airTurn` | 1.2 rad/s | no steering once you leave the ground | you steer in the air as well as on it |
+
+### ground
+
+| Constant | Now | Too low feels like | Too high feels like |
+| --- | --- | --- | --- |
+| `stickAccel` | 18 m/s² | every crest throws you into the air | you never fly off crests and kickers |
+
+### gears
+
+| Constant | Now | Too low feels like | Too high feels like |
+| --- | --- | --- | --- |
+| `gearHyst` | 1 m/s | the gear flickers at the edge of a gear | the HUD shows a gear you are no longer going |
+| `gearDropTicks` | 12 ticks (0.2 s) | a hop or a turn drops the gear | the gear hangs on long after you slowed |
+
+### view
+
+| Constant | Now | Too low feels like | Too high feels like |
+| --- | --- | --- | --- |
+| `viewFollow` | 3.2 /s | the view lags your turns; the stick feels wrong after a turn | the view whips round; holding the stick sideways spins you |
+| `viewMinSpeed` | 2 m/s | the view swings around when you are nearly still | slow turns do not bring the view round |
+
+### camera
+
+| Constant | Now | Too low feels like | Too high feels like |
+| --- | --- | --- | --- |
+| `camDist` | 7 m | too close, cannot see the line | the mover is a speck |
+| `camHeight` | 5.5 m | flat view, the ground ahead is hidden | looking straight down, no horizon |
+| `camLookAhead` | 4 m | the mover sits mid-screen, little ahead shown | the mover sits at the bottom edge under the thumb |
+| `camLookAheadPerGear` | 1.2 m | fast gears show no more of what is coming | the mover drops under the thumb at speed |
+| `camFov` | 74° | tunnel vision | fisheye, speed feels slow |
+| `camFovPerGear` | 3° | no sense of speed when the gear goes up | the edges stretch at gear 5 |
+| `camPosRate` | 9 /s | the camera drifts behind, floaty | every bump shakes the camera |
+| `camLandKick` | 0.05 m per m/s | landings have no weight | landings shake the screen |
+
+## Sending it back
+
+In the panel, press **Copy changes**. It copies the scheme you were on and every number you moved,
+one per line (if the phone will not copy, the text appears in a box to select by hand). Paste that
+into your message, then add in plain words: which scheme you pick (or that none of them works), and
+anything that felt wrong that no slider fixed.

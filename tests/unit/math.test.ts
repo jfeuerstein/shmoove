@@ -70,7 +70,7 @@ describe('Rng', () => {
     const a = new Rng(7);
     const f1 = a.fork('city').next();
     const f2 = a.fork('city').next();
-    const g = a.fork('rides').next();
+    const g = a.fork('spawns').next();
     expect(f1).toBe(f2);
     expect(f1).not.toBe(g);
     expect(new Rng(7).next()).toBe(a.next());

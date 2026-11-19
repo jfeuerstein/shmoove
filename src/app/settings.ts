@@ -1,122 +1,168 @@
 /**
- * Player settings: the four the save already holds (music, effects, haptics, hints) plus two that
- * only the app cares about (reduced motion, the risograph print pass). The sim's save type keeps
- * its four; the app's two are stored alongside it by `src/app/save.ts` (see `extraOf`).
+ * What the owner has tuned, kept between visits: the control scheme and every `FEEL` value that
+ * differs from its shipped default, under one versioned `localStorage` key.
  *
- * Pure: cleaning, stepping volumes, converting to and from what is stored, and applying settings
- * through injected setters so tests need no browser, renderer or audio.
+ * The logic is pure (`parseStored`, `collectOverrides`, `applyOverrides`, `overridesText`); `Settings`
+ * is the thin wrapper around a storage object. Storage can be missing, full or throw (private mode),
+ * and the game must run the same without it.
  */
-import type { SaveSettings } from '../sim/game/save';
+import { SCHEMES, type Scheme } from '../input/source';
+import { FEEL, FEEL_DEFS, FEEL_KEYS, type FeelKey } from '../sim/constants';
 
-export interface AppSettings {
-  /** 0..1 in steps of 1/VOLUME_STEPS. */
-  music: number;
-  sfx: number;
-  haptics: boolean;
-  hints: boolean;
-  /** No camera shake, UI flips land at once. */
-  reduced: boolean;
-  /** The risograph print pass (misregistration, grain). */
-  riso: boolean;
+export const STORAGE_KEY = 'shmoove.settings.v1';
+const VERSION = 1;
+
+export type FeelValues = Record<FeelKey, number>;
+export type FeelOverrides = Partial<Record<FeelKey, number>>;
+
+/** The part of `Storage` we use, so tests can hand in a fake. */
+export interface StorageLike {
+  getItem(key: string): string | null;
+  setItem(key: string, value: string): void;
 }
 
-/** The app-only part, stored next to the save. */
-export interface AppExtraSettings {
-  reduced: boolean;
-  riso: boolean;
+export interface Stored {
+  scheme: Scheme | null;
+  feel: FeelOverrides;
 }
 
-/** Volume sliders have this many steps above zero. */
-export const VOLUME_STEPS = 10;
-
-export const DEFAULT_APP_SETTINGS: Readonly<AppSettings> = Object.freeze({
-  music: 1,
-  sfx: 1,
-  haptics: true,
-  hints: true,
-  reduced: false,
-  riso: true,
-});
-
-function isRecord(v: unknown): v is Record<string, unknown> {
-  return typeof v === 'object' && v !== null && !Array.isArray(v);
+function isScheme(v: unknown): v is Scheme {
+  return typeof v === 'string' && (SCHEMES as readonly string[]).includes(v);
 }
 
-/** A volume clamped to 0..1 and snapped to the slider's steps; `dflt` if not a finite number. */
-export function cleanVolume(v: unknown, dflt: number): number {
-  if (typeof v !== 'number' || !Number.isFinite(v)) return dflt;
-  const c = Math.min(1, Math.max(0, v));
-  return Math.round(c * VOLUME_STEPS) / VOLUME_STEPS;
+function isFeelKey(k: string): k is FeelKey {
+  return Object.prototype.hasOwnProperty.call(FEEL_DEFS, k);
 }
 
-/** The slider step (0..VOLUME_STEPS) a volume shows. */
-export function volumeStep(v: number): number {
-  return Math.round(cleanVolume(v, 0) * VOLUME_STEPS);
+/** Clamp to the def's range. */
+export function clampFeel(key: FeelKey, v: number): number {
+  const d = FEEL_DEFS[key];
+  return Math.min(d.max, Math.max(d.min, v));
 }
 
-/** The volume for a slider step, clamped. */
-export function volumeAt(step: number): number {
-  if (!Number.isFinite(step)) return 0;
-  return Math.min(VOLUME_STEPS, Math.max(0, Math.round(step))) / VOLUME_STEPS;
-}
-
-const bool = (v: unknown, dflt: boolean): boolean => (typeof v === 'boolean' ? v : dflt);
-
-/** Anything into valid settings: clamps volumes, defaults what is missing or wrong, ignores unknown fields. */
-export function cleanAppSettings(raw: unknown): AppSettings {
-  const r = isRecord(raw) ? raw : {};
-  const d = DEFAULT_APP_SETTINGS;
-  return {
-    music: cleanVolume(r.music, d.music),
-    sfx: cleanVolume(r.sfx, d.sfx),
-    haptics: bool(r.haptics, d.haptics),
-    hints: bool(r.hints, d.hints),
-    reduced: bool(r.reduced, d.reduced),
-    riso: bool(r.riso, d.riso),
-  };
-}
-
-/** Settings from what was stored: the save's settings plus the app's extra record (either may be junk). */
-export function fromStored(save: unknown, extra: unknown): AppSettings {
-  const s = isRecord(save) ? save : {};
-  const e = isRecord(extra) ? extra : {};
-  return cleanAppSettings({ music: s.music, sfx: s.sfx, haptics: s.haptics, hints: s.hints, reduced: e.reduced, riso: e.riso });
-}
-
-/** The part the sim's save holds. */
-export function toSaveSettings(a: AppSettings): SaveSettings {
-  return { music: a.music, sfx: a.sfx, haptics: a.haptics, hints: a.hints };
-}
-
-/** The part stored alongside the save. */
-export function extraOf(a: AppSettings): AppExtraSettings {
-  return { reduced: a.reduced, riso: a.riso };
-}
-
-/** A copy of `a` with `patch` applied, cleaned. */
-export function patchSettings(a: AppSettings, patch: Partial<AppSettings>): AppSettings {
-  return cleanAppSettings({ ...a, ...patch });
-}
-
-/** Where settings take effect. Injected, so this module stays free of audio, render and DOM. */
-export interface SettingSinks {
-  setVolumes(music: number, sfx: number): void;
-  /** Camera shake scale (FEEL.CAM_SHAKE). */
-  setShake(scale: number): void;
-  setRiso(enabled: boolean): void;
-  /** UI flips and slides land at once. */
-  setReducedUi(reduced: boolean): void;
-}
-
-/**
- * Apply settings through the sinks. `shakeDefault` is the shake scale to use when motion is not
- * reduced. With `prev`, only what changed is applied.
- */
-export function applySettings(a: AppSettings, sinks: SettingSinks, shakeDefault: number, prev: AppSettings | null = null): void {
-  if (!prev || prev.music !== a.music || prev.sfx !== a.sfx) sinks.setVolumes(a.music, a.sfx);
-  if (!prev || prev.reduced !== a.reduced) {
-    sinks.setShake(a.reduced ? 0 : shakeDefault);
-    sinks.setReducedUi(a.reduced);
+/** Read saved text: anything wrong with it gives the empty settings, never a throw. */
+export function parseStored(raw: string | null): Stored {
+  const empty: Stored = { scheme: null, feel: {} };
+  if (raw === null) return empty;
+  let data: unknown;
+  try {
+    data = JSON.parse(raw);
+  } catch (_err) {
+    return empty;
   }
-  if (!prev || prev.riso !== a.riso) sinks.setRiso(a.riso);
+  if (typeof data !== 'object' || data === null) return empty;
+  const rec = data as Record<string, unknown>;
+  if (rec.v !== VERSION) return empty;
+  const out: Stored = { scheme: isScheme(rec.scheme) ? rec.scheme : null, feel: {} };
+  const feel = rec.feel;
+  if (typeof feel === 'object' && feel !== null) {
+    for (const [k, v] of Object.entries(feel as Record<string, unknown>)) {
+      if (!isFeelKey(k) || typeof v !== 'number' || !Number.isFinite(v)) continue;
+      out.feel[k] = clampFeel(k, v);
+    }
+  }
+  return out;
+}
+
+/** The values that differ from the shipped defaults. */
+export function collectOverrides(feel: Readonly<FeelValues>): FeelOverrides {
+  const out: FeelOverrides = {};
+  for (const k of FEEL_KEYS) if (feel[k] !== FEEL_DEFS[k].v) out[k] = feel[k];
+  return out;
+}
+
+export function serialize(scheme: Scheme | null, feel: Readonly<FeelValues>): string {
+  const body: { v: number; scheme?: Scheme; feel: FeelOverrides } = { v: VERSION, feel: collectOverrides(feel) };
+  if (scheme !== null) body.scheme = scheme;
+  return JSON.stringify(body);
+}
+
+/** Write the overrides into `target`. */
+export function applyOverrides(target: FeelValues, overrides: FeelOverrides): void {
+  for (const k of FEEL_KEYS) {
+    const v = overrides[k];
+    if (v !== undefined) target[k] = v;
+  }
+}
+
+/** The `?scheme=` value if the URL carries a valid one. */
+export function urlScheme(search: string): Scheme | null {
+  const v = new URLSearchParams(search).get('scheme');
+  if (v === null) return null;
+  const s = v.trim().toLowerCase();
+  for (const k of SCHEMES) if (k === s) return k;
+  return null;
+}
+
+/** `key = value` per line for the changed constants, to paste back to whoever sets the defaults. */
+export function overridesText(feel: Readonly<FeelValues>, scheme: Scheme | null = null): string {
+  const lines: string[] = [];
+  if (scheme !== null) lines.push(`scheme = ${scheme}`);
+  const o = collectOverrides(feel);
+  for (const k of FEEL_KEYS) {
+    const v = o[k];
+    if (v !== undefined) lines.push(`${k} = ${v}`);
+  }
+  return lines.length > 0 ? lines.join('\n') : '(no changes from the defaults)';
+}
+
+/** The browser's storage, or null where it is not there or refuses to be touched. */
+export function browserStorage(): StorageLike | null {
+  try {
+    return window.localStorage;
+  } catch (_err) {
+    return null;
+  }
+}
+
+export class Settings {
+  /** The scheme in force: `?scheme=` if given, else the saved one, else `fallback`. */
+  scheme: Scheme;
+  private readonly storage: StorageLike | null;
+  private readonly feel: FeelValues;
+  private stored: Stored;
+
+  constructor(storage: StorageLike | null, search: string, fallback: Scheme, feel: FeelValues = FEEL) {
+    this.storage = storage;
+    this.feel = feel;
+    let raw: string | null = null;
+    try {
+      raw = storage ? storage.getItem(STORAGE_KEY) : null;
+    } catch (_err) {
+      raw = null;
+    }
+    this.stored = parseStored(raw);
+    this.scheme = urlScheme(search) ?? this.stored.scheme ?? fallback;
+  }
+
+  /** Put the saved values into the live constants. Call once, before anything reads them. */
+  applySaved(): void {
+    applyOverrides(this.feel, this.stored.feel);
+  }
+
+  /** The owner chose a scheme in the panel: it is saved, and wins until a `?scheme=` says otherwise. */
+  chooseScheme(s: Scheme): void {
+    this.scheme = s;
+    this.stored.scheme = s;
+    this.save();
+  }
+
+  /** Save the live constants' differences from the defaults. */
+  saveFeel(): void {
+    this.stored.feel = collectOverrides(this.feel);
+    this.save();
+  }
+
+  text(): string {
+    return overridesText(this.feel, this.scheme);
+  }
+
+  private save(): void {
+    if (!this.storage) return;
+    try {
+      this.storage.setItem(STORAGE_KEY, serialize(this.stored.scheme, this.feel));
+    } catch (_err) {
+      // Full or refused: the settings last for this visit only.
+    }
+  }
 }

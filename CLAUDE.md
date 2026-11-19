@@ -1,52 +1,58 @@
-# SKITCH
+# SHMOOVE
 
-Portrait-mode, one-thumb skating game set in Santa Rampa. TypeScript + Three.js + Vite, shipped as an
-installable PWA. Spec: `docs/DESIGN.md`. Progress: `docs/PLAN.md`. Decisions: `docs/DECISIONS.md`.
-Human-only tuning list: `docs/PLAYTEST.md`. Task briefs: `docs/briefs/`.
+Portrait-mode, one-thumb 3D survivor where speed is the build. Pitch and design: `docs/PITCH.md`.
+Milestones and status: `docs/PLAN.md`.
+
+**State of the repo:** M0 is built and the M1 feel slice is playable: one mover on a seeded bowl,
+three control schemes, the debug panel. No enemies, weapons or run structure yet (M2 on).
+
+## Stack
+
+TypeScript + Three.js (WebGL2) + Vite, shipped as an installable offline PWA.
 
 ## Commands
 
 | Command | What it does |
 | --- | --- |
-| `npm run dev` | Draws the icons, then the Vite dev server (add `?debug` for the feel panel, `?slice` for the M1 feel slice; every URL parameter is in `README.md`) |
+| `npm run dev` | Draws the icons, then the Vite dev server |
 | `npm run build` | Typecheck, icons, production build to `dist/`, service worker |
-| `npm run preview` | Serve `dist/` |
 | `npm run typecheck` | `tsc --noEmit` |
-| `npm run lint` | ESLint (includes the sim purity rules) |
-| `npm test` | Vitest: unit tests + deterministic sim tests (headless, no browser) |
-| `npm run e2e` | Playwright at 390x844 with touch: plays every route in `tests/e2e/routes/`, fails on a console error or warning, saves `artifacts/screens/*.png` |
-| `npm run e2e:pwa` | The built app installs, works offline and updates through the "new timetable" ticket |
-| `npm run perf` | Headless Chrome, 4x CPU throttle: frame work and game step on the `perfcity` route, draw calls and triangles there and on a viewpoint tour, bundle size, vs. `tests/perf/budgets.json`; writes `artifacts/perf.json` |
-| `npm run gate` | typecheck, lint, test, build, e2e, e2e:pwa, perf in order, stopping at the first failure. A milestone is done only when this is green |
+| `npm run lint` | ESLint, including the sim purity rules |
+| `npm test` | Vitest: unit tests and deterministic sim tests with bots (headless) |
+| `npm run e2e` | Playwright at 390x844 with touch: every route in `tests/e2e/routes/`; fails on a console error or warning; saves `artifacts/screens/*.png` |
+| `npm run e2e:pwa` | The built app installs, works offline and updates through the bottom bar |
+| `npm run perf` | Headless Chrome at 4x CPU throttle against `tests/perf/budgets.json`; writes `artifacts/perf.json` |
+| `npm run gate` | All of the above in order, stopping at the first failure. A milestone is done only when this is green |
+
+URL parameters: `?debug` (feel panel), `?scheme=tuck|lift|swipe`, `?seed=N` (map), `?flat` (level
+ground, for tests), `?hook` (`window.__shmoove` test hook), `?perf`.
 
 ## Layout
 
 - `src/sim/` deterministic simulation. Pure TypeScript. Fixed 60 Hz step, seeded RNG.
-- `src/input/` touch gestures -> `InputFrame`.
-- `src/render/` Three.js. Reads sim state, never writes it.
-- `src/audio/` Web Audio synthesis and the stem mixer.
-- `src/ui/` DOM overlay: destination boards, ticket stubs, line map, menus.
-- `src/app/` boot, main loop, saves, settings, haptics, debug panel, PWA glue, test hook.
+  `mover.ts` (carve, tuck, hop), `flow.ts` (gears), `bowl.ts` (the map), `constants.ts` (`FEEL`).
+- `src/input/` touch gestures -> `InputFrame`. `gestures.ts` is pure; `touch.ts` binds the DOM.
+- `src/render/` Three.js. Reads sim state, never writes it. `camera.ts`, `look.ts` (palette).
+- `src/ui/` DOM overlay: HUD, stick view, debug panel (level-up cards and menus later).
+- `src/app/` boot, main loop, settings, platform glue, PWA, test hook.
 - `scripts/` the gate, the icon generator, the service-worker generator.
-- `public/` the manifest and host headers (icons are generated there at build time).
 - `tests/unit`, `tests/sim` (bots in `tests/sim/bot/`), `tests/e2e`, `tests/perf`.
+- `docs/briefs/` one file per delegated task.
 
 ## Conventions
 
-- **Sim purity.** `src/sim/**` imports nothing from `three`, the DOM, `src/render`, `src/ui`,
-  `src/audio` or `src/app`. No `Date`, `performance`, `Math.random`. No `Math.sin/cos/tan/atan2/
-  asin/acos/pow/exp/log` (engine-dependent results): use `dsin/dcos/datan2/...` from
-  `src/sim/math.ts`. `Math.sqrt/abs/floor/ceil/round/min/max/sign/trunc/fround/imul` are fine.
-  ESLint enforces this.
-- **One clock.** The sim advances only through `Sim.step(input)`; one step = 1/60 s. Rides are a pure
-  function of the tick. Rendering interpolates between the last two sim states.
+- **Sim purity.** `src/sim/**` imports nothing from `three`, the DOM, or any other `src/` folder. No
+  `Date`, `performance`, `Math.random`. No `Math.sin/cos/tan/atan2/asin/acos/pow/exp/log`
+  (engine-dependent results): use the deterministic versions in `src/sim/math.ts`. ESLint enforces it.
+- **One clock.** The sim advances only through `Sim.step(input)`; one step = 1/60 s. Rendering
+  interpolates between the last two sim states.
 - **Feel constants** live in `src/sim/constants.ts` (`FEEL`). Nothing feel-related is hard-coded
   elsewhere. Every constant appears in the debug panel and, if only a thumb can judge it, in
   `docs/PLAYTEST.md`.
-- **No assets.** Geometry, textures, shaders, fonts-as-shapes and audio are generated in code.
+- **No assets.** Geometry, textures, shaders and audio are generated in code.
 - **Strict TypeScript.** No `any`, no non-null `!` on things that can be null at runtime.
-- **Allocation.** No per-tick or per-frame allocation in sim or render hot paths; use `out` params
-  and scratch objects.
+- **Allocation.** No per-tick or per-frame allocation in sim or render hot paths. Enemies, sparks,
+  projectiles and damage numbers are pooled.
 - **Tests assert behaviour** (what the player would observe), not implementation. Never weaken a test
   to make it pass; fix the code or flag it.
 - **Commits** are small and say why. Each milestone ends with a green `npm run gate` and a tag `mN`.
@@ -58,17 +64,19 @@ Human-only tuning list: `docs/PLAYTEST.md`. Task briefs: `docs/briefs/`.
 Fable is the scarce resource; Opus does the bulk of the work.
 
 - **Fable (lead):** architecture and plan, interface contracts, the movement controller
-  (`src/sim/player.ts`), hitch / slingshot / chain logic (`src/sim/hitch.ts`), the camera
+  (`src/sim/mover.ts`), gears and Wake loop logic (`src/sim/flow.ts`, `src/sim/wake.ts` from M2), the camera
   (`src/render/camera.ts`), the core look (`src/render/look.ts`), integration, and debugging anything
   Opus has failed at twice.
-- **Opus subagents:** everything with a clear contract: scaffolding, build config, test harness, city
-  generation, ride and timetable data, UI screens, audio sequencing, errands, saves, PWA setup, docs,
-  refactors, and all independent verification.
+- **Opus subagents:** contract-bound work that needs design judgement: bowl generation, the app
+  shell and render views, enemies and the spawn director, weapons and passives, bots and balance
+  tests, and all independent verification.
+- **Sonnet subagents:** contract-bound work that is mostly plumbing: input gesture logic, PWA setup
+  and deploy, the debug panel and settings, simple UI screens, saves, docs, mechanical refactors.
 
 Delegation rules:
 
-- Agents are defined in `.claude/agents/implementer.md` and `.claude/agents/verifier.md`
-  (`model: opus`). Pass the model explicitly on every spawn as well.
+- Agents are defined in `.claude/agents/implementer.md` and `.claude/agents/verifier.md`. Pass the
+  model explicitly on every spawn (`opus` or `sonnet` as above); the brief names it too.
 - Every brief states: the goal, the files the agent owns, the interfaces to match, the acceptance
   tests, and what to return (a short summary and the list of changed files, never file contents).
 - Independent tasks run in parallel in separate git worktrees and are merged by the lead.

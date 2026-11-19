@@ -1,78 +1,143 @@
-/** Contract between the app and the e2e / perf harness (tests/e2e, tests/perf). */
-export interface SkitchTestState {
+/**
+ * The test hook: an `InputSource` that scripts can hold, and `window.__shmoove`, installed only with
+ * `?hook`. The e2e and perf runners drive the game through it.
+ *
+ * Without a script holding it, `HookInput` reads as a thumb off the screen (tucked, no stick).
+ */
+import type { InputSource } from '../input/source';
+import type { Sim } from '../sim/sim';
+import type { InputFrame } from '../sim/types';
+import type { FrameStatsSummary } from './loop';
+
+export interface HookState {
   tick: number;
-  mode: string;
   x: number;
   y: number;
   z: number;
   speed: number;
+  gear: number;
+  grounded: boolean;
+  tucked: boolean;
   chain: number;
-  hitchedLine: string | null;
-  dayFrac: number;
-  /** Types of the sim events since the previous state() call, in order. */
-  events?: string[];
-  /** Smoothed steer applied to the board, and whether the touch is armed to hitch. */
-  steer?: number;
-  armed?: boolean;
-  /** Rows in the feel panel (0 when it is not open). */
-  feelRows?: number;
-  /** Audio mixer facts: context running, track (district, -1 none), stems in, full band, wheel level. */
-  audio?: { running: boolean; track: number; stems: number; fullBand: boolean; wheel: number };
-  /**
-   * Every ride line in world order: its id; its livery base and stripe (0xRRGGBB) and pattern;
-   * `painted`, whether base and stripe are both in the vertex colours of every one of its vehicle
-   * meshes; `paint`, a hash of the vertex colours its first vehicle is drawn with; and `drawn`, how
-   * many of its vehicles are drawn this frame.
-   */
-  lines?: { id: string; base: number; stripe: number; pattern: number; painted: boolean; paint: number; drawn: number }[];
-  /** Anything else a screen wants a route to be able to assert on. */
-  ui?: Record<string, string | number | boolean>;
+  viewYaw: number;
+  events: number;
 }
 
-export interface SkitchPerfStats {
-  frames: number;
-  workMs: number[];
-  drawCalls: number;
-  triangles: number;
-  /**
-   * Frame accounting, one entry per frame like `workMs`: milliseconds per part of the frame (sim,
-   * each reducer, each view part, UI, audio...) and `steps`, the sim steps the frame carried.
-   */
-  parts?: Record<string, number[]>;
-  /** Milliseconds of each game step (sim + reducers) in those frames, in order. */
-  stepMs?: number[];
-  /**
-   * Where each frame was, one entry per frame like `workMs`: `tick` (route ticks played after the
-   * frame), `x`, `z`, `district`, `chunk` (streaming chunk under the skater), `hitches` (in the
-   * frame), `built` (chunk meshes the world view finished in the frame), `draws` and `tris` (the
-   * frame's draw calls and triangles), `slings` (ride releases in the frame) and `piece` (the
-   * longest chunk-build piece of the frame, ms).
-   */
-  track?: Record<string, number[]>;
-  /** The route's timed windows, in route ticks (src/app/routes.ts `routeWindows`). */
-  windows?: { name: string; from: number; to: number }[];
-  /** Streaming totals of the city view since load (absent for a world drawn whole). */
-  stream?: { shown: number; resident: number; builtTotal: number; worstChunkMs: number; worstFrameBuildMs: number; worstPieceMs: number; triangles: number };
-}
-
-export interface SkitchHook {
+export interface TestHook {
   ready: boolean;
-  /** true when opened with ?e2e: the app does not run its own rAF loop */
-  manual: boolean;
-  /** manual mode only: step the sim `ticks` fixed steps (sampling current input each step), then render exactly one frame */
-  advance(ticks: number): void;
-  state(): SkitchTestState;
-  /** since the last resetStats(); workMs[i] = duration of frame i's work (sim + scene update + render submit) inside the rAF callback; drawCalls/triangles are from the most recent frame */
-  stats(): SkitchPerfStats;
-  resetStats(): void;
+  /** A plain copy of the parts of the sim state scripts check. */
+  state(): HookState;
+  /** Override the input until cleared with null. Fields left out read as a thumb off the screen. */
+  hold(frame: Partial<InputFrame> | null): void;
+  /** A hop on the next step. */
+  hop(): void;
+  /** Stop (true) or restart (false) the real-time clock. */
+  pause(on: boolean): void;
+  /** Advance n ticks now and render one frame. */
+  step(n: number): void;
+  /** Averages over the last 120 frames. */
+  stats(): FrameStatsSummary;
 }
 
 declare global {
   interface Window {
-    __skitch?: SkitchHook;
+    __shmoove?: TestHook;
   }
 }
 
-export function installHook(hook: SkitchHook): void {
-  window.__skitch = hook;
+export class HookInput implements InputSource {
+  private held: InputFrame | null = null;
+  private hopNext = false;
+
+  hold(frame: Partial<InputFrame> | null): void {
+    if (frame === null) {
+      this.held = null;
+      return;
+    }
+    this.held = {
+      steerX: typeof frame.steerX === 'number' ? frame.steerX : 0,
+      steerY: typeof frame.steerY === 'number' ? frame.steerY : 0,
+      carve: frame.carve === true,
+      hop: frame.hop === true,
+    };
+  }
+
+  hop(): void {
+    this.hopNext = true;
+  }
+
+  sample(out: InputFrame): void {
+    out.steerX = 0;
+    out.steerY = 0;
+    out.carve = false;
+    out.hop = false;
+    this.overlay(out);
+  }
+
+  /** Lay the script's intent over a frame another source filled: a hold replaces it, a hop adds to it. */
+  overlay(out: InputFrame): void {
+    const h = this.held;
+    if (h) {
+      out.steerX = h.steerX;
+      out.steerY = h.steerY;
+      out.carve = h.carve;
+      out.hop = h.hop;
+    }
+    if (this.hopNext) {
+      out.hop = true;
+      this.hopNext = false;
+    }
+  }
+}
+
+/** What the hook needs from the app. */
+export interface HookHost {
+  sim: Sim;
+  input: HookInput;
+  pause(on: boolean): void;
+  /** Run n sim steps now and draw one frame of the result. */
+  stepNow(n: number): void;
+  stats(): FrameStatsSummary;
+}
+
+export function installTestHook(host: HookHost): TestHook {
+  const hook: TestHook = {
+    ready: false,
+    state() {
+      const s = host.sim.state;
+      const m = s.mover;
+      return {
+        tick: s.tick,
+        x: m.x,
+        y: m.y,
+        z: m.z,
+        speed: m.speed,
+        gear: m.gear,
+        grounded: m.grounded,
+        tucked: m.tucked,
+        chain: m.chain,
+        viewYaw: s.viewYaw,
+        events: s.events,
+      };
+    },
+    hold(frame) {
+      host.input.hold(frame);
+    },
+    hop() {
+      host.input.hop();
+    },
+    pause(on) {
+      host.pause(on);
+    },
+    step(n) {
+      const k = Math.floor(n);
+      if (!(k > 0)) return;
+      host.stepNow(k);
+    },
+    stats() {
+      return host.stats();
+    },
+  };
+  window.__shmoove = hook;
+  return hook;
 }

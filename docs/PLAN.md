@@ -1,166 +1,206 @@
-# SKITCH — Plan
+# SHMOOVE: the plan
 
-Status key: `[ ]` not started, `[~]` in progress, `[x]` done.
+How the game in `PITCH.md` gets built. Status lives here and is updated in the same commit that
+changes it.
 
-The gate for every milestone is `npm run gate`: typecheck, lint, unit tests and deterministic sim
-tests driven by scripted input, the production build, a Playwright run at 390x844 with touch
-emulation that plays every scripted route and saves screenshots, the PWA check, and the frame-time
-and budget check. Only `m1` was tagged; M2–M5 were closed by their merge commits and the status
-here (DECISIONS 20), and `m6` is the lead's to tag.
+**Now:** M0 is built and its gate is green. M1 is built and waiting on the owner: play the three
+control schemes on the phone (`docs/PLAYTEST.md`) and pick one. That is the go / no-go. M2 does not
+start before it.
 
-## Last gate (the tip of this branch)
+Two things only the owner can do:
 
-Green, after a fresh `npm ci`, on an idle 4-core machine:
+1. Let the deploy run. GitHub rejects it until the `github-pages` environment allows this branch:
+   Settings, Environments, `github-pages`, Deployment branches, add `claude/festive-babbage-zk6cxn`
+   (and Settings, Pages, source "GitHub Actions"). Then re-run the Pages workflow.
+2. Play it and send back the scheme and any tuning (the panel's Copy changes button).
 
-| Stage | Result | Time |
-| --- | --- | --- |
-| typecheck | PASS | 7.6 s |
-| lint | PASS | 4.1 s |
-| test | PASS: 701 tests in 52 files | 27.2 s |
-| build | PASS: bundle 287 kB gzip (budget 400) | 4.9 s |
-| e2e | PASS: 15 routes, no console errors or warnings | 285 s |
-| pwa | PASS | 6.0 s |
-| perf | PASS | 105 s |
+## The order, and why
 
-Perf (`artifacts/perf.json`), headless Chromium at 4x CPU throttle, `perfcity` route, five windows
-pooled: frame work mean 3.2 ms, p95 9.1 ms (budget 10 / 16.6); game step mean 0.08 ms, p95 0.40 ms
-(0.6 / 1.5); one-step frames mean 2.4 ms (6); most draw calls in a timed frame 34, triangles 66k.
-Tour of fixed viewpoints, day and night: at most 71 draw calls and 145.7k triangles (120 / 180k).
-The figures move with machine load: the same build measured 6.2 / 15.4 ms pooled with a verifier
-running beside it, and three runs under heavy load during M6f failed p95 at about 20 ms, all of it
-the render submit waiting on the software rasteriser (DECISIONS 87). Frame time on a real phone is
-the first thing on the playtest list.
+The order is set by the risks, biggest first. The premise (one thumb can drive this) is tested before
+any content exists, the horde's performance before any build system, and the full run before any
+polish. Each milestone ends with something playable on the phone and a decision the owner makes with
+a thumb, because tests cannot judge feel.
 
-A fresh clone of the branch into a temporary directory passed `npm install`, `npm run build` and
-`npm test` during M6j (693 tests then; 701 now).
+| | Milestone | Proves | Size | Status |
+| --- | --- | --- | --- | --- |
+| M0 | Ground | The toolchain, the gate, a link that opens on the phone | S | built, gate green at `f769d0d`; the link waits on a repo setting |
+| M1 | Feel slice | Moving around an empty bowl with one thumb is fun | L | built, gate green; waiting on the owner's playtest |
+| M2 | Horde slice | 400 enemies, readable in portrait, at 60 fps; three minutes are fun | L | |
+| M3 | Build | Level-ups, the arsenal and the drive-through map make runs differ | L | |
+| M4 | Run | A whole ten-minute run with bosses, an ending and resume | M | |
+| M5 | Juice | It looks, sounds and hits like the pitch | M | |
+| M6 | Meta | A reason for the next run: movers, feats, unlocks, daily bowl | M | |
+| M7 | Ship | Installed, offline, tuned, on real phones | S | |
 
-## M0 — Foundations `[x]`
+M1 is a go / no-go. If no control scheme is fun in an empty bowl, the project stops or changes shape
+there, having cost one milestone.
 
-- [x] CLAUDE.md, DESIGN.md, PLAN.md, agent definitions
-- [x] Scaffold: Vite + TS strict + ESLint (sim purity rules) + Vitest + Playwright e2e + perf harness + `npm run gate`
+## M0. Ground
 
-Acceptance: fresh clone passes `npm install`, `npm run build`, `npm test`; `npm run gate` runs end to
-end. Met (re-checked in M6j, above).
+Goal: an empty world on the phone, and every check that later milestones depend on.
 
-## M1 — Feel slice `[x]` (tag `m1`)
+- Vite + strict TypeScript + Three.js, ESLint with the sim purity rules, Vitest, Playwright at
+  390x844 with touch.
+- `src/sim` (deterministic, 60 Hz, seeded RNG, deterministic maths), `src/input`, `src/render`,
+  `src/audio`, `src/ui`, `src/app`. Main loop with interpolation. A test hook for e2e.
+- Debug panel (`?debug`) driven by the `FEEL` constants table.
+- PWA shell: manifest, generated icons, service worker, safe-area insets, browser gestures
+  (pull-to-refresh, edge swipe, double-tap zoom) suppressed, screen wake lock.
+- `npm run gate`: typecheck, lint, test, build, e2e, perf. Perf budgets file, empty but enforced.
+- GitHub Pages deploy on every push to the working branch.
 
-One street, one tram, one funicular, one staircase with a handrail.
+Done when: the gate is green and the owner opens the link on their phone and sees a lit, empty
+ground plane that follows a finger.
 
-- [x] Sim core: world queries, deterministic math, line kinematics
-- [x] Movement controller: ground, air, hop, grind, wallride, bail, vehicle bodies
-- [x] Hitch, slingshot, chain
-- [x] Gesture input (touch + keyboard)
-- [x] Core look: ink material, halftone shadow, riso post pass
-- [x] Chase camera
-- [x] Debug panel exposing every `FEEL` constant
-- [x] docs/PLAYTEST.md first pass
+## M1. Feel slice
 
-Result at the time: 147 unit + sim tests, 3 e2e routes (carve/hop, hitch/whip/sling, grind) with
-screenshots, perf on the slice at 4x throttle: 23 draw calls, 27k triangles, 2.7 ms mean / 8.3 ms p95
-work. Verified by an independent Opus verifier (brief `m1-verify`): 11 source mutations, all caught;
-four defects found and fixed (DECISIONS 19).
+Goal: answer the only question that matters yet. Greybox, no enemies.
 
-## M2 — City `[x]`
+- Bowl generator v0: seeded heightfield with the banked rim, hills, a crater, one half-pipe, ramps,
+  boost pads. Height and normal sampling for the sim.
+- The mover: carve, tuck, hop, clean-hop chains and the buffer, air-steer, slope gravity, drag, grip
+  scrub, the powerslide turn, rim riding. Every number in `FEEL`.
+- Gears: thresholds, hysteresis, the HUD numeral.
+- Camera: velocity-following chase camera, pull-back and field of view by gear, landing kick.
+- The three control schemes from the pitch, switchable in the debug panel and by URL.
+- Input: floating stick, tap vs drag discrimination, second-touch hop, dead zones, left-handed mirror.
+- Bots: a tuck-only bot, a carve-only bot and a line-following bot, with tests that pin what the
+  player would see (the stick alone never passes gear 2; a clean chain down the half-pipe reaches
+  gear 4; a missed hop loses the chain, not the run).
+- `docs/PLAYTEST.md` starts here: the list of constants only a thumb can judge.
 
-- [x] City generator: four districts into the World contract
-- [x] Chunk mesher + seamless streaming, district dressing, sea, day/night, props
-- [x] City fixes from verification: the spawn rolls, landings fall, the summit is crowned, the
-      Mercado is tight with awnings, stalls and handrails on every stair street, forklifts reach the
-      east docks, handrail/stair/clearance tests made strict
-- [x] Retune: no traps from 400 random starts, awnings bounce a wanderer, parapets on the hairpins
-- [x] The city is the default world; `city-spine` and `city-errand` e2e routes
-- [x] Independent check of the drawn city (brief `m6d-verify-world`): haze and night fixed
-      (DECISIONS 69, 70); chunk builds in one-row pieces and a perf gate that covers the whole city
-      followed in M6f
+Done when: gate green, and the owner has played each scheme on the phone for five minutes and picked
+one (or sent it back with notes). **Go / no-go.**
 
-## M3 — Rides and time `[x]`
+What the bots say about the slice as built (seeds 1 to 5, two minutes each; `npx vitest run
+tests/sim/bowl-bots.test.ts --silent=false` prints the table):
 
-- [x] All 16 lines on the city's routes with lanes, stops, hours; scheduled meetings; a scripted
-      climb from the docks to the summit on rides only; the four-link summit route
-- [x] Retune and verification follow-ups: tram 5 every two minutes, a catchable blimp, a
-      night-only express night bus, stops off the spine, body-corner clearance
-- [x] Vehicle meshes for every kind, pattern liveries, line-up fixture (`?world=lineup`); the
-      line-up e2e route asserts each of the 16 lines is drawn in its own livery (M6j)
-- [x] Day cycle visuals, timetable boards at stops, HUD destination board
-- [x] Line map screen and segment inking
-- [x] Independent verification of the ride data (failed once on the blimp; fixed)
+| Player | Average speed | Time in gear 3 or higher | Top gear |
+| --- | --- | --- | --- |
+| Never touches the screen | 2 to 4 m/s | 6 to 14% | 4, briefly |
+| Holds the stick, never tucks or hops | 10 m/s | 0 to 3% | 3 |
+| Steers a good line but hops at random | 12 to 13 m/s | 58 to 65% | 4, rarely 5 |
+| Plays a line: tucks downhill, clean hops | 16 to 19 m/s | 86 to 97% | 5 |
 
-## M4 — Sound `[x]`
+So skill shows, the stick alone does not make speed, and gear 5 is reachable but not held. Whether
+any of it is fun is the owner's call.
 
-- [x] Four district tracks in four stems, the stem mixer, wheel/wind/ride/UI sounds, wired into the
-      loop; verified by measurement (brief `m4-audio-verify`). Nobody has heard it: see PLAYTEST
-- [x] Verifier follow-ups: lighter compressor, two mixer tests, lead register
+## M2. Horde slice
 
-## M5 — Things to do `[x]`
+Goal: the second and third risks. A three-minute run with one enemy family and two weapons.
 
-- [x] Errands (13), conductor challenges (13), secrets (4), ledger, world markers. Verified: the M5
-      verifier completed every errand and challenge with bots of its own; the repository's bots
-      play four errands and two challenges end to end, and the rest are proved feasible from
-      geometry and the timetable (DECISIONS 51)
-- [x] Verifier follow-ups: `ferry_luggage` limit, three conductor tests
-- [x] Chalk lines: record, `SK2-` share code (about 2.4 kB for two minutes), ghost race. Verified exact
-- [x] Saves. Verified against 500 corruptions; version 2 keeps the day (M6h)
+- Enemy core: pooled entities, uniform grid, steering toward the player with separation, recycling
+  of enemies left behind, distance-based tick reduction.
+- Instanced rendering with shader hop-wobble, blob shadows.
+- Three enemies: Shuffler, Gnats, Bollard. Contact rules by gear (hurt, plow, bonk), the hit shove,
+  invulnerability window, HP, death.
+- Sparks: drops, magnet, merging above a cap, XP and levels (no cards yet: fixed upgrades).
+- Two weapons: Wake (with loop detection and the pop) and Seekers. The metres-based tick.
+- Spawn director v0: a density curve over three minutes, spawning out of frame ahead and around.
+- Edge markers and the rear-pressure rim glow.
+- Perf in the gate: 400 enemies and 600 sparks at 4x CPU throttle against budgets for frame work,
+  sim step, draw calls and triangles.
 
-## M6 — Ship `[x]` (to be tagged `m6` by the lead)
+Done when: gate green with the perf budgets met, and the owner agrees that deaths feel earned and the
+loop pop feels as good as it reads. If the browser cannot hold the horde, this is where the enemy cap
+drops or the platform decision is reopened.
 
-- [x] Onboarding that teaches by play (M6b), its independent check (which led to the planted foot,
-      DECISIONS 77), and the fixes for clumsy players (M6g): four lesson steps, a lead to a waiting
-      spot at a stop, a first-launch e2e touch route that completes the lesson; player bots
-      complete 30/30 for each of three profiles (DECISIONS 88–93)
-- [x] Menus: title, pause, settings, map-complete. Verified
-- [x] Haptics
-- [x] PWA: manifest, icons generated in code, service worker, offline, portrait lock. Verified,
-      including the update flow and a stale-cache bug the verifier found and fixed
-- [x] README with deploy steps; GitHub Pages workflow deploying `develop` and the working branch
-- [x] Performance pass, then made honest: the gate times five windows across all four districts
-      with hitches, slings and chunk streaming at speed (it used to time 8 s on the summit lawn).
-      Chunk builds are one row, solid or rail at a time. Figures above
-- [x] Full-game check: first launch → completed line map by a scripted skater with no teleports
-      (`tests/sim/fullGame.test.ts`, bot in `tests/sim/bot/`): every line complete, no bails, the
-      map at 51.5 simulated minutes, all four secrets at 67.3, three save/load points end in the
-      same state
-- [x] Secrets a player can finish (M6h): the blimp is caught at the hill station and sets you down
-      there, the summit chain's king-kite ride inks S3, a guy wire down from the needle, run-in
-      steps onto the hill station platform, quieter errand givers clear of stops, saves keep the
-      day (DECISIONS 94–99)
-- [x] Camera looks for a clear line to the skater (awnings, pillars) and keeps them in frame
-- [x] Final docs and audit (M6j): documents brought in line with the code, the chain meter's false
-      "lost", livery assertions, e2e failing on console warnings, dead code removed, fresh clone
-      checked
-- [x] Independent check of M6g, M6h, the planted foot and the camera (brief `m6i-verify-final`):
-      gate green, no test loosened, 119 of 120 late, clumsy and hint-ignoring players finish the
-      lesson, the secrets finishable. It failed the camera under low awnings and an early press
-      behind a ride; both fixed with tests, and waiting spots moved clear of stall roofs
-      (DECISIONS 106–110)
-- [x] The city is lit at night (M6k): slope windows, roof lanterns, warehouse clerestories, lit
-      glass in the far level of detail (DECISIONS 111). Not independently checked beyond its own
-      test and screenshots
+## M3. Build
 
-Acceptance:
-- Fresh clone: `npm install`, `npm run build`, `npm test` pass. Met.
-- PWA checks: manifest valid, service worker registered, works offline, updates. Met by
-  `npm run e2e:pwa` (our own checks; Lighthouse itself is not run).
-- e2e: first-launch onboarding completes by scripted touch (`city-first-launch`); a scripted
-  full-game sim test completes the line map from a new save (`fullGame.test.ts`). Met.
-- No placeholders, TODOs or stubs in the tree; cuts listed in DECISIONS.md. Met (M6j audit; Cut
-  section in DECISIONS).
+Goal: runs differ from each other.
 
-Still open, and only a human can close them: everything in `docs/PLAYTEST.md`, starting with frame
-time on a real phone.
+- Stat system (one table of modifiers that weapons, mover and passives read).
+- Level-up flow: slow motion, three cards in the thumb zone, momentum handed back, auto-pick.
+- The remaining eight weapons and the eleven passives, four slots each, five levels each.
+- The remaining enemies: Cutter, Lobber, Sludge, Clinger. Elites and auras.
+- Drive-through interactables: crates, orbit shrines, slaloms, hoops, totems. Bowl generator v1
+  places them off the natural circuits.
+- HUD: timer, HP, gear, XP bar, build icons, damage numbers (pooled, capped).
+- Bots that take builds; a test per weapon that it kills more per minute in a higher gear.
 
-## Milestone commits
+Done when: gate green, and two runs with different first picks play visibly differently.
 
-The remote accepts only branch pushes from the build session, so the milestone tags could not be
-pushed (DECISIONS 20). Work on the milestones overlapped, so each line is the commit where that
-milestone's last piece merged; the full gate was run at `m1` and at the end, not at every one of
-these. To tag them:
+## M4. Run
 
-```
-git tag m1 b658fcd   # feel slice
-git tag m2 9116e60   # city: generator, streamed view, fixes, retune
-git tag m3 eef38a7   # rides and time: 16 lines, meetings, vehicles, map
-git tag m4 8eafb6e   # sound, with the verifier's follow-ups
-git tag m5 8eafb6e   # things to do: errands, conductors, secrets, chalk, saves (same merge)
-git tag m6 <the tip of this branch>   # ship: the last green gate
-git push origin --tags
-```
+Goal: a beginning, a middle and an end.
+
+- Spawn director v1: the three acts from the pitch, waves, elite timing.
+- The Toll, The Roundabout, The Standstill.
+- Win, death, Overtime. Results screen.
+- Snapshot on backgrounding; resume; a snapshot round-trip test.
+- Balance harness: bots at three skill levels play full seeded runs headlessly. Targets to start
+  from: the tuck-and-circle bot dies before 4:00, the competent bot reaches the final boss about half
+  the time, no single weapon wins more than twice as often as the median.
+
+Done when: gate green including the balance harness, and the owner finishes (or fairly loses) a full
+run on the phone.
+
+## M5. Juice
+
+Goal: the pitch's look, sound and feel.
+
+- Look: palette, fog, flat shading, enemy silhouettes, the five movers' models, the Wake, speed
+  streaks, pops and slams.
+- Audio: synthesised stems that follow the gear, clean-hop scale, level-up and boss stingers, SFX.
+- Feel: hit-stop, camera kicks, haptics where available, reduced-motion setting.
+- Screenshots of every state in `artifacts/screens/` for review.
+
+Done when: gate green (perf budgets unchanged) and the owner signs off the look on the phone outdoors.
+
+## M6. Meta
+
+Goal: the next run.
+
+- Tokens, saves with versioning and migration tests.
+- The four other movers, each with its own movement rule.
+- Feats (about thirty) and the unlocks they gate; small capped perks.
+- Records per mover; the daily bowl.
+- Menus, settings (handedness, auto-pick, reduced motion, volume), a thirty-second first-run lesson
+  that teaches carve, tuck, hop by doing them.
+
+Done when: gate green and a new player (not the owner) gets from the link to gear 4 without help.
+
+## M7. Ship
+
+- PWA install, offline and update flow tested end to end (`e2e:pwa`).
+- Perf pass on the real target phones; budgets tightened to what they actually do.
+- Balance pass from the owner's `PLAYTEST.md` notes.
+- README, a how-to-play screen, version stamp.
+
+Done when: gate green, tag `v1`, installed on the owner's phone from the public link.
+
+## After v1
+
+Evolutions, rails, a second biome (The Stacks: terraces and drops), ghosts of your best daily run,
+online leaderboards for the daily bowl.
+
+## How the work is done
+
+- **The gate.** A milestone is done only when `npm run gate` is green and tagged `mN`.
+- **Bots before thumbs.** Anything a bot can check (determinism, reachability of gears, kill rates,
+  survival curves, perf) is a test. The owner's time is spent only on what a thumb must judge, and
+  that list is `docs/PLAYTEST.md`.
+- **Lead and implementers.** The lead writes contracts and owns the feel-critical code (the mover,
+  the gears and loop logic, the camera, the core look). Everything with a clear contract goes to
+  implementer agents in parallel worktrees and is checked by a verifier with fresh context. See
+  `CLAUDE.md`.
+- **Decisions** made without the owner are logged in `docs/DECISIONS.md` from M0 on.
+
+## Decisions made in this pitch, to overrule if wrong
+
+| # | Decision | Default taken | Why |
+| --- | --- | --- | --- |
+| 1 | Name and fiction | SHMOOVE; Stiffs; the last thing moving | The repo name, and a fiction where speed as power needs no explaining |
+| 2 | Platform | Web PWA | On the phone from a link, no store. Reopened at M2 if the horde will not fit |
+| 3 | Hands | One thumb is complete; a second is optional | Portrait is a one-handed grip |
+| 4 | Run length | Ten minutes, resumable | Long enough for a build, short enough for a phone |
+| 5 | Slots | Four weapons, four passives | Readable on a narrow HUD |
+| 6 | Art and audio | All generated in code | Small, offline, nothing to license |
+| 7 | Monetisation and network | None | It is your game on your phone |
+
+## What the owner needs to answer
+
+1. Which phone or phones is this for? It sets the perf target and whether haptics exist.
+2. Is the fiction (Stiffs, the Bowl, funk) the tone you want, or should it be something else?
+3. Where should it deploy from? The old Pages workflow built from `develop` and the old default
+   branch; M0 will point a new one at this branch unless told otherwise.

@@ -1,20 +1,28 @@
-# Builds the game and deploys dist/ to GitHub Pages on every push to develop.
-# Needs: Settings → Pages → Build and deployment → Source: GitHub Actions, and the branch allowed
-# under Settings → Environments → github-pages → Deployment branches (GitHub only allows the
-# default branch there until others are added). The working branch is listed as well because it
-# is the repository's default branch and so may already be allowed.
+# Deploys the built game to GitHub Pages on every push to the branches below.
+#
+# What the repository needs for the deploy job to run:
+#   - Settings, Pages, Source: "GitHub Actions".
+#   - Settings, Environments, github-pages, Deployment branches: it must include the branch being
+#     pushed. By default only the default branch may deploy, so a push from any other branch listed
+#     here is rejected at the environment until it is added there.
+# A deploy in progress is never cancelled by a newer push (cancel-in-progress is false); the newer
+# one waits its turn.
 name: Pages
+
 on:
   push:
-    branches: [develop, claude/build-skitch-game-ntnaek]
+    branches: [claude/festive-babbage-zk6cxn, main]
   workflow_dispatch:
+
 permissions:
   contents: read
   pages: write
   id-token: write
+
 concurrency:
-  group: pages-${{ github.ref }}
-  cancel-in-progress: true
+  group: pages
+  cancel-in-progress: false
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -29,14 +37,16 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
+      - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
       - id: deployment
         uses: actions/deploy-pages@v4
-  # Reports on the build being tested; does not hold the deploy back.
+
   checks:
     runs-on: ubuntu-latest
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

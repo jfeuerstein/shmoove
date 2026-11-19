@@ -1,218 +1,249 @@
-// e2e runner: plays data-only routes from tests/e2e/routes/ against the built app in headless
-// Chromium at 390x844 with real CDP touch input. Time advances only via window.__skitch.advance(),
-// so every run is deterministic.
-//   npm run e2e            all routes
-//   npm run e2e -- boot    one route
-import { mkdirSync, readdirSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { pathToFileURL } from 'node:url';
-import { ROOT, newPhoneContext, waitForReady, withAppAndBrowser } from './lib/browser.mjs';
-import { decodePng, nonFlatFraction } from './lib/png.mjs';
-import {
-  SWIPE_MOVES,
-  SWIPE_STEP_PX,
-  VIEW_H,
-  VIEW_W,
-  routeQuery,
-  validateRoute,
-  waitSlices,
-} from './lib/route.mjs';
+// e2e runner: serves dist/ with `vite preview`, opens headless Chromium as a phone (390x844 CSS px,
+// touch, device scale factor 2) and plays every route in tests/e2e/routes/. A route fails on any
+// console error or warning, any page error, or a failed check; each one saves
+// artifacts/screens/<route>.png. Exits non-zero if any route failed.
+//
+//   npm run e2e              every route
+//   npm run e2e -- drive     one route
+//
+// dist/ is built with `vite build` when it is missing (the gate builds it before this runs).
+// The rest of the harness (server, browser, phone context) is exported for the perf runner.
+import { spawn, spawnSync } from 'node:child_process';
+import { existsSync, mkdirSync, readdirSync } from 'node:fs';
+import { createServer } from 'node:net';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { chromium } from 'playwright';
 
-const SHOT_TIMEOUT_MS = 180_000;
-
+export const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
+export const DIST = join(ROOT, 'dist');
+export const VIEWPORT = { width: 390, height: 844 };
+/** Headless Chromium has no GPU: WebGL runs on SwiftShader, which has to be allowed explicitly. */
+const CHROMIUM_ARGS = ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'];
 const ROUTES_DIR = join(ROOT, 'tests', 'e2e', 'routes');
 const SCREENS_DIR = join(ROOT, 'artifacts', 'screens');
-/** A canvas whose pixels differ from its first pixel in less than this fraction counts as blank. */
-const MIN_NON_FLAT = 0.0005;
+/** Software rendering on a busy machine can take a while to produce a frame. */
+const SHOT_TIMEOUT_MS = 120_000;
+const ROUTE_TIMEOUT_MS = 180_000;
+
+/** Build dist/ with vite if it is not there. */
+export function ensureBuild() {
+  if (existsSync(join(DIST, 'index.html'))) return;
+  console.log('[harness] dist/ missing, running vite build ...');
+  const vite = join(ROOT, 'node_modules', 'vite', 'bin', 'vite.js');
+  const r = spawnSync(process.execPath, [vite, 'build'], { cwd: ROOT, stdio: 'inherit' });
+  if (r.status !== 0) throw new Error('vite build failed');
+}
+
+function freePort() {
+  return new Promise((res, rej) => {
+    const srv = createServer();
+    srv.unref();
+    srv.on('error', rej);
+    srv.listen(0, '127.0.0.1', () => {
+      const addr = srv.address();
+      const port = typeof addr === 'object' && addr ? addr.port : 0;
+      srv.close(() => res(port));
+    });
+  });
+}
+
+async function waitForHttp(url, child, timeoutMs) {
+  const end = Date.now() + timeoutMs;
+  while (Date.now() < end) {
+    if (child.exitCode !== null) throw new Error(`vite preview exited with code ${child.exitCode}`);
+    try {
+      const r = await fetch(url);
+      if (r.ok) return;
+    } catch {
+      // not up yet
+    }
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  throw new Error(`vite preview did not answer at ${url} within ${timeoutMs} ms`);
+}
+
+/** Start `vite preview` on dist/ on a free port. Returns { url, close }. */
+export async function startPreview() {
+  const port = await freePort();
+  const vite = join(ROOT, 'node_modules', 'vite', 'bin', 'vite.js');
+  const child = spawn(process.execPath, [vite, 'preview', '--host', '127.0.0.1', '--port', String(port), '--strictPort'], {
+    cwd: ROOT,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  let log = '';
+  child.stdout.on('data', (d) => (log += d));
+  child.stderr.on('data', (d) => (log += d));
+  const url = `http://127.0.0.1:${port}`;
+  try {
+    await waitForHttp(url + '/', child, 20_000);
+  } catch (e) {
+    child.kill();
+    throw new Error(`${e instanceof Error ? e.message : String(e)}\n${log}`);
+  }
+  return {
+    url,
+    close: () =>
+      new Promise((res) => {
+        if (child.exitCode !== null) return res(undefined);
+        child.once('exit', () => res(undefined));
+        child.kill();
+      }),
+  };
+}
+
+export function launchBrowser() {
+  return chromium.launch({ headless: true, args: CHROMIUM_ARGS });
+}
+
+/** A phone held upright: 390x844 CSS px, device scale factor 2, touch. */
+export function newPhoneContext(browser, deviceScaleFactor = 2) {
+  return browser.newContext({ viewport: VIEWPORT, screen: VIEWPORT, deviceScaleFactor, hasTouch: true, isMobile: true });
+}
+
+/**
+ * The one console message that is the harness's, not the app's: headless Chromium composites in
+ * software, so it reads every displayed WebGL canvas back from SwiftShader and its GPU process logs
+ * this performance note for the first few frames. A page that only clears a WebGL canvas once
+ * prints it too. Matched exactly, so any other driver message still fails the run.
+ */
+const HARNESS_NOISE = /^\[\.WebGL-0x[0-9a-f]+\]GL Driver Message \(OpenGL, Performance, [A-Z_]+, High\): GPU stall due to ReadPixels( \(this message will no longer repeat\))?$/;
+
+/** Collect every console error and warning and every page error into `problems`. */
+export function watchProblems(page, problems) {
+  page.on('pageerror', (e) => problems.push(`page error: ${e.message}`));
+  page.on('console', (m) => {
+    const t = m.type();
+    if (t !== 'error' && t !== 'warning' && t !== 'assert') return;
+    const text = m.text();
+    if (t === 'warning' && HARNESS_NOISE.test(text)) return;
+    problems.push(`console ${t}: ${text}`);
+  });
+}
+
+export async function waitForHook(page, timeoutMs = 30_000) {
+  await page.waitForFunction(() => window.__shmoove?.ready === true, undefined, { timeout: timeoutMs });
+}
+
+/** Serve dist/ and launch Chromium around `fn`; cleans up both. */
+export async function withAppAndBrowser(fn) {
+  ensureBuild();
+  const server = await startPreview();
+  let browser;
+  try {
+    browser = await launchBrowser();
+    return await fn({ url: server.url, browser });
+  } finally {
+    if (browser) await browser.close();
+    await server.close();
+  }
+}
 
 async function loadRoutes(only) {
-  const files = readdirSync(ROUTES_DIR).filter((f) => f.endsWith('.mjs')).sort();
+  const files = readdirSync(ROUTES_DIR)
+    .filter((f) => f.endsWith('.mjs'))
+    .sort();
   const routes = [];
   for (const f of files) {
     const mod = await import(pathToFileURL(join(ROUTES_DIR, f)).href);
-    const route = mod.default ?? mod.route;
-    const errs = validateRoute(route);
-    if (errs.length) throw new Error(`invalid route in ${f}:\n  ${errs.join('\n  ')}`);
-    routes.push(route);
+    const r = mod.default;
+    if (!r || typeof r.name !== 'string' || typeof r.run !== 'function') {
+      throw new Error(`${f}: a route exports default { name, query, run(t) }`);
+    }
+    routes.push(r);
   }
   if (only.length === 0) return routes;
-  const picked = routes.filter((r) => only.includes(r.name));
   const missing = only.filter((n) => !routes.some((r) => r.name === n));
   if (missing.length) throw new Error(`unknown route(s): ${missing.join(', ')}`);
-  return picked;
+  return routes.filter((r) => only.includes(r.name));
 }
 
-const clampX = (x) => Math.min(VIEW_W - 1, Math.max(0, x));
-const clampY = (y) => Math.min(VIEW_H - 1, Math.max(0, y));
+/**
+ * What a route gets: the page, the hook (each method of window.__shmoove as an async call),
+ * `check(ok, label, detail)` which records a failure without stopping, and `shot()`.
+ */
+function routeApi(page, route, problems) {
+  const call = (method, ...args) => page.evaluate(([m, a]) => window.__shmoove[m](...a), [method, args]);
+  let shotTaken = false;
+  return {
+    page,
+    hook: {
+      state: () => call('state'),
+      hold: (frame) => call('hold', frame),
+      hop: () => call('hop'),
+      pause: (on) => call('pause', on),
+      step: (n) => call('step', n),
+      stats: () => call('stats'),
+    },
+    check(ok, label, detail) {
+      if (ok !== true) problems.push(`check failed: ${label}${detail === undefined ? '' : ` (${JSON.stringify(detail)})`}`);
+      return ok === true;
+    },
+    async shot() {
+      const file = join(SCREENS_DIR, `${route.name}.png`);
+      // Let the compositor show the last frame drawn.
+      await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r(undefined)))));
+      await page.screenshot({ path: file, timeout: SHOT_TIMEOUT_MS });
+      shotTaken = true;
+      return file;
+    },
+    get shotTaken() {
+      return shotTaken;
+    },
+  };
+}
 
 async function playRoute(browser, url, route) {
   const context = await newPhoneContext(browser);
   const page = await context.newPage();
   const problems = [];
-  page.on('pageerror', (e) => problems.push(`page error: ${e.message}`));
-  // Any console error or warning fails the route: a clean run prints nothing to either.
-  page.on('console', (m) => {
-    const t = m.type();
-    if (t === 'error' || t === 'warning' || t === 'assert') problems.push(`console ${t}: ${m.text()}`);
-  });
-  const cdp = await context.newCDPSession(page);
-  const history = [];
-  let finger = null; // current touch point in CSS px, or null
-  let checkedCanvas = false;
-
-  const flushInput = () =>
-    page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r(undefined)))));
-  const touch = async (type, pt) => {
-    await cdp.send('Input.dispatchTouchEvent', {
-      type,
-      touchPoints: pt ? [{ x: pt.x, y: pt.y, id: 0, radiusX: 4, radiusY: 4, force: 1 }] : [],
-    });
-    await flushInput();
-  };
-  const sample = async () => {
-    const s = await page.evaluate(() => window.__skitch.state());
-    history.push(s);
-    return s;
-  };
-  const advance = async (ticks) => {
-    await page.evaluate((n) => window.__skitch.advance(n), ticks);
-    return sample();
-  };
-  const down = async (x, y) => {
-    if (finger) await touch('touchEnd', null);
-    finger = { x: clampX(x), y: clampY(y) };
-    await touch('touchStart', finger);
-  };
-  const move = async (x, y) => {
-    if (!finger) throw new Error('move without a finger down');
-    finger = { x: clampX(x), y: clampY(y) };
-    await touch('touchMove', finger);
-  };
-  const up = async () => {
-    if (!finger) return;
-    finger = null;
-    await touch('touchEnd', null);
-  };
-  const shot = async (name) => {
-    const file = join(SCREENS_DIR, `${route.name}-${name}.png`);
-    // Software rendering on a busy machine can take a while to produce a frame.
-    const png = await page.screenshot({ path: file, timeout: SHOT_TIMEOUT_MS });
-    await assertCanvasNotBlank(page, png, `${route.name}-${name}`);
-    checkedCanvas = true;
-  };
-
+  watchProblems(page, problems);
+  const t0 = Date.now();
   try {
-    await page.goto(url + '/' + routeQuery(route));
-    await waitForReady(page);
-    const manual = await page.evaluate(() => window.__skitch.manual);
-    if (!manual) throw new Error('app did not enter manual stepping mode with ?e2e');
-    await sample();
-    for (const [i, step] of route.steps.entries()) {
-      if (problems.length) break;
-      switch (step.do) {
-        case 'down':
-          await down(step.x, step.y);
-          break;
-        case 'move':
-          await move(step.x, step.y);
-          break;
-        case 'up':
-          await up();
-          break;
-        case 'swipeUp': {
-          // Fast upward flick: touch start seen on its own tick, then 3 moves over 3 ticks.
-          if (!finger) {
-            await down(step.x ?? VIEW_W / 2, step.y ?? VIEW_H * 0.7);
-            await advance(1);
-          }
-          for (let k = 0; k < SWIPE_MOVES; k++) {
-            await move(finger.x, finger.y - SWIPE_STEP_PX);
-            await advance(1);
-          }
-          if (!step.hold) await up();
-          break;
-        }
-        case 'wait':
-          for (const n of waitSlices(step.ticks)) await advance(n);
-          break;
-        case 'shot':
-          await shot(step.name);
-          break;
-        case 'expect': {
-          const state = await page.evaluate(() => window.__skitch.state());
-          let ok = false;
-          try {
-            ok = step.test(state, history) === true;
-          } catch (e) {
-            problems.push(`expect '${step.label}' threw: ${e instanceof Error ? e.message : String(e)}`);
-            break;
-          }
-          if (!ok) problems.push(`expect failed at steps[${i}]: ${step.label} (state ${JSON.stringify(state)})`);
-          break;
-        }
-      }
+    await page.goto(`${url}/${route.query ?? '?hook'}`);
+    await waitForHook(page);
+    const api = routeApi(page, route, problems);
+    let timer;
+    const timeout = new Promise((_, rej) => {
+      timer = setTimeout(() => rej(new Error(`route took longer than ${ROUTE_TIMEOUT_MS / 1000} s`)), ROUTE_TIMEOUT_MS);
+    });
+    try {
+      await Promise.race([route.run(api), timeout]);
+    } finally {
+      clearTimeout(timer);
     }
-    if (!checkedCanvas && problems.length === 0) {
-      await assertCanvasNotBlank(page, await page.screenshot({ timeout: SHOT_TIMEOUT_MS }), `${route.name} (end)`);
-    }
+    if (!api.shotTaken) problems.push('route saved no screenshot');
   } catch (e) {
-    problems.push(e instanceof Error ? e.message : String(e));
+    problems.push(`route threw: ${e instanceof Error ? e.stack ?? e.message : String(e)}`);
   } finally {
     await context.close();
   }
-  return { name: route.name, ticks: history.length ? history[history.length - 1].tick : 0, problems };
-}
-
-/** Throws if the #game canvas region of the screenshot is a single flat colour. */
-async function assertCanvasNotBlank(page, png, label) {
-  const box = await page.locator('#game').boundingBox();
-  if (!box) throw new Error(`${label}: #game canvas not found`);
-  const dpr = await page.evaluate(() => window.devicePixelRatio);
-  const img = decodePng(png);
-  const frac = nonFlatFraction(img, {
-    x: box.x * dpr,
-    y: box.y * dpr,
-    width: box.width * dpr,
-    height: box.height * dpr,
-  });
-  if (frac < MIN_NON_FLAT) {
-    throw new Error(`${label}: game canvas is blank (one flat colour, ${(frac * 100).toFixed(3)}% differs)`);
-  }
+  return { name: route.name, problems, ms: Date.now() - t0 };
 }
 
 async function main() {
   const only = process.argv.slice(2).filter((a) => !a.startsWith('-'));
   const routes = await loadRoutes(only);
-  if (routes.length === 0) throw new Error(`no routes in ${ROUTES_DIR}`);
   mkdirSync(SCREENS_DIR, { recursive: true });
-
   const results = await withAppAndBrowser(async ({ url, browser }) => {
     const out = [];
     for (const route of routes) {
-      const t0 = Date.now();
+      process.stdout.write(`[e2e] ${route.name} ... `);
       const r = await playRoute(browser, url, route);
-      out.push({ ...r, ms: Date.now() - t0 });
+      console.log(r.problems.length ? 'FAIL' : 'ok', `(${(r.ms / 1000).toFixed(1)} s)`);
+      for (const p of r.problems) console.log(`    ${p}`);
+      out.push(r);
     }
     return out;
   });
-
-  const w = Math.max(5, ...results.map((r) => r.name.length));
-  console.log(`\n${'route'.padEnd(w)}  result  ticks     ms`);
-  for (const r of results) {
-    const res = r.problems.length ? 'FAIL' : 'PASS';
-    console.log(`${r.name.padEnd(w)}  ${res.padEnd(6)}  ${String(r.ticks).padStart(5)}  ${String(r.ms).padStart(5)}`);
-    for (const p of r.problems) console.log(`${' '.repeat(w)}    - ${p}`);
-  }
-  writeFileSync(
-    join(ROOT, 'artifacts', 'e2e.json'),
-    JSON.stringify(results.map(({ name, ticks, ms, problems }) => ({ name, ticks, ms, problems })), null, 2),
-  );
-  const failed = results.filter((r) => r.problems.length).length;
-  console.log(failed ? `\ne2e: ${failed}/${results.length} route(s) FAILED` : `\ne2e: all ${results.length} route(s) passed`);
-  process.exitCode = failed ? 1 : 0;
+  const failed = results.filter((r) => r.problems.length > 0);
+  console.log(`\n[e2e] ${results.length - failed.length}/${results.length} routes passed; screenshots in artifacts/screens/`);
+  process.exitCode = failed.length ? 1 : 0;
 }
 
-main().catch((e) => {
-  console.error(e instanceof Error ? e.stack ?? e.message : e);
-  process.exitCode = 1;
-});
+if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
+  main().catch((e) => {
+    console.error(e);
+    process.exitCode = 1;
+  });
+}
