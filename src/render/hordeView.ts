@@ -99,7 +99,7 @@ const STILL_SPEED = 0.05;
 /** An elite is drawn this much larger than its kind. */
 export const ELITE_SCALE = 1.4;
 /** An elite always shows this much of the flash colour (white): a sheen, under its crown. */
-const ELITE_SHEEN = 0.12;
+const ELITE_SHEEN = 0.08;
 /**
  * The colour of each aura, by ELITE_*: its ring on the ground and the crown of an elite carrying it.
  * Index 0 (ELITE_NONE) is the crown of an elite with no aura: the elite white. Haste orange (the
@@ -482,11 +482,12 @@ export function shufflerGeometry(): BufferGeometry {
   m.set(PART_BODY, 0).block(0.72, 1.38, 0.34, 0.22, 0.44, 0.28, 0.16);
   m.set(PART_BODY, 0.18).block(1.3, 1.7, 0.2, 0.19, 0.17, 0.16, 0.04, 0.22);
   m.set(PART_BODY, EYE).octa(0.085, 1.53, 0.43, 0.075, 0.08, 0.05).octa(-0.09, 1.52, 0.42, 0.05, 0.055, 0.04);
+  m.set(PART_BODY, DARK).block(1.36, 1.43, 0.11, 0.03, 0.12, 0.03, 0, 0.42, 0.01);
   m.set(PART_ARM_A, 0.06, 0.42, 1.28, 0.2).limb(0.42, 1.28, 0.2, 0.33, 1.13, 0.76, 0.1, 0.08);
-  m.set(PART_ARM_A, 0.28, 0.42, 1.28, 0.2).octa(0.33, 1.12, 0.82, 0.11, 0.1, 0.11);
+  m.set(PART_ARM_A, 0.28, 0.42, 1.28, 0.2).tetra([0.33, 1.24, 0.8, 0.45, 1.04, 0.8, 0.21, 1.04, 0.8, 0.33, 1.1, 0.98]);
   m.set(PART_ARM_B, 0.06, -0.42, 1.28, 0.2).limb(-0.42, 1.28, 0.2, -0.31, 1.18, 0.74, 0.1, 0.08);
-  m.set(PART_ARM_B, 0.28, -0.42, 1.28, 0.2).octa(-0.31, 1.17, 0.8, 0.11, 0.1, 0.11);
-  m.set(PART_CROWN, 0, 0, 1.7, 0.24).spike(0, 1.68, 0.24, 0.06, 0.3).spike(0.12, 1.68, 0.24, 0.05, 0.22, 0.05).spike(-0.12, 1.68, 0.24, 0.05, 0.22, -0.05);
+  m.set(PART_ARM_B, 0.28, -0.42, 1.28, 0.2).tetra([-0.31, 1.29, 0.78, -0.19, 1.09, 0.78, -0.43, 1.09, 0.78, -0.31, 1.15, 0.96]);
+  m.set(PART_CROWN, 0, 0, 1.7, 0.24).spike(0.08, 1.68, 0.24, 0.084, 0.448, 0.04).spike(-0.08, 1.68, 0.24, 0.084, 0.448, -0.04);
   return m.geometry();
 }
 
@@ -510,10 +511,12 @@ export function bollardGeometry(): BufferGeometry {
   m.set(PART_LEG_A, -0.5, 0.5, 0.3, 0).block(0, 0.32, 0.3, 0.42, 0.26, 0.34, 0, 0.08, 0.5);
   m.set(PART_LEG_B, -0.5, -0.5, 0.3, 0).block(0, 0.32, 0.3, 0.42, 0.26, 0.34, 0, 0.08, -0.5);
   m.set(PART_BODY, 0).prism(8, 1.15, 0.9, 0.25, 1.95, false, false);
-  m.set(PART_BODY, 0.6).prism(8, 1.1, 1.04, 0.95, 1.3, false, false);
+  m.set(PART_BODY, 0.6).prism(8, 1.13, 1.09, 0.65, 0.98, false, false);
   m.set(PART_BODY, -0.18).prism(8, 0.95, 0.7, 1.95, 2.4, false, true);
-  m.set(PART_BODY, EYE).octa(0.32, 1.62, 0.96, 0.2, 0.13, 0.08).octa(-0.32, 1.62, 0.96, 0.2, 0.13, 0.08);
-  m.set(PART_CROWN, 0, 0, 2.4, 0).spike(0, 2.38, 0, 0.12, 0.42).spike(0.42, 2.3, 0, 0.1, 0.32, 0.12).spike(-0.42, 2.3, 0, 0.1, 0.32, -0.12);
+  // Sleepy eyes, heavy-lidded (flat on top), and a wide dark mouth.
+  for (const side of [1, -1]) m.set(PART_BODY, EYE).tetra([side * 0.12, 1.68, 0.97, side * 0.52, 1.68, 0.92, side * 0.32, 1.5, 0.98, side * 0.32, 1.63, 1.06]);
+  m.set(PART_BODY, DARK).block(1.2, 1.36, 0.36, 0.06, 0.3, 0.06, 0, 1.0);
+  m.set(PART_CROWN, 0, 0, 2.4, 0).spike(0.25, 2.36, 0, 0.168, 0.672, 0.06).spike(-0.25, 2.36, 0, 0.168, 0.672, -0.06);
   return m.geometry();
 }
 
@@ -535,7 +538,7 @@ export function cutterGeometry(): BufferGeometry {
   m.set(PART_BODY, -0.42).pyramid([-0.05, 1.3, 0.4, 0.05, 1.3, 0.4, 0.05, 1.48, 0.42, -0.05, 1.48, 0.42], 0, 1.45, 0.12);
   m.set(PART_BODY, 0.6).pyramid([-0.14, 0.86, 0.2, 0.14, 0.86, 0.2, 0.09, 1.2, 0.42, -0.09, 1.2, 0.42], 0, 1.02, 0.95);
   m.set(PART_ARM_A, 0.08, 0.16, 1.2, 0.3).limb(0.16, 1.2, 0.3, 0.17, 0.88, -0.35, 0.06, 0.05);
-  m.set(PART_CROWN, 0, 0, 1.5, 0.55).spike(0.07, 1.48, 0.53, 0.04, 0.22, 0.04, -0.04).spike(-0.07, 1.48, 0.53, 0.04, 0.22, -0.04, -0.04);
+  m.set(PART_CROWN, 0, 0, 1.5, 0.55).spike(0.07, 1.48, 0.53, 0.056, 0.352, 0.04, -0.04).spike(-0.07, 1.48, 0.53, 0.056, 0.352, -0.04, -0.04);
   return m.geometry();
 }
 
@@ -554,7 +557,7 @@ export function lobberGeometry(): BufferGeometry {
   m.set(PART_ACT, 0.08, 0.38, 1.0, -0.05).limb(0.38, 1.0, -0.05, 0.3, 1.58, -0.15, 0.1, 0.08);
   m.set(PART_ACT, -0.35, 0.38, 1.0, -0.05).octa(0.3, 1.72, -0.15, 0.18, 0.18, 0.18);
   m.set(PART_BODY, 0.08).limb(-0.55, 0.85, 0, -0.66, 0.5, 0.2, 0.1, 0.08);
-  m.set(PART_CROWN, 0, 0, 1.05, 0).spike(-0.12, 1.03, -0.1, 0.06, 0.26).spike(-0.32, 1.03, -0.1, 0.05, 0.2, -0.04);
+  m.set(PART_CROWN, 0, 0, 1.05, 0).spike(-0.12, 1.03, -0.1, 0.084, 0.416).spike(-0.32, 1.03, -0.1, 0.07, 0.32, -0.04);
   return m.geometry();
 }
 
@@ -570,7 +573,7 @@ export function sludgeGeometry(): BufferGeometry {
     m.set(PART_HEAD, 0.1, 0, 0.8, 0.36).limb(side * 0.2, 0.78, 0.36, side * 0.27, 0.96, 0.42, 0.05, 0.04, 3);
     m.set(PART_HEAD, EYE, 0, 0.8, 0.36).octa(side * 0.27, 1.0, 0.44, 0.1, 0.1, 0.09);
   }
-  m.set(PART_CROWN, 0, 0, 1.0, 0).spike(0, 1.0, -0.1, 0.07, 0.28).spike(0.2, 0.96, -0.12, 0.06, 0.22, 0.05).spike(-0.2, 0.96, -0.12, 0.06, 0.22, -0.05);
+  m.set(PART_CROWN, 0, 0, 1.0, 0).spike(0, 1.0, -0.1, 0.098, 0.448).spike(0.2, 0.96, -0.12, 0.084, 0.352, 0.05).spike(-0.2, 0.96, -0.12, 0.084, 0.352, -0.05);
   return m.geometry();
 }
 
@@ -604,7 +607,7 @@ export function clingerGeometry(): BufferGeometry {
       m.set(part, -0.4, side * 0.1, c, z).limb(side * 0.1, c, z, side * 0.33, 0.02, z * 1.6, 0.035, 0.02, 3);
     }
   }
-  m.set(PART_CROWN, 0, 0, c + 0.15, 0).spike(0.1, c + 0.12, 0, 0.04, 0.2, 0.06).spike(-0.1, c + 0.12, 0, 0.04, 0.2, -0.06);
+  m.set(PART_CROWN, 0, 0, c + 0.15, 0).spike(0.1, c + 0.12, 0, 0.056, 0.32, 0.06).spike(-0.1, c + 0.12, 0, 0.056, 0.32, -0.06);
   return m.ground().geometry();
 }
 
@@ -638,8 +641,8 @@ export function bruiserGeometry(): BufferGeometry {
   m.set(PART_HEAD, 0.05, nx, ny, nz).block(0.75, 1.7, 0.62, 0.52, 0.52, 0.45, 0.12, 1.9);
   m.set(PART_HEAD, 0.35, nx, ny, nz).block(0.72, 1.18, 0.44, 0.28, 0.4, 0.26, 0.06, 2.45);
   m.set(PART_HEAD, DARK, nx, ny, nz).box(0.17, 1.02, 2.73, 0.07, 0.07, 0.03).box(-0.17, 1.02, 2.73, 0.07, 0.07, 0.03);
-  m.set(PART_HEAD, EYE, nx, ny, nz).octa(0.34, 1.38, 2.38, 0.12, 0.09, 0.07).octa(-0.34, 1.38, 2.38, 0.12, 0.09, 0.07);
-  m.set(PART_HEAD, -0.55, nx, ny, nz).box(0.34, 1.5, 2.36, 0.2, 0.05, 0.08, -0.25).box(-0.34, 1.5, 2.36, 0.2, 0.05, 0.08, 0.25);
+  m.set(PART_HEAD, EYE, nx, ny, nz).octa(0.32, 1.4, 2.45, 0.15, 0.11, 0.09).octa(-0.32, 1.4, 2.45, 0.15, 0.11, 0.09);
+  m.set(PART_HEAD, -0.55, nx, ny, nz).box(0.32, 1.54, 2.46, 0.2, 0.05, 0.08, -0.3).box(-0.32, 1.54, 2.46, 0.2, 0.05, 0.08, 0.3);
   // Horns: out from the sides of the head, then forward and up to a point. The right one breaks off.
   for (const side of [1, -1]) {
     const part = side > 0 ? PART_HEAD : PART_INTACT;
@@ -652,7 +655,7 @@ export function bruiserGeometry(): BufferGeometry {
     );
   }
   m.set(PART_SCAR, 0.5, nx, ny, nz).limb(-0.45, 1.5, 2.0, -0.95, 1.56, 2.12, 0.17, 0.15);
-  m.set(PART_SCAR, DARK).box(1.38, 1.5, 0.2, 0.08, 0.32, 0.05, 0.4).box(-1.4, 1.35, -0.4, 0.08, 0.36, 0.05, -0.3).box(0.6, 2.2, 0.4, 0.05, 0.25, 0.25, 0.6);
+  m.set(PART_SCAR, 0.75).box(1.38, 1.5, 0.2, 0.08, 0.32, 0.05, 0.4).box(-1.4, 1.35, -0.4, 0.08, 0.36, 0.05, -0.3).box(0.6, 2.2, 0.4, 0.05, 0.25, 0.25, 0.6);
   return m.geometry();
 }
 
@@ -677,11 +680,12 @@ export function mortarGeometry(): BufferGeometry {
   m.set(PART_ACT, -0.18, 0, 1.6, 0).prism(10, 0.55, 0.55, 1.6, 2.55, false, false);
   m.set(PART_ACT, 0.1, 0, 1.6, 0).prism(10, 0.62, 0.8, 2.52, 2.8, false, false);
   m.set(PART_ACT, DARK, 0, 1.6, 0).prism(10, 0.72, 0.72, 2.6, 2.78, false, true);
-  m.set(PART_BODY, EYE).octa(0.45, 1.22, 1.5, 0.2, 0.16, 0.12).octa(-0.45, 1.22, 1.5, 0.2, 0.16, 0.12);
-  m.set(PART_BODY, DARK).box(0.45, 1.42, 1.46, 0.26, 0.05, 0.09, -0.3).box(-0.45, 1.42, 1.46, 0.26, 0.05, 0.09, 0.3);
+  m.set(PART_BODY, EYE).octa(0.46, 1.2, 1.52, 0.27, 0.2, 0.12).octa(-0.46, 1.2, 1.52, 0.27, 0.2, 0.12);
+  m.set(PART_BODY, DARK).octa(0.42, 1.18, 1.62, 0.1, 0.1, 0.05).octa(-0.42, 1.18, 1.62, 0.1, 0.1, 0.05);
+  m.set(PART_BODY, DARK).box(0.46, 1.45, 1.48, 0.3, 0.06, 0.09, -0.3).box(-0.46, 1.45, 1.48, 0.3, 0.06, 0.09, 0.3);
   m.set(PART_BODY, 0.5).prism(6, 0.2, 0.2, 1.55, 2.15, false, true, 0.45, -1.0);
   m.set(PART_INTACT, 0.5).prism(6, 0.2, 0.2, 1.55, 2.15, false, true, -0.45, -1.0);
-  m.set(PART_SCAR, DARK).box(1.25, 1.1, 0.95, 0.06, 0.3, 0.2, 0.9).box(-1.35, 1.0, -0.6, 0.06, 0.34, 0.2, -1.1).box(0.2, 1.75, -0.9, 0.3, 0.06, 0.2, 0.3);
+  m.set(PART_SCAR, 0.75).box(1.25, 1.1, 0.95, 0.06, 0.3, 0.2, 0.9).box(-1.35, 1.0, -0.6, 0.06, 0.34, 0.2, -1.1).box(0.2, 1.75, -0.9, 0.3, 0.06, 0.2, 0.3);
   return m.geometry();
 }
 
@@ -701,9 +705,9 @@ export function standstillGeometry(): BufferGeometry {
   // The lines of light, above the eye.
   m.set(PART_BODY, 0.6).box(0, 5.55, 0.79, 0.7, 0.06, 0.04).box(-0.55, 5.1, 0.82, 0.06, 0.32, 0.04).box(0.55, 5.1, 0.82, 0.06, 0.32, 0.04);
   // The eye: a dark socket, the eyeball, and an iris that turns to follow the rider.
-  m.set(PART_BODY, DARK).block(3.75, 4.65, 0.72, 0.08, 0.68, 0.08, 0, 0.8);
-  m.set(PART_ACT, EYE, 0, 4.2, 0.86).octa(0, 4.2, 0.86, 0.46, 0.34, 0.22);
-  m.set(PART_ACT, DARK, 0, 4.2, 0.86).octa(0, 4.2, 1.08, 0.18, 0.2, 0.1);
+  m.set(PART_BODY, DARK).block(3.65, 4.75, 0.95, 0.08, 0.9, 0.08, 0, 0.8);
+  m.set(PART_ACT, EYE, 0, 4.2, 0.86).octa(0, 4.2, 0.86, 0.66, 0.44, 0.26);
+  m.set(PART_ACT, DARK, 0, 4.2, 0.86).octa(0, 4.2, 1.1, 0.24, 0.26, 0.12);
   // The core behind the plates, and the plates, hinged at their outer edges.
   m.set(PART_BODY, 0.85).block(1.4, 3.3, 0.85, 0.06, 0.8, 0.06, 0, 0.88);
   for (const side of [1, -1]) {

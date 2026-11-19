@@ -800,20 +800,20 @@ export class MoverView {
       bs.box(0, this.by(hy, al), this.bz(hy, al), wx - WHEEL_HALF_WIDTH, 0, 0, 0, uy * hh, uz * hh, 0, fy * 0.04, fz * 0.04);
       bs.color(rgb, C_WHEEL * 3);
       for (let w = -1; w <= 1; w += 2) this.wheel(bs, w * wx, this.by(axleUp, al), this.bz(axleUp, al), fy, fz, uy, uz);
-      if (lv[P_SPRINGS] > 0) {
-        // A coil standing on the truck beside the hanger, as tall as the gap allows, fatter with level.
-        bs.color(rgb, C_SPRING * 3);
-        const r = 0.03 * grow(lv[P_SPRINGS]) + 0.01;
-        for (let w = -1; w <= 1; w += 2) {
-          const sx = w * (wx - 0.035);
-          const lo = axleUp + 0.02;
-          const hi = DECK_LOW - py;
-          for (let c = 0; c < 2; c++) {
-            const u0 = lerp(lo, hi, c / 2);
-            const u1 = lerp(lo, hi, (c + 1) / 2);
-            const d0 = c % 2 === 0 ? -r : r;
-            bs.limb(sx, this.by(u0, al + d0), this.bz(u0, al + d0), sx, this.by(u1, al - d0), this.bz(u1, al - d0), 0.012, 0.012, 3);
-          }
+    }
+    if (lv[P_SPRINGS] > 0) {
+      // Coils under the kicks, nose and tail, from the deck down toward the ground; fatter with level.
+      bs.color(rgb, C_SPRING * 3);
+      const r = 0.022 + 0.006 * lv[P_SPRINGS];
+      const hi = -t;
+      const lo = WHEEL_RADIUS * 0.4 - py;
+      for (let e = -1; e <= 1; e += 2) {
+        const al = e * (KICK_AT + 0.06);
+        for (let c = 0; c < 4; c++) {
+          const u0 = lerp(hi, lo, c / 4);
+          const u1 = lerp(hi, lo, (c + 1) / 4);
+          const x0 = c % 2 === 0 ? -r : r;
+          bs.limb(x0, this.by(u0, al), this.bz(u0, al), -x0, this.by(u1, al), this.bz(u1, al), 0.014, 0.014, 3);
         }
       }
     }
@@ -826,10 +826,10 @@ export class MoverView {
     if (lv[P_LUCK] > 0) {
       // A star on the grip near the tail.
       bs.color(rgb, C_STAR * 3);
-      const r = 0.06 * grow(lv[P_LUCK]);
+      const r = 0.075 * grow(lv[P_LUCK]);
       const up = t + 0.016;
       const cx = 0;
-      const al = -0.17;
+      const al = 0;
       for (let p = 0; p < 10; p++) {
         const a0 = (p / 10) * Math.PI * 2;
         const a1 = ((p + 1) / 10) * Math.PI * 2;
@@ -916,7 +916,7 @@ export class MoverView {
     if (lv[P_HIDE] > 0) {
       // Knee pads.
       fs.color(rgb, C_PAD * 3);
-      const pr = 0.05 + 0.012 * lv[P_HIDE];
+      const pr = 0.045 + 0.008 * lv[P_HIDE];
       this.kneePad(fs, hipX, hipY, hipZ + HIP_HALF, ffx, ffy + 0.06, ffz, pr);
       this.kneePad(fs, hipX, hipY, hipZ - HIP_HALF, bfx, bfy + 0.06, bfz, pr);
     }
@@ -934,7 +934,7 @@ export class MoverView {
     if (lv[P_HEART] > 0) {
       // A heart on the chest: two lobes and a point.
       fs.color(rgb, C_HEART * 3);
-      const g = 0.06 * grow(lv[P_HEART]);
+      const g = 0.075 * grow(lv[P_HEART]);
       const cx = hipX + tx * TORSO_LEN * 0.66 + ty * (TORSO_DEPTH + 0.01);
       const cy = hipY + ty * TORSO_LEN * 0.66 - tx * (TORSO_DEPTH + 0.01);
       fs.diamond(cx, cy + g * 0.35, sz + g * 0.55, g * 0.5, g * 0.7, g * 0.7);
@@ -943,9 +943,9 @@ export class MoverView {
     }
     if (lv[P_MAGNET] > 0) {
       // A horseshoe on the back, its ends up, silver tips.
-      const g = grow(lv[P_MAGNET]);
-      const bx0 = hipX + tx * TORSO_LEN * 0.55 - ty * (TORSO_DEPTH + 0.04);
-      const by0 = hipY + ty * TORSO_LEN * 0.55 + tx * (TORSO_DEPTH + 0.04);
+      const g = grow(lv[P_MAGNET]) * 1.3;
+      const bx0 = hipX + tx * TORSO_LEN * 0.5 - ty * (TORSO_DEPTH + 0.06);
+      const by0 = hipY + ty * TORSO_LEN * 0.5 + tx * (TORSO_DEPTH + 0.06);
       const w = 0.11 * g;
       const h = 0.16 * g;
       const r = 0.032 * g;
@@ -1007,7 +1007,7 @@ export class MoverView {
     if (lv[P_HIDE] > 0) {
       // Shoulder pads.
       fs.color(rgb, C_PAD * 3);
-      const pr = 0.075 + 0.012 * lv[P_HIDE];
+      const pr = 0.06 + 0.008 * lv[P_HIDE];
       for (let dir = -1; dir <= 1; dir += 2) {
         fs.box(shX, shY + 0.03, sz + dir * (TORSO_SHOULDERS + 0.01), pr * ty, -pr * tx, 0, pr * 0.55 * tx, pr * 0.55 * ty, 0, 0, 0, pr * 0.9, false);
       }
@@ -1145,8 +1145,8 @@ export class MoverView {
 
   /** A small wing at a heel, swept back and up, `g` its size, on the outer side `dir` (+z or -z). */
   private wing(fs: Shape, x: number, y: number, z: number, g: number, dir: number): void {
-    const l = 0.16 * g;
-    const h = 0.1 * g;
+    const l = 0.22 * g;
+    const h = 0.13 * g;
     fs.tri(x, y, z + dir * 0.07, x - l, y + h * 1.4, z + dir * (0.07 + l * 0.6), x - l * 0.6, y - h * 0.2, z + dir * 0.09, x + 0.02, y, z);
     fs.tri(x, y, z + dir * 0.07, x - l, y + h * 1.4, z + dir * (0.07 + l * 0.6), x - l * 0.6, y - h * 0.2, z + dir * 0.09, x - l * 0.5, y + h * 0.4, z + dir * (0.07 + l * 0.9));
     fs.tri(x - l * 0.4, y + h * 0.2, z + dir * 0.08, x - l * 1.2, y + h * 0.9, z + dir * (0.07 + l * 0.45), x - l * 0.9, y - h * 0.15, z + dir * 0.08, x, y + h * 0.3, z);
@@ -1264,7 +1264,7 @@ export class MoverView {
     if (lv[P_HASTE] > 0) {
       // A bolt on the helmet's side (the side away from the nose, toward the camera behind).
       fs.color(rgb, C_BOLT * 3);
-      const g = grow(lv[P_HASTE]);
+      const g = grow(lv[P_HASTE]) * 1.5;
       const ox = x - rx * 0.165;
       const oy = y - ry * 0.165 + uy * 0.08;
       const oz = z - rz * 0.165;
