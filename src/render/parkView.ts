@@ -57,7 +57,8 @@ const BLEACHER_STEPS = 5;
 const BLEACHER_WIDE = 18;
 const CROWD_PER_STEP = 7;
 const SIGNS = 6;
-const SKYLINE = 28;
+/** Blocks in the skyline: close enough together to stand as one dark wall of city round the bowl. */
+const SKYLINE = 44;
 /**
  * The scenery's lights (fence lamps, floodlight heads, billboard stripes, the skyline's bands): a
  * darker tone of their colour and a little glow, so they are silhouettes with a little light,
@@ -423,15 +424,16 @@ export class ParkView {
       clear.ringBox(a, r - 0.25, 4 + rng.next() * 4, 0.12, y + 5.6, y + 6.6, tone(c1, LIGHT_DIM), LIGHT_GLOW * 0.8);
     }
 
-    // The skyline beyond the rim: tall dark blocks, each with a neon band.
-    const block = tone(rim, -0.55);
-    const blockB = tone(PALETTE.fog, -0.45);
+    // The skyline beyond the rim: tall dark blocks standing close, a wall of city darker than the sky
+    // and the bowl, each with one dim band of light.
+    const block = tone(rim, -0.7);
+    const blockB = tone(PALETTE.fog, -0.6);
     for (let k = 0; k < SKYLINE; k++) {
       const a = ((k + rng.next() * 0.8) / SKYLINE) * Math.PI * 2;
       const r = R + 30 + rng.next() * 45;
       const y = lip(a);
-      const h = 35 + rng.next() * 55;
-      const wide = 12 + rng.next() * 18;
+      const h = 40 + rng.next() * 55;
+      const wide = 16 + rng.next() * 20;
       const deep = 12 + rng.next() * 10;
       clear.ringBox(a, r, wide, deep, y - 4, y + h, k % 2 === 0 ? block : blockB, 0);
       const band = y + h * (0.55 + rng.next() * 0.35);

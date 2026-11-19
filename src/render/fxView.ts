@@ -513,7 +513,7 @@ const SHARD_SHRINK = 0.35;
 /** A death's splat on the ground: times the enemy's radius, its life and strength. */
 const SPLAT_SCALE = 1.4;
 const SPLAT_LIFE = 0.9;
-const SPLAT_PEAK = 0.3;
+const SPLAT_PEAK = 0.2;
 /** A hit's chips: how many, how fast, their life and size (share of a shard's). */
 const HIT_CHIPS = 3;
 const HIT_SPEED = 7;

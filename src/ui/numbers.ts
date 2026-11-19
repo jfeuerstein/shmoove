@@ -11,7 +11,8 @@
  *   least of them (a pop over a kill over a bigger hit over a smaller one, the oldest of equals), or
  *   is not shown at all if it is the least: big hits and kills win the cap.
  * - None is drawn over the rider: one that would land within 2 m of it on the screen is pushed out
- *   to that edge (`riderOnScreen`, from the threat view, or the place passed to `update`).
+ *   to that edge (`riderOnScreen`, from the threat view, or the place passed to `update`). None is
+ *   drawn over the build bar along the bottom.
  *
  * Numbers float up and fade over about 0.6 s. A fixed pool of elements; nothing is created after
  * the constructor and elements are moved by transform only. `ingest` is called after every sim tick
@@ -31,6 +32,8 @@ export const NUMBER_RISE = 40;
 /** Hits this near a number (m, on the ground) born this recently (s) add to it. */
 export const MERGE_DIST = 1.2;
 export const MERGE_TIME = 0.3;
+/** No number is drawn this near the bottom of the screen, where the build bar is, CSS px. */
+export const NUMBER_BOTTOM = 110;
 /** The least room kept round the rider on the screen, CSS px, however far away it is drawn. */
 export const RIDER_KEEP_MIN = 36;
 /** Height above the hit's place where the number starts, m. */
@@ -159,11 +162,6 @@ export class Numbers {
         if (this.on[i]) this.hide(i);
         continue;
       }
-      if (!this.on[i]) {
-        this.on[i] = 1;
-        el.hidden = false;
-      }
-      this.write(i);
       let x = ((this.p.x + 1) / 2) * width;
       let y = ((1 - this.p.y) / 2) * height - NUMBER_RISE * (1 - (1 - k) * (1 - k));
       if (keep.known) {
@@ -182,6 +180,16 @@ export class Numbers {
           }
         }
       }
+      // Not over the build bar along the bottom.
+      if (y > height - NUMBER_BOTTOM) {
+        if (this.on[i]) this.hide(i);
+        continue;
+      }
+      if (!this.on[i]) {
+        this.on[i] = 1;
+        el.hidden = false;
+      }
+      this.write(i);
       el.style.transform = `translate3d(${Math.round(x)}px, ${Math.round(y)}px, 0)`;
       el.style.opacity = String(Math.round((1 - k * k) * 20) / 20);
     }

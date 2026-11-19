@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { emitFx, FX_ENEMY_DIE, FX_ENEMY_HIT, FX_POP, FX_SPARK, makeWorld, type World } from '../../src/sim/world';
-import { MERGE_DIST, MERGE_TIME, NUMBER_LIFE, NUMBER_POOL, Numbers, RIDER_KEEP_MIN } from '../../src/ui/numbers';
+import { MERGE_DIST, MERGE_TIME, NUMBER_BOTTOM, NUMBER_LIFE, NUMBER_POOL, Numbers, RIDER_KEEP_MIN } from '../../src/ui/numbers';
 
 class FakeEl {
   className = '';
@@ -221,6 +221,18 @@ describe('Numbers', () => {
     nums.update(0, IDENTITY, SIZE, SIZE, small);
     const q = at(els.filter((e) => !e.hidden)[0]);
     expect(Math.hypot(q.x - keep.x, q.y - keep.y)).toBeGreaterThanOrEqual(RIDER_KEEP_MIN - 1);
+  });
+
+  it('draws no number over the build bar along the bottom of the screen', () => {
+    const { nums, els } = build();
+    const w = makeWorld(1);
+    w.fx.count = 0;
+    // Low on the screen: y = -0.98 in the frame (the lift of 0.9 m takes it up by 0.9 of a unit).
+    emitFx(w, FX_ENEMY_HIT, 0, -1.88, 0, 5);
+    nums.ingest(w);
+    nums.update(0, IDENTITY, SIZE, SIZE);
+    expect(SIZE * 0.01).toBeLessThan(NUMBER_BOTTOM);
+    expect(els.every((e) => e.hidden)).toBe(true);
   });
 
   it('hides a number that is off screen, and reset clears everything', () => {
