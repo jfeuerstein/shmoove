@@ -34,7 +34,14 @@ export const KIND_LOBBER = 4;
 export const KIND_SLUDGE = 5;
 /** Small and fast; latches on and drags. */
 export const KIND_CLINGER = 6;
+/** How many ordinary kinds there are: the ones the director brings. The bosses follow them in `KINDS`. */
 export const KIND_COUNT = 7;
+/** The first mini-boss (3:00): charges in a straight line after a tell. See `bosses.ts`. */
+export const KIND_BRUISER = 7;
+/** The second mini-boss (6:00): keeps its distance and lays lines of lob rings across your path. */
+export const KIND_MORTAR = 8;
+/** The final boss (9:00): slows you near it and sends rings along the ground. */
+export const KIND_STANDSTILL = 9;
 
 export const WEIGHT_LIGHT = 0;
 export const WEIGHT_MEDIUM = 1;
@@ -75,6 +82,11 @@ export const KINDS: readonly EnemyKind[] = [
   { name: 'lobber', radius: 0.7, height: 1.9, speed: 3.2, accel: 6, hp: 18, damage: 8, weight: WEIGHT_MEDIUM, xp: 3 },
   { name: 'sludge', radius: 0.9, height: 1.1, speed: 3, accel: 4, hp: 40, damage: 10, weight: WEIGHT_MEDIUM, xp: 4 },
   { name: 'clinger', radius: 0.3, height: 0.7, speed: 9, accel: 20, hp: 8, damage: 0, weight: WEIGHT_LIGHT, xp: 1, latches: true },
+  // Bosses: `accel` 0 because the horde never steers one; `bosses.ts` sets its velocity every tick
+  // and the horde's step only carries it along. `speed` is its walking speed, for the drawing.
+  { name: 'bruiser', radius: 2.2, height: 2.6, speed: 3, accel: 0, hp: 900, damage: 20, weight: WEIGHT_HEAVY, xp: 30, boss: true },
+  { name: 'mortar', radius: 1.8, height: 2.8, speed: 2, accel: 0, hp: 1400, damage: 15, weight: WEIGHT_HEAVY, xp: 30, boss: true },
+  { name: 'standstill', radius: 3, height: 7, speed: 2.5, accel: 0, hp: 2600, damage: 25, weight: WEIGHT_HEAVY, xp: 30, boss: true },
 ];
 
 /** The widest enemy, m. Every query that must reach an enemy's edge pads by this. */

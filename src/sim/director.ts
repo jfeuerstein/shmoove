@@ -38,14 +38,19 @@ import {
 const DEG = PI / 180;
 
 export const DIRECTOR = {
-  /** Run times (s) at which the rate, floor and cap below are given; linear between, flat after. */
-  at: [0, 30, 60, 120, 180],
+  /**
+   * Run times (s) at which the rate, floor and cap below are given; linear between, flat after.
+   * Ten minutes in three acts: the cap reaches 400 at 8:00, a minute before the final boss.
+   */
+  at: [0, 30, 60, 120, 180, 300, 420, 480],
   /** Enemies arriving per second. */
-  rate: [2.5, 5, 8, 13, 17],
+  rate: [2.5, 4.5, 6.5, 9, 11, 14, 17, 19],
   /** Fewer than this alive and the director spawns perTick a tick until there are this many. */
-  floor: [10, 15, 25, 40, 60],
+  floor: [10, 14, 20, 30, 40, 55, 70, 80],
   /** Never more than this alive. */
-  cap: [50, 100, 200, 330, 400],
+  cap: [50, 90, 140, 200, 250, 320, 370, 400],
+  /** While a boss is alive the rate is this share of normal, and no new bollards come. */
+  bossRate: 0.6,
   /** Seconds of rate the budget may hold beyond what the room under the cap could use. */
   bank: 2,
   /** Most spawns in one tick. */
@@ -59,34 +64,34 @@ export const DIRECTOR = {
   /** Share of the horde that is gnats: from the first at gnatFrom to the full share at gnatFull. */
   gnatShareStart: 0.15,
   gnatShare: 0.3,
-  gnatFull: 100,
+  gnatFull: 120,
 
   /** Bollards arrive from this run time, one at a time. */
-  bollardFrom: 80,
+  bollardFrom: 120,
   /** How many may be alive: one at bollardFrom, rising to bollardMax at bollardFull. */
   bollardMax: 6,
-  bollardFull: 175,
+  bollardFull: 330,
   /** At least this long between two bollards, s. */
   bollardGap: 8,
 
   /** Cutters arrive from this run time, as this share of the horde. */
-  cutterFrom: 60,
+  cutterFrom: 190,
   cutterShare: 0.08,
   /** Lobbers arrive from this run time, one at a time at least lobberGap s apart, at most lobberMax alive. */
-  lobberFrom: 75,
+  lobberFrom: 220,
   lobberMax: 8,
   lobberGap: 2.5,
   /** Sludges likewise. */
-  sludgeFrom: 100,
+  sludgeFrom: 370,
   sludgeMax: 5,
   sludgeGap: 4,
   /** Clingers arrive from this run time, as this share of the horde. */
-  clingerFrom: 120,
+  clingerFrom: 400,
   clingerShare: 0.06,
 
   /** From this run time, about every eliteEvery s, the next shuffler or cutter to come up is an elite. */
-  eliteFrom: 90,
-  eliteEvery: 25,
+  eliteFrom: 300,
+  eliteEvery: 30,
   /** An elite has this many times its kind's health. */
   eliteHp: 6,
 
@@ -378,8 +383,9 @@ function spawnCloudGnat(w: World, s: SimState, terrain: Terrain, st: DirectorSta
 }
 
 /**
- * Take away what is too far from the mover, or far enough and left behind a fast one. Elites stay:
- * one is something to hunt (a pack's is a totem's reward), and it would not come back as itself.
+ * Take away what is too far from the mover, or far enough and left behind a fast one. Elites and
+ * bosses stay: one is something to hunt (a pack's is a totem's reward), and it would not come back
+ * as itself.
  */
 function recycle(w: World, s: SimState): number {
   const h = w.horde;
@@ -387,7 +393,7 @@ function recycle(w: World, s: SimState): number {
   const behind = behindLimit(m.vx, m.vz);
   let taken = 0;
   for (let i = h.count - 1; i >= 0; i--) {
-    if (h.elite[i] === ELITE_NONE && leftBehind(m, h.x[i] - m.x, h.z[i] - m.z, behind)) {
+    if (h.elite[i] === ELITE_NONE && KINDS[h.kind[i]].boss !== true && leftBehind(m, h.x[i] - m.x, h.z[i] - m.z, behind)) {
       removeEnemy(w, i);
       taken++;
     }
@@ -433,24 +439,13 @@ export function stepDirector(w: World, s: SimState, terrain: Terrain): void {
 
   const seconds = tick * DT;
   const h = w.horde;
-  const cap = Math.floor(capCount(seconds));
-  const floor = floorCount(seconds);
-  // Pay in this tick's share of the rate, holding no more than a couple of seconds of it (or a whole
-  // cloud) unspent; then refund what was just taken away, so it comes back at once.
-  const rate = spawnRate(seconds);
-  const hold = Math.max(rate * D.bank, D.cloudSize);
-  if (st.budget < hold) {
-    st.budget += rate * DT;
-    if (st.budget > hold) st.budget = hold;
-  }
-  st.budget += taken;
-
   let gnats = 0;
   let bollards = 0;
   let cutters = 0;
   let lobbers = 0;
   let sludges = 0;
   let clingers = 0;
+  let boss = false;
   for (let i = 0; i < h.count; i++) {
     const k = h.kind[i];
     if (k === KIND_GNAT) gnats++;
@@ -459,12 +454,27 @@ export function stepDirector(w: World, s: SimState, terrain: Terrain): void {
     else if (k === KIND_LOBBER) lobbers++;
     else if (k === KIND_SLUDGE) sludges++;
     else if (k === KIND_CLINGER) clingers++;
+    else if (KINDS[k].boss === true) boss = true;
   }
+  const cap = Math.floor(capCount(seconds));
+  const floor = floorCount(seconds);
+  // Pay in this tick's share of the rate, holding no more than a couple of seconds of it (or a whole
+  // cloud) unspent; then refund what was just taken away, so it comes back at once. A boss on the
+  // field slows the rest.
+  const rate = boss ? spawnRate(seconds) * D.bossRate : spawnRate(seconds);
+  const hold = Math.max(rate * D.bank, D.cloudSize);
+  if (st.budget < hold) {
+    st.budget += rate * DT;
+    if (st.budget > hold) st.budget = hold;
+  }
+  st.budget += taken;
+
   const crowd = h.count > floor ? h.count : floor;
   const gnatWanted = gnatShare(seconds) * crowd;
   const cutterWanted = cutterShare(seconds) * crowd;
   const clingerWanted = clingerShare(seconds) * crowd;
-  const bollardsAllowed = bollardCap(seconds);
+  // No new bollards while a boss is on the field.
+  const bollardsAllowed = boss ? 0 : bollardCap(seconds);
   const lobbersAllowed = lobberCap(seconds);
   const sludgesAllowed = sludgeCap(seconds);
 

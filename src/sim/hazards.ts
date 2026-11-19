@@ -85,10 +85,10 @@ function stateOf(w: World): HazardState {
   return st;
 }
 
-/** Lob a shot that lands at (x, z) after `HAZARDS.lobTicks`. */
-export function lob(w: World, terrain: Terrain, x: number, z: number): void {
+/** Lob a shot that lands at (x, z) after `ticks` (a lobber's `HAZARDS.lobTicks` by default). */
+export function lob(w: World, terrain: Terrain, x: number, z: number, ticks: number = HAZARDS.lobTicks): void {
   const H = HAZARDS;
-  addZone(w, ZONE_LOB, x, terrain.heightAt(x, z), z, H.lobRadius, H.lobTicks, H.lobDamage);
+  addZone(w, ZONE_LOB, x, terrain.heightAt(x, z), z, H.lobRadius, ticks, H.lobDamage);
 }
 
 /** Leave a patch of tar at (x, y, z). At the limit, the oldest patch makes way. */

@@ -21,8 +21,12 @@ export const PLAYER_RADIUS = 0.5;
 export const MAGNET_BASE = 4.5;
 export const MAGNET_PER_GEAR = 0;
 
-/** The M2 slice: three minutes, then you have won. */
-export const RUN_TICKS = 180 * 60;
+/**
+ * When the bosses come, s into the run: the Bruiser, the Mortar, the Standstill. There is no win on
+ * the clock: the run is won when the last of them falls, and past 9:00 the clock simply keeps
+ * counting.
+ */
+export const BOSS_TIMES: readonly number[] = [180, 360, 540];
 
 /** How many times an ordinary enemy's sparks an elite is worth. */
 export const ELITE_XP = 8;

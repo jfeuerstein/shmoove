@@ -1,7 +1,6 @@
 /** What a player would notice touching the horde: it hurts, at any speed, and then there is room. */
 import { describe, expect, it } from 'vitest';
 import { P_HIDE, P_REGEN, W_BUMPER, W_WAKE } from '../../src/sim/arsenal';
-import { RUN_TICKS } from '../../src/sim/balance';
 import { setPassiveLevel, setWeaponLevel } from '../../src/sim/build';
 import { FEEL } from '../../src/sim/constants';
 import { BUMPER } from '../../src/sim/stats';
@@ -203,11 +202,15 @@ describe('the run', () => {
     expect(sim.state.mover.z).toBeGreaterThan(5);
   });
 
-  it('is won when the clock runs out', () => {
+  it("is not won on the clock: past the final boss's time the clock keeps counting and the run goes on", () => {
     const sim = arena();
-    run(sim, TUCK, RUN_TICKS - 1);
+    run(sim, TUCK, 3 * 60);
     expect(sim.world.run.phase).toBe(PHASE_PLAY);
-    sim.step(TUCK);
-    expect(sim.world.run.phase).toBe(PHASE_WON);
+    // Ten minutes in, with no boss brought down: nothing ends the run but health.
+    sim.world.run.ticks = 600 * 60;
+    run(sim, TUCK, 5 * 60);
+    expect(sim.world.run.phase).toBe(PHASE_PLAY);
+    expect(sim.world.run.ticks).toBe(605 * 60);
+    expect(sim.world.run.phase).not.toBe(PHASE_WON);
   });
 });

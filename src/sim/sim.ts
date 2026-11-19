@@ -1,5 +1,5 @@
-import { RUN_TICKS } from './balance';
 import { applyBuildToMover, openOffer, pickCard } from './build';
+import { stepBosses } from './bosses';
 import { stepContact } from './contact';
 import { stepDirector } from './director';
 import { stepGear } from './flow';
@@ -111,12 +111,14 @@ function stepWorld(w: World, s: SimState, terrain: Terrain): void {
   stepHazards(w, s, terrain);
   stepWeapons(w, s, terrain);
   reapHorde(w);
+  stepBosses(w, s, terrain);
   stepSparks(w, s, terrain);
   stepThings(w, s, terrain);
   openOffer(w);
 
+  // No win on the clock: the run is won when the last boss falls (see bosses.ts), and the clock
+  // keeps counting past it.
   w.run.ticks++;
-  if (w.run.ticks >= RUN_TICKS) w.run.phase = PHASE_WON;
 }
 
 /** The run is over: the mover stands where it is. */
