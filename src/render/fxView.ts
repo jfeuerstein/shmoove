@@ -25,7 +25,8 @@
  *   and a fountain of spark-coloured glints. A level-up opens its cards at once and the world holds
  *   under them, so the burst waits for the cards to close and goes off as the ride resumes.
  * - `FX_SPARK`: a spark taken: a small pop of its colour where it went in.
- * - `FX_PLAYER_HIT`: `hitTint` jumps up and decays; the UI overlay draws it as a red wash. With the
+ * - `FX_PLAYER_HIT`: `hitTint` jumps up and fades, both as big and as long as the hit is
+ *   (`washStrength`, `washLife`); the UI overlay draws it as a flash at the screen's edges. With the
  *   Bumper carried, its ring is thrown out at hip height to the hit's shove radius
  *   (`FEEL.hitShoveRadius`), in `PALETTE.accent`.
  * - Grinding (read from the sim state's mover and events, not the queue): while the board is on a
@@ -509,11 +510,33 @@ const MARK_RISE = 1.6;
 const MARK_LIFE = 0.7;
 const MARK_SIZE = 0.3;
 const MARK_FROM = 1.2;
-/** Red wash after a hit: strength for a hit of `HIT_REF` damage or more, and its fade time, s. */
-const HIT_MIN = 0.35;
-const HIT_MAX = 0.7;
-const HIT_REF = 15;
-const HIT_FADE = 0.4;
+/**
+ * The flash at the screen's edges after a hit: its strength and how long it takes to fade, from the
+ * faintest (a scratch) to the strongest (a hit of `WASH_FULL` of the maximum health or more).
+ */
+export const WASH_MIN = 0.2;
+export const WASH_MAX = 0.65;
+export const WASH_LIFE_MIN = 0.12;
+export const WASH_LIFE_MAX = 0.32;
+export const WASH_FULL = 0.25;
+
+/** How big a hit of `damage` is against `maxHp`, 0..1. */
+function hitSize(damage: number, maxHp: number): number {
+  if (!(damage > 0)) return 0;
+  const share = damage / (maxHp > 0 ? maxHp : 100);
+  return Math.min(1, share / WASH_FULL);
+}
+
+/** The edge flash's strength, 0..1, for a hit of `damage` against `maxHp`: bigger hits, stronger. 0 for no damage. */
+export function washStrength(damage: number, maxHp: number): number {
+  if (!(damage > 0)) return 0;
+  return WASH_MIN + (WASH_MAX - WASH_MIN) * hitSize(damage, maxHp);
+}
+
+/** Seconds the edge flash takes to fade, for a hit of `damage` against `maxHp`: bigger hits, longer. */
+export function washLife(damage: number, maxHp: number): number {
+  return WASH_LIFE_MIN + (WASH_LIFE_MAX - WASH_LIFE_MIN) * hitSize(damage, maxHp);
+}
 /** The slam's leading edge: its life, and the cracks' life. */
 const SLAM_LIFE = 0.45;
 const CRACK_LIFE = 0.9;
@@ -594,8 +617,10 @@ export class FxView {
   readonly bolts: InstancedMesh;
   /** Heals and tokens rising from the mover. */
   readonly marks: InstancedMesh;
-  /** 0..1: how strongly the frame is washed red after a hit. */
+  /** 0..1: how strongly the screen's edges flash red after a hit (`washStrength`). */
   hitTint = 0;
+  /** How fast the flash fades, per second: the latest hit's strength over its life. */
+  private hitFade = 1;
 
   private readonly terrain: Terrain;
   private readonly glowDisc: InstancedBufferAttribute;
@@ -895,8 +920,11 @@ export class FxView {
         const r = SPARK_POP * (0.8 + 0.2 * Math.sqrt(a > 0 ? a : 0));
         this.glow(true, GLOW_FLASH, x, y + 0.6, z, r, SPARK_POP_LIFE, 0.9, 0, this.sparkColor);
       } else if (type === FX_PLAYER_HIT) {
-        const s = HIT_MIN + (HIT_MAX - HIT_MIN) * Math.min(1, a / HIT_REF);
-        if (s > this.hitTint) this.hitTint = s;
+        const s = washStrength(a, w.player.maxHp);
+        if (s > this.hitTint) {
+          this.hitTint = s;
+          this.hitFade = s / washLife(a, w.player.maxHp);
+        }
         if (w.player.loadout.weaponLevel[W_BUMPER] > 0) this.bumper(x, y, z, FEEL.hitShoveRadius);
       } else if (type === FX_BUMP) {
         this.bumper(x, y, z, a);
@@ -1243,7 +1271,7 @@ export class FxView {
   /** Advance and draw. `dt` is the real time since the last frame, s. */
   update(dt: number): void {
     const step = dt > 0.1 ? 0.1 : dt < 0 ? 0 : dt;
-    this.hitTint = Math.max(0, this.hitTint - step / HIT_FADE);
+    this.hitTint = Math.max(0, this.hitTint - step * this.hitFade);
     this.updateGlows(step);
     this.updateShards(step);
     this.updateBolts(step);

@@ -1,6 +1,25 @@
 import { Color, type InstancedBufferAttribute } from 'three';
 import { describe, expect, it } from 'vitest';
-import { BOLT_FROM, BOLT_JAG, BOLT_LIFE, BOLT_POINTS, BOLT_REROLL, BOLT_TO, BOSS_BURST, BOSS_IN_LIFE, BOSS_IN_REACH, FxView, GRIND_BURST, GRIND_STREAM } from '../../src/render/fxView';
+import {
+  BOLT_FROM,
+  BOLT_JAG,
+  BOLT_LIFE,
+  BOLT_POINTS,
+  BOLT_REROLL,
+  BOLT_TO,
+  BOSS_BURST,
+  BOSS_IN_LIFE,
+  BOSS_IN_REACH,
+  FxView,
+  GRIND_BURST,
+  GRIND_STREAM,
+  WASH_LIFE_MAX,
+  WASH_LIFE_MIN,
+  WASH_MAX,
+  WASH_MIN,
+  washLife,
+  washStrength,
+} from '../../src/render/fxView';
 import { W_BUMPER } from '../../src/sim/arsenal';
 import { FEEL } from '../../src/sim/constants';
 import { PALETTE } from '../../src/render/look';
@@ -500,4 +519,46 @@ describe('FxView: hits, deaths and the weapons that show on the ground', () => {
     if (!c) throw new Error('no colours');
     expect(c.getZ(0)).toBeCloseTo(new Color(PALETTE.spark).b, 5);
   });
+
+  describe('the flash at the edges after a hit', () => {
+    it('is nothing without a hit', () => {
+      const fx = new FxView(flatTerrain(100));
+      fx.ingest(makeWorld(1));
+      fx.update(1 / 60);
+      expect(fx.hitTint).toBe(0);
+      expect(washStrength(0, 100)).toBe(0);
+    });
+
+    it('is stronger and longer the bigger the hit is against the maximum health, within its bounds', () => {
+      expect(washStrength(1, 100)).toBeGreaterThanOrEqual(WASH_MIN);
+      expect(washStrength(10, 100)).toBeGreaterThan(washStrength(3, 100));
+      expect(washStrength(1000, 100)).toBe(WASH_MAX);
+      expect(washLife(10, 100)).toBeGreaterThan(washLife(3, 100));
+      expect(washLife(1000, 100)).toBe(WASH_LIFE_MAX);
+      expect(washLife(0.01, 100)).toBeCloseTo(WASH_LIFE_MIN, 3);
+      // The same hit is less against more health.
+      expect(washStrength(10, 200)).toBeLessThan(washStrength(10, 100));
+      // A short flash, never a lasting screen of red.
+      expect(WASH_MAX).toBeLessThan(0.8);
+      expect(WASH_LIFE_MAX).toBeLessThanOrEqual(0.35);
+    });
+
+    it('jumps to the hit strength and is gone after the hit length', () => {
+      for (const dmg of [3, 12, 40]) {
+        const w = makeWorld(1);
+        emitFx(w, FX_PLAYER_HIT, 0, 0, 0, dmg);
+        const fx = new FxView(flatTerrain(100));
+        fx.ingest(w);
+        expect(fx.hitTint).toBeCloseTo(washStrength(dmg, w.player.maxHp), 6);
+        const life = washLife(dmg, w.player.maxHp);
+        // In frames of no more than a tenth of a second (a longer one is taken as a tenth).
+        for (let k = 0; k < 4; k++) fx.update(life / 8);
+        expect(fx.hitTint).toBeCloseTo(washStrength(dmg, w.player.maxHp) / 2, 3);
+        for (let k = 0; k < 4; k++) fx.update(life / 8);
+        fx.update(0.001);
+        expect(fx.hitTint).toBe(0);
+      }
+    });
+  });
 });
+
