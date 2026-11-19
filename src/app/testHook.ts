@@ -4,6 +4,7 @@
  *
  * Without a script holding it, `HookInput` reads as a thumb off the screen (tucked, no stick).
  */
+import type { SoundReport } from '../audio/audio';
 import type { InputSource } from '../input/source';
 import { setPassiveLevel, setWeaponLevel } from '../sim/build';
 import { hurtPlayer } from '../sim/contact';
@@ -97,6 +98,8 @@ export interface TestHook {
   rails(): HookRail[];
   /** Put the rider on the ground at (x, z), heading `yaw`, moving at `speed` m/s, the view behind it. */
   place(x: number, z: number, yaw: number, speed: number): void;
+  /** The audio context's state and how many notes and effects have been scheduled. */
+  sound(): SoundReport | null;
 }
 
 declare global {
@@ -162,6 +165,7 @@ export interface HookHost {
   stats(): FrameStatsSummary;
   /** Queue a card pick for the next step. */
   pick(index: number): void;
+  sound?: () => SoundReport;
 }
 
 function items(slots: Int8Array, levels: Uint8Array): HookItem[] {
@@ -284,6 +288,9 @@ export function installTestHook(host: HookHost): TestHook {
       s.viewYaw = yaw;
       // No streak from where it was.
       copySimState(sim.prev, s);
+    },
+    sound() {
+      return host.sound ? host.sound() : null;
     },
   };
   window.__shmoove = hook;

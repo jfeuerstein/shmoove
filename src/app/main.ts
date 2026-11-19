@@ -5,6 +5,7 @@
  * Each tick: `input.sample(frame)`, then `sim.step(frame)`. Each frame: mover view, camera, HUD,
  * render.
  */
+import { GameAudio } from '../audio/audio';
 import { ChaseCamera } from '../render/camera';
 import { FxView } from '../render/fxView';
 import { HordeView } from '../render/hordeView';
@@ -151,8 +152,15 @@ function boot(): void {
   const numbers = sim.horde ? new Numbers(hudRoot) : null;
   const buildBar = sim.horde ? new BuildBar(hudRoot) : null;
   const cards = sim.horde ? new Cards(hudRoot, (i) => picks.set(i)) : null;
+  // Sound: silent until the first touch (browsers insist); `?mute` silences one visit.
+  const audio = new GameAudio({
+    muted: params.mute || settings.mute,
+    volume: settings.musicVolume,
+    seed: params.seed,
+    save: (muted, volume) => settings.chooseSound(muted, volume),
+  });
   const panel = params.debug
-    ? new DebugPanel(hudRoot, settings, (s) => touch.setScheme(s), () => applyAutoPick())
+    ? new DebugPanel(hudRoot, settings, (s) => touch.setScheme(s), () => applyAutoPick(), audio)
     : null;
 
   // The first-run lesson: on the real bowl, with the horde held back until the player can use it.
@@ -252,11 +260,17 @@ function boot(): void {
     stepper.scale = 1;
     choosing = false;
     stepper.reset();
+    audio.restart();
   };
-  const howTo = new HowTo(hudRoot, () => {
-    settings.chooseLessonDone(false);
-    restart(true);
-  });
+  const howTo = new HowTo(
+    hudRoot,
+    () => {
+      settings.chooseLessonDone(false);
+      restart(true);
+    },
+    document,
+    audio,
+  );
   const endScreen = new EndScreen(hudRoot, () => restart(), document, () => howTo.open());
   const stats = new FrameStats();
   const info = view.renderer.info.render;
@@ -272,6 +286,7 @@ function boot(): void {
     const m = sim.state.mover;
     fx.ingest(sim.world, m.x, m.y, m.z, sim.state);
     numbers?.ingest(sim.world);
+    audio.tick(sim.world.fx, sim.state.events, m, sim.world.run.phase);
     const nowChoosing = sim.world.run.phase === PHASE_CHOOSE;
     if (choosing && !nowChoosing) ramp.begin();
     choosing = nowChoosing;
@@ -352,6 +367,7 @@ function boot(): void {
       restart: () => restart(),
       stats: () => stats.summary(),
       pick: (index) => picks.set(index),
+      sound: () => audio.report(),
     });
   }
 

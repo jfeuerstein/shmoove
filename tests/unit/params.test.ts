@@ -4,7 +4,7 @@ import { parseParams } from '../../src/app/params';
 describe('parseParams', () => {
   it('has defaults for an empty query', () => {
     for (const q of ['', '?']) {
-      expect(parseParams(q)).toEqual({ debug: false, hook: false, perf: false, flat: false, solo: false, seed: 1, scheme: 'tuck', horde: 0, sparks: 0, lesson: false, nolesson: false, arsenal: false });
+      expect(parseParams(q)).toEqual({ debug: false, hook: false, perf: false, flat: false, solo: false, seed: 1, scheme: 'tuck', horde: 0, sparks: 0, lesson: false, nolesson: false, arsenal: false, mute: false });
     }
   });
 
@@ -77,6 +77,13 @@ describe('parseParams', () => {
     const p = parseParams('foo=bar&seed=3&hook');
     expect(p.seed).toBe(3);
     expect(p.hook).toBe(true);
+  });
+
+  it('reads ?mute as a flag', () => {
+    expect(parseParams('?mute').mute).toBe(true);
+    expect(parseParams('?hook&mute&nolesson').mute).toBe(true);
+    expect(parseParams('?mute=0').mute).toBe(false);
+    expect(parseParams('?hook').mute).toBe(false);
   });
 
   it('reads the lesson flags', () => {

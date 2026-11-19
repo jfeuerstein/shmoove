@@ -1,8 +1,10 @@
 /**
  * How to play: one sheet of eight lines, opened from the end card and closed by a button on it, with
- * a second button that sends the player back into the lesson. It fits 390x844 without scrolling.
+ * a second button that sends the player back into the lesson and a third that switches the sound on
+ * or off. It fits 390x844 without scrolling.
  * Like the end card it is a DOM sibling of the canvas and stops touches reaching the game.
  */
+import type { SoundControls } from '../audio/audio';
 import { PALETTE } from '../render/look';
 import './howTo.css';
 
@@ -27,9 +29,18 @@ export const HOW_TO_LINES: readonly HowToLine[] = [
 export class HowTo {
   readonly element: HTMLElement;
   private opened = false;
+  private readonly soundBtn: HTMLButtonElement | null = null;
 
-  /** `doc` is a seam so tests can build the sheet over a fake element tree. */
-  constructor(root: HTMLElement, private readonly onReplay: () => void, doc: Document = document) {
+  /**
+   * `doc` is a seam so tests can build the sheet over a fake element tree. `sound` is the switch the
+   * SOUND button flips; without one there is no button.
+   */
+  constructor(
+    root: HTMLElement,
+    private readonly onReplay: () => void,
+    doc: Document = document,
+    private readonly sound: SoundControls | null = null,
+  ) {
     const el = doc.createElement('div');
     el.className = 'howto';
     el.hidden = true;
@@ -58,6 +69,18 @@ export class HowTo {
     close.className = 'howto-close';
     close.textContent = 'CLOSE';
     close.style.backgroundColor = `#${PALETTE.accent.toString(16).padStart(6, '0')}`;
+    if (sound) {
+      const btn = doc.createElement('button');
+      btn.className = 'howto-sound';
+      el.appendChild(btn);
+      this.soundBtn = btn;
+      this.syncSound();
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        sound.setMuted(!sound.muted);
+        this.syncSound();
+      });
+    }
     el.appendChild(replay);
     el.appendChild(close);
 
@@ -85,6 +108,17 @@ export class HowTo {
   open(): void {
     this.opened = true;
     this.element.hidden = false;
+    this.syncSound();
+  }
+
+  /** The button says what the sound is now: SOUND ON or SOUND OFF. */
+  private syncSound(): void {
+    const b = this.soundBtn;
+    if (!b || !this.sound) return;
+    const on = !this.sound.muted;
+    b.textContent = on ? 'SOUND ON' : 'SOUND OFF';
+    b.setAttribute('aria-pressed', String(on));
+    b.className = on ? 'howto-sound' : 'howto-sound off';
   }
 
   close(): void {

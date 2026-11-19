@@ -12,6 +12,7 @@
  * - `sparks` integer >= 0, default 0: the crowd fixture's sparks.
  * - `lesson`   flag: show the first-run lesson even if it has been done.
  * - `nolesson` flag: never show the lesson.
+ * - `mute`   flag: no sound for this visit (the saved setting is left alone).
  * - `arsenal` flag: every weapon at level 3 and one of each map thing and zone ahead of the spawn
  *   (see `fixtures.ts`), with cards answered at once.
  */
@@ -30,6 +31,7 @@ export interface Params {
   lesson: boolean;
   nolesson: boolean;
   arsenal: boolean;
+  mute: boolean;
 }
 
 export const DEFAULT_SEED = 1;
@@ -72,5 +74,5 @@ function count(q: URLSearchParams, name: string): number {
 
 export function parseParams(search: string): Params {
   const q = new URLSearchParams(search);
-  return { debug: flag(q, 'debug'), hook: flag(q, 'hook'), perf: flag(q, 'perf'), flat: flag(q, 'flat'), solo: flag(q, 'solo'), seed: seed(q), scheme: scheme(q), horde: count(q, 'horde'), sparks: count(q, 'sparks'), lesson: flag(q, 'lesson'), nolesson: flag(q, 'nolesson'), arsenal: flag(q, 'arsenal') };
+  return { debug: flag(q, 'debug'), hook: flag(q, 'hook'), perf: flag(q, 'perf'), flat: flag(q, 'flat'), solo: flag(q, 'solo'), seed: seed(q), scheme: scheme(q), horde: count(q, 'horde'), sparks: count(q, 'sparks'), lesson: flag(q, 'lesson'), nolesson: flag(q, 'nolesson'), arsenal: flag(q, 'arsenal'), mute: flag(q, 'mute') };
 }
