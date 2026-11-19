@@ -46,3 +46,16 @@ Things decided without the owner, newest last. Overrule any of them.
    phone" cannot happen until a repository setting allows this branch to deploy to Pages. And the
    `m0` tag could not be pushed: the build session may only push its own branch. Tag `f769d0d` (or
    later) as `m0` from a machine that can.
+15. **M2 started without the M1 playtest.** The plan made M1 a go / no-go judged on a phone. The
+   owner said to continue onto further milestones, so M2 proceeds with the `tuck` scheme as the
+   default. All three schemes stay switchable, and `?solo` keeps the feel slice reachable.
+16. **The world is not interpolated.** Enemies, sparks and shots live in dense arrays whose indices
+   move when something is removed, so the renderer draws each from its velocity instead of blending
+   two states. Only the mover is interpolated.
+17. **Loops close by coming near your own trail, not by crossing it exactly.** Passing within
+   `wakeCloseDist` (2.6 m) of trail laid at least `wakeLoopMin` (16 m) ago closes the loop. A thumb
+   cannot be asked to hit a line.
+18. **A hop clears small enemies.** In the air, anything shorter than about 1.7 times your height
+   above it passes under you: gnats yes, shufflers and bollards no.
+19. **In gear 5 a bollard shatters outright** (the ram takes all its health) at a cost of 2 m/s,
+   rather than taking ordinary ram damage, which would not kill it.

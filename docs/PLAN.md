@@ -3,16 +3,18 @@
 How the game in `PITCH.md` gets built. Status lives here and is updated in the same commit that
 changes it.
 
-**Now:** M0 is built and its gate is green. M1 is built and waiting on the owner: play the three
-control schemes on the phone (`docs/PLAYTEST.md`) and pick one. That is the go / no-go. M2 does not
-start before it.
+**Now:** M0 and M1 are built with a green gate. The owner said to carry on past the M1 go / no-go
+without a playtest, so M2 (the horde slice) is in progress on the assumption that the default
+control scheme (`tuck`) stands. The playtest still matters: nothing here has been under a real
+thumb, and a change of scheme or feel after M2 is cheap, after M4 it is not.
 
-Two things only the owner can do:
+Still only the owner can:
 
 1. Let the deploy run. GitHub rejects it until the `github-pages` environment allows this branch:
    Settings, Environments, `github-pages`, Deployment branches, add `claude/festive-babbage-zk6cxn`
    (and Settings, Pages, source "GitHub Actions"). Then re-run the Pages workflow.
-2. Play it and send back the scheme and any tuning (the panel's Copy changes button).
+2. Play it (`docs/PLAYTEST.md`) and send back the scheme and any tuning (the panel's Copy changes
+   button). `?solo` gives the bowl without the horde.
 
 ## The order, and why
 
@@ -24,8 +26,8 @@ a thumb, because tests cannot judge feel.
 | | Milestone | Proves | Size | Status |
 | --- | --- | --- | --- | --- |
 | M0 | Ground | The toolchain, the gate, a link that opens on the phone | S | built, gate green at `f769d0d`; the link waits on a repo setting |
-| M1 | Feel slice | Moving around an empty bowl with one thumb is fun | L | built, gate green; waiting on the owner's playtest |
-| M2 | Horde slice | 400 enemies, readable in portrait, at 60 fps; three minutes are fun | L | |
+| M1 | Feel slice | Moving around an empty bowl with one thumb is fun | L | built, gate green; passed without a playtest on the owner's say-so |
+| M2 | Horde slice | 400 enemies, readable in portrait, at 60 fps; three minutes are fun | L | in progress |
 | M3 | Build | Level-ups, the arsenal and the drive-through map make runs differ | L | |
 | M4 | Run | A whole ten-minute run with bosses, an ending and resume | M | |
 | M5 | Juice | It looks, sounds and hits like the pitch | M | |
