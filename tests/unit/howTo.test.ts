@@ -96,7 +96,7 @@ describe('HowTo', () => {
     expect(lines).toHaveLength(8);
     expect(lines[0].text()).toBe('Drag: steer. Let go: coast. Tap: ollie.');
     expect(lines[6].text()).toBe('Ollie onto a white rail to grind it. Ollie again to get off.');
-    expect(lines[7].text()).toBe('Ride into crates and shrines. Ride between the gates in order. Jump through hoops. Totems call elites.');
+    expect(lines[7].text()).toBe('Ride into crates and shrines. Ride between the gates in order. Go through hoops. Totems call elites.');
     button(el, 'CLOSE').fire('click');
     expect(el.hidden).toBe(true);
     expect(sheet.isOpen).toBe(false);
