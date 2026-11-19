@@ -638,7 +638,7 @@ describe('every boss', () => {
     }
   });
 
-  it('gives back 40% of maximum health, its sparks and a rare card when it falls', () => {
+  it('gives back a share of maximum health (BOSS.heal), its sparks and a rare card when it falls', () => {
     for (const kind of [KIND_BRUISER, KIND_MORTAR]) {
       const sim = arena();
       const w = sim.world;
@@ -665,7 +665,7 @@ describe('every boss', () => {
       for (let k = 0; k < f.count; k++) types.push(f.type[k]);
       expect(types).toContain(FX_BOSS_DOWN);
       expect(types).toContain(FX_HEAL);
-      expect(w.player.hp).toBeCloseTo(30 + 0.4 * w.player.maxHp, 4);
+      expect(w.player.hp).toBeCloseTo(30 + BOSS.heal * w.player.maxHp, 4);
       expect(value() - before).toBeCloseTo(30, 4);
       expect(sources).toContain(OFFER_BOSS);
       expect(w.boss.felled).toBe(1);
@@ -692,7 +692,7 @@ describe('every boss', () => {
     sim.step(TUCK);
     expect(w.run.phase).toBe(PHASE_WON);
     expect(w.boss.felled).toBe(1);
-    expect(w.player.hp).toBeCloseTo(50 + 0.4 * w.player.maxHp, 4);
+    expect(w.player.hp).toBeCloseTo(50 + BOSS.heal * w.player.maxHp, 4);
     // The rare card is owed but the run is over: it waits, unopened.
     expect(w.offerQueued).toBe(1);
     expect(w.offer.open).toBe(false);

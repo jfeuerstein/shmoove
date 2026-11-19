@@ -151,11 +151,11 @@ describe('cutter', () => {
     expect(turned.touched).toBe(-1);
   });
 
-  it('is fast and medium: plowed from gear 4, 26 health, 10 damage, 3 XP', () => {
+  it('is fast and medium: plowed from gear 4, 20 health, 6 damage, 3 XP', () => {
     const k = KINDS[KIND_CUTTER];
     expect(k.speed).toBe(10.5);
-    expect(k.hp).toBe(26);
-    expect(k.damage).toBe(10);
+    expect(k.hp).toBe(20);
+    expect(k.damage).toBe(6);
     expect(k.xp).toBe(3);
     // Below gear 4 it hurts.
     const sim = arena();
@@ -299,7 +299,7 @@ describe('sludge', () => {
       expect(Math.hypot(zn.x[b] - zn.x[a], zn.z[b] - zn.z[a])).toBeCloseTo(HAZARDS.tarEvery, 1);
     }
     expect(KINDS[KIND_SLUDGE].speed).toBe(3);
-    expect(KINDS[KIND_SLUDGE].hp).toBe(40);
+    expect(KINDS[KIND_SLUDGE].hp).toBe(100);
   });
 
   it('never has more than 24 patches down at once', () => {
@@ -388,7 +388,7 @@ describe('clinger', () => {
     expect(sim.world.player.hp).toBe(sim.world.player.maxHp);
   });
 
-  it('stacks to four and no more; four drag a tucked mover 1 /s', () => {
+  it('stacks to four and no more; four drag a tucked mover 4 times the clinger drag', () => {
     const sim = held(6);
     expect(latchedCount(sim)).toBe(MAX_LATCHED);
     expect(sim.world.player.latched).toBe(4);
@@ -407,7 +407,7 @@ describe('clinger', () => {
       s.step(TUCK);
       return ((before - s.state.mover.speed) / DT - FEEL.rollFriction) / before;
     };
-    expect(drag(sim) - drag(clean)).toBeCloseTo(1, 1);
+    expect(drag(sim) - drag(clean)).toBeCloseTo(4 * HAZARDS.clingDrag, 1);
   });
 
   it('is shaken off one per clean hop', () => {
@@ -545,7 +545,8 @@ describe('elites', () => {
     const near = place(sim, KIND_SHUFFLER, 3, 40);
     const far = place(sim, KIND_SHUFFLER, 25, 40);
     const fast = place(sim, KIND_CUTTER, -3, 41);
-    run(sim, TUCK, 60);
+    // Long enough for the cutter to reach its capped speed from rest at its acceleration.
+    run(sim, TUCK, 75);
     const h = sim.world.horde;
     const v = (i: number): number => Math.hypot(h.vx[i], h.vz[i]);
     const s = KINDS[KIND_SHUFFLER].speed;

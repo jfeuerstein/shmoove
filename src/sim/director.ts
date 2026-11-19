@@ -45,13 +45,13 @@ export const DIRECTOR = {
    */
   at: [0, 30, 60, 120, 180, 300, 420, 480],
   /** Enemies arriving per second. */
-  rate: [2.5, 4.5, 6.5, 9, 11, 14, 17, 19],
+  rate: [2.5, 4.5, 6.5, 9, 11, 15, 24, 34],
   /** Fewer than this alive and the director spawns perTick a tick until there are this many. */
   floor: [10, 14, 20, 30, 40, 55, 70, 80],
   /** Never more than this alive. */
-  cap: [50, 90, 140, 200, 250, 320, 370, 400],
+  cap: [50, 90, 125, 160, 170, 290, 360, 400],
   /** While a boss is alive the rate is this share of normal, and no new bollards come. */
-  bossRate: 0.6,
+  bossRate: 0.35,
   /** Seconds of rate the budget may hold beyond what the room under the cap could use. */
   bank: 2,
   /** Most spawns in one tick. */
@@ -70,10 +70,10 @@ export const DIRECTOR = {
   /** Bollards arrive from this run time, one at a time. */
   bollardFrom: 120,
   /** How many may be alive: one at bollardFrom, rising to bollardMax at bollardFull. */
-  bollardMax: 6,
+  bollardMax: 12,
   bollardFull: 330,
   /** At least this long between two bollards, s. */
-  bollardGap: 8,
+  bollardGap: 5,
 
   /** Cutters arrive from this run time, as this share of the horde. */
   cutterFrom: 190,
@@ -84,11 +84,11 @@ export const DIRECTOR = {
   lobberGap: 2.5,
   /** Sludges likewise. */
   sludgeFrom: 370,
-  sludgeMax: 5,
-  sludgeGap: 4,
+  sludgeMax: 8,
+  sludgeGap: 2.5,
   /** Clingers arrive from this run time, as this share of the horde. */
   clingerFrom: 400,
-  clingerShare: 0.06,
+  clingerShare: 0.14,
 
   /** From this run time, about every eliteEvery s, the next shuffler or cutter to come up is an elite. */
   eliteFrom: 300,

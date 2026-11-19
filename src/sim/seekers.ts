@@ -26,11 +26,11 @@ import {
 /** By weapon level 1..5. */
 export const SEEKERS = {
   /** Seconds between volleys, before Haste. */
-  wait: [1.2, 1.05, 0.9, 0.8, 0.7],
+  wait: [0.65, 1.05, 0.9, 0.8, 0.7],
   /** Darts per volley. */
   darts: [1, 2, 2, 3, 4],
   /** Damage per dart before gear power. */
-  damage: [8, 10, 12, 14, 17],
+  damage: [9, 12, 14, 17, 20],
 } as const;
 
 /** An enemy must be this close to the mover to be shot at, m. */

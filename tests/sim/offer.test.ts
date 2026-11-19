@@ -184,12 +184,12 @@ describe('the build', () => {
     raisePassive(l, P_WAX, 1);
     raiseWeapon(l, W_BUMPER, 3);
     recomputeStats(st, l);
-    expect(st.maxHp).toBe(140);
+    expect(st.maxHp).toBe(120);
     expect(st.drag).toBeLessThan(1);
     expect(st.thorns).toBe(BUMPER.thorns[2]);
 
     // Recomputing is not cumulative.
     recomputeStats(st, l);
-    expect(st.maxHp).toBe(140);
+    expect(st.maxHp).toBe(120);
   });
 });

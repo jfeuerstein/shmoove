@@ -59,7 +59,7 @@ export const BOSS = {
   ahead: 45,
   aheadSpeed: 3,
   /** Share of maximum health a fallen boss gives back. */
-  heal: 0.4,
+  heal: 0.15,
 
   bruiser: {
     /** Walking speed, m/s. */
@@ -81,8 +81,8 @@ export const BOSS = {
   mortar: {
     speed: 2,
     /** It backs off when nearer than this and closes in when farther than `far`, m. */
-    near: 20,
-    far: 30,
+    near: 10,
+    far: 18,
     /** Seconds between lines of rings. */
     volleyEvery: 4,
     /** Rings in a line, how far apart, m, and how long until they land, s. */
@@ -99,13 +99,13 @@ export const BOSS = {
   standstill: {
     speed: 2.5,
     /** A grounded mover this near it is slowed by this much drag, 1/s. */
-    auraReach: 12,
+    auraReach: 8.5,
     auraDrag: 0.8,
     /** Seconds between rings; how fast the front spreads, m/s; how far it goes, m; its damage. */
     ringEvery: 3.5,
     ringSpeed: 9,
     ringReach: 40,
-    ringDamage: 15,
+    ringDamage: 35,
     /** Seconds between called elites, and how far from it they come up, m. */
     eliteEvery: 15,
     eliteNear: 10,

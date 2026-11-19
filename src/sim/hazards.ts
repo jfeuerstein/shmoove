@@ -58,7 +58,7 @@ export const HAZARDS = {
   tarDrag: 1.2,
 
   /** Extra drag per clinger holding on, 1/s. */
-  clingDrag: 0.25,
+  clingDrag: 0.8,
   /** A landing at least this hard (speed into the ground, m/s) shakes every clinger off. */
   shakeImpact: 5,
   /** A clinger shaken off is thrown this fast, m/s, ... */

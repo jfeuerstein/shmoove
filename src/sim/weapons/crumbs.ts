@@ -28,7 +28,7 @@ export const CRUMBS = {
   /** Seconds between mines, before Haste. */
   wait: [1.6, 1.4, 1.2, 1.05, 0.9],
   /** Damage of a blast, before might (the might when the mine was dropped). */
-  damage: [26, 32, 40, 50, 62],
+  damage: [20, 25, 31, 38, 46],
   /** Blast radius, m, times area. */
   radius: [3, 3.3, 3.6, 4, 4.5],
   /** A mine is armed this many ticks after it is dropped. */

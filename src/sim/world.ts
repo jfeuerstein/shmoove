@@ -75,18 +75,18 @@ export const STATE_LATCHED = 1;
 export const MAX_LATCHED = 4;
 
 export const KINDS: readonly EnemyKind[] = [
-  { name: 'shuffler', radius: 0.6, height: 1.7, speed: 4, accel: 10, hp: 10, damage: 8, weight: WEIGHT_LIGHT, xp: 1 },
+  { name: 'shuffler', radius: 0.6, height: 1.7, speed: 4, accel: 10, hp: 10, damage: 9, weight: WEIGHT_LIGHT, xp: 1 },
   { name: 'gnat', radius: 0.35, height: 0.6, speed: 8.5, accel: 18, hp: 2, damage: 3, weight: WEIGHT_LIGHT, xp: 0.5 },
   { name: 'bollard', radius: 1.3, height: 2.4, speed: 1.6, accel: 3, hp: 120, damage: 15, weight: WEIGHT_HEAVY, xp: 12 },
-  { name: 'cutter', radius: 0.5, height: 1.5, speed: 10.5, accel: 16, hp: 26, damage: 10, weight: WEIGHT_MEDIUM, xp: 3 },
+  { name: 'cutter', radius: 0.5, height: 1.5, speed: 10.5, accel: 10, hp: 20, damage: 6, weight: WEIGHT_MEDIUM, xp: 3 },
   { name: 'lobber', radius: 0.7, height: 1.9, speed: 3.2, accel: 6, hp: 18, damage: 8, weight: WEIGHT_MEDIUM, xp: 3 },
-  { name: 'sludge', radius: 0.9, height: 1.1, speed: 3, accel: 4, hp: 40, damage: 10, weight: WEIGHT_MEDIUM, xp: 4 },
+  { name: 'sludge', radius: 1.3, height: 1.1, speed: 3, accel: 4, hp: 100, damage: 16, weight: WEIGHT_MEDIUM, xp: 4 },
   { name: 'clinger', radius: 0.3, height: 0.7, speed: 9, accel: 20, hp: 8, damage: 0, weight: WEIGHT_LIGHT, xp: 1, latches: true },
   // Bosses: `accel` 0 because the horde never steers one; `bosses.ts` sets its velocity every tick
   // and the horde's step only carries it along. `speed` is its walking speed, for the drawing.
-  { name: 'bruiser', radius: 2.2, height: 2.6, speed: 3, accel: 0, hp: 900, damage: 20, weight: WEIGHT_HEAVY, xp: 30, boss: true },
-  { name: 'mortar', radius: 1.8, height: 2.8, speed: 2, accel: 0, hp: 1400, damage: 15, weight: WEIGHT_HEAVY, xp: 30, boss: true },
-  { name: 'standstill', radius: 3, height: 7, speed: 2.5, accel: 0, hp: 2600, damage: 25, weight: WEIGHT_HEAVY, xp: 30, boss: true },
+  { name: 'bruiser', radius: 2.2, height: 2.6, speed: 3, accel: 0, hp: 1700, damage: 20, weight: WEIGHT_HEAVY, xp: 30, boss: true },
+  { name: 'mortar', radius: 1.8, height: 2.8, speed: 2, accel: 0, hp: 2300, damage: 15, weight: WEIGHT_HEAVY, xp: 30, boss: true },
+  { name: 'standstill', radius: 3, height: 7, speed: 2.5, accel: 0, hp: 4000, damage: 30, weight: WEIGHT_HEAVY, xp: 30, boss: true },
 ];
 
 /** `Tally.hits` and `.hurt` indices past the enemy kinds: a lobbed shot landing, a boss's ring, anything else. */
