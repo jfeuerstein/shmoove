@@ -24,6 +24,8 @@ export interface StorageLike {
 export interface Stored {
   scheme: Scheme | null;
   feel: FeelOverrides;
+  /** The sim answers card offers itself (for watching the game without choosing). */
+  autoPick: boolean;
 }
 
 function isScheme(v: unknown): v is Scheme {
@@ -42,7 +44,7 @@ export function clampFeel(key: FeelKey, v: number): number {
 
 /** Read saved text: anything wrong with it gives the empty settings, never a throw. */
 export function parseStored(raw: string | null): Stored {
-  const empty: Stored = { scheme: null, feel: {} };
+  const empty: Stored = { scheme: null, feel: {}, autoPick: false };
   if (raw === null) return empty;
   let data: unknown;
   try {
@@ -53,7 +55,7 @@ export function parseStored(raw: string | null): Stored {
   if (typeof data !== 'object' || data === null) return empty;
   const rec = data as Record<string, unknown>;
   if (rec.v !== VERSION) return empty;
-  const out: Stored = { scheme: isScheme(rec.scheme) ? rec.scheme : null, feel: {} };
+  const out: Stored = { scheme: isScheme(rec.scheme) ? rec.scheme : null, feel: {}, autoPick: rec.autoPick === true };
   const feel = rec.feel;
   if (typeof feel === 'object' && feel !== null) {
     for (const [k, v] of Object.entries(feel as Record<string, unknown>)) {
@@ -71,9 +73,10 @@ export function collectOverrides(feel: Readonly<FeelValues>): FeelOverrides {
   return out;
 }
 
-export function serialize(scheme: Scheme | null, feel: Readonly<FeelValues>): string {
-  const body: { v: number; scheme?: Scheme; feel: FeelOverrides } = { v: VERSION, feel: collectOverrides(feel) };
+export function serialize(scheme: Scheme | null, feel: Readonly<FeelValues>, autoPick = false): string {
+  const body: { v: number; scheme?: Scheme; feel: FeelOverrides; autoPick?: boolean } = { v: VERSION, feel: collectOverrides(feel) };
   if (scheme !== null) body.scheme = scheme;
+  if (autoPick) body.autoPick = true;
   return JSON.stringify(body);
 }
 
@@ -122,6 +125,11 @@ export class Settings {
   private readonly feel: FeelValues;
   private stored: Stored;
 
+  /** Whether the sim answers card offers itself. Off unless the owner switched it on. */
+  get autoPick(): boolean {
+    return this.stored.autoPick;
+  }
+
   constructor(storage: StorageLike | null, search: string, fallback: Scheme, feel: FeelValues = FEEL) {
     this.storage = storage;
     this.feel = feel;
@@ -147,6 +155,12 @@ export class Settings {
     this.save();
   }
 
+  /** The owner switched auto-pick on or off in the panel. */
+  chooseAutoPick(on: boolean): void {
+    this.stored.autoPick = on;
+    this.save();
+  }
+
   /** Save the live constants' differences from the defaults. */
   saveFeel(): void {
     this.stored.feel = collectOverrides(this.feel);
@@ -160,7 +174,7 @@ export class Settings {
   private save(): void {
     if (!this.storage) return;
     try {
-      this.storage.setItem(STORAGE_KEY, serialize(this.stored.scheme, this.feel));
+      this.storage.setItem(STORAGE_KEY, serialize(this.stored.scheme, this.feel, this.stored.autoPick));
     } catch (_err) {
       // Full or refused: the settings last for this visit only.
     }

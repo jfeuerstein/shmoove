@@ -1,0 +1,70 @@
+.bb {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 22px);
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  gap: 4px;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  color: #fff;
+  line-height: 1;
+  z-index: 10;
+}
+
+.bb-gap {
+  width: 10px;
+}
+
+.bb-tile {
+  width: 34px;
+  height: 34px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border-radius: 8px;
+  border: 2px solid var(--bb-weapon);
+  background: rgba(27, 22, 48, 0.72);
+}
+
+.bb-tile.bb-passive {
+  border-color: var(--bb-passive);
+}
+
+.bb-tile.bb-empty {
+  border: 2px solid rgba(255, 255, 255, 0.16);
+  background: rgba(27, 22, 48, 0.25);
+}
+
+.bb-code {
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+}
+
+.bb-pips {
+  display: flex;
+  gap: 1px;
+}
+
+.bb-pip {
+  width: 4px;
+  height: 3px;
+  border-radius: 1px;
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.bb-weapon .bb-pip.on {
+  background: var(--bb-weapon);
+}
+
+.bb-passive .bb-pip.on {
+  background: var(--bb-passive);
+}

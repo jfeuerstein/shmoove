@@ -1,0 +1,31 @@
+.nums {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 8;
+}
+
+.num {
+  position: absolute;
+  left: 0;
+  top: 0;
+  translate: -50% -100%;
+  will-change: transform, opacity;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-size: 16px;
+  font-weight: 900;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: #fff;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+}
+
+.num[hidden] {
+  display: none;
+}
+
+.num-big {
+  font-size: 30px;
+  color: #fff1b0;
+}
