@@ -7,6 +7,10 @@
  * `WEAPON_INFO`, `PASSIVE_INFO` and `BOON_INFO`, so any weapon the sim knows has a card);
  * `autoPickCard` is the policy auto-pick answers with; `Cards` is the DOM around them. The overlay is
  * a DOM sibling of the canvas, so touches on it never reach the game; they are also stopped here.
+ *
+ * Each card is its icon (large, on the left), the name, the line of what it does and level pips.
+ * A weapon, a passive and a boon wear their own frame colour; a thing not yet carried has its icon
+ * on a solid tile and a NEW tag, a level on something carried has its icon on a dark tile.
  */
 import { PALETTE } from '../render/look';
 import { MAX_LEVEL, PASSIVE_INFO, WEAPON_INFO, type Loadout } from '../sim/arsenal';
@@ -23,6 +27,7 @@ import {
   type Offer,
 } from '../sim/offer';
 import { PHASE_CHOOSE, type World } from '../sim/world';
+import { cssHex, iconSvg } from './icons';
 import './cards.css';
 
 /** Seconds after a tap during which further taps are ignored, so a double tap cannot answer the next offer unseen. */
@@ -32,8 +37,10 @@ export type CardKind = 'weapon' | 'passive' | 'boon';
 
 export interface CardText {
   kind: CardKind;
-  /** Two letters for the tile. */
-  code: string;
+  /** The icon's SVG markup (see icons.ts), tinted by the card. */
+  icon: string;
+  /** Not carried yet: a new weapon or passive. Never true for a boon. */
+  isNew: boolean;
   name: string;
   /** `NEW`, `NEW  Lv 2`, `Lv 2 > 3` or `BOON`. */
   tag: string;
@@ -44,6 +51,9 @@ export interface CardText {
   rare: boolean;
   /** `+2` for a rare card, else empty. */
   bonus: string;
+  /** The level carried now (0 when new or a boon) and after taking the card (0 for a boon). */
+  from: number;
+  to: number;
 }
 
 export interface OfferText {
@@ -74,41 +84,52 @@ export function describeCard(o: Offer, index: number, l: Loadout): CardText {
   if (type === CARD_WEAPON) {
     const info = WEAPON_INFO[id];
     const rare = by > 1;
+    const from = l.weaponLevel[id];
     return {
       kind: 'weapon',
-      code: info.code,
+      icon: iconSvg('weapon', id),
+      isNew: from === 0,
       name: info.name,
-      tag: levelTag(l.weaponLevel[id], by),
+      tag: levelTag(from, by),
       blurb: info.blurb,
       fedBy: info.fedBy,
       rare,
       bonus: rare ? `+${by}` : '',
+      from,
+      to: Math.min(MAX_LEVEL, from + by),
     };
   }
   if (type === CARD_PASSIVE) {
     const info = PASSIVE_INFO[id];
     const rare = by > 1;
+    const from = l.passiveLevel[id];
     return {
       kind: 'passive',
-      code: info.code,
+      icon: iconSvg('passive', id),
+      isNew: from === 0,
       name: info.name,
-      tag: levelTag(l.passiveLevel[id], by),
+      tag: levelTag(from, by),
       blurb: info.blurb,
       fedBy: '',
       rare,
       bonus: rare ? `+${by}` : '',
+      from,
+      to: Math.min(MAX_LEVEL, from + by),
     };
   }
   const boon = BOON_INFO[id];
   return {
     kind: 'boon',
-    code: boon.name.slice(0, 2).toUpperCase(),
+    icon: iconSvg('boon', id),
+    isNew: false,
     name: boon.name,
     tag: 'BOON',
     blurb: boon.blurb,
     fedBy: '',
     rare: false,
     bonus: '',
+    from: 0,
+    to: 0,
   };
 }
 
@@ -143,10 +164,6 @@ function offerKey(o: Offer): number {
   return k === 0 ? 1 : k;
 }
 
-function cssHex(c: number): string {
-  return `#${c.toString(16).padStart(6, '0')}`;
-}
-
 interface CardEls {
   button: HTMLElement;
   tile: HTMLElement;
@@ -155,6 +172,15 @@ interface CardEls {
   bonus: HTMLElement;
   blurb: HTMLElement;
   fed: HTMLElement;
+  pipRow: HTMLElement;
+  pips: HTMLElement[];
+}
+
+/** The class of level pip `p` (0-based) on a card that raises a level from `from` to `to`. */
+export function pipClass(p: number, from: number, to: number): string {
+  if (p < from) return 'card-pip on';
+  if (p < to) return 'card-pip gain';
+  return 'card-pip';
 }
 
 export class Cards {
@@ -172,8 +198,8 @@ export class Cards {
     el.setAttribute('aria-live', 'polite');
     el.style.setProperty('--card-weapon', cssHex(PALETTE.accent));
     el.style.setProperty('--card-passive', cssHex(PALETTE.pad));
-    el.style.setProperty('--card-boon', cssHex(PALETTE.spark));
-    el.style.setProperty('--card-rare', cssHex(PALETTE.mover));
+    el.style.setProperty('--card-boon', cssHex(PALETTE.mover));
+    el.style.setProperty('--card-rare', cssHex(PALETTE.elite));
     const stack = doc.createElement('div');
     stack.className = 'cards-stack';
     this.head = doc.createElement('div');
@@ -191,12 +217,15 @@ export class Cards {
       const bonus = part(doc, top, 'card-bonus');
       const blurb = part(doc, body, 'card-blurb');
       const fed = part(doc, body, 'card-fed');
+      const pipRow = part(doc, body, 'card-pips');
+      const pips: HTMLElement[] = [];
+      for (let p = 0; p < MAX_LEVEL; p++) pips.push(part(doc, pipRow, 'card-pip'));
       button.addEventListener('click', (e) => {
         e.stopPropagation();
         this.tap(i);
       });
       stack.appendChild(button);
-      this.els.push({ button, tile, name, tag, bonus, blurb, fed });
+      this.els.push({ button, tile, name, tag, bonus, blurb, fed, pipRow, pips });
     }
     el.appendChild(stack);
     for (const type of ['pointerdown', 'pointermove', 'pointerup', 'touchstart', 'touchmove', 'touchend']) {
@@ -245,8 +274,8 @@ export class Cards {
       const c = t.cards[i];
       e.button.hidden = c === undefined;
       if (c === undefined) continue;
-      e.button.className = c.rare ? `card card-${c.kind} card-rare` : `card card-${c.kind}`;
-      e.tile.textContent = c.code;
+      e.button.className = `card card-${c.kind}${c.isNew ? ' card-new' : ''}${c.rare ? ' card-rare' : ''}`;
+      e.tile.innerHTML = c.icon;
       e.name.textContent = c.name;
       e.tag.textContent = c.tag;
       e.bonus.textContent = c.bonus;
@@ -254,6 +283,9 @@ export class Cards {
       e.blurb.textContent = c.blurb;
       e.fed.textContent = c.fedBy === '' ? '' : `fed by ${c.fedBy}`;
       e.fed.hidden = c.fedBy === '';
+      // A boon is not part of the build: no levels to show.
+      e.pipRow.hidden = c.kind === 'boon';
+      for (let p = 0; p < e.pips.length; p++) e.pips[p].className = pipClass(p, c.from, c.to);
     }
   }
 }
