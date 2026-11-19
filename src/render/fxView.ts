@@ -322,6 +322,8 @@ export const GRIND_BURST = 10;
 /** A streamed spark's size (share of a shard's), and how much of the board's speed it keeps. */
 const GRIND_SIZE = 0.45;
 const GRIND_TRAIL = 0.35;
+/** Grind sparks glow (other shards are lit only): hot metal reads on the dark ground. */
+export const GRIND_GLOW = 0.9;
 /** Its speed up and sideways, m/s. */
 const GRIND_UP = 3;
 const GRIND_SIDE = 2.2;
@@ -347,6 +349,7 @@ export class FxView {
   private readonly terrain: Terrain;
   private readonly glowDisc: InstancedBufferAttribute;
   private readonly glowRgb: Float32Array;
+  private readonly shardGlow: InstancedBufferAttribute;
   private readonly boltFade: InstancedBufferAttribute;
   private readonly markGlow: InstancedBufferAttribute;
   private readonly markRgb: Float32Array;
@@ -414,7 +417,9 @@ export class FxView {
     this.glows = makeInstanced(glowGeo, discMaterial(0), GLOW_POOL, 'fx-glows');
     this.glowRgb = addInstanceColor(this.glows, GLOW_POOL);
 
-    this.shards = makeInstanced(new TetrahedronGeometry(SHARD_SIZE, 0), flatMaterial(0xffffff), SHARD_POOL, 'fx-shards');
+    const shardGeo = new TetrahedronGeometry(SHARD_SIZE, 0);
+    this.shardGlow = addInstanceFloat(shardGeo, 'aGlow', SHARD_POOL);
+    this.shards = makeInstanced(shardGeo, tintMaterial(), SHARD_POOL, 'fx-shards');
     const shardCol = addInstanceColor(this.shards, SHARD_POOL);
     shardCol.fill(1);
     for (let k = 0; k < SHARD_COLORS.length; k++) rgbInto(this.shardRgb, k * 3, SHARD_COLORS[k]);
@@ -714,6 +719,7 @@ export class FxView {
     const sm = this.shards.instanceMatrix.array;
     const col = this.shards.instanceColor;
     const sc = col ? (col.array as Float32Array) : null;
+    const glow = this.shardGlow.array as Float32Array;
     let i = 0;
     while (i < this.shardCount) {
       const age = (this.sage[i] += step);
@@ -747,12 +753,14 @@ export class FxView {
         sc[i * 3 + 1] = this.shardRgb[k + 1];
         sc[i * 3 + 2] = this.shardRgb[k + 2];
       }
+      glow[i] = this.scol[i] === GRIND_COLOR ? GRIND_GLOW : 0;
       i++;
     }
     this.shards.count = this.shardCount;
     this.shards.visible = this.shardCount > 0;
     if (this.shardCount > 0) {
       uploadFirst(this.shards.instanceMatrix, this.shardCount);
+      uploadFirst(this.shardGlow, this.shardCount);
       if (col) uploadFirst(col, this.shardCount);
     }
   }

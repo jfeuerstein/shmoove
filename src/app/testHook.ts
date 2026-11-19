@@ -7,7 +7,7 @@
 import type { InputSource } from '../input/source';
 import { setPassiveLevel, setWeaponLevel } from '../sim/build';
 import { hurtPlayer } from '../sim/contact';
-import type { Sim } from '../sim/sim';
+import { copySimState, type Sim } from '../sim/sim';
 import type { World } from '../sim/world';
 import type { InputFrame } from '../sim/types';
 import type { FrameStatsSummary } from './loop';
@@ -21,6 +21,8 @@ export interface HookState {
   gear: number;
   grounded: boolean;
   tucked: boolean;
+  /** The rail being ground (its index in `rails()`), or -1. */
+  rail: number;
   chain: number;
   viewYaw: number;
   events: number;
@@ -42,6 +44,16 @@ export interface HookState {
   weapons: HookItem[];
   passives: HookItem[];
   tokens: number;
+}
+
+/** A rail on the map: its two ends, in world space. */
+export interface HookRail {
+  x0: number;
+  y0: number;
+  z0: number;
+  x1: number;
+  y1: number;
+  z1: number;
 }
 
 export interface HookItem {
@@ -81,6 +93,10 @@ export interface TestHook {
   /** Set a weapon's level outright (0 removes it). */
   setWeapon(id: number, level: number): void;
   setPassive(id: number, level: number): void;
+  /** The rails on the map. */
+  rails(): HookRail[];
+  /** Put the rider on the ground at (x, z), heading `yaw`, moving at `speed` m/s, the view behind it. */
+  place(x: number, z: number, yaw: number, speed: number): void;
 }
 
 declare global {
@@ -178,6 +194,7 @@ export function installTestHook(host: HookHost): TestHook {
         gear: m.gear,
         grounded: m.grounded,
         tucked: m.tucked,
+        rail: m.rail,
         chain: m.chain,
         viewYaw: s.viewYaw,
         events: s.events,
@@ -231,6 +248,42 @@ export function installTestHook(host: HookHost): TestHook {
     },
     setPassive(id, level) {
       setPassiveLevel(host.sim.world, Math.floor(id), Math.floor(level));
+    },
+    rails() {
+      return host.sim.terrain.rails.map((r) => ({ x0: r.x0, y0: r.y0, z0: r.z0, x1: r.x1, y1: r.y1, z1: r.z1 }));
+    },
+    place(x, z, yaw, speed) {
+      if (![x, z, yaw, speed].every(Number.isFinite)) return;
+      const sim = host.sim;
+      const s = sim.state;
+      const m = s.mover;
+      const n = { x: 0, y: 1, z: 0 };
+      sim.terrain.normalAt(x, z, n);
+      m.x = x;
+      m.y = sim.terrain.heightAt(x, z);
+      m.z = z;
+      m.nx = n.x;
+      m.ny = n.y;
+      m.nz = n.z;
+      // Along the ground, heading `yaw` as seen from above.
+      const hx = Math.sin(yaw);
+      const hz = Math.cos(yaw);
+      const hy = -(hx * n.x + hz * n.z) / n.y;
+      const k = speed / Math.sqrt(hx * hx + hy * hy + hz * hz);
+      m.vx = hx * k;
+      m.vy = hy * k;
+      m.vz = hz * k;
+      m.speed = speed;
+      m.heading = yaw;
+      m.grounded = true;
+      m.rail = -1;
+      m.railCooldown = 0;
+      m.airTicks = 0;
+      m.hopBuffer = 0;
+      m.landPending = false;
+      s.viewYaw = yaw;
+      // No streak from where it was.
+      copySimState(sim.prev, s);
     },
   };
   window.__shmoove = hook;

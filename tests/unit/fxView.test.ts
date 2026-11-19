@@ -159,6 +159,7 @@ describe('FxView glows and marks', () => {
     const s = fx.shards.instanceColor;
     if (!s) throw new Error('no colours');
     expect(s.getX(0)).toBeCloseTo(new Color(PALETTE.things[THING_CRATE]).r, 5);
+    expect(fx.shards.geometry.getAttribute('aGlow').getX(0)).toBe(0);
     for (let k = 0; k < 10; k++) fx.update(0.1);
     expect(fx.liveMarks).toBe(0);
     fx.reset();
@@ -207,10 +208,13 @@ describe('FxView grind sparks', () => {
     const col = fx.shards.instanceColor;
     if (!col) throw new Error('no colours');
     const want = new Color(PALETTE.grindSpark);
+    const glow = fx.shards.geometry.getAttribute('aGlow');
     for (let i = 0; i < fx.liveShards; i++) {
       expect(col.getX(i)).toBeCloseTo(want.r, 5);
       expect(col.getY(i)).toBeCloseTo(want.g, 5);
       expect(col.getZ(i)).toBeCloseTo(want.b, 5);
+      // Hot: they glow, where the shards of a broken crate or a dead enemy do not.
+      expect(glow.getX(i)).toBeGreaterThanOrEqual(0.5);
     }
     const before = fx.liveShards;
     tick(0);
