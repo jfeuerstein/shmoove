@@ -6,8 +6,12 @@
  *   inner part can be cut away so the same instance is a ring or a flash. Pop: a ring out to the
  *   loop's radius and a flash in `PALETTE.pop`. Slam: a ring out to the wave's radius in
  *   `PALETTE.slam`. Blast: a flash and a ring in the mine's colour.
- * - `FX_ENEMY_DIE`: a small burst of shards in the enemy's colour; `FX_THING`: the same in the
- *   thing's colour (one instanced pool of 256 for both).
+ * - `FX_ENEMY_DIE`: a small burst of shards in the enemy's colour (a boss's in `PALETTE.bosses`);
+ *   `FX_THING`: the same in the thing's colour (one instanced pool of 256 for both).
+ * - `FX_BOSS_IN`: a boss arrives: a column of shards thrown up and shockwaves out over the ground
+ *   at the spot, in the boss's colour, for about a second. `FX_BOSS_DOWN`: it falls: a burst
+ *   `BOSS_BURST` times an ordinary death's, with a flash and a ring, in the boss's colour. Both use
+ *   the same pools as everything else, so they add no draw call.
  * - `FX_ARC`: each run of links in a tick (0, 1, 2, ...) is one jagged bolt from the mover through
  *   the struck enemies in order, gone in `BOLT_LIFE`.
  * - `FX_HEAL`, `FX_TOKEN`: a small mark rising from the mover.
@@ -39,6 +43,8 @@ import { EV_GRIND_END, EV_GRIND_START, type SimState } from '../sim/types';
 import {
   FX_ARC,
   FX_BLAST,
+  FX_BOSS_DOWN,
+  FX_BOSS_IN,
   FX_ENEMY_DIE,
   FX_HEAL,
   FX_PLAYER_HIT,
@@ -46,6 +52,7 @@ import {
   FX_SLAM,
   FX_THING,
   FX_TOKEN,
+  KIND_BRUISER,
   KIND_COUNT,
   KINDS,
   type World,
@@ -311,10 +318,21 @@ const HIT_MAX = 0.7;
 const HIT_REF = 15;
 const HIT_FADE = 0.4;
 
-/** Shard colours: the enemy kinds, then the things. */
+/** Shard colours: the enemy kinds, then the things, the grind, then the bosses. */
 const THING_COLOR_BASE = KIND_COUNT;
-const SHARD_COLORS = [...PALETTE.enemies, ...PALETTE.things, PALETTE.grindSpark];
-const GRIND_COLOR = SHARD_COLORS.length - 1;
+const SHARD_COLORS = [...PALETTE.enemies, ...PALETTE.things, PALETTE.grindSpark, ...PALETTE.bosses];
+const GRIND_COLOR = KIND_COUNT + PALETTE.things.length;
+const BOSS_COLOR_BASE = GRIND_COLOR + 1;
+
+/** A boss's fall throws this many times the shards of an ordinary death, each this much bigger. */
+export const BOSS_BURST = 5;
+const BOSS_SHARD_SCALE = 1.4;
+/** A boss's arrival: how long its shockwaves last, s, how far the widest reaches, m, and its column. */
+export const BOSS_IN_LIFE = 1.1;
+export const BOSS_IN_REACH = 14;
+const BOSS_COLUMN_SHARDS = 28;
+const BOSS_COLUMN_UP = 15;
+const BOSS_COLUMN_OUT = 1.2;
 
 /** Grind sparks streamed each tick on a rail, and thrown when a grind starts or ends. */
 export const GRIND_STREAM = 2;
@@ -518,8 +536,12 @@ export class FxView {
         this.glow(GLOW_RING, x, y, z, r, 0.35, 0.9, 0.8, PALETTE.zones[0]);
       } else if (type === FX_ENEMY_DIE) {
         const k = a | 0;
-        const def = KINDS[k >= 0 && k < KIND_COUNT ? k : 0];
-        this.burst(k >= 0 && k < KIND_COUNT ? k : 0, x, y + def.height * 0.5, z, def.radius, SHARDS_PER_DEATH);
+        const def = KINDS[k >= 0 && k < KINDS.length ? k : 0];
+        this.burst(shardColorOfKind(k), x, y + def.height * 0.5, z, def.radius, SHARDS_PER_DEATH);
+      } else if (type === FX_BOSS_IN) {
+        this.bossIn(a | 0, x, y, z);
+      } else if (type === FX_BOSS_DOWN) {
+        this.bossDown(a | 0, x, y, z);
       } else if (type === FX_THING) {
         const k = a | 0;
         if (k >= 0 && k < PALETTE.things.length) this.burst(THING_COLOR_BASE + k, x, y + 0.8, z, 0.7, SHARDS_PER_THING);
@@ -585,20 +607,50 @@ export class FxView {
     rgbInto(this.gRgb, p * 3, color);
   }
 
-  private burst(col: number, x: number, y: number, z: number, radius: number, perUnit: number, scale = 1): void {
+  /** A boss came up at (x, y, z): a column of its colour thrown up, and shockwaves over the ground. */
+  private bossIn(kind: number, x: number, y: number, z: number): void {
+    const color = bossColor(kind);
+    const r = BOSS_IN_REACH;
+    this.glow(GLOW_FLASH, x, y, z, r * 0.35, BOSS_IN_LIFE * 0.6, 0.9, 0, color);
+    this.glow(GLOW_RING, x, y, z, r * 0.55, BOSS_IN_LIFE * 0.6, 1, 0.86, color);
+    this.glow(GLOW_RING, x, y, z, r * 0.8, BOSS_IN_LIFE * 0.8, 0.9, 0.9, color);
+    this.glow(GLOW_RING, x, y, z, r, BOSS_IN_LIFE, 0.8, 0.93, color);
+    this.burst(shardColorOfKind(kind), x, y + 0.3, z, 0.6, BOSS_COLUMN_SHARDS, BOSS_SHARD_SCALE, BOSS_COLUMN_OUT, BOSS_COLUMN_UP);
+  }
+
+  /** A boss fell at (x, y, z): a burst several times an ordinary death's, a flash and a ring. */
+  private bossDown(kind: number, x: number, y: number, z: number): void {
+    const color = bossColor(kind);
+    const def = KINDS[kind >= 0 && kind < KINDS.length ? kind : 0];
+    this.glow(GLOW_FLASH, x, y, z, def.radius * 3, 0.5, 1, 0, color);
+    this.glow(GLOW_RING, x, y, z, def.radius * 5, 0.8, 1, 0.88, color);
+    this.burst(shardColorOfKind(kind), x, y + def.height * 0.5, z, def.radius, SHARDS_PER_DEATH * BOSS_BURST, BOSS_SHARD_SCALE);
+  }
+
+  private burst(
+    col: number,
+    x: number,
+    y: number,
+    z: number,
+    radius: number,
+    perUnit: number,
+    scale = 1,
+    outSpeed = SHARD_OUT,
+    upSpeed = SHARD_UP,
+  ): void {
     const n = Math.max(3, Math.round(perUnit * Math.sqrt(radius / 0.6)));
     const size = (0.6 + radius * 0.6) * scale;
     for (let j = 0; j < n; j++) {
       // A full pool overwrites a live shard at random: in a crowd nobody notices which.
       const i = this.shardCount < SHARD_POOL ? this.shardCount++ : Math.floor(this.rand() * SHARD_POOL);
       const a = this.rand() * Math.PI * 2;
-      const out = SHARD_OUT * (0.5 + this.rand());
+      const out = outSpeed * (0.5 + this.rand());
       this.sx[i] = x;
       this.sy[i] = y;
       this.sz[i] = z;
       this.svx[i] = Math.cos(a) * out;
       this.svz[i] = Math.sin(a) * out;
-      this.svy[i] = SHARD_UP * (0.6 + 0.6 * this.rand());
+      this.svy[i] = upSpeed * (0.6 + 0.6 * this.rand());
       this.sage[i] = 0;
       this.sspin[i] = this.rand() * Math.PI * 2;
       this.ssize[i] = size * (0.7 + 0.6 * this.rand());
@@ -836,4 +888,18 @@ export class FxView {
     this.ssize[i] = this.ssize[j];
     this.scol[i] = this.scol[j];
   }
+}
+
+/** The shard colour for an enemy of `kind`: its own, a boss's from `PALETTE.bosses`, else the shuffler's. */
+export function shardColorOfKind(kind: number): number {
+  if (kind >= 0 && kind < KIND_COUNT) return kind;
+  const b = kind - KIND_BRUISER;
+  if (b >= 0 && b < PALETTE.bosses.length) return BOSS_COLOR_BASE + b;
+  return 0;
+}
+
+/** A boss's colour; an unknown kind falls back to the threat colour. */
+function bossColor(kind: number): number {
+  const b = kind - KIND_BRUISER;
+  return b >= 0 && b < PALETTE.bosses.length ? PALETTE.bosses[b] : PALETTE.threat;
 }
