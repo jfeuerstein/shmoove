@@ -104,3 +104,19 @@ Things decided without the owner, newest last. Overrule any of them.
 34. **Three balance bands are loose while M3 is being built.** With cards, what a bot carries
    depends on what it is dealt, and the arsenal is changing weekly. The looper's "outlives the
    evader" and the rider's "at most one comfortable win" wait for the M3 balance pass.
+35. **Hoops sit where they can be flown through, not where the slope rule says.** The spot 5 m past
+   a hill kicker's top is its landing slope, steeper than the 0.35 every other site keeps to. With
+   the rule applied there, only pipe-end and crater-lip kickers were left, and a test rider never
+   came within reach of those hoops at any speed. The slope is checked at the kicker's top
+   instead, hoops go over the kickers with the most drop behind them, and a map has one or two
+   rather than four.
+36. **A hoop is taken by the mover's middle, not its feet**, which makes it a little easier.
+37. **Slaloms bend.** A straight 72 m line down the fall line rarely fits on the floor, so a
+   slalom's line may turn off straight downhill, with looser rules tried in turn if nothing fits.
+38. **A lobbed shot leads by 1.1 s, not 0.9.** The ring shows for 66 ticks; with a shorter lead a
+   mover that kept its line was already past the ring when it landed.
+39. **A plain hop sheds every clinger**, because it lands harder than the 5 m/s that counts as a
+   hard landing. "One per clean hop" only shows on soft landings. Left for the balance pass.
+40. **Elites are never recycled**, and a totem's pack comes even with the director switched off.
+41. **The Skipper's stones never skip backwards**, so two neighbours cannot trade one stone
+   between them and use up its skips.
