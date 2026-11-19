@@ -11,7 +11,8 @@ import { hurtPlayer } from '../sim/contact';
 import { findBoss } from '../sim/bosses';
 import { TICK_HZ } from '../sim/constants';
 import { copySimState, type Sim } from '../sim/sim';
-import { damageEnemy, ZONE_RING, type World } from '../sim/world';
+import { makeElite } from '../sim/director';
+import { damageEnemy, KINDS, SPAWN_TICKS, spawnEnemy, ZONE_RING, type World } from '../sim/world';
 import type { InputFrame } from '../sim/types';
 import type { FrameStatsSummary } from './loop';
 import type { RunReport } from './runLog';
@@ -117,6 +118,13 @@ export interface TestHook {
   setClock(seconds: number): void;
   /** Take the boss on the field down to no health: it falls on the next step. False if there is none. */
   killBoss(): boolean;
+  /** Leave the boss on the field with `share` (0..1) of its health. False if there is none. */
+  hurtBoss(share: number): boolean;
+  /**
+   * Put an enemy of `kind` on the ground at (x, z), already risen; `elite` (ELITE_*, 0 for none)
+   * makes it one. Returns its index in the horde, or -1 if it could not be added.
+   */
+  spawn(kind: number, x: number, z: number, elite?: number): number;
 }
 
 declare global {
@@ -340,6 +348,23 @@ export function installTestHook(host: HookHost): TestHook {
       // Twice over: a shield elite's aura halves damage to whatever stands in it.
       damageEnemy(w, i, 2 * w.horde.hp[i] + 1);
       return true;
+    },
+    hurtBoss(share) {
+      const w = host.sim.world;
+      const i = findBoss(w);
+      if (i < 0 || !(share > 0 && share <= 1)) return false;
+      w.horde.hp[i] = KINDS[w.horde.kind[i]].hp * share;
+      return true;
+    },
+    spawn(kind, x, z, elite = 0) {
+      const w = host.sim.world;
+      const k = Math.floor(kind);
+      if (!(k >= 0 && k < KINDS.length) || !Number.isFinite(x) || !Number.isFinite(z)) return -1;
+      const i = spawnEnemy(w, k, x, host.sim.terrain.heightAt(x, z), z);
+      if (i < 0) return -1;
+      w.horde.age[i] = SPAWN_TICKS;
+      if (elite > 0) makeElite(w, i, Math.floor(elite));
+      return i;
     },
   };
   window.__shmoove = hook;
