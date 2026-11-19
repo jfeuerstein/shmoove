@@ -150,4 +150,27 @@ describe('settings', () => {
     expect(new Settings(store, '', 'tuck', defaults()).autoPick).toBe(false);
     expect(parseStored(JSON.stringify({ v: 1, feel: {}, autoPick: 'yes' })).autoPick).toBe(false);
   });
+
+  it('remembers that the lesson is done, and lets it be cleared', () => {
+    const store = memoryStorage();
+    const feel = defaults();
+    const a = new Settings(store, '', 'tuck', feel);
+    expect(a.lessonDone).toBe(false);
+    a.chooseLessonDone(true);
+    expect(new Settings(store, '', 'tuck', defaults()).lessonDone).toBe(true);
+    // Other saves do not lose it.
+    feel.grip = 20;
+    a.saveFeel();
+    a.chooseAutoPick(true);
+    expect(new Settings(store, '', 'tuck', defaults()).lessonDone).toBe(true);
+    a.chooseLessonDone(false);
+    expect(new Settings(store, '', 'tuck', defaults()).lessonDone).toBe(false);
+    expect(parseStored(JSON.stringify({ v: 1, feel: {}, lessonDone: 'yes' })).lessonDone).toBe(false);
+  });
+
+  it('runs without storage: the lesson is simply not remembered', () => {
+    const s = new Settings(null, '', 'tuck', defaults());
+    s.chooseLessonDone(true);
+    expect(s.lessonDone).toBe(true);
+  });
 });

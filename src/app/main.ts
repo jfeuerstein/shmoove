@@ -18,20 +18,24 @@ import { WakeView } from '../render/wakeView';
 import type { InputSource, Scheme } from '../input/source';
 import { TouchInput } from '../input/touch';
 import { DT } from '../sim/constants';
+import { Rng, hashString } from '../sim/rng';
 import { Sim } from '../sim/sim';
 import { BOWL_RADIUS, makeBowl } from '../sim/bowl';
 import { flatTerrain, type Terrain } from '../sim/terrain';
-import { PHASE_CHOOSE } from '../sim/world';
+import { FX_PLAYER_HIT, FX_PLOW, KIND_SHUFFLER, PHASE_CHOOSE, spawnEnemy } from '../sim/world';
 import { makeInputFrame } from '../sim/types';
 import { BuildBar } from '../ui/buildBar';
 import { autoPickCard, Cards } from '../ui/cards';
 import { DebugPanel } from '../ui/debugPanel';
 import { EndScreen } from '../ui/endScreen';
 import { Hud } from '../ui/hud';
+import { HowTo } from '../ui/howTo';
+import { LessonView } from '../ui/lessonView';
 import { Numbers } from '../ui/numbers';
 import { StickView } from '../ui/stickView';
 import { ThreatView } from '../ui/threat';
 import { applyFixture } from './fixtures';
+import { Lesson, LESSON, lessonWanted, makeLessonSample } from './lesson';
 import { FixedStepper, FrameStats, RafDriver, TimeRamp } from './loop';
 import { parseParams, type Params } from './params';
 import { setupPlatform } from './platform';
@@ -138,12 +142,99 @@ function boot(): void {
     ? new DebugPanel(hudRoot, settings, (s) => touch.setScheme(s), () => applyAutoPick())
     : null;
 
+  // The first-run lesson: on the real bowl, with the horde held back until the player can use it.
+  const lessonSample = makeLessonSample();
+  let lesson: Lesson | null = null;
+  const lessonView = sim.horde ? new LessonView(hudRoot, () => endLesson(), { debug: params.debug }) : null;
+  const lessonGate = {
+    force: params.lesson,
+    skip: params.nolesson,
+    done: settings.lessonDone,
+    flat: params.flat,
+    solo: params.solo,
+    horde: params.horde > 0 || params.sparks > 0,
+    arsenal: new URLSearchParams(window.location.search).has('arsenal'),
+    perf: params.perf,
+  };
+  /** A lesson has no crates or shrines to open cards over it. */
+  const startLesson = (): void => {
+    lesson = new Lesson();
+    sim.world.spawning = false;
+    sim.world.things.count = 0;
+  };
+  if (sim.horde && lessonWanted(lessonGate)) startLesson();
+  /** Twelve shufflers come up 25 to 35 m ahead of the mover, inside the map. */
+  const spawnLessonCrowd = (): void => {
+    const w = sim.world;
+    const m = sim.state.mover;
+    const rng = new Rng(hashString('lesson-crowd', w.seed + sim.state.tick));
+    const limit = Math.max(0, terrain.radius - 4);
+    for (let n = 0; n < LESSON.crowd; n++) {
+      let x = m.x;
+      let z = m.z;
+      for (let tries = 0; tries < 24; tries++) {
+        const dist = rng.range(LESSON.crowdNear, LESSON.crowdFar);
+        // Ahead, in a fan; if that is off the map, anywhere round.
+        const a = tries < 8 ? sim.state.viewYaw + rng.range(-0.5, 0.5) : rng.range(0, Math.PI * 2);
+        x = m.x + Math.sin(a) * dist;
+        z = m.z + Math.cos(a) * dist;
+        if (x * x + z * z <= limit * limit) break;
+      }
+      spawnEnemy(w, KIND_SHUFFLER, x, terrain.heightAt(x, z), z);
+    }
+  };
+  /** Once a tick while the lesson runs: what it holds still, what it reads, what it brings on. */
+  const stepLesson = (l: Lesson): void => {
+    const w = sim.world;
+    const s = sim.state;
+    const m = s.mover;
+    // The run is not on the clock, nobody dies, and no level-up opens cards.
+    w.run.ticks = 0;
+    w.player.xp = 0;
+    if (w.player.hp < LESSON.minHp) w.player.hp = LESSON.minHp;
+    let hurt = false;
+    let plowed = false;
+    for (let i = 0; i < w.fx.count; i++) {
+      if (w.fx.type[i] === FX_PLAYER_HIT) hurt = true;
+      else if (w.fx.type[i] === FX_PLOW) plowed = true;
+    }
+    const q = lessonSample;
+    q.carve = frameInput.carve;
+    q.tap = frameInput.hop;
+    q.distance = s.distance;
+    q.tucked = m.tucked;
+    q.grounded = m.grounded;
+    q.gear = m.gear;
+    q.speed = m.speed;
+    q.normalY = m.ny;
+    q.events = s.events;
+    q.hurt = hurt;
+    q.plowed = plowed;
+    q.pops = w.player.pops;
+    const before = l.step;
+    l.update(q);
+    if (l.ended) {
+      endLesson();
+      return;
+    }
+    if (l.step === 4 && (before !== 4 || (l.done === 4 && w.horde.count === 0))) spawnLessonCrowd();
+  };
+  /** The lesson is over, finished or skipped: remember it and start the real run. */
+  const endLesson = (): void => {
+    settings.chooseLessonDone(true);
+    restart();
+  };
+
   const stepper = new FixedStepper(DT);
   // After the last card is taken the game starts slow and climbs back to full speed.
   const ramp = new TimeRamp();
   let choosing = false;
-  const restart = (): void => {
+  const restart = (intoLesson = false): void => {
     sim.reset();
+    lesson = null;
+    lessonView?.hide();
+    sim.world.spawning = true;
+    if (intoLesson && sim.horde) startLesson();
     if (params.horde > 0 || params.sparks > 0) applyFixture(sim, params.horde, params.sparks);
     fx.reset();
     threat.reset();
@@ -156,7 +247,11 @@ function boot(): void {
     choosing = false;
     stepper.reset();
   };
-  const endScreen = new EndScreen(hudRoot, restart);
+  const howTo = new HowTo(hudRoot, () => {
+    settings.chooseLessonDone(false);
+    restart(true);
+  });
+  const endScreen = new EndScreen(hudRoot, () => restart(), document, () => howTo.open());
   const stats = new FrameStats();
   const info = view.renderer.info.render;
   let stepMs = 0;
@@ -167,6 +262,7 @@ function boot(): void {
     const t0 = performance.now();
     input.sample(frameInput);
     sim.step(frameInput);
+    if (lesson) stepLesson(lesson);
     fx.ingest(sim.world);
     numbers?.ingest(sim.world);
     const nowChoosing = sim.world.run.phase === PHASE_CHOOSE;
@@ -195,6 +291,7 @@ function boot(): void {
     numbers?.updateCamera(dt, view.camera, window.innerWidth, window.innerHeight);
     buildBar?.update(w.player.loadout);
     cards?.update(w, dt);
+    if (lesson) lessonView?.update(lesson);
     if (sim.horde) endScreen.update(sim.world, dt);
     stick.update();
     if (panel) panel.update();
@@ -237,7 +334,7 @@ function boot(): void {
         draw(1, n * DT);
         finishFrame(t0);
       },
-      restart,
+      restart: () => restart(),
       stats: () => stats.summary(),
       pick: (index) => picks.set(index),
     });

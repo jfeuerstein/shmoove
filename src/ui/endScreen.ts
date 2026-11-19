@@ -1,6 +1,6 @@
 /**
  * The end of a run: a card that rises over the lower half of the screen, 0.6 s after the run stops,
- * with how it went and one big AGAIN button in the thumb zone. `endCard` is the pure "what to show
+ * with how it went, one big AGAIN button in the thumb zone and a smaller HOW TO PLAY under it. `endCard` is the pure "what to show
  * and when"; `EndScreen` is the DOM around it. The card is a DOM sibling of the canvas, so touches on
  * it never reach the game; they are also stopped here.
  */
@@ -38,16 +38,24 @@ export function endCard(w: World, elapsed: number): EndCard | null {
   };
 }
 
+function noop(): void {}
+
 export class EndScreen {
   readonly element: HTMLElement;
   private readonly titleEl: HTMLElement;
   private readonly rows: HTMLElement[] = [];
   private readonly button: HTMLElement;
+  private readonly howToButton: HTMLElement;
   private elapsed = 0;
   private shown = false;
 
   /** `doc` is a seam so tests can build the card over a fake element tree. */
-  constructor(root: HTMLElement, private readonly onAgain: () => void, doc: Document = document) {
+  constructor(
+    root: HTMLElement,
+    private readonly onAgain: () => void,
+    doc: Document = document,
+    private readonly onHowTo: () => void = noop,
+  ) {
     const el = doc.createElement('div');
     el.className = 'end';
     el.setAttribute('aria-live', 'polite');
@@ -65,6 +73,10 @@ export class EndScreen {
     this.button.textContent = 'AGAIN';
     this.button.style.backgroundColor = `#${PALETTE.accent.toString(16).padStart(6, '0')}`;
     el.appendChild(this.button);
+    this.howToButton = doc.createElement('button');
+    this.howToButton.className = 'end-howto';
+    this.howToButton.textContent = 'HOW TO PLAY';
+    el.appendChild(this.howToButton);
 
     for (const type of ['pointerdown', 'pointermove', 'pointerup', 'touchstart', 'touchmove', 'touchend']) {
       el.addEventListener(type, (e) => e.stopPropagation());
@@ -72,6 +84,10 @@ export class EndScreen {
     this.button.addEventListener('click', (e) => {
       e.stopPropagation();
       if (this.shown) this.onAgain();
+    });
+    this.howToButton.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (this.shown) this.onHowTo();
     });
     root.appendChild(el);
     this.element = el;

@@ -3,7 +3,7 @@ import { VIEWPORT } from '../run.mjs';
 
 export default {
   name: 'boot',
-  query: '?hook',
+  query: '?hook&nolesson',
   async run(t) {
     const { page, hook, check } = t;
     await hook.pause(true);
