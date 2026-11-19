@@ -68,8 +68,8 @@ function stepWorld(w: World, s: SimState, terrain: Terrain): void {
   w.fx.count = 0;
   w.deaths.count = 0;
 
-  stepDirector(w, s, _terrain); // [director] spawns and recycles, if w.spawning
-  stepHorde(w, s, _terrain); // [horde] moves
+  stepDirector(w, s, terrain);
+  stepHorde(w, s, terrain);
   rebuildGrid(w);
   stepContact(w, s);
   if (w.run.phase !== PHASE_PLAY) return;

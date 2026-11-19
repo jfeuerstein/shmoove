@@ -37,6 +37,8 @@ describe('drops', () => {
     const at = pointAt(sim, 40);
     const e = place(sim, KIND_SHUFFLER, at.x, at.z);
     kill(sim, e);
+    // Rooted, so "where it died" is where it was placed.
+    root(sim.world);
     sim.step(TUCK);
     const s = sim.world.sparks;
     expect(s.count).toBe(1);
