@@ -10,7 +10,7 @@ import { hurtPlayer } from '../sim/contact';
 import { findBoss } from '../sim/bosses';
 import { TICK_HZ } from '../sim/constants';
 import { copySimState, type Sim } from '../sim/sim';
-import { damageEnemy, type World } from '../sim/world';
+import { damageEnemy, ZONE_RING, type World } from '../sim/world';
 import type { InputFrame } from '../sim/types';
 import type { FrameStatsSummary } from './loop';
 
@@ -50,6 +50,8 @@ export interface HookState {
   boss: { kind: number; hp: number; maxHp: number; x: number; z: number; felled: number };
   /** Offers waiting behind the open one. */
   offersQueued: number;
+  /** The Standstill's rings on the ground: centre and the front's radius, m. */
+  rings: { x: number; z: number; r: number }[];
 }
 
 /** A rail on the map: its two ends, in world space. */
@@ -180,6 +182,13 @@ function items(slots: Int8Array, levels: Uint8Array): HookItem[] {
   return out;
 }
 
+function ringsOf(w: World): HookState['rings'] {
+  const zn = w.zones;
+  const out: HookState['rings'] = [];
+  for (let i = 0; i < zn.count; i++) if (zn.kind[i] === ZONE_RING) out.push({ x: zn.x[i], z: zn.z[i], r: zn.r[i] });
+  return out;
+}
+
 function offerOf(w: World): HookOffer | null {
   const o = w.offer;
   if (!o.open) return null;
@@ -224,6 +233,7 @@ export function installTestHook(host: HookHost): TestHook {
         tokens: w.player.tokens,
         boss: { ...w.boss },
         offersQueued: w.offerQueued,
+        rings: ringsOf(w),
       };
     },
     hold(frame) {
@@ -305,7 +315,8 @@ export function installTestHook(host: HookHost): TestHook {
       const w = host.sim.world;
       const i = findBoss(w);
       if (i < 0) return false;
-      damageEnemy(w, i, w.horde.hp[i] + 1);
+      // Twice over: a shield elite's aura halves damage to whatever stands in it.
+      damageEnemy(w, i, 2 * w.horde.hp[i] + 1);
       return true;
     },
   };

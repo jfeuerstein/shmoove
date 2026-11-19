@@ -1,4 +1,4 @@
-// run: the run on screen. On the bowl with a run: the clock reads 3:00 and counts down; a hit
+// run: the run on screen. On the bowl with a run: the clock reads 0:00 and counts up; a hit
 // shortens the health bar; a killing hit ends the run, the STOPPED card rises and the mover stops;
 // a real touch on AGAIN starts over (full health, clock back, card gone, the mover moves again).
 // Screenshots: the HUD mid-run (run.png) and the end card (run-end.png).
@@ -25,12 +25,12 @@ export default {
     await hook.pause(true);
     await hook.step(1);
 
-    check((await text(page, '.hud-clock')) === '3:00', 'the clock starts at 3:00', await text(page, '.hud-clock'));
+    check((await text(page, '.hud-clock')) === '0:00', 'the clock starts at 0:00', await text(page, '.hud-clock'));
     check((await hpScale(page)) === 1, 'the health bar starts full', await hpScale(page));
     check((await cardShown(page)) === false, 'no card while playing');
 
     await hook.step(120);
-    check((await text(page, '.hud-clock')) === '2:58', 'the clock counts down', await text(page, '.hud-clock'));
+    check((await text(page, '.hud-clock')) === '0:02', 'the clock counts up', await text(page, '.hud-clock'));
 
     await hurt(30);
     await hook.step(1);
@@ -89,7 +89,7 @@ export default {
     const fresh = await hook.state();
     check(fresh.hp === fresh.maxHp && fresh.maxHp > 0, 'health is full again', fresh);
     check(fresh.phase === 0 && fresh.level === 1 && fresh.kills === 0, 'a fresh run', fresh);
-    check((await text(page, '.hud-clock')) === '3:00', 'the clock is back at 3:00', await text(page, '.hud-clock'));
+    check((await text(page, '.hud-clock')) === '0:00', 'the clock is back at 0:00', await text(page, '.hud-clock'));
     check((await hpScale(page)) === 1, 'the health bar is full again', await hpScale(page));
 
     await hook.hold(FORWARD);

@@ -54,8 +54,9 @@ import {
 } from './world';
 
 export const BOSS = {
-  /** A boss comes up this far ahead of the mover, m. */
+  /** A boss comes up this far ahead of the mover, m: along its travel at this speed or more (m/s), else along the view. */
   ahead: 45,
+  aheadSpeed: 3,
   /** Share of maximum health a fallen boss gives back. */
   heal: 0.4,
 
@@ -220,13 +221,20 @@ function travel(s: SimState): void {
 }
 
 /**
- * Bring boss `kind` on, `BOSS.ahead` in front of the mover. If that is off the floor, the nearest
- * direction either side that is on it; if none is, straight ahead pulled in to the region.
+ * Bring boss `kind` on, `BOSS.ahead` in front of the mover: along its travel when it is going
+ * somewhere (`BOSS.aheadSpeed` or faster), else where the view looks, so it comes up on screen. If
+ * that is off the floor, the nearest direction either side that is on it; if none is, straight
+ * ahead pulled in to the region.
  */
 function arrive(w: World, s: SimState, terrain: Terrain, kind: number): number {
   const m = s.mover;
   const r = KINDS[kind].radius;
-  travel(s);
+  if (m.vx * m.vx + m.vz * m.vz >= BOSS.aheadSpeed * BOSS.aheadSpeed) {
+    travel(s);
+  } else {
+    dir.x = dsin(s.viewYaw);
+    dir.z = dcos(s.viewYaw);
+  }
   let x = m.x + dir.x * BOSS.ahead;
   let z = m.z + dir.z * BOSS.ahead;
   if (!fairGround(terrain, x, z, r)) {

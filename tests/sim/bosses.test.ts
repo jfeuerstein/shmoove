@@ -119,7 +119,7 @@ describe('when the bosses come', () => {
       expect(w.horde.kind[i]).toBe(kind);
       expect(w.boss.kind).toBe(kind);
       const m = sim.state.mover;
-      // Standing still, ahead is its heading (+z at the spawn).
+      // Standing still, ahead is where the view looks (+z at the spawn).
       expect(w.horde.x[i] - m.x).toBeCloseTo(0, 4);
       expect(w.horde.z[i] - m.z).toBeCloseTo(BOSS.ahead, 4);
       expect(w.horde.y[i]).toBe(sim.terrain.heightAt(w.horde.x[i], w.horde.z[i]));
@@ -148,6 +148,19 @@ describe('when the bosses come', () => {
     expect(seen).toBe(1);
     const i = boss(w);
     expect(w.horde.x[i] - m.x).toBeCloseTo(BOSS.ahead, 1);
+    expect(Math.abs(w.horde.z[i] - m.z)).toBeLessThan(0.5);
+  });
+
+  it('comes up where the view looks when the mover is all but still', () => {
+    const sim = arena();
+    const w = sim.world;
+    setClock(sim, BOSS_TIMES[0]);
+    sim.state.viewYaw = -Math.PI / 2;
+    sim.state.mover.heading = 0.4;
+    sim.step(TUCK);
+    const i = boss(w);
+    const m = sim.state.mover;
+    expect(w.horde.x[i] - m.x).toBeCloseTo(-BOSS.ahead, 1);
     expect(Math.abs(w.horde.z[i] - m.z)).toBeLessThan(0.5);
   });
 
