@@ -29,7 +29,7 @@ import { Rng, hashString } from '../sim/rng';
 import { Sim } from '../sim/sim';
 import { BOWL_RADIUS, makeBowl } from '../sim/bowl';
 import { flatTerrain, type Terrain } from '../sim/terrain';
-import { KIND_SHUFFLER, PHASE_CHOOSE, spawnEnemy } from '../sim/world';
+import { KIND_SHUFFLER, PHASE_CHOOSE, PHASE_DEAD, PHASE_PLAY, PHASE_WON, spawnEnemy } from '../sim/world';
 import { makeInputFrame } from '../sim/types';
 import { BuildBar } from '../ui/buildBar';
 import { autoPickCard, Cards } from '../ui/cards';
@@ -37,6 +37,7 @@ import { DebugPanel } from '../ui/debugPanel';
 import { EndScreen } from '../ui/endScreen';
 import { Hud } from '../ui/hud';
 import { HowTo } from '../ui/howTo';
+import { ReportView } from '../ui/reportView';
 import { LowHealthView } from '../ui/lowHealth';
 import { LessonView } from '../ui/lessonView';
 import { Numbers } from '../ui/numbers';
@@ -51,6 +52,8 @@ import { FixedStepper, FrameStats, RafDriver, TimeRamp } from './loop';
 import { parseParams, type Params } from './params';
 import { setupPlatform } from './platform';
 import { registerPwa } from './pwa';
+import { ReportStore } from './reports';
+import { RunLog, statsLines, type Outcome, type RunReport } from './runLog';
 import { browserStorage, prefersReducedMotion, Settings } from './settings';
 import { HookInput, installTestHook, type TestHook } from './testHook';
 
@@ -121,6 +124,40 @@ function boot(): void {
   };
   applyAutoPick();
   const picks = new PickBox();
+  // The playtest report: what the run measured, kept for the last ten runs.
+  const runLog = new RunLog();
+  const reportStore = new ReportStore(browserStorage());
+  let finished: RunReport | null = null;
+  const makeReport = (outcome?: Outcome): RunReport => {
+    runLog.meta.scheme = settings.scheme;
+    return runLog.report(sim, outcome);
+  };
+  /** The run on screen, finished or so far. */
+  const currentReport = (): RunReport => finished ?? makeReport();
+  /** A run restarted or left while it was still going is kept as abandoned. */
+  const abandonRun = (): void => {
+    const phase = sim.world.run.phase;
+    if (finished === null && sim.horde && (phase === PHASE_PLAY || phase === PHASE_CHOOSE)) reportStore.keep(makeReport('abandoned'));
+  };
+  const meta = runLog.meta;
+  meta.userAgent = navigator.userAgent;
+  meta.screenW = window.screen.width;
+  meta.screenH = window.screen.height;
+  meta.dpr = window.devicePixelRatio;
+  meta.standalone = window.matchMedia('(display-mode: standalone)').matches || (navigator as Navigator & { standalone?: boolean }).standalone === true;
+  meta.build = __SHMOOVE_BUILD__ ? 'unknown (no service worker cache found)' : 'dev';
+  if (__SHMOOVE_BUILD__) {
+    // The service worker's cache name is the build's id.
+    void (async () => {
+      try {
+        const name = (await caches.keys()).find((k) => k.startsWith('shmoove-'));
+        if (name !== undefined) meta.build = name;
+      } catch (_err) {
+        meta.build = 'unknown (caches unavailable)';
+      }
+    })();
+  }
+  runLog.reset(Date.now());
   const applyFixtures = (): void => {
     if (params.horde > 0 || params.sparks > 0) applyFixture(sim, params.horde, params.sparks);
     if (params.arsenal) applyArsenal(sim);
@@ -162,7 +199,10 @@ function boot(): void {
   const haptics = Haptics.browser();
   const numbers = sim.horde ? new Numbers(hudRoot) : null;
   const buildBar = sim.horde ? new BuildBar(hudRoot) : null;
-  const cards = sim.horde ? new Cards(hudRoot, (i) => picks.set(i)) : null;
+  const cards = sim.horde ? new Cards(hudRoot, (i) => {
+        runLog.notePick(i);
+        picks.set(i);
+      }) : null;
   // Sound: silent until the first touch (browsers insist); `?mute` silences one visit.
   const audio = new GameAudio({
     muted: params.mute || settings.mute,
@@ -257,7 +297,10 @@ function boot(): void {
   const restart = (intoLesson = false): void => {
     // A new run (REPLAY THE LESSON from the pause sheet's HOW TO PLAY) is not a paused one.
     pauseView?.resume();
+    abandonRun();
     sim.reset();
+    finished = null;
+    runLog.reset(Date.now());
     lesson = null;
     lessonView?.hide();
     applyAutoPick();
@@ -288,7 +331,11 @@ function boot(): void {
     document,
     audio,
   );
-  const endScreen = new EndScreen(hudRoot, () => restart(), document, () => howTo.open());
+  const reportView = new ReportView(hudRoot, reportStore);
+  const endScreen = new EndScreen(hudRoot, () => restart(), document, () => howTo.open(), {
+    lines: () => statsLines(currentReport()),
+    copy: (button) => void reportView.copy(currentReport(), button),
+  });
   const stats = new FrameStats();
   const info = view.renderer.info.render;
   let stepMs = 0;
@@ -299,7 +346,16 @@ function boot(): void {
     const t0 = performance.now();
     input.sample(frameInput);
     sim.step(frameInput);
-    if (lesson) stepLesson(lesson);
+    if (lesson) {
+      runLog.lessonTick(lesson.step);
+      stepLesson(lesson);
+    }
+    runLog.afterStep(sim, frameInput.carve);
+    const phase = sim.world.run.phase;
+    if (finished === null && (phase === PHASE_DEAD || phase === PHASE_WON)) {
+      finished = makeReport();
+      reportStore.keep(finished);
+    }
     const m = sim.state.mover;
     fx.ingest(sim.world, m.x, m.y, m.z, sim.state);
     numbers?.ingest(sim.world);
@@ -370,6 +426,7 @@ function boot(): void {
     hitStop.enabled = !reduced;
     lowHealth.reduced = reduced;
     haptics.enabled = settings.haptics;
+    if (dt > 0) runLog.frame(dt * 1000);
     ramp.update(dt);
     hitStop.update(dt);
     stepper.scale = ramp.scale * hitStop.scale;
@@ -400,13 +457,16 @@ function boot(): void {
             if (!hookHeld) driver.start();
           },
           onHowTo: () => howTo.open(),
+          onReports: () => reportView.open(),
         },
-        { debug: params.debug },
+        { debug: params.debug, reports: true },
       )
     : null;
   if (pauseView) {
     const pv = pauseView;
     bindAutoPause(window, document, () => pv.pause());
+    // Closing the page mid-run keeps what was measured so far.
+    window.addEventListener('pagehide', abandonRun);
     // A resize clears the canvas: while paused, draw the held frame again once it has settled.
     window.addEventListener('resize', () => {
       if (!pv.paused) return;
@@ -438,7 +498,11 @@ function boot(): void {
       },
       restart: () => restart(),
       stats: () => stats.summary(),
-      pick: (index) => picks.set(index),
+      pick: (index) => {
+        runLog.notePick(index);
+        picks.set(index);
+      },
+      report: () => (sim.horde ? currentReport() : null),
       sound: () => audio.report(),
     });
   }

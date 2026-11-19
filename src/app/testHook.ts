@@ -14,6 +14,7 @@ import { copySimState, type Sim } from '../sim/sim';
 import { damageEnemy, ZONE_RING, type World } from '../sim/world';
 import type { InputFrame } from '../sim/types';
 import type { FrameStatsSummary } from './loop';
+import type { RunReport } from './runLog';
 
 export interface HookState {
   tick: number;
@@ -108,6 +109,8 @@ export interface TestHook {
   rails(): HookRail[];
   /** Put the rider on the ground at (x, z), heading `yaw`, moving at `speed` m/s, the view behind it. */
   place(x: number, z: number, yaw: number, speed: number): void;
+  /** The playtest report of the run so far (or the finished run), or null on the bare bowl. */
+  report(): RunReport | null;
   /** The audio context's state and how many notes and effects have been scheduled. */
   sound(): SoundReport | null;
   /** Set the run clock to `seconds`: the director and the bosses go by it from the next step. */
@@ -182,6 +185,8 @@ export interface HookHost {
   /** Queue a card pick for the next step. */
   pick(index: number): void;
   sound?: () => SoundReport;
+  /** The run report as it stands, or null where there is no run. */
+  report?: () => RunReport | null;
 }
 
 function items(slots: Int8Array, levels: Uint8Array): HookItem[] {
@@ -317,6 +322,9 @@ export function installTestHook(host: HookHost): TestHook {
       s.viewYaw = yaw;
       // No streak from where it was.
       copySimState(sim.prev, s);
+    },
+    report() {
+      return host.report ? host.report() : null;
     },
     sound() {
       return host.sound ? host.sound() : null;

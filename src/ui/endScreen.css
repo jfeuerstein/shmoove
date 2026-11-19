@@ -82,3 +82,30 @@
 .end-howto:active {
   filter: brightness(1.2);
 }
+
+/* The run report: three short lines of numbers, and the button that copies the whole report. */
+.end-stats {
+  margin-top: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: pre;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.75;
+}
+
+.end-report {
+  min-height: 44px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  font: 800 14px/1 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  letter-spacing: 0.16em;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.end-report:active {
+  filter: brightness(1.2);
+}

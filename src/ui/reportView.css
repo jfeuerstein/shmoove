@@ -1,0 +1,128 @@
+/* The REPORTS sheet and the copy-by-hand box: full-height sheets above the pause and how-to sheets. */
+.reports,
+.reports-box {
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + 24px);
+  left: calc(env(safe-area-inset-left, 0px) + 16px);
+  right: calc(env(safe-area-inset-right, 0px) + 16px);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 24px);
+  box-sizing: border-box;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+  border-radius: 20px;
+  background: rgb(27, 22, 48);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: #fff;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  line-height: 1.2;
+  z-index: 41;
+  touch-action: none;
+}
+
+.reports-box {
+  z-index: 42;
+}
+
+.reports[hidden],
+.reports-box[hidden] {
+  display: none;
+}
+
+.reports-title {
+  font-size: 26px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-align: center;
+}
+
+.reports-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  touch-action: pan-y;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.reports-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 6px 6px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.reports-when {
+  font-size: 15px;
+  font-weight: 600;
+  white-space: pre;
+  font-variant-numeric: tabular-nums;
+}
+
+.reports-none {
+  text-align: center;
+  opacity: 0.7;
+  padding: 24px 0;
+}
+
+.reports-copy,
+.reports-all,
+.reports-close {
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  font: 900 15px/1 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  letter-spacing: 0.14em;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.reports-copy {
+  min-width: 84px;
+  min-height: 44px;
+}
+
+.reports-all,
+.reports-close {
+  min-height: 48px;
+}
+
+.reports-close {
+  min-height: 56px;
+  font-size: 18px;
+}
+
+.reports-copy:active,
+.reports-all:active,
+.reports-close:active {
+  filter: brightness(1.2);
+}
+
+.reports-hint {
+  text-align: center;
+  font-weight: 700;
+  opacity: 0.85;
+}
+
+.reports-text {
+  flex: 1;
+  min-height: 0;
+  box-sizing: border-box;
+  resize: none;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: rgba(0, 0, 0, 0.35);
+  color: #fff;
+  font: 11px/1.3 ui-monospace, Menlo, Consolas, monospace;
+  padding: 10px;
+  touch-action: pan-y;
+  -webkit-user-select: text;
+  user-select: text;
+}

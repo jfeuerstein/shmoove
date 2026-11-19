@@ -45,12 +45,21 @@ export function endCard(w: World, elapsed: number): EndCard | null {
 
 function noop(): void {}
 
+/** What the end card needs from the run report: a short block of text, and the copy action. */
+export interface EndReportHost {
+  /** The lines of the stats block, for the run that just ended. */
+  lines(): string[];
+  /** COPY REPORT was pressed; `button` is where "Copied" shows. */
+  copy(button: HTMLElement): void;
+}
+
 export class EndScreen {
   readonly element: HTMLElement;
   private readonly titleEl: HTMLElement;
   private readonly rows: HTMLElement[] = [];
   private readonly button: HTMLElement;
   private readonly howToButton: HTMLElement;
+  private readonly statsEl: HTMLElement | null = null;
   private elapsed = 0;
   private shown = false;
 
@@ -60,6 +69,7 @@ export class EndScreen {
     private readonly onAgain: () => void,
     doc: Document = document,
     private readonly onHowTo: () => void = noop,
+    private readonly report: EndReportHost | null = null,
   ) {
     const el = doc.createElement('div');
     el.className = 'end';
@@ -72,6 +82,17 @@ export class EndScreen {
       row.className = `end-row ${cls}`;
       el.appendChild(row);
       this.rows.push(row);
+    }
+    let copyButton: HTMLElement | null = null;
+    if (report) {
+      const stats = doc.createElement('div');
+      stats.className = 'end-stats';
+      el.appendChild(stats);
+      this.statsEl = stats;
+      copyButton = doc.createElement('button');
+      copyButton.className = 'end-report';
+      copyButton.textContent = 'COPY REPORT';
+      el.appendChild(copyButton);
     }
     this.button = doc.createElement('button');
     this.button.className = 'end-again';
@@ -94,6 +115,13 @@ export class EndScreen {
       e.stopPropagation();
       if (this.shown) this.onHowTo();
     });
+    if (report && copyButton) {
+      const btn = copyButton;
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (this.shown) report.copy(btn);
+      });
+    }
     root.appendChild(el);
     this.element = el;
   }
@@ -120,6 +148,7 @@ export class EndScreen {
     // Loops only mean something to a player who carried the Wake and closed one.
     this.rows[4].textContent = card.pops > 0 ? `Loops  ${card.pops}  (best ${card.bestPop})` : '';
     this.rows[4].hidden = card.pops === 0;
+    if (this.statsEl && this.report) this.statsEl.textContent = this.report.lines().join('\n');
     this.element.className = 'end end-show';
   }
 
