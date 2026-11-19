@@ -3,10 +3,12 @@
 How the game in `PITCH.md` gets built. Status lives here and is updated in the same commit that
 changes it.
 
-**Now:** M0 and M1 are built with a green gate. The owner said to carry on past the M1 go / no-go
-without a playtest, so M2 (the horde slice) is in progress on the assumption that the default
-control scheme (`tuck`) stands. The playtest still matters: nothing here has been under a real
-thumb, and a change of scheme or feel after M2 is cheap, after M4 it is not.
+**Now:** M0, M1 and M2 are built with a green gate (M2 at the commit that follows `83f2344` on
+this branch; tags cannot be pushed from the build session). M3 (the build: cards, the full
+arsenal, the other enemies, the drive-through map) is in progress. The owner said to carry on past
+the M1 go / no-go without a playtest, so everything since assumes the default control scheme
+(`tuck`). Nothing here has been under a real thumb; the bots say it is not broken, not that it is
+fun.
 
 Still only the owner can:
 
@@ -27,8 +29,8 @@ a thumb, because tests cannot judge feel.
 | --- | --- | --- | --- | --- |
 | M0 | Ground | The toolchain, the gate, a link that opens on the phone | S | built, gate green at `f769d0d`; the link waits on a repo setting |
 | M1 | Feel slice | Moving around an empty bowl with one thumb is fun | L | built, gate green; passed without a playtest on the owner's say-so |
-| M2 | Horde slice | 400 enemies, readable in portrait, at 60 fps; three minutes are fun | L | in progress |
-| M3 | Build | Level-ups, the arsenal and the drive-through map make runs differ | L | |
+| M2 | Horde slice | 400 enemies, readable in portrait, at 60 fps; three minutes are fun | L | built, gate green; fun is unjudged |
+| M3 | Build | Level-ups, the arsenal and the drive-through map make runs differ | L | in progress |
 | M4 | Run | A whole ten-minute run with bosses, an ending and resume | M | |
 | M5 | Juice | It looks, sounds and hits like the pitch | M | |
 | M6 | Meta | A reason for the next run: movers, feats, unlocks, daily bowl | M | |
@@ -106,6 +108,28 @@ Goal: the second and third risks. A three-minute run with one enemy family and t
 Done when: gate green with the perf budgets met, and the owner agrees that deaths feel earned and the
 loop pop feels as good as it reads. If the browser cannot hold the horde, this is where the enemy cap
 drops or the platform decision is reopened.
+
+As built. Perf at 4x CPU throttle with 400 enemies and 600 sparks: 5.0 ms of frame work (budget
+8), 0.8 ms a sim step (budget 2), 15 draw calls, 66 000 triangles. The browser holds the horde in
+headless Chromium; a real phone has not been tried.
+
+What five bots do with the three minutes, seeds 1 to 5 (`npx vitest run tests/sim/balance.test.ts
+--silent=false` prints the table; the bands are asserted there):
+
+| Player | Outcome | Kills | Hits taken |
+| --- | --- | --- | --- |
+| Never touches the screen | dead at 0:39 to 0:45 | 43 to 94 | 13 to 14 |
+| Holds the stick, blind to the horde | dead at 0:35 to 0:50 | 46 to 126 | 13 to 14 |
+| Holds the stick, dodges well, never tucks or hops | dead at 1:37 to 2:46 | 530 to 1430 | 13 to 18 |
+| Dodges and closes loops round crowds | dead at 2:34 to 2:53, wins 1 of 5 | 1240 to 1680 | 10 to 17 |
+| Rides lines, keeps gear 3 and up, plows | wins 5 of 5 with 10 to 92 health | 1535 to 1640 | 5 to 21 |
+
+Three things had to change to get a skill curve at all, and they are worth a thumb's attention
+first: the director spawns at a rate (so killing thins the horde, where refilling to a target count
+made kills meaningless); the gear that contact goes by outlasts the gear itself for 0.75 s (so
+riding into a crowd and losing gear 3 inside it is not a trap); and health comes back in gear 3 and
+above (the only healing, so keeping speed is what outlasts dodging). The loop pops what is on its
+ring as well as inside it, because the horde chasing you round is on the trail.
 
 ## M3. Build
 

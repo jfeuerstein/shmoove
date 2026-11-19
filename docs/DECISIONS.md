@@ -66,3 +66,27 @@ Things decided without the owner, newest last. Overrule any of them.
    full 55 m so its horde still arrives.
 21. **Gnat clouds come up whole**, finishing even if that puts the horde a few over its target,
    rather than trickling in over seconds.
+22. **The director spawns at a rate, not to a target count.** The first director refilled the
+   horde to a number that rose with time. Bots showed that made the player's power meaningless:
+   whatever was killed came straight back, and survival depended only on how big the number was.
+   Now enemies arrive at a rate (2.5 a second rising to 17), with a floor so a strong player never
+   has an empty field and a cap ending at 400. Killing thins the horde.
+23. **Plow grace.** The gear that decides hurt-or-plow is the highest held in the last 45 ticks, as
+   long as the mover is still at gear-2 speed. Without it, each plow's speed cost dropped the mover
+   out of gear 3 in the middle of the crowd it had ridden into: about 45% of a fast bot's hits came
+   within 2 s of being in gear 3. A hit or a bonk ends the grace.
+24. **Speed heals.** 1 / 1.8 / 2.6 health a second in gears 3 / 4 / 5, nothing below. The pitch
+   has healing only from crates and the Second Wind passive; with none in the base game every run
+   was attrition and riding lines outlasted nothing. Second Wind will add to this.
+25. **A loop pops what is on its ring too** (within 2.2 m outside the loop's line). The trail burns
+   pursuers before they can get inside the loop; the horde that chased you round is strung along
+   the trail. Without this a pop caught 0 to 4 enemies.
+26. **The Wake burn was three times too strong and is now what the table says.** Found by the
+   verifier; the first balance numbers were tuned against the bug and redone after the fix.
+27. **The balance bands are sanity checks, not targets.** They are heuristic bots on five seeds;
+   one mechanic change flips a seed. Band 1 was loosened from "dead by 0:45" to "by 1:00", band 7
+   restated for a rate-based director, and band 5 allows one comfortable win in five. They catch
+   "nobody can win" and "anybody can win"; they do not say the game is fun.
+28. **Round-1 tuning kept:** shuffler speed 4.5 to 4, first level at 5 XP (it grants Seekers, the
+   first thing that hurts what is in front of you), Seekers a little stronger, invulnerability
+   after a hit 0.6 to 0.8 s, and a harder, wider shove of the horde when you are hit.
