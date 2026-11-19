@@ -4,8 +4,8 @@
  *
  * Browsers refuse sound before a gesture (iOS Safari most of all), so the `AudioContext` is made
  * and resumed inside the first touch, tap or key that counts as one, never before: nothing warns on
- * load. Hidden, the context is suspended; shown again, resumed. Muted, nothing is scheduled and the
- * context sleeps. If Web Audio is missing or refuses, the game goes on silent: nothing here throws
+ * load. Hidden, the context is suspended; shown again, resumed. Paused, it sleeps until the game
+ * resumes. Muted, nothing is scheduled and the context sleeps. If Web Audio is missing or refuses, the game goes on silent: nothing here throws
  * or logs.
  */
 import type { Fx } from '../sim/world';
@@ -69,6 +69,7 @@ export class GameAudio implements SoundControls {
   private vol: number;
   private timer = 0;
   private failed = false;
+  private paused = false;
   private readonly save: ((muted: boolean, volume: number) => void) | undefined;
 
   constructor(opts: GameAudioOptions) {
@@ -103,6 +104,16 @@ export class GameAudio implements SoundControls {
     this.save?.(this.director.muted, this.vol);
   }
 
+  /**
+   * The game paused (true) or resumed (false). Paused, the context is suspended: the music stops
+   * where it is and nothing more sounds. Resuming is a tap on RESUME, so the context can be woken here.
+   */
+  setPaused(on: boolean): void {
+    this.paused = on;
+    if (on) this.sleep();
+    else this.unlock();
+  }
+
   /** One sim tick: its effects and the mover's state. */
   tick(fx: Fx, events: number, mover: MoverState, phase: number): void {
     this.director.tick(fx, events, mover, mover.gear, phase);
@@ -127,7 +138,7 @@ export class GameAudio implements SoundControls {
 
   /** Inside a gesture: make the context if there is none, and wake it. */
   private unlock(): void {
-    if (this.director.muted || this.failed || document.visibilityState === 'hidden') return;
+    if (this.director.muted || this.failed || this.paused || document.visibilityState === 'hidden') return;
     if (this.ctx === null) {
       if (!gestureActive()) return;
       const Ctor = contextCtor();
@@ -160,7 +171,7 @@ export class GameAudio implements SoundControls {
 
   private onVisibility(): void {
     if (document.visibilityState === 'hidden') this.sleep();
-    else if (this.ctx !== null && !this.director.muted && this.ctx.state !== 'running') this.ctx.resume().catch(() => undefined);
+    else if (this.ctx !== null && !this.director.muted && !this.paused && this.ctx.state !== 'running') this.ctx.resume().catch(() => undefined);
   }
 
   /** For tests and teardown: stop the pump and close the context. */

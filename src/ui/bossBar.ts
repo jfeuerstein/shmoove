@@ -2,13 +2,29 @@
  * The boss on screen: a bar at the top, under the clock, with its name and its health while one is
  * on the field, and its name in big letters across the upper screen for two seconds when it
  * arrives. Part of the HUD; written only when what it shows changes.
+ *
+ * The name is timed by real time, not by sim ticks: the world holds still behind cards and after
+ * the run, and a name timed by ticks would stay up there. It is hidden at once whenever the run is
+ * not being played (cards open, the run over).
  */
 import { PALETTE } from '../render/look';
-import { TICK_HZ } from '../sim/constants';
-import { KIND_BRUISER, KIND_MORTAR, KIND_STANDSTILL, type World } from '../sim/world';
+import { KIND_BRUISER, KIND_MORTAR, KIND_STANDSTILL, PHASE_PLAY, type World } from '../sim/world';
 
-/** How long the name stays across the screen after a boss arrives, s. */
+/** How long the name stays across the screen after a boss arrives, real seconds. */
 export const BANNER_SECONDS = 2;
+
+/**
+ * Is the name across the screen: a boss of `kind` (-1 for none) is on the field, it arrived
+ * `sinceArrival` real seconds ago, and the run is in `phase`?
+ */
+export function bannerShown(kind: number, sinceArrival: number, phase: number): boolean {
+  return kind >= 0 && phase === PHASE_PLAY && sinceArrival >= 0 && sinceArrival < BANNER_SECONDS;
+}
+
+/** Real seconds, from the page's clock. */
+function realSeconds(): number {
+  return performance.now() / 1000;
+}
 /** The bar is redrawn only when it moves by at least 1/BAR_STEPS of its length. */
 const BAR_STEPS = 200;
 
@@ -33,11 +49,14 @@ export class BossBar {
   private readonly fill: HTMLElement;
   private kind = -1;
   private step = -1;
-  /** Sim tick at which the boss on the field arrived. */
+  /** Real time at which the boss on the field arrived, s. */
   private arrived = 0;
-  private bannerShown = false;
+  private bannerOn = false;
+  private readonly clock: () => number;
 
-  constructor(doc: Document, parent: HTMLElement) {
+  /** `clock` gives real seconds; a seam for tests. */
+  constructor(doc: Document, parent: HTMLElement, clock: () => number = realSeconds) {
+    this.clock = clock;
     this.bar = el(doc, parent, 'hud-boss');
     this.name = el(doc, this.bar, 'hud-boss-name');
     const track = el(doc, this.bar, 'hud-boss-track');
@@ -47,9 +66,9 @@ export class BossBar {
     this.banner.hidden = true;
   }
 
-  /** `tick` is the sim's step count, which only moves while the world does. */
-  update(w: World, tick: number): void {
+  update(w: World): void {
     const b = w.boss;
+    const now = this.clock();
     if (b.kind !== this.kind) {
       this.kind = b.kind;
       this.step = -1;
@@ -61,12 +80,12 @@ export class BossBar {
         this.fill.style.backgroundColor = css;
         this.banner.textContent = name;
         this.banner.style.color = css;
-        this.arrived = tick;
+        this.arrived = now;
       }
     }
-    const show = b.kind >= 0 && tick - this.arrived < BANNER_SECONDS * TICK_HZ;
-    if (show !== this.bannerShown) {
-      this.bannerShown = show;
+    const show = bannerShown(b.kind, now - this.arrived, w.run.phase);
+    if (show !== this.bannerOn) {
+      this.bannerOn = show;
       this.banner.hidden = !show;
     }
     if (b.kind < 0) return;

@@ -1,0 +1,109 @@
+/* The pause button: top right, clear of the notch and the kills (which sit to its left), above the
+   cards so a choice can be paused too, and far above the steering zone (the lower two thirds). */
+.pause-btn {
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + 4px);
+  right: calc(env(safe-area-inset-right, 0px) + 6px);
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  margin: 0;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 12px;
+  background: rgba(27, 22, 48, 0.62);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  z-index: 27;
+}
+
+/* The feel panel's button holds the corner in ?debug: this one sits to its left. */
+.pause-btn-debug {
+  right: calc(env(safe-area-inset-right, 0px) + 80px);
+}
+
+.pause-btn:active {
+  filter: brightness(1.4);
+}
+
+.pause-btn[hidden] {
+  display: none;
+}
+
+/* Two bars. */
+.pause-bars {
+  display: block;
+  width: 14px;
+  height: 16px;
+  border-left: 4px solid #fff;
+  border-right: 4px solid #fff;
+  box-sizing: border-box;
+}
+
+/* Paused: a plain dimmed overlay, above the cards, the lesson and the end card, under HOW TO PLAY. */
+.pause {
+  position: fixed;
+  inset: 0;
+  z-index: 35;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 12, 28, 0.62);
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  color: #fff;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.pause[hidden] {
+  display: none;
+}
+
+.pause-sheet {
+  width: min(320px, calc(100vw - 48px));
+  box-sizing: border-box;
+  padding: 26px 22px 22px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 14px;
+  border-radius: 20px;
+  background: rgba(27, 22, 48, 0.94);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.pause-title {
+  font-size: 34px;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+  text-align: center;
+  margin-bottom: 6px;
+}
+
+.pause-resume,
+.pause-howto {
+  min-height: 56px;
+  border-radius: 14px;
+  border: none;
+  font: 900 20px/1 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  letter-spacing: 0.14em;
+  color: #fff;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.pause-howto {
+  min-height: 48px;
+  font-size: 15px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+}
+
+.pause-resume:active,
+.pause-howto:active {
+  filter: brightness(1.25);
+}

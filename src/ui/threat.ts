@@ -7,14 +7,22 @@
  * - For each bollard within `MARKER_RANGE` that is off screen (the nearest `MARKER_POOL` of them),
  *   a chevron pinned to the screen edge, pointing at it.
  * - The red wash after a hit (strength from the effects view).
+ * - While a boss is alive and outside the frame, one bigger marker on the edge pointing at it, in
+ *   that boss's colour; it pulses hard while the Bruiser tells or charges. It is its own element,
+ *   never one of the bollards' pool.
+ * - When the front of a Standstill ring is out of frame or behind the rider, the rider is still
+ *   outside it, and it will reach the rider within `RING_CUE_SECONDS`: a cue on the edge toward the
+ *   ring's centre in `PALETTE.ring`, growing as it nears. One at a time: the nearest front.
  *
- * Which enemies count and where a marker sits are pure functions below; `ThreatView` only applies
- * them to the DOM, writing a style only when its value changes.
+ * Which enemies count, where a marker sits, when the boss marker shows and pulses and how strong the
+ * ring cue is are pure functions below; `ThreatView` only applies them to the DOM, writing a style
+ * only when its value changes.
  */
 import { Color, Matrix4, type Camera } from 'three';
 import { PALETTE } from '../render/look';
+import { BOSS, BRUISER_CHARGE, BRUISER_TELL, findBoss } from '../sim/bosses';
 import type { SimState } from '../sim/types';
-import { KIND_BOLLARD, SPAWN_TICKS, type World } from '../sim/world';
+import { KIND_BOLLARD, KIND_BRUISER, KINDS, SPAWN_TICKS, ZONE_RING, type World } from '../sim/world';
 import './threat.css';
 
 /** Enemies nearer than this, behind you or out of frame, light the glow, m. */
@@ -28,6 +36,12 @@ export const MARKER_RANGE = 60;
 export const MARKER_POOL = 6;
 /** Markers sit this far inside the screen edge, CSS px. */
 export const MARKER_MARGIN = 26;
+/** The boss marker sits further in than a bollard's: it is bigger. */
+export const BOSS_MARGIN = 34;
+/** A ring's front this many seconds or less from reaching the rider gets a cue. */
+export const RING_CUE_SECONDS = 1.2;
+/** The ring cue's size at its faintest (furthest) and its strength steps. */
+const RING_CUE_MIN = 0.35;
 /** Height on an enemy that is tested against the frame, m. */
 const AIM_HEIGHT = 0.9;
 const BOLLARD_AIM_HEIGHT = 1.2;
@@ -160,6 +174,38 @@ export function placeMarker(
   out.edge = edge;
 }
 
+/** Should the boss marker show: a boss is alive (`kind` >= 0) and nothing of it is in frame? */
+export function bossMarkerShown(kind: number, inFrame: boolean): boolean {
+  return kind >= 0 && !inFrame;
+}
+
+/** Does the boss marker pulse: the Bruiser is telling or charging (`state` is its phase)? */
+export function bossMarkerPulses(kind: number, state: number): boolean {
+  return kind === KIND_BRUISER && (state === BRUISER_TELL || state === BRUISER_CHARGE);
+}
+
+/**
+ * How strongly a ring's front gets a cue, 0 (none) to 1: `dist` is the rider's distance from the
+ * ring's centre, `front` the front's radius, `ahead` how far the centre lies ahead of the rider
+ * along the view (the front reaches the rider from that side), and `inFrame` whether the part of
+ * the front coming at the rider is in the frame. Only a front the rider has not seen (out of
+ * frame, or behind) that it is still outside of and that will reach it within `RING_CUE_SECONDS`
+ * counts; the cue grows as the front nears.
+ */
+export function ringCueStrength(dist: number, front: number, ahead: number, inFrame: boolean): number {
+  const gap = dist - front;
+  if (gap <= 0) return 0;
+  const t = gap / BOSS.standstill.ringSpeed;
+  if (t > RING_CUE_SECONDS) return 0;
+  if (inFrame && ahead >= 0) return 0;
+  return RING_CUE_MIN + (1 - RING_CUE_MIN) * (1 - t / RING_CUE_SECONDS);
+}
+
+/** A palette colour as CSS "r, g, b", exactly as written (no colour-space conversion), as the boss bar shows it. */
+function hexRgb(hex: number): string {
+  return `${(hex >> 16) & 255}, ${(hex >> 8) & 255}, ${hex & 255}`;
+}
+
 function cssRgb(hex: number): string {
   const c = new Color(hex);
   return `${Math.round(c.r * 255)}, ${Math.round(c.g * 255)}, ${Math.round(c.b * 255)}`;
@@ -175,8 +221,19 @@ export class ThreatView {
   /** Markers shown last frame. */
   shown = 0;
 
+  /** Is the boss marker up, and is a ring cue (its strength, 0 for none)? For tests. */
+  bossShown = false;
+  bossPulse = false;
+  ringCue = 0;
+
   private readonly glow: HTMLElement;
   private readonly hit: HTMLElement;
+  private readonly bossEl: HTMLElement;
+  private readonly ringEl: HTMLElement;
+  private bossKind = -1;
+  private bossPulseShown = false;
+  private readonly bossKey = new Int32Array(3).fill(-99999);
+  private readonly ringKey = new Int32Array(4).fill(-99999);
   private readonly markers: HTMLElement[] = [];
   private readonly markerKey = new Int32Array(MARKER_POOL * 3).fill(-99999);
   private readonly markerOn = new Uint8Array(MARKER_POOL);
@@ -212,6 +269,15 @@ export class ThreatView {
       this.element.appendChild(m);
       this.markers.push(m);
     }
+    this.bossEl = doc.createElement('div');
+    this.bossEl.className = 'threat-boss';
+    this.bossEl.hidden = true;
+    this.element.appendChild(this.bossEl);
+    this.ringEl = doc.createElement('div');
+    this.ringEl.className = 'threat-ring';
+    this.ringEl.hidden = true;
+    this.ringEl.style.setProperty('--ring-rgb', hexRgb(PALETTE.ring));
+    this.element.appendChild(this.ringEl);
     root.appendChild(this.element);
   }
 
@@ -222,6 +288,10 @@ export class ThreatView {
     this.hit.style.opacity = '0';
     this.glowShown = 0;
     this.hitShown = 0;
+    this.bossShown = false;
+    this.bossEl.hidden = true;
+    this.ringCue = 0;
+    this.ringEl.hidden = true;
   }
 
   /**
@@ -311,5 +381,100 @@ export class ThreatView {
       }
     }
     this.shown = n;
+
+    this.updateBoss(w, s, vp, ox, oy, width, height);
+    this.updateRing(w, s, vp, ox, oy, width, height);
+  }
+
+  /** The boss marker: up while a boss is alive and out of frame, pointing at it. */
+  private updateBoss(w: World, s: SimState, vp: ArrayLike<number>, ox: number, oy: number, width: number, height: number): void {
+    const i = w.boss.kind >= 0 ? findBoss(w) : -1;
+    const h = w.horde;
+    const kind = i >= 0 ? h.kind[i] : -1;
+    let inFrame = false;
+    if (kind >= 0) {
+      const def = KINDS[kind];
+      // Any of its foot, its middle or its top in frame counts as seen.
+      inFrame =
+        project(vp, h.x[i], h.y[i] + 0.3, h.z[i], this.p) ||
+        project(vp, h.x[i], h.y[i] + def.height * 0.5, h.z[i], this.p) ||
+        project(vp, h.x[i], h.y[i] + def.height, h.z[i], this.p);
+    }
+    const show = bossMarkerShown(kind, inFrame);
+    if (show !== this.bossShown) {
+      this.bossShown = show;
+      this.bossEl.hidden = !show;
+    }
+    if (!show) return;
+    if (kind !== this.bossKind) {
+      this.bossKind = kind;
+      const c = PALETTE.bosses[kind - KIND_BRUISER] ?? PALETTE.threat;
+      this.bossEl.style.setProperty('--boss-rgb', hexRgb(c));
+    }
+    const pulse = bossMarkerPulses(kind, h.state[i]);
+    this.bossPulse = pulse;
+    if (pulse !== this.bossPulseShown) {
+      this.bossPulseShown = pulse;
+      this.bossEl.className = pulse ? 'threat-boss threat-boss-pulse' : 'threat-boss';
+    }
+    const m = s.mover;
+    const dx = h.x[i] - m.x;
+    const dz = h.z[i] - m.z;
+    placeMarker(rightOf(dx, dz, s.viewYaw), aheadOf(dx, dz, s.viewYaw), ox, oy, width, height, BOSS_MARGIN, this.place);
+    this.move(this.bossEl, this.bossKey, this.place, -1);
+  }
+
+  /** The ring cue: for the nearest unseen front that will reach the rider soon. */
+  private updateRing(w: World, s: SimState, vp: ArrayLike<number>, ox: number, oy: number, width: number, height: number): void {
+    const zn = w.zones;
+    const m = s.mover;
+    const yaw = s.viewYaw;
+    let best = 0;
+    let bestGap = Infinity;
+    let bx = 0;
+    let bz = 0;
+    for (let k = 0; k < zn.count; k++) {
+      if (zn.kind[k] !== ZONE_RING) continue;
+      const cx = zn.x[k] - m.x;
+      const cz = zn.z[k] - m.z;
+      const d = Math.sqrt(cx * cx + cz * cz);
+      const r = zn.r[k];
+      const gap = d - r;
+      if (gap <= 0 || gap >= bestGap) continue;
+      // The part of the front coming at the rider: on the line from the centre to the rider.
+      const f = d > 1e-6 ? r / d : 0;
+      const fx = zn.x[k] - cx * f;
+      const fz = zn.z[k] - cz * f;
+      const inFrame = project(vp, fx, m.y + 0.2, fz, this.p);
+      const strength = ringCueStrength(d, r, aheadOf(cx, cz, yaw), inFrame);
+      if (strength <= 0) continue;
+      best = strength;
+      bestGap = gap;
+      bx = cx;
+      bz = cz;
+    }
+    this.ringCue = best;
+    const show = best > 0;
+    if (show === this.ringEl.hidden) this.ringEl.hidden = !show;
+    if (!show) return;
+    placeMarker(rightOf(bx, bz, yaw), aheadOf(bx, bz, yaw), ox, oy, width, height, MARKER_MARGIN, this.place);
+    this.move(this.ringEl, this.ringKey, this.place, Math.round(best * 20));
+  }
+
+  /** Put a marker element at a place, writing only what changed; `size` in twentieths, or -1 for none. */
+  private move(el: HTMLElement, key: Int32Array, place: MarkerPlace, size: number): void {
+    const kx = Math.round(place.x);
+    const ky = Math.round(place.y);
+    const ka = Math.round(place.angle * 20);
+    if (kx !== key[0] || ky !== key[1] || ka !== key[2]) {
+      key[0] = kx;
+      key[1] = ky;
+      key[2] = ka;
+      el.style.transform = `translate3d(${kx}px, ${ky}px, 0) rotate(${ka / 20}rad)`;
+    }
+    if (size >= 0 && size !== key[3]) {
+      key[3] = size;
+      el.style.setProperty('--cue', String(size / 20));
+    }
   }
 }

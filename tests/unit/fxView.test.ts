@@ -1,6 +1,6 @@
 import { Color, type InstancedBufferAttribute } from 'three';
 import { describe, expect, it } from 'vitest';
-import { BOLT_FROM, BOLT_JAG, BOLT_LIFE, BOLT_POINTS, BOLT_TO, FxView, GRIND_BURST, GRIND_STREAM } from '../../src/render/fxView';
+import { BOLT_FROM, BOLT_JAG, BOLT_LIFE, BOLT_POINTS, BOLT_TO, BOSS_BURST, BOSS_IN_LIFE, BOSS_IN_REACH, FxView, GRIND_BURST, GRIND_STREAM } from '../../src/render/fxView';
 import { PALETTE } from '../../src/render/look';
 import { makeSimState } from '../../src/sim/sim';
 import { flatTerrain } from '../../src/sim/terrain';
@@ -9,12 +9,19 @@ import {
   emitFx,
   FX_ARC,
   FX_BLAST,
+  FX_BOSS_DOWN,
+  FX_BOSS_IN,
+  FX_ENEMY_DIE,
   FX_ENEMY_HIT,
   FX_HEAL,
   FX_POP,
   FX_SLAM,
   FX_THING,
   FX_TOKEN,
+  KIND_BRUISER,
+  KIND_MORTAR,
+  KIND_SHUFFLER,
+  KIND_STANDSTILL,
   makeWorld,
   THING_CRATE,
 } from '../../src/sim/world';
@@ -238,5 +245,82 @@ describe('FxView grind sparks', () => {
     // And they die away.
     for (let k = 0; k < 10; k++) fx.update(0.1);
     expect(fx.liveShards).toBe(0);
+  });
+});
+
+describe('FxView bosses', () => {
+  /** The colour of live shard i. */
+  function shardRgb(fx: FxView, i: number): [number, number, number] {
+    const c = fx.shards.instanceColor;
+    if (!c) throw new Error('no colours');
+    return [c.getX(i), c.getY(i), c.getZ(i)];
+  }
+  const linear = (hex: number): [number, number, number] => {
+    const c = new Color(hex);
+    return [c.r, c.g, c.b];
+  };
+
+  it('bursts a dead boss in its own colour, not the shuffler\'s', () => {
+    for (const [kind, k] of [
+      [KIND_BRUISER, 0],
+      [KIND_MORTAR, 1],
+      [KIND_STANDSTILL, 2],
+    ] as const) {
+      const w = makeWorld(1);
+      emitFx(w, FX_ENEMY_DIE, 0, 0, 0, kind);
+      const fx = new FxView(flatTerrain(100));
+      fx.ingest(w);
+      fx.update(0.01);
+      const got = shardRgb(fx, 0);
+      const want = linear(PALETTE.bosses[k]);
+      for (let j = 0; j < 3; j++) expect(got[j], `kind ${kind}`).toBeCloseTo(want[j], 5);
+    }
+    const w = makeWorld(1);
+    emitFx(w, FX_ENEMY_DIE, 0, 0, 0, KIND_SHUFFLER);
+    const fx = new FxView(flatTerrain(100));
+    fx.ingest(w);
+    fx.update(0.01);
+    expect(shardRgb(fx, 0)[1]).toBeCloseTo(linear(PALETTE.enemies[KIND_SHUFFLER])[1], 5);
+  });
+
+  it('marks an arrival with shockwaves and a column in the boss colour, for about a second', () => {
+    const w = makeWorld(1);
+    emitFx(w, FX_BOSS_IN, 4, 0, -6, KIND_STANDSTILL);
+    const fx = new FxView(flatTerrain(100));
+    fx.ingest(w);
+    expect(fx.liveGlows).toBeGreaterThanOrEqual(3);
+    expect(fx.liveShards).toBeGreaterThan(10);
+    fx.update(0.01);
+    const c = fx.glows.instanceColor;
+    if (!c) throw new Error('no colours');
+    const want = linear(PALETTE.bosses[2]);
+    expect(c.getX(0)).toBeCloseTo(want[0], 5);
+    const m = fx.glows.instanceMatrix.array;
+    expect([m[12], m[14]]).toEqual([4, -6]);
+    // The widest wave reaches out to the reach.
+    let r = 0;
+    for (let t = 0; t < BOSS_IN_LIFE; t += 0.05) {
+      fx.update(0.05);
+      for (let g = 0; g < fx.glows.count; g++) r = Math.max(r, fx.glows.instanceMatrix.array[g * 16]);
+    }
+    expect(r).toBeGreaterThan(BOSS_IN_REACH * 0.85);
+    expect(fx.liveGlows).toBe(0);
+  });
+
+  it('bursts a fallen boss several times over an ordinary death', () => {
+    const death = makeWorld(1);
+    emitFx(death, FX_ENEMY_DIE, 0, 0, 0, KIND_BRUISER);
+    const a = new FxView(flatTerrain(100));
+    a.ingest(death);
+    const w = makeWorld(1);
+    emitFx(w, FX_BOSS_DOWN, 0, 0, 0, KIND_BRUISER);
+    const b = new FxView(flatTerrain(100));
+    b.ingest(w);
+    expect(b.liveShards).toBeGreaterThanOrEqual(a.liveShards * (BOSS_BURST - 1));
+    expect(b.liveGlows).toBeGreaterThan(0);
+    b.update(0.01);
+    const got = shardRgb(b, 0);
+    const want = linear(PALETTE.bosses[0]);
+    for (let j = 0; j < 3; j++) expect(got[j]).toBeCloseTo(want[j], 5);
   });
 });

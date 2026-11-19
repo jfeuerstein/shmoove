@@ -131,7 +131,7 @@ export class Hud {
       this.clockSeconds = played;
       r.clock.textContent = formatTime(played);
     }
-    r.boss.update(w, sim.state.tick);
+    r.boss.update(w);
     if (p.kills !== this.kills) {
       this.kills = p.kills;
       r.kills.textContent = `${p.kills} kills`;
