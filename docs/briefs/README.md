@@ -42,6 +42,8 @@ what to return. The verifier gets the same file.
 | `art-weapons.md` | art pass | opus | merged |
 | `art-park.md` | art pass | opus | merged |
 | `art-icons.md` | art pass | opus | merged |
+| `clear-objectives.md` | after the first full playtest | opus | out |
+| `clear-picture.md` | after the first full playtest | opus | out |
 
 Verification: one opus verifier checked the five merged M0/M1 briefs together; its findings became
 `m1-verifier-fixes.md`. A second checked the four M2 briefs and the lead's M2 core; the core's

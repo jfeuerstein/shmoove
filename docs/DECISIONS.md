@@ -270,3 +270,13 @@ Things decided without the owner, newest last. Overrule any of them.
 73. **Known and left for the playtest:** levels come fast (the bots take 5 to 8 cards a minute and
    end at level 48 to 76), which may interrupt the riding too often; a full build is rarely
    threatened after 6:00; the first act is where careful play is most often lost.
+74. **After the owner's full playtest** ("make the game a little easier to understand visually...
+   the jump to be a bit higher... some objectives feel very janky or clunky, like the shrines
+   you have to stay in range of"). The ollie is about half as high again (`hopSpeed` 7 to 8.5;
+   the top speed tier starts at 24 m/s, not 25, since a chain of longer hops gathers speed a
+   little more slowly). One colour language in every look: gold is a point of interest, the
+   cool bright colour is experience, red on the ground hurts, and no enemy wears gold or the
+   experience colour. The default floor is calmer. Two tasks follow: objectives become one clear
+   thing to do each, with labels (`docs/briefs/clear-objectives.md`: a shrine is ridden into,
+   a slalom has no clock and no miss, a hoop is forgiving), and the picture is calmed so what
+   matters stands out (`docs/briefs/clear-picture.md`).
