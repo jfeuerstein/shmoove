@@ -132,7 +132,6 @@ export const ARC_MIDDLE = 12;
 export const ARC_STEP = 1.3;
 export const ARC_TAKEOFF = 5;
 const MARK_LIFT = 0.07;
-const DASH_HIGH = 0.1;
 
 /** How long, s, the planks of a broken crate fly, the gem of a done shrine falls, a called totem shakes and sinks. */
 export const THROW_TIME = 0.7;
@@ -414,9 +413,12 @@ export class ThingsView {
     (this.markGlow.array as Float32Array)[i] = glow;
   }
 
-  /** A dash lying on the ground from (x0, z0) to (x1, z1), following it (`y` where there is no terrain). */
-  private dash(x0: number, z0: number, x1: number, z1: number, y: number, wide: number, s: number, dim: number, glow: number): void {
-    this.mark(x0, this.ground(x0, z0, y) + MARK_LIFT, z0, x1, this.ground(x1, z1, y) + MARK_LIFT, z1, wide, DASH_HIGH, s, dim, glow);
+  /**
+   * A dash lying on the ground from (x0, z0) to (x1, z1), following it (`y` where there is no terrain):
+   * a low ridge `high` tall (half of it sunk), so it still reads from the chase camera's low angle.
+   */
+  private dash(x0: number, z0: number, x1: number, z1: number, y: number, wide: number, high: number, s: number, dim: number, glow: number): void {
+    this.mark(x0, this.ground(x0, z0, y) + MARK_LIFT, z0, x1, this.ground(x1, z1, y) + MARK_LIFT, z1, wide, high, s, dim, glow);
   }
 
   /** A beacon over (x, z), its strength `fade` scaled by how far the rider is; -1 if the rider is too near for one. */
@@ -793,7 +795,8 @@ export class ThingsView {
       const a0 = -Math.PI + (k + 0.16) * step;
       const a1 = -Math.PI + (k + 0.84) * step;
       let r = SHRINE_RING;
-      let wide = 0.55;
+      let wide = 0.9;
+      let high = 0.45;
       let s = slot(THING_SHRINE, T_LIGHT);
       let dim = 1;
       let glow = GLOW_LIT;
@@ -804,10 +807,11 @@ export class ThingsView {
       } else if (done) {
         // Open: the whole ring flashes.
         glow = GLOW_LIT + 0.8 * (0.5 + 0.5 * Math.cos(opening * 18));
-        wide = 0.7;
+        wide = 1.1;
       } else if ((lit & (1 << k)) !== 0) {
         const pop = 1 - clamp01((time - this.litAt[i * n + k]) / POP_TIME);
-        wide = 0.55 + 0.5 * pop;
+        wide = 0.9 + 0.5 * pop;
+        high = 0.45 + 0.4 * pop;
         r += 0.4 * pop;
         glow = GLOW_LIT + 0.6 * pop;
       } else {
@@ -815,8 +819,9 @@ export class ThingsView {
         s = slot(THING_SHRINE, T_BASE);
         dim = UNLIT_DIM + (1 - UNLIT_DIM) * 0.5 * pulse;
         glow = GLOW_UNLIT + PULSE_GLOW * pulse;
+        high = 0.3;
       }
-      this.dash(x + Math.sin(a0) * r, z + Math.cos(a0) * r, x + Math.sin(a1) * r, z + Math.cos(a1) * r, y, wide, s, dim, glow);
+      this.dash(x + Math.sin(a0) * r, z + Math.cos(a0) * r, x + Math.sin(a1) * r, z + Math.cos(a1) * r, y, wide, high, s, dim, glow);
     }
   }
 
@@ -870,7 +875,7 @@ export class ThingsView {
     const len = Math.sqrt(dx * dx + dz * dz);
     if (len < 1e-3) return;
     const n = DOTS_PER_LEG;
-    const half = Math.min(0.45, (len / n) * 0.3) / len;
+    const half = Math.min(0.6, (len / n) * 0.35) / len;
     // Into the next gate: how many of its dots, from the gate's end, are still lit.
     const left = state === gateIdx + 1 ? Math.ceil((t.timer[i] / THINGS.slalomTicks) * n) : 0;
     for (let k = 0; k < n; k++) {
@@ -878,7 +883,7 @@ export class ThingsView {
       let s = slot(THING_GATE, T_LIGHT);
       let dim = 1;
       let glow = GLOW_LIT;
-      let wide = 0.4;
+      let wide = 0.55;
       if (done) {
         s = slot(C_SPENT, T_BASE);
         dim = 0.6;
@@ -895,7 +900,7 @@ export class ThingsView {
           s = slot(THING_GATE, T_BASE);
           dim = UNLIT_DIM;
           glow = GLOW_UNLIT;
-        } else wide = 0.5;
+        } else wide = 0.7;
       } else if (gateIdx + 1 > state) {
         // Ahead: dim until the rider gets there. (Behind the rider a leg stays lit.)
         s = slot(THING_GATE, T_BASE);
@@ -903,7 +908,7 @@ export class ThingsView {
         glow = GLOW_UNLIT;
       }
       const yl = y + (t.y[j] - y) * f;
-      this.dash(x + dx * (f - half), z + dz * (f - half), x + dx * (f + half), z + dz * (f + half), yl, wide, s, dim, glow);
+      this.dash(x + dx * (f - half), z + dz * (f - half), x + dx * (f + half), z + dz * (f + half), yl, wide, 0.3, s, dim, glow);
     }
   }
 
@@ -979,9 +984,9 @@ export class ThingsView {
         // A little diamond in the air, along the way of the flight.
         const dy = this.arcPoint(w, i, k + 0.25) - py;
         const d = 0.25 * ARC_STEP;
-        this.mark(px - fx * d, py - dy, pz - fz * d, px + fx * d, py + dy, pz + fz * d, 0.3, 0.3, s, dim, glow);
+        this.mark(px - fx * d, py - dy, pz - fz * d, px + fx * d, py + dy, pz + fz * d, 0.4, 0.4, s, dim, glow);
       } else {
-        this.dash(px - fx * 0.35, pz - fz * 0.35, px + fx * 0.35, pz + fz * 0.35, py - MARK_LIFT, 0.4, s, dim, glow);
+        this.dash(px - fx * 0.4, pz - fz * 0.4, px + fx * 0.4, pz + fz * 0.4, py - MARK_LIFT, 0.55, 0.3, s, dim, glow);
       }
     }
   }
@@ -1004,7 +1009,7 @@ export class ThingsView {
       for (let k = 0; k < TOTEM_DASHES; k++) {
         const a0 = (k + 0.2) * step;
         const a1 = (k + 0.8) * step;
-        this.dash(x + Math.sin(a0) * TOTEM_RING, z + Math.cos(a0) * TOTEM_RING, x + Math.sin(a1) * TOTEM_RING, z + Math.cos(a1) * TOTEM_RING, y, 0.25, slot(THING_TOTEM, T_BASE), 0.7, 0.12);
+        this.dash(x + Math.sin(a0) * TOTEM_RING, z + Math.cos(a0) * TOTEM_RING, x + Math.sin(a1) * TOTEM_RING, z + Math.cos(a1) * TOTEM_RING, y, 0.3, 0.15, slot(THING_TOTEM, T_BASE), 0.7, 0.12);
       }
     }
     if (done) {
