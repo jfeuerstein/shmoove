@@ -112,8 +112,10 @@ is something to fix or to argue with, not a failed test.
    rings along the ground: ollie as the front reaches you. Notice: can you time the ollie over a
    ring by eye? Is the slow near it clear? The run is won when it falls.
 6. **Ride the board.** On a second run, use the bowl: pads, the half-pipes, rails (ollie onto one
-   from its run-up), crates (a card, a heal, a magnet or a bomb), slaloms and hoops. Notice: does
-   using the map feel worth the detour, or is it safer to ignore it?
+   from its run-up), crates (a card, a heal, a magnet or a bomb), shrines (circle one once: its
+   dashes light as you pass them), slaloms (the dotted line to the next gate runs out in 5 s) and
+   hoops (ollie near the kicker's lip, through the ring). Notice: does each thing say what it wants
+   without words, and does using the map feel worth the detour, or is it safer to ignore it?
 
 ## Ratings to send with the reports
 

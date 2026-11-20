@@ -116,14 +116,15 @@ twelve rails.
 | Thing | How you use it | Reward |
 | --- | --- | --- |
 | **Crate** | Ride into it. | A card, a heal, a magnet or a bomb |
-| **Shrine** | Ride into its ring. | Pick one of three boons |
-| **Slalom** | Ride between five gates in order, the next one lit. No clock: the gates taken are kept. | XP and tokens |
-| **Hoop** | A big ring on top of a kicker: ride or ollie straight through it. | Tokens; a streak bonus |
-| **Totem** | Ride into it to call an elite pack on purpose. | A rare card when its elite falls |
+| **Shrine** | Circle it once, a few metres out, either way, any speed. Twelve dashes round it light as you pass them; ride off past 25 m and they go out. | Pick one of three boons |
+| **Slalom** | Ride between five gates in order. The dotted line to the next gate is its clock (5 s a gate): its dots go out as the time runs, and when it runs out the slalom starts over. | XP and tokens |
+| **Hoop** | A ring over a kicker's top, half a metre above the ramp: ollie near the lip and fly through it. A dotted arc shows the flight. | Tokens; a streak bonus |
+| **Totem** | Ride into it to call an elite pack on purpose. Its eyes glow red. | A rare card when its elite falls |
 | **Rail** | Ollie onto it. The rail steers; you pick up speed. Ollie off, or ride off the end. | Speed, and a lane above the small enemies' reach |
 
-Near enough to use, each one wears a small label saying what it is and what to do (`SHRINE · ride
-in`, `GATES 2/5`); from afar, all but the plain crates show a beacon.
+Nothing in the world carries words: each thing shows what it wants and how far along you are by
+itself (the shrine's dashes, the slalom's dotted line, the hoop's dotted arc). From afar, all but
+the plain crates show a beacon, which fades out as you come near.
 
 To come: more of the park (see `PLAN.md`).
 
