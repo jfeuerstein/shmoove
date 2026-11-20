@@ -25,7 +25,8 @@ import {
 } from '../../../src/sim/arsenal';
 import { BOSS, BRUISER_CHARGE, BRUISER_TELL } from '../../../src/sim/bosses';
 import type { Bowl } from '../../../src/sim/bowl';
-import { DT } from '../../../src/sim/constants';
+import { DT, FEEL } from '../../../src/sim/constants';
+import { PLAYER_RADIUS } from '../../../src/sim/balance';
 import { angleDiff, datan2, dcos, dsin, PI, TAU } from '../../../src/sim/math';
 import { Rng } from '../../../src/sim/rng';
 import type { Sim } from '../../../src/sim/sim';
@@ -35,8 +36,6 @@ import { ORBIT } from '../../../src/sim/weapons/orbit';
 import {
   KIND_BOLLARD,
   KIND_BRUISER,
-  KIND_CLINGER,
-  KIND_GNAT,
   KIND_STANDSTILL,
   KINDS,
   SPAWN_TICKS,
@@ -150,6 +149,21 @@ export const KITE = {
   ringHop: 0.12,
 };
 
+/** Share of an enemy's height the rider must clear to pass over it in the air (as contact judges it). */
+const HOP_CLEAR = 0.6;
+
+/** When something at (rx, rz) moving at (ux, uz) relative to the rider comes within `r`, s (0 if it is; Infinity if never). */
+function closingIn(rx: number, rz: number, ux: number, uz: number, r: number): number {
+  const c = rx * rx + rz * rz - r * r;
+  if (c <= 0) return 0;
+  const a = ux * ux + uz * uz;
+  const b = rx * ux + rz * uz;
+  if (a < 1e-9 || b >= 0) return Infinity;
+  const disc = b * b - a * c;
+  if (disc <= 0) return Infinity;
+  return (-b - Math.sqrt(disc)) / a;
+}
+
 /** What the board adds for the rider. */
 export const BOARD = {
   /** Pressed: this many enemies within `pressNear` m. */
@@ -157,8 +171,16 @@ export const BOARD = {
   pressNear: 9,
   /** Worth per metre of fall over the next 8 m, when pressed. */
   downhillWeight: 0.8,
-  /** A gnat or clinger this close ahead is hopped over, m. */
-  smallAhead: 2.6,
+  /**
+   * Ollies over what is coming: an enemy whose touch the rider's present line enters within
+   * `hopLook` s is hopped over when the ollie would carry the rider clear of its head (contact's
+   * share of its height, plus `hopPad` m) for the whole crossing, starting as late as it can (no
+   * more than `hopEarly` s before it must), and only if everything else met before landing is
+   * cleared too. Bollards stand too tall for an ollie; the fan steers round them.
+   */
+  hopLook: 0.8,
+  hopPad: 0.1,
+  hopEarly: 0.1,
   /** Pads within this are a way out when pressed, m, and how much one is wanted. */
   padSight: 22,
   padWeight: 3,
@@ -266,6 +288,9 @@ function makeFighter(bowl: Bowl | null): Bot {
   const evz = new Float64Array(MAXN);
   const esafe = new Float64Array(MAXN);
   const ewt = new Float64Array(MAXN);
+  /** The height to clear to pass over each, m, and how near its middle it touches, m. */
+  const eclear = new Float64Array(MAXN);
+  const etouch = new Float64Array(MAXN);
   const MAXS = 96;
   const sx = new Float64Array(MAXS);
   const sz = new Float64Array(MAXS);
@@ -341,7 +366,7 @@ function makeFighter(bowl: Bowl | null): Bot {
       consider('rail', r, rs.x0 - ux * BOARD.runUp, rs.z0 - uz * BOARD.runUp, 10);
     }
     if (pick !== 'none') {
-      errand = pick;
+        errand = pick;
       errandIdx = pickIdx;
       errandTicks = 0;
       errandStep = 0;
@@ -480,6 +505,64 @@ function makeFighter(bowl: Bowl | null): Bot {
     return NaN;
   }
 
+  /**
+   * Whether to ollie now to pass over what the rider's present line runs into (see `BOARD.hopLook`).
+   * The ollie is judged on level ground, keeping the rider's speed and the enemies' own.
+   */
+  function hopOver(sim: Sim, n: number, bi: number): boolean {
+    const m = sim.state.mover;
+    const vy = FEEL.hopSpeed * sim.state.mods.hopSpeed;
+    const g = FEEL.gravity;
+    const apex = (vy * vy) / (2 * g);
+    const air = (2 * vy) / g;
+    const look = Math.max(air, BOARD.hopLook);
+    let want = false;
+    if (bi >= 0) {
+      // Nothing clears a boss, and the air is no place to be when one is about to touch.
+      const h = sim.world.horde;
+      const rx = h.x[bi] - m.x;
+      const rz = h.z[bi] - m.z;
+      const ux = h.vx[bi] - m.vx;
+      const uz = h.vz[bi] - m.vz;
+      const t = closingIn(rx, rz, ux, uz, KINDS[h.kind[bi]].radius + PLAYER_RADIUS + 1);
+      if (t < air + 0.2) return false;
+    }
+    for (let i = 0; i < n; i++) {
+      const rx = ex[i];
+      const rz = ez[i];
+      const ux = evx[i] - m.vx;
+      const uz = evz[i] - m.vz;
+      // When |r + u t| = touch: a t^2 + 2 b t + c = 0.
+      const a = ux * ux + uz * uz;
+      const bb = rx * ux + rz * uz;
+      const rr = etouch[i] + 0.1;
+      const c = rx * rx + rz * rz - rr * rr;
+      if (a < 1e-9) continue;
+      const disc = bb * bb - a * c;
+      if (disc <= 0) continue;
+      const sq = Math.sqrt(disc);
+      const tIn = (-bb - sq) / a;
+      const tOut = (-bb + sq) / a;
+      if (tOut <= 0 || tIn > look) continue;
+      // Anything met before landing must be cleared, or this is no time to leave the ground.
+      const ch = eclear[i];
+      let lo = Infinity;
+      let hi = -Infinity;
+      if (ch < apex) {
+        // The ollie is above ch between these times after take-off.
+        const s2 = Math.sqrt(vy * vy - 2 * g * ch);
+        lo = (vy - s2) / g;
+        hi = (vy + s2) / g;
+      }
+      if (tIn < lo || tOut > hi) {
+        if (tIn < air) return false;
+        continue;
+      }
+      if (tIn <= lo + BOARD.hopEarly) want = true;
+    }
+    return want;
+  }
+
   return (sim, out) => {
     tick++;
     const w = sim.world;
@@ -495,7 +578,6 @@ function makeFighter(bowl: Bowl | null): Bot {
     // What is in sight.
     let n = 0;
     let near = 0;
-    let smallAhead = false;
     const sight2 = KITE.sight * KITE.sight;
     for (let i = 0; i < h.count && n < MAXN; i++) {
       if (h.hp[i] <= 0) continue;
@@ -515,9 +597,8 @@ function makeFighter(bowl: Bowl | null): Bot {
       esafe[n] = kind.radius + 0.5 + (heavy ? KITE.heavyMargin : KITE.margin);
       ewt[n] = kind.damage <= 0 ? 0.4 : kind.damage / 8;
       if (d2 < BOARD.pressNear * BOARD.pressNear) near++;
-      if (board && (h.kind[i] === KIND_GNAT || h.kind[i] === KIND_CLINGER) && d2 < BOARD.smallAhead * BOARD.smallAhead) {
-        if (dx * dsin(ty) + dz * dcos(ty) > 0) smallAhead = true;
-      }
+      eclear[n] = kind.height * HOP_CLEAR + BOARD.hopPad;
+      etouch[n] = kind.radius + PLAYER_RADIUS;
       n++;
     }
     const pressed = near >= BOARD.pressCount;
@@ -584,8 +665,10 @@ function makeFighter(bowl: Bowl | null): Bot {
       // Hurt, it only goes out of its way for what might heal it: a crate.
       if (errand === 'none' && calm && cooldown === 0) chooseErrand(sim, w.player.hp < w.player.maxHp * BOARD.errandHealth);
       if (errand !== 'none') {
-        // A boss calls it off; danger on the way does too (below, once the fan is scored).
+        // A boss calls it off; so does being pressed before it is committed (on a rail, or in the air
+        // for one): a crate is not worth a crowd. Danger on the way is weighed by the fan, below.
         if (bi >= 0) endErrand(false);
+        else if (pressed && m.rail < 0 && errandStep < 2) endErrand(true);
         else errandWant = errandYaw(sim);
       }
     }
@@ -768,7 +851,7 @@ function makeFighter(bowl: Bowl | null): Bot {
         if (closing > 0 && gap / closing < KITE.ringHop) out.hop = true;
       }
       if (board) {
-        if (smallAhead) out.hop = true;
+        if (hopOver(sim, n, bi)) out.hop = true;
         if (w.player.latched > 0) out.hop = true;
         if (wantHop) out.hop = true;
       }
