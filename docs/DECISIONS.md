@@ -299,3 +299,10 @@ Things decided without the owner, newest last. Overrule any of them.
    pressed. To keep the final fight a threat the Standstill hits for 38 (was 30) and has 4500
    health (was 4000). All twelve bands are met again; the careful bot clears 4 of 5 and the
    riding bot 5 of 5.
+77. **Objectives, third pass** (owner: "now the objectives feel a bit too easy - have them be
+   somewhere in between the two difficulties, but visually conveying how to complete them
+   rather than a label saying it"). A shrine is circled once (twelve segments of its ring light
+   as the rider passes them; no clock); a slalom's line is its clock (five seconds a gate, a
+   reset and not a lock-out); a hoop is ollied through. The labels are removed: nothing in the
+   world carries words; the ring, the dotted line and the arc show what to do and how far along
+   it is. `docs/briefs/objectives-shown.md`.
