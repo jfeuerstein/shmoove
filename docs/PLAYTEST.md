@@ -95,7 +95,7 @@ is something to fix or to argue with, not a failed test.
    the first cards as they come. Notice: how long until the first hit, and did you see it coming?
    Does the first level come soon enough to feel you are hitting back? If you stop and stand, you
    should be overrun well inside a minute: is that how it feels, or does standing look safe?
-2. **Up to 3:00.** Gnats come at 0:40 (an ollie clears them), bollards at 2:00 (heavy: you do not
+2. **Up to 3:00.** Gnats come at 0:40 (an ollie clears them, and shufflers and cutters too), bollards at 2:00 (heavy and too tall to ollie: you do not
    push through). Pick a build. Notice: are the cards readable at a glance with one thumb? Does any
    weapon feel useless or like the only answer? Are you getting chipped down with no way to heal,
    and does that feel fair?
@@ -171,7 +171,7 @@ director, the bosses) are not here: report how those feel in words.
 
 | Constant | Now | Too low feels like | Too high feels like |
 | --- | --- | --- | --- |
-| `hopSpeed` | 8.5 m/s | an ollie barely clears a gnat or a ring | floaty; long waits before you can steer again |
+| `hopSpeed` | 8.5 m/s | an ollie barely clears a shuffler or a ring | floaty; long waits before you can steer again; bollards can be jumped |
 | `hopBufferTicks` | 9 ticks (0.15 s) | early taps are eaten | taps well before landing still count |
 | `cleanWindowTicks` | 7 ticks (0.12 s) | clean hops (and shaking off a clinger) need perfect timing | clean hops are free |
 

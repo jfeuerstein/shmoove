@@ -20,7 +20,7 @@ export const HOW_TO_LINES: readonly HowToLine[] = [
   { text: 'Tap again as you land and you keep your speed.' },
   { text: 'Hills, half-pipes and the green pads make you fast.' },
   { text: 'Your weapons fire themselves. You only have to move.' },
-  { text: 'Touching an enemy hurts. An ollie clears the small ones.' },
+  { text: 'Touching an enemy hurts. An ollie clears all but the big ones.' },
   { text: 'Sparks are XP. A level is a card: a weapon, a level on one you carry, or a passive.' },
   { text: 'Ollie onto a white rail to grind it. Ollie again to get off.' },
   { text: 'Ride into crates and shrines. Ride between the gates in order. Go through hoops. Totems call elites.' },

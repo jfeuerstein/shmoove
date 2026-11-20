@@ -292,3 +292,10 @@ Things decided without the owner, newest last. Overrule any of them.
    merge per enemy and cap at eight; effects centred on the rider keep 2 m round it clear;
    scenery lights are dim; shadows are dark in every look. POOL DAY's walls are tile blue,
    not cream, and RENTAL TAPE's fog is darker, so the top of the screen is the quiet part.
+76. **The balance after the higher ollie.** An ollie now clears a shuffler and a cutter as well as
+   a gnat (it peaks near 1.45 m; an enemy is cleared at 60% of its height), which makes the
+   ollie a dodge for most of the horde and not only for gnats and rings; a bollard and a boss
+   are still too tall. The rider bot was taught to use it and to call an errand off when
+   pressed. To keep the final fight a threat the Standstill hits for 38 (was 30) and has 4500
+   health (was 4000). All twelve bands are met again; the careful bot clears 4 of 5 and the
+   riding bot 5 of 5.

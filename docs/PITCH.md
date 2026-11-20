@@ -46,7 +46,7 @@ There is nothing to learn before you can play: drag and you go.
 Not for damage and not for health. For:
 
 - **Getting away.** The horde runs at 4 to 10 m/s. You push at 10 and a good hill gives you 25.
-- **Getting over.** An ollie clears the small ones. A kicker clears a crowd.
+- **Getting over.** An ollie clears everything but the big ones (a bollard, a boss).
 - **Getting to things.** Crates, shrines, slaloms and hoops are spread across the bowl.
 - **Feeling good.** The camera pulls back, the music fills in, the board hums.
 
