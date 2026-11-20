@@ -45,7 +45,7 @@ what to return. The verifier gets the same file.
 | `clear-objectives.md` | after the first full playtest | opus | merged |
 | `refit-balance.md` | after the first full playtest | opus | merged |
 | `clear-picture.md` | after the first full playtest | opus | merged |
-| `objectives-shown.md` | after the owner's second note on objectives | opus | out |
+| `objectives-shown.md` | after the owner's second note on objectives | opus | merged |
 
 Verification: one opus verifier checked the five merged M0/M1 briefs together; its findings became
 `m1-verifier-fixes.md`. A second checked the four M2 briefs and the lead's M2 core; the core's

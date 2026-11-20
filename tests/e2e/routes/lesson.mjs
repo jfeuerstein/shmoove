@@ -122,7 +122,7 @@ export default {
       sawDip = true;
       l = await untilLineChanges(DIP, 2400, 10);
     }
-    check(l === LINES[3], 'going faster than 16 m/s moves on to the weapons line', { l, sawDip, s: await hook.state() });
+    check(l === LINES[3], 'going fast moves on to the weapons line', { l, sawDip, s: await hook.state() });
     s = await hook.state();
     check(s.enemies === 8, 'eight shufflers come up', s);
     check(s.seconds === 0, 'the clock has not counted', s);

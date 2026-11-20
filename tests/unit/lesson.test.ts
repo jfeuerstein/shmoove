@@ -126,7 +126,7 @@ describe('the lesson', () => {
   });
 
   describe('step 3, hills', () => {
-    it('is done above 16 m/s and not at 16', () => {
+    it('is done above the fast speed and not at it', () => {
       const l = lessonAt(2);
       feed(l, 60, sample({ speed: LESSON.fastSpeed }));
       expect(l.done).toBe(2);

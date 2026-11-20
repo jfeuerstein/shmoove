@@ -306,3 +306,19 @@ Things decided without the owner, newest last. Overrule any of them.
    reset and not a lock-out); a hoop is ollied through. The labels are removed: nothing in the
    world carries words; the ring, the dotted line and the arc show what to do and how far along
    it is. `docs/briefs/objectives-shown.md`.
+78. **Objectives shown, as built.** A shrine's ring is twelve dashes at 6 m; a dash lights while
+   the rider is in its sector between 2.5 and 11 m, and all go out past 25 m. A slalom's gates
+   stand 3.5 m either side and each must be taken within 5 s of the last; running out resets
+   it at once. A hoop's ring hangs half a metre over its kicker's top, is 1.8 m in radius, and
+   counts only in the air, measured on the board; the ollie window is a quarter of a second up
+   to 20 m/s and a fifth at 24 (the kicker throws the rider up before its top at that speed).
+   A rider well over 20 m/s can still be thrown through without an ollie. The labels are gone.
+   The rider bot circles shrines and ollies at hoops; no number was changed and every band is
+   met, with band 11 (hoops and gates) the closest: 6 against 5.
+79. **The lesson's "let go" step asks for 14 m/s, not 16.** Coasting down from the spawn peaks
+   right at 16, so the step could hang for a player and its check flickered.
+80. **The perf stage depends on the machine it runs on.** On a slower container the stage went
+   red for the day's build and for the build that was green the day before, by the same amount
+   (bowl 8.7 against 9.7 ms, horde 14.5 against 14.6, budgets 8 and 12). The budgets were left
+   alone; a perf failure means something only against the last green build measured on the
+   same machine. Frame times from the owner's phone (the run report) are the number that counts.

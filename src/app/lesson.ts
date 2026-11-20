@@ -15,7 +15,7 @@ export const LESSON = {
   steerSeconds: 2,
   steerMetres: 15,
   /** Step 3: faster than this, m/s, is "fast"; after `dipSeconds` the line points at the dip. */
-  fastSpeed: 16,
+  fastSpeed: 14,
   dipSeconds: 12,
   /** Step 4: how many come up, how far ahead of the rider, m, and how many must die. */
   crowd: 8,
