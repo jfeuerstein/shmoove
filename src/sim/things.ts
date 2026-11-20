@@ -1,27 +1,29 @@
 /**
- * The things on the map, all of them ridden through, none of them a reason to stop, and each one
- * thing to do: crates rammed open, shrines ridden into, gates ridden between, hoops ridden through,
- * totems rammed to call a fight.
+ * The things on the map, all of them ridden through, none of them a reason to stop, and each a small
+ * thing to do on the board: crates rammed open, a shrine circled once, a slalom's gates ridden before
+ * its clock runs out, a hoop ollied through, totems rammed to call a fight.
  *
  * They are placed from the bowl's sites when a run starts (`placeThings`) and stepped once a tick
  * after the sparks (`stepThings`). Spent ones stay in `w.things` at `THING_DONE` for the renderer.
  *
  * Per kind, the fields of `w.things` mean:
- * - crate, gold crate, shrine, totem: `state` 0 until it is used, then `THING_DONE`; nothing else.
+ * - crate, gold crate, totem: `state` 0 until it is used, then `THING_DONE`; nothing else.
+ * - shrine: `state` 0 until it opens, then `THING_DONE`. `progress` is the segments of its ring that
+ *   are lit, one bit each (bit k for segment k, see `shrineSector`), kept while the mover stays within
+ *   `shrineKeep` and cleared past it. All of them lit, it opens.
  * - gate: the gates of one slalom are contiguous in `w.things`, in the order they are ridden, and
  *   share a `group`. Every gate of a slalom holds the slalom's `state`: the index of the gate that
- *   is next (so also how many are taken), kept however long the rider takes. `progress` is the
- *   gate's own: which side of its line the mover was on last tick, signed metres (0 before the
- *   first tick).
- * - hoop: `state` HOOP_TAKEN and `timer` ticks until it is back; `progress` as a gate's. It stands
- *   on its kicker's top and is taken by the mover's middle, a body radius above its feet, riding
- *   through it, on the ground or in the air.
+ *   is next (so also how many are taken), and its `timer`: once the first is taken, the ticks left to
+ *   take the next one; at 0 the slalom is back at its start. `progress` is the gate's own: which side
+ *   of its line the mover was on last tick, signed metres (0 before the first tick).
+ * - hoop: `state` HOOP_TAKEN and `timer` ticks until it is back; `progress` as a gate's. Its middle
+ *   (`y`) is `hoopReach` above the bottom of its ring, and the ring is taken by the mover's board
+ *   passing through it in the air.
  */
 import { HOOP_AHEAD, type Bowl, type SiteKind } from './bowl';
 import { queueOffer } from './build';
-import { PLAYER_RADIUS } from './balance';
 import { DT, FEEL } from './constants';
-import { dcos, dsin } from './math';
+import { datan2, dcos, dsin, PI, TAU } from './math';
 import { OFFER_CRATE, OFFER_SHRINE, OFFER_TOTEM } from './offer';
 import { powerOf } from './stats';
 import type { Terrain } from './terrain';
@@ -64,19 +66,43 @@ export const THINGS = {
   bombDamage: 60,
   bombRadius: 22,
   goldTokens: 5,
-  /** A shrine opens when the mover comes within this of its middle, m: the ring drawn round it. */
-  shrineReach: 4,
+  /**
+   * A shrine's ring has this many segments round it. A segment lights while the mover is in its
+   * sector between `shrineNear` and `shrineFar` of the shrine's middle, m; lit ones stay lit while the
+   * mover is within `shrineKeep`, and all go out past it. All lit: it opens.
+   */
+  shrineSegments: 12,
+  shrineNear: 2.5,
+  shrineFar: 11,
+  shrineKeep: 25,
   /** A gate's posts stand this far either side of its middle, m. */
-  gateHalf: 4,
+  gateHalf: 3.5,
+  /** Once a slalom's first gate is taken, each next one must be taken within this many ticks of the last. */
+  slalomTicks: 300,
   slalomXp: 12,
   slalomTokens: 2,
   /**
-   * A hoop stands on its kicker's top, its middle this high over it, and is taken by riding through
-   * it within this of its middle, m (drawn that big); it comes back after `hoopTicks`.
+   * A hoop's ring hangs over its kicker's top, its bottom `hoopGap` above the ramp, and is taken by the
+   * mover's board passing through it in the air within `hoopReach` of its middle, m (drawn that big);
+   * it comes back after `hoopTicks`.
    */
-  hoopReach: 2.2,
+  hoopGap: 0.5,
+  hoopReach: 1.8,
   hoopTicks: 1200,
 } as const;
+
+/**
+ * Which segment of a shrine's ring the point (dx, dz) from its middle is in: segment k covers the
+ * angles atan2(dx, dz) from -PI + k * TAU / n to -PI + (k + 1) * TAU / n, n = `shrineSegments`.
+ */
+export function shrineSector(dx: number, dz: number): number {
+  const n = THINGS.shrineSegments;
+  const k = Math.floor(((datan2(dx, dz) + PI) / TAU) * n);
+  return k < 0 ? 0 : k >= n ? n - 1 : k;
+}
+
+/** A shrine's `progress` with every segment lit. */
+export const SHRINE_ALL = (1 << THINGS.shrineSegments) - 1;
 
 /** `state` of a hoop that has been taken and is not back yet. */
 export const HOOP_TAKEN = 1;
@@ -148,12 +174,12 @@ export function placeThings(w: World, terrain: Terrain): void {
     let z = site.z;
     let y = terrain.heightAt(x, z);
     if (kind === THING_HOOP) {
-      // The site is past the kicker's top, where a big jump would come down. Even at full speed the
-      // kicker throws the mover less than a metre up, and at run speed not at all: the ring stands on
-      // the top itself, where every straight run up the kicker goes, ollie or none.
+      // The site is past the kicker's top, where a big jump would come down. The kicker barely
+      // launches (at run speed not at all), so the ring hangs over the top itself, just above the
+      // board of a rider who rides it, where an ollie off the ramp carries the board through it.
       x = site.x - dsin(site.yaw) * HOOP_AHEAD;
       z = site.z - dcos(site.yaw) * HOOP_AHEAD;
-      y = terrain.heightAt(x, z) + THINGS.hoopReach;
+      y = terrain.heightAt(x, z) + THINGS.hoopGap + THINGS.hoopReach;
     }
     addThing(w, kind, x, y, z, site.yaw, site.group);
   }
@@ -240,9 +266,16 @@ function stepShrine(w: World, s: SimState, i: number): void {
   const m = s.mover;
   const dx = m.x - t.x[i];
   const dz = m.z - t.z[i];
-  const r = THINGS.shrineReach;
-  // Into the ring drawn round it, on the ground or flying low over it: its boons open at once.
-  if (dx * dx + dz * dz > r * r || m.y - t.y[i] > r) return;
+  const d2 = dx * dx + dz * dz;
+  if (d2 > THINGS.shrineKeep * THINGS.shrineKeep) {
+    t.progress[i] = 0;
+    return;
+  }
+  if (d2 < THINGS.shrineNear * THINGS.shrineNear || d2 > THINGS.shrineFar * THINGS.shrineFar) return;
+  // Round it at any speed, either way, with no clock: the segment the mover is in lights.
+  const lit = t.progress[i] | (1 << shrineSector(dx, dz));
+  t.progress[i] = lit;
+  if (lit !== SHRINE_ALL) return;
   t.state[i] = THING_DONE;
   used(w, i);
   queueOffer(w, OFFER_SHRINE);
@@ -277,6 +310,12 @@ function stepSlalom(w: World, s: SimState, first: number, n: number): void {
   const state = t.state[first];
   if (state === THING_DONE) return;
   let next = state;
+  let clock = t.timer[first];
+  // The line ran out before the next gate: back to the start at once, ready to go again.
+  if (next > 0) {
+    if (clock > 0) clock--;
+    if (clock === 0) next = 0;
+  }
   for (let k = 0; k < n; k++) {
     const i = first + k;
     // Every gate keeps its side, so the next one knows where the mover came from.
@@ -285,13 +324,18 @@ function stepSlalom(w: World, s: SimState, first: number, n: number): void {
     if (a > THINGS.gateHalf || a < -THINGS.gateHalf) continue;
     used(w, i);
     next = k + 1;
+    clock = THINGS.slalomTicks;
   }
   if (next === n) {
     next = THING_DONE;
+    clock = 0;
     w.player.xp += THINGS.slalomXp;
     giveTokens(w, s, THINGS.slalomTokens);
+  } else if (next === 0) clock = 0;
+  for (let k = 0; k < n; k++) {
+    t.state[first + k] = next;
+    t.timer[first + k] = clock;
   }
-  for (let k = 0; k < n; k++) t.state[first + k] = next;
 }
 
 function stepHoop(w: World, s: SimState, i: number): void {
@@ -303,10 +347,10 @@ function stepHoop(w: World, s: SimState, i: number): void {
     if (t.timer[i] === 0) t.state[i] = 0;
     return;
   }
-  if (!through) return;
-  // The mover is a ball on its feet: its middle is a radius above them.
+  // Only in the air: the board through the ring.
+  if (!through || m.grounded) return;
   const a = across(w, s, i);
-  const dy = m.y + PLAYER_RADIUS - t.y[i];
+  const dy = m.y - t.y[i];
   if (a * a + dy * dy > THINGS.hoopReach * THINGS.hoopReach) return;
   // A streak: one more token for every other hoop taken in the last 20 s (the ones not back yet).
   let streak = 0;
