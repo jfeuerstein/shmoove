@@ -1,13 +1,19 @@
-// park: the bowl as a place. Each kind of point of interest is looked at from 8 m, with its label,
-// and from 60 m, with its beacon, fresh (park-<kind>-fresh-8.png, park-<kind>-fresh-60.png), then
-// used up by riding it the way a player would and looked at again (park-<kind>-spent-8.png, -60):
-// crates rammed; the shrine ridden into (park-shrine-riding.png) and its cards
-// (park-shrine-cards.png); the slalom's first two gates ridden and the third looked at
-// (park-gate-2of5.png, labelled GATES 2/5) before the rest; the hoop ridden through off its kicker
-// (park-hoop-through.png). Then a rail with the rider grinding it (park-rail.png), a boost pad
-// (park-pad.png), a kicker with its hoop from behind and from the side (park-kicker.png,
-// park-kicker-side.png), and three wide views of the bowl from different places that show the rim's
-// dressing (park-wide-1..3.png; the route's own park.png is the first).
+// park: the bowl as a place. Each kind of point of interest is looked at from 8 m and from 60 m, with
+// its beacon, fresh (park-<kind>-fresh-8.png, park-<kind>-fresh-60.png), then used up by riding it the
+// way a player would and looked at again (park-<kind>-spent-8.png, -60). No words are over anything:
+// each thing shows what it wants itself. Crates rammed. The shrine untouched (park-shrine-untouched.png),
+// circled half a lap (park-shrine-half.png: half its ring lit), and circled the rest of the way, the
+// last segment ridden into facing it (park-shrine-opening.png: the ring flashing, its cards up;
+// park-shrine-cards.png). The slalom before
+// it is started (park-slalom-start.png: the line marching from the first gate), two gates taken and half
+// the clock to the third gone (park-slalom-clock.png: half the leg's dots out), left to run out
+// (park-slalom-reset.png: the banners rising, the line marching again), then ridden whole. The hoop
+// from its run-in (park-hoop-runin.png: the dotted flight up the ramp and through the ring) and a
+// rider ollied through it (park-hoop-through.png). The totem (park-totem-fresh-8.png: its red eyes and
+// its ring) rammed. Then a rail with the rider grinding it (park-rail.png), a boost pad (park-pad.png),
+// a kicker with its hoop from behind and from the side (park-kicker.png, park-kicker-side.png), and
+// three wide views of the bowl from different places that show the rim's dressing (park-wide-1..3.png;
+// the route's own park.png is the first).
 //
 // The hook does not list the map's things, so the route works them out the way the game does: it
 // loads the sim from src/ in node (vite's module runner) and places the same seed's things. The
@@ -24,10 +30,13 @@ const THING_HOOP = 4;
 /** PHASE_CHOOSE in src/sim/world.ts; OFFER_SHRINE in src/sim/offer.ts. */
 const PHASE_CHOOSE = 3;
 const OFFER_SHRINE = 3;
-/** A shrine opens when the rider comes within its reach (THINGS.shrineReach in src/sim/things.ts), m. */
-const SHRINE_REACH = 4;
-/** A hoop run starts this far behind the hoop (which stands on its kicker's top), m. */
+/** A shrine is circled this far out, m (inside THINGS.shrineNear..shrineFar in src/sim/things.ts). */
+const SHRINE_ORBIT = 6;
+/** A slalom's clock, ticks (THINGS.slalomTicks). */
+const SLALOM_TICKS = 300;
+/** A hoop run starts this far behind the hoop (which hangs over its kicker's top), m, with an ollie this far before it. */
 const HOOP_BACK = 18;
+const HOOP_HOP = 5.5;
 const WAIT = { steerX: 0, steerY: 0, carve: true };
 const FORWARD = { steerX: 0, steerY: 1, carve: true };
 
@@ -68,7 +77,7 @@ function placeMover(simModule, S, x, z, yaw, speed) {
 /**
  * The things the page's sim places for this seed (kind, position, yaw, group, in order), and a way
  * through one of its hoops: found here, on the same sim, by trying straight runs up its kicker at a
- * few speeds with no ollie. The page replays it exactly.
+ * few speeds with an ollie `HOOP_HOP` m before it. The page replays it exactly.
  */
 async function thingsOf(seed) {
   const sim = (await runnerImport(join(ROOT, 'src', 'sim', 'sim.ts'))).module;
@@ -89,7 +98,13 @@ async function thingsOf(seed) {
       const fz = Math.cos(hp.yaw);
       placeMover(sim, S, hp.x - fx * HOOP_BACK, hp.z - fz * HOOP_BACK, hp.yaw, speed);
       const input = { steerX: 0, steerY: 1, carve: true, hop: false };
-      for (let i = 0; i < 200 && t.state[hp.i] === 0; i++) S.step(input);
+      let hopped = false;
+      for (let i = 0; i < 200 && t.state[hp.i] === 0; i++) {
+        const m = S.state.mover;
+        input.hop = !hopped && (m.x - hp.x) * fx + (m.z - hp.z) * fz > -HOOP_HOP;
+        if (input.hop) hopped = true;
+        S.step(input);
+      }
       if (t.state[hp.i] !== 0) hoopRun = { i: hp.i, speed };
     }
   }
@@ -137,6 +152,28 @@ async function look(page, x, z, dist, from, file) {
   );
   await settle(page);
   await page.screenshot({ path: join(SCREENS, file) });
+}
+
+/**
+ * Ride round (cx, cz) at radius `r` and `speed` from angle `a0` (atan2(x, z)) through `turns` of a
+ * lap, put on the circle each tick. Stops early, returning the offer's source, if an offer opens.
+ */
+function circle(page, cx, cz, r, speed, a0, turns) {
+  return page.evaluate(
+    ([cx, cz, r, speed, a0, turns, choose]) => {
+      const h = window.__shmoove;
+      const ticks = Math.ceil((turns * 2 * Math.PI * r) / (speed / 60));
+      for (let t = 0; t <= ticks; t++) {
+        const a = a0 + (t * speed) / 60 / r;
+        h.place(cx + r * Math.sin(a), cz + r * Math.cos(a), a + Math.PI / 2, speed);
+        h.step(1);
+        const s = h.state();
+        if (s.phase === choose) return s.offer ? s.offer.source : -1;
+      }
+      return null;
+    },
+    [cx, cz, r, speed, a0, turns, PHASE_CHOOSE],
+  );
 }
 
 /** Ride at (x, z) from `back` m away at `speed`, through it. */
@@ -191,57 +228,84 @@ export default {
     }
     const afterCrates = await call(page, 'state');
     check(afterCrates.tokens >= before.tokens + 5, 'the gold crate opened (its tokens)', { before: before.tokens, after: afterCrates.tokens });
-    // Shrine: ridden straight into. A picture as the rider comes in, and of its cards.
+    // Shrine: untouched, half circled, then circled the rest of the way: it opens. Its cards.
     const sh = first(2);
     const shYaw = facing(sh);
-    await call(page, 'place', sh.x - Math.sin(shYaw) * 16, sh.z - Math.cos(shYaw) * 16, shYaw, 9);
+    await look(page, sh.x, sh.z, 12, shYaw, 'park-shrine-untouched.png');
+    const a0 = shYaw + Math.PI;
+    check((await circle(page, sh.x, sh.z, SHRINE_ORBIT, 9, a0, 0.5)) === null, 'half a lap round the shrine opens nothing');
+    // From 12 m, within the 25 m that keeps what is lit.
+    await look(page, sh.x, sh.z, 12, shYaw, 'park-shrine-half.png');
+    // On round, short of the last segment: the one just before the one where the lap began (segment k
+    // covers atan2(dx, dz) from -PI + k * SEG; see shrineSector in src/sim/things.ts)...
+    const SEG = (Math.PI * 2) / 12;
+    const wrap = (a) => a - Math.PI * 2 * Math.floor((a + Math.PI) / (Math.PI * 2));
+    // The first segment lit is where the rider is after the first tick (a0 may sit on a boundary).
+    const k0 = Math.floor((wrap(a0 + 0.05) + Math.PI) / SEG);
+    // Where the last segment starts, one lap on from a0.
+    let lastFrom = -Math.PI + (k0 - 1) * SEG;
+    while (lastFrom < a0 + Math.PI) lastFrom += Math.PI * 2;
+    const rest = (lastFrom - 0.08 - (a0 + Math.PI)) / (Math.PI * 2);
+    check((await circle(page, sh.x, sh.z, SHRINE_ORBIT, 9, a0 + Math.PI, rest)) === null, 'eleven twelfths of a lap opens nothing');
+    // ...then straight in through that one, facing the shrine, so the picture has it and its ring.
+    const b = lastFrom + SEG / 2;
+    await call(page, 'place', sh.x + Math.sin(b) * 16, sh.z + Math.cos(b) * 16, b + Math.PI, 9);
     await call(page, 'hold', FORWARD);
-    const offers = [];
-    for (let i = 0; i < 120; i++) {
-      const s = await call(page, 'state');
-      if (Math.hypot(s.x - sh.x, s.z - sh.z) < SHRINE_REACH + 3.5) break;
-      await call(page, 'step', 1);
-    }
-    await settle(page);
-    await page.screenshot({ path: join(SCREENS, 'park-shrine-riding.png') });
-    for (let i = 0; i < 60; i++) {
+    let opened = null;
+    for (let i = 0; i < 120 && opened === null; i++) {
       await call(page, 'step', 1);
       const s = await call(page, 'state');
-      if (s.phase === PHASE_CHOOSE) {
-        if (s.offer) offers.push(s.offer.source);
-        break;
-      }
+      if (s.phase === PHASE_CHOOSE) opened = s.offer ? s.offer.source : -1;
     }
     await settle(page);
+    await page.screenshot({ path: join(SCREENS, 'park-shrine-opening.png') });
+    check(opened === OFFER_SHRINE, 'the last segment of the lap opens its boons', opened);
     await page.waitForTimeout(250);
     await page.screenshot({ path: join(SCREENS, 'park-shrine-cards.png') });
-    check(offers.includes(OFFER_SHRINE), 'riding into the shrine opens its boons', offers);
     await call(page, 'pick', 0);
     await call(page, 'step', 1);
-    // Slalom: through the first two gates, a look at the third (its label counts them), then the rest.
+    // Slalom: before it is started; two gates taken and half the clock to the third gone; left to run
+    // out (it goes back to the start); then ridden whole.
     const gates = map.things.filter((th) => th.kind === 3 && th.group === first(3).group);
     const preSlalom = (await call(page, 'state')).tokens;
+    await look(page, gates[0].x, gates[0].z, 14, gates[0].yaw, 'park-slalom-start.png');
     for (const g of gates.slice(0, 2)) await rideInto(page, g.x, g.z, g.yaw, 2.5, 10, 20);
-    await look(page, gates[2].x, gates[2].z, 10, gates[2].yaw, 'park-gate-2of5.png');
-    for (const g of gates.slice(2)) await rideInto(page, g.x, g.z, g.yaw, 2.5, 10, 20);
-    check((await call(page, 'state')).tokens >= preSlalom + 2, 'the slalom was cleared (its tokens)', { pre: preSlalom });
-    // Hoop: the run found in node, replayed tick for tick; the picture as the rider goes through.
+    // About 5 ticks since the second gate; `look` steps 61 more.
+    await call(page, 'hold', WAIT);
+    await stepThrough(page, SLALOM_TICKS / 2 - 5 - 61);
+    // Just past the gate taken, looking along the leg to the next: the dots near the rider are out.
+    const leg = [gates[2].x - gates[1].x, gates[2].z - gates[1].z];
+    const legLen = Math.hypot(leg[0], leg[1]);
+    await look(page, gates[2].x, gates[2].z, legLen + 4, Math.atan2(leg[0], leg[1]), 'park-slalom-clock.png');
+    await stepThrough(page, SLALOM_TICKS / 2 + 10);
+    await look(page, gates[0].x, gates[0].z, 14, gates[0].yaw, 'park-slalom-reset.png');
+    for (const g of gates) await rideInto(page, g.x, g.z, g.yaw, 2.5, 10, 20);
+    check((await call(page, 'state')).tokens >= preSlalom + 2, 'the slalom was cleared after its reset (its tokens)', { pre: preSlalom });
+    // Hoop: from its run-in; then the run found in node, replayed tick for tick, the ollie near the
+    // lip; the picture as the rider goes through.
     const hp = first(THING_HOOP);
+    await look(page, hp.x, hp.z, HOOP_BACK + 6, hp.yaw, 'park-hoop-runin.png');
     const preHoop = (await call(page, 'state')).tokens;
-    check(map.hoopRun !== null, 'a straight run through a hoop was found');
+    check(map.hoopRun !== null, 'a run up a kicker with an ollie through its hoop was found');
     const run = map.hoopRun ?? { speed: 14 };
     await call(page, 'place', hp.x - Math.sin(hp.yaw) * HOOP_BACK, hp.z - Math.cos(hp.yaw) * HOOP_BACK, hp.yaw, run.speed);
     await call(page, 'hold', FORWARD);
     let took = false;
+    let hopped = false;
     for (let i = 0; i < 200 && !took; i++) {
-      await call(page, 'step', 1);
       const s = await call(page, 'state');
-      if (s.phase === PHASE_CHOOSE) await call(page, 'pick', 0);
-      took = s.tokens > preHoop;
+      if (!hopped && (s.x - hp.x) * Math.sin(hp.yaw) + (s.z - hp.z) * Math.cos(hp.yaw) > -HOOP_HOP) {
+        hopped = true;
+        await call(page, 'hold', { ...FORWARD, hop: true });
+      } else await call(page, 'hold', FORWARD);
+      await call(page, 'step', 1);
+      const after = await call(page, 'state');
+      if (after.phase === PHASE_CHOOSE) await call(page, 'pick', 0);
+      took = after.tokens > preHoop;
     }
     await settle(page);
     await page.screenshot({ path: join(SCREENS, 'park-hoop-through.png') });
-    check(took, 'the hoop was ridden through off its kicker (its token)');
+    check(took, 'the hoop was ollied through off its kicker (its token)');
     // Totem: rammed; the shots catch it shaking with its eyes lit, then the stump.
     const tm = first(5);
     await rideInto(page, tm.x, tm.z, facing(tm), 4, 8, 25);
