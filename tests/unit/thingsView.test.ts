@@ -1,14 +1,28 @@
-import { Color, type InstancedBufferAttribute, type MeshLambertMaterial } from 'three';
+import mainSource from '../../src/app/main.ts?raw';
+import { Color, InstancedMesh, type InstancedBufferAttribute, type MeshLambertMaterial } from 'three';
 import { describe, expect, it } from 'vitest';
 import { PALETTE } from '../../src/render/look';
 import {
+  ARC_DOTS,
+  ARC_MIDDLE,
+  ARC_STEP,
+  ARC_TAKEOFF,
   BOX_TRIANGLES,
   CALL_TIME,
-  DASHES_PER_LEG,
+  DOTS_PER_LEG,
   DROP_TIME,
+  EYES_HIGH,
+  EYES_LOW,
+  FLASH_TIME,
   GATE_HALF,
   GLOW_EYES,
+  GLOW_LIT,
+  GLOW_UNLIT,
   HOOP_RADIUS,
+  POP_TIME,
+  RAISE_TIME,
+  SHRINE_DASHES,
+  SHRINE_RING,
   THROW_TIME,
   GLOW_GATE,
   GLOW_GATE_NEXT,
@@ -20,13 +34,13 @@ import {
   BEACON_FAR,
   BEACON_NEAR,
   beaconShare,
-  RING_LOW,
-  RING_SPENT,
-  SHRINE_REACH,
   ThingsView,
+  TOTEM_DASHES,
   TOTEM_HIGH,
+  TOTEM_RING,
 } from '../../src/render/thingsView';
 import { flatTerrain } from '../../src/sim/terrain';
+import { shrineSector, THINGS } from '../../src/sim/things';
 import {
   makeWorld,
   THING_CRATE,
@@ -89,6 +103,35 @@ function trimsOf(view: ThingsView, i: number): ReturnType<typeof solid>[] {
   return out;
 }
 
+/** What one mark (a dash or a dot) looks like: its middle, its length and width, its colour and glow. */
+function markAt(view: ThingsView, n: number): { x: number; y: number; z: number; len: number; wide: number; rgb: number[]; glow: number } {
+  const m = view.marks.instanceMatrix.array;
+  const o = n * 16;
+  const c = view.marks.instanceColor;
+  if (!c) throw new Error('no colours');
+  const g = view.marks.geometry.getAttribute('aGlow') as InstancedBufferAttribute;
+  return {
+    x: m[o + 12],
+    y: m[o + 13],
+    z: m[o + 14],
+    wide: Math.hypot(m[o], m[o + 1], m[o + 2]),
+    len: Math.hypot(m[o + 8], m[o + 9], m[o + 10]),
+    rgb: [c.getX(n), c.getY(n), c.getZ(n)],
+    glow: g.getX(n),
+  };
+}
+
+function marksOf(view: ThingsView, i: number): ReturnType<typeof markAt>[] {
+  const out = [];
+  for (let k = 0; k < view.markCount[i]; k++) out.push(markAt(view, view.firstMark[i] + k));
+  return out;
+}
+
+/** Which of a run of marks are lit. */
+function litOf(marks: ReturnType<typeof markAt>[]): boolean[] {
+  return marks.map((d) => d.glow >= GLOW_LIT - 1e-6);
+}
+
 function linear(color: number): number[] {
   const c = new Color(color);
   return [c.r, c.g, c.b];
@@ -139,41 +182,127 @@ describe('ThingsView', () => {
     expect(boxesOf(view, g)[0].h).toBeLessThan(0.3);
   });
 
-  it('draws a shrine as a pillar with a whole bright ring whose outer edge is its reach, faint once spent', () => {
+  it('draws a shrine as a pillar with a ring of twelve dashes round it, one in each segment of its ring', () => {
     const w = makeWorld(1);
     const s = put(w, THING_SHRINE, 10, -10);
     const view = new ThingsView();
-    const verts = (): number => (view.rings.segments + 1) * 2;
-    const fades = (): number[] => Array.from(view.rings.fades.slice(0, verts()));
     view.update(w, 0);
     const pillar = boxesOf(view, s);
     expect(pillar.length).toBe(2);
     expect(pillar[0].h).toBeCloseTo(PILLAR_HIGH, 5);
-    expect(view.rings.count).toBe(1);
-    // The ring lies inside its reach, its outer edge on it: inside the ring is inside the reach.
-    let outer = 0;
-    for (let v = 0; v < verts(); v++) {
-      const d = Math.hypot(view.rings.positions[v * 3] - 10, view.rings.positions[v * 3 + 2] + 10);
-      expect(d).toBeLessThanOrEqual(SHRINE_REACH + 1e-4);
-      expect(d).toBeGreaterThan(SHRINE_REACH - 1);
-      outer = Math.max(outer, d);
-    }
-    expect(outer).toBeCloseTo(SHRINE_REACH, 3);
-    // Fresh: lit all the way round, brightly, and breathing.
-    const fresh = fades();
-    expect(Math.min(...fresh)).toBeGreaterThanOrEqual(RING_LOW - 1e-6);
-    const a = Math.max(...fresh);
-    view.update(w, 0.23);
-    const b = Math.max(...fades());
-    expect(a).not.toBeCloseTo(b, 3);
-    // Spent: a stump and a faint ring.
-    w.things.state[s] = THING_DONE;
+    const dashes = marksOf(view, s);
+    expect(dashes.length).toBe(SHRINE_DASHES);
+    dashes.forEach((d, k) => {
+      // On the ground, about 6 m out, in the sim's segment k, and inside the band where it lights.
+      const r = Math.hypot(d.x - 10, d.z + 10);
+      expect(r).toBeGreaterThan(SHRINE_RING - 0.5);
+      expect(r).toBeLessThan(SHRINE_RING + 0.1);
+      expect(r).toBeGreaterThan(THINGS.shrineNear);
+      expect(r).toBeLessThan(THINGS.shrineFar);
+      expect(shrineSector(d.x - 10, d.z + 10)).toBe(k);
+      expect(d.y).toBeLessThan(0.2);
+      expect(d.len).toBeGreaterThan(1.5);
+    });
+    // Untouched: every dash dim.
+    expect(litOf(dashes)).toEqual(new Array(SHRINE_DASHES).fill(false));
+  });
+
+  it('lights the dashes the sim has lit, bright gold, each with a pop, and dims them all at once when they go out', () => {
+    const w = makeWorld(1);
+    const s = put(w, THING_SHRINE, 0, 0);
+    const view = new ThingsView();
     view.update(w, 0);
+    w.things.progress[s] = 0b100000000111;
+    view.update(w, 1);
+    const lit = litOf(marksOf(view, s));
+    expect(lit).toEqual([true, true, true, false, false, false, false, false, false, false, false, true]);
+    const now = marksOf(view, s);
+    for (const k of [0, 1, 2, 11]) {
+      expect(now[k].rgb.map((v) => v.toFixed(4))).not.toEqual(now[5].rgb.map((v) => v.toFixed(4)));
+      expect(brightness(now[k].rgb)).toBeGreaterThan(brightness(now[5].rgb));
+    }
+    // The pop: wide when it lights, settled a moment later.
+    const popped = now[0].wide;
+    view.update(w, 1 + POP_TIME + 0.1);
+    const settled = marksOf(view, s)[0];
+    expect(popped).toBeGreaterThan(settled.wide * 1.3);
+    // One more lights: only it pops.
+    w.things.progress[s] |= 1 << 6;
+    view.update(w, 2);
+    const next = marksOf(view, s);
+    expect(next[6].wide).toBeCloseTo(popped, 5);
+    expect(next[0].wide).toBeCloseTo(settled.wide, 5);
+    // Out of range in the sim: every dash dim, at once.
+    w.things.progress[s] = 0;
+    view.update(w, 2.01);
+    expect(litOf(marksOf(view, s))).toEqual(new Array(SHRINE_DASHES).fill(false));
+    // Lit before the view first saw it: no pop.
+    w.things.progress[s] = 0b11;
+    const fresh = new ThingsView();
+    fresh.update(w, 5);
+    expect(marksOf(fresh, s)[0].wide).toBeCloseTo(settled.wide, 5);
+  });
+
+  it('runs a pulse round through the unlit dashes, the way the rider is circling (clockwise before)', () => {
+    /** Where the pulse is: the unlit dash glowing most. */
+    const peak = (view: ThingsView, s: number): number => {
+      const d = marksOf(view, s);
+      let best = -1;
+      for (let k = 0; k < d.length; k++) if (best < 0 || d[k].glow > d[best].glow) best = k;
+      return best;
+    };
+    /** How far round the pulse moved, in segments, from one frame to the next: + the way k grows. */
+    const moved = (a: number, b: number): number => {
+      let d = b - a;
+      if (d > SHRINE_DASHES / 2) d -= SHRINE_DASHES;
+      if (d < -SHRINE_DASHES / 2) d += SHRINE_DASHES;
+      return d;
+    };
+    const w = makeWorld(1);
+    const s = put(w, THING_SHRINE, 0, 0);
+    const view = new ThingsView();
+    // No rider near: clockwise seen from above, the way atan2(x, z), and so k, falls.
+    view.update(w, 0);
+    const a = peak(view, s);
+    view.update(w, 0.25);
+    expect(moved(a, peak(view, s))).toBeLessThan(0);
+    expect(marksOf(view, s)[peak(view, s)].glow).toBeGreaterThan(GLOW_UNLIT + 0.3);
+    // A rider going round the other way: the pulse turns with it.
+    for (let f = 0; f < 5; f++) view.update(w, 1 + f / 60, 6 * Math.sin(f * 0.05), 6 * Math.cos(f * 0.05));
+    const b = peak(view, s);
+    view.update(w, 1.3, 6 * Math.sin(0.3), 6 * Math.cos(0.3));
+    expect(moved(b, peak(view, s))).toBeGreaterThan(0);
+    // It never lights a lit dash brighter: they are steady.
+    w.things.progress[s] = (1 << SHRINE_DASHES) - 1 - (1 << 4);
+    for (let f = 0; f < 30; f++) {
+      view.update(w, 10 + f / 30, 6 * Math.sin(f * 0.05), 6 * Math.cos(f * 0.05));
+      const d = marksOf(view, s);
+      for (let k = 0; k < d.length; k++) if (k !== 4) expect(d[k].glow).toBeGreaterThanOrEqual(GLOW_LIT - 1e-6);
+    }
+  });
+
+  it('flashes the whole ring as the shrine opens, then leaves it grey round the stump', () => {
+    const w = makeWorld(1);
+    const s = put(w, THING_SHRINE, 0, 0);
+    const view = new ThingsView();
+    w.things.progress[s] = (1 << SHRINE_DASHES) - 1 - 1;
+    view.update(w, 0);
+    w.things.state[s] = THING_DONE;
+    const glows: number[] = [];
+    for (let f = 0; f < 20; f++) {
+      view.update(w, 1 + (f * FLASH_TIME) / 20);
+      const d = marksOf(view, s);
+      expect(d.length).toBe(SHRINE_DASHES);
+      for (const m of d) expect(m.glow).toBeGreaterThanOrEqual(GLOW_LIT - 1e-6);
+      glows.push(d[3].glow);
+    }
+    // Flashing, not steady.
+    expect(Math.max(...glows) - Math.min(...glows)).toBeGreaterThan(0.4);
+    view.update(w, 1 + FLASH_TIME + 0.5);
     const stump = boxesOf(view, s);
     expect(stump.length).toBe(1);
     expect(stump[0].h).toBeLessThan(PILLAR_HIGH / 2);
-    expect(Math.max(...fades())).toBeLessThanOrEqual(RING_SPENT + 1e-6);
-    expect(RING_SPENT).toBeLessThan(RING_LOW / 3);
+    for (const m of marksOf(view, s)) expect(m.glow).toBeCloseTo(0);
   });
 
   it('draws gates as two posts and a bar, the next of the slalom bright, cleared ones grey, spent ones stumps', () => {
@@ -226,7 +355,15 @@ describe('ThingsView', () => {
     expect(m[k * 16 + 8]).toBeCloseTo(1, 5);
     expect(m[k * 16 + 10]).toBeCloseTo(0, 5);
     const fade = view.hoops.geometry.getAttribute('aFade') as InstancedBufferAttribute;
-    expect(fade.getX(k)).toBeCloseTo(HOOP_READY);
+    // Waiting, it pulses gently, never far under its strength.
+    const strengths: number[] = [];
+    for (let f = 0; f < 40; f++) {
+      view.update(w, f / 20);
+      strengths.push(fade.getX(view.hoopOf[h]));
+    }
+    expect(Math.max(...strengths)).toBeLessThanOrEqual(HOOP_READY + 1e-6);
+    expect(Math.min(...strengths)).toBeGreaterThan(HOOP_READY * 0.8);
+    expect(Math.max(...strengths) - Math.min(...strengths)).toBeGreaterThan(0.05);
     w.things.state[h] = 1;
     view.update(w, 0);
     expect(fade.getX(view.hoopOf[h])).toBeCloseTo(HOOP_GONE);
@@ -254,12 +391,28 @@ describe('ThingsView', () => {
     const w = makeWorld(1);
     const view = new ThingsView();
     view.update(w, 0);
-    expect(view.solids.visible || view.hoops.visible || view.rings.mesh.visible || view.beacons.visible).toBe(false);
+    expect(view.solids.visible || view.hoops.visible || view.marks.visible || view.beacons.visible).toBe(false);
     for (let k = 0; k < 30; k++) put(w, k % 6, k * 4, 0, 0, k % 6 === THING_GATE ? 1 + k : 0);
     view.update(w, 0);
-    // Boxes, hoops, the shrines' rings and the beacons.
+    // Boxes, hoops, the marks on the ground and in the air, and the beacons.
     expect(view.object.children.length).toBe(4);
-    expect(view.solids.visible && view.hoops.visible && view.rings.mesh.visible && view.beacons.visible).toBe(true);
+    expect(view.solids.visible && view.hoops.visible && view.marks.visible && view.beacons.visible).toBe(true);
+  });
+
+  it('says what each thing wants with the thing itself: no words anywhere, no labels in the app', () => {
+    const w = makeWorld(1);
+    for (let k = 0; k < 5; k++) put(w, THING_GATE, 0, 18 * k, 0, 1);
+    for (let kind = 0; kind < 6; kind++) if (kind !== THING_GATE) put(w, kind, 20 + kind * 8, 0, 0, 0, kind === THING_HOOP ? 6 : 0);
+    const view = new ThingsView(flatTerrain());
+    view.update(w, 0);
+    // Only meshes of shapes: nothing that could carry text (no sprites, no canvas textures).
+    for (const c of view.object.children) {
+      expect(c).toBeInstanceOf(InstancedMesh);
+      const mat = (c as InstancedMesh).material as MeshLambertMaterial;
+      expect(mat.map).toBeNull();
+    }
+    expect(mainSource).not.toMatch(/thingLabels|ThingLabels/);
+    expect(Object.keys(import.meta.glob('../../src/ui/thingLabels*'))).toEqual([]);
   });
 
   it('keeps every thing within 150 triangles, and builds each from parts', () => {
@@ -269,6 +422,8 @@ describe('ThingsView', () => {
     const view = new ThingsView();
     const hoopTris = (view.hoops.geometry.index?.count ?? 0) / 3;
     const beaconTris = view.beacons.geometry.getAttribute('position').count / 3;
+    const markTris = view.marks.geometry.getAttribute('position').count / 3;
+    expect(markTris).toBe(8);
     for (const state of [0, THING_DONE]) {
       for (let i = 0; i < w.things.count; i++) if (w.things.kind[i] !== THING_HOOP) w.things.state[i] = state;
       view.update(w, 0);
@@ -276,6 +431,8 @@ describe('ThingsView', () => {
         const tris =
           (view.solidCount[i] + view.trimCount[i]) * BOX_TRIANGLES + (view.hoopOf[i] >= 0 ? hoopTris : 0) + (view.beaconOf[i] >= 0 ? beaconTris : 0);
         expect(tris, `thing ${i} kind ${w.things.kind[i]} state ${state}`).toBeLessThanOrEqual(150);
+        // Its marks on the ground and in the air are cheap diamonds, a few dozen at most.
+        expect(view.markCount[i] * markTris, `thing ${i} marks`).toBeLessThanOrEqual(ARC_DOTS * markTris);
         if (state === 0) expect(view.solidCount[i] + view.trimCount[i], `thing ${i}`).toBeGreaterThanOrEqual(4);
       }
     }
@@ -341,7 +498,7 @@ describe('ThingsView', () => {
     expect(view.beacons.visible).toBe(false);
   });
 
-  it('fades a beacon out as the rider comes near, where the label takes over', () => {
+  it('fades a beacon out as the rider comes near, where the thing itself takes over', () => {
     expect(beaconShare(BEACON_FAR + 10)).toBe(1);
     expect(beaconShare(BEACON_FAR)).toBe(1);
     expect(beaconShare((BEACON_FAR + BEACON_NEAR) / 2)).toBeCloseTo(0.5, 5);
@@ -413,15 +570,37 @@ describe('ThingsView', () => {
     const eyesOf = (): ReturnType<typeof solid>[] => trimsOf(view, i).filter((b) => b.w < 0.25);
     const idle = eyesOf();
     expect(idle.length).toBe(6);
-    for (const e of idle) expect(e.glow).toBeCloseTo(0);
+    // Waiting: a slow red glow (it bites), under the glow of a called one.
+    const idleGlows: number[] = [];
+    for (let f = 0; f < 40; f++) {
+      view.update(w, f / 10);
+      for (const e of eyesOf()) {
+        expect(e.rgb.map((v) => v.toFixed(4))).toEqual(linear(PALETTE.threat).map((v) => v.toFixed(4)));
+        expect(e.glow).toBeGreaterThanOrEqual(EYES_LOW - 1e-6);
+        expect(e.glow).toBeLessThanOrEqual(EYES_HIGH + 1e-6);
+        idleGlows.push(e.glow);
+      }
+    }
+    expect(Math.max(...idleGlows) - Math.min(...idleGlows)).toBeGreaterThan(0.2);
+    expect(EYES_HIGH).toBeLessThan(GLOW_EYES);
+    // A faint ring of dashes on the ground where it is touched.
+    const ring = marksOf(view, i);
+    expect(ring.length).toBe(TOTEM_DASHES);
+    for (const d of ring) {
+      expect(Math.hypot(d.x, d.z)).toBeCloseTo(TOTEM_RING, 0);
+      expect(Math.hypot(d.x, d.z)).toBeLessThanOrEqual(TOTEM_RING + 1e-6);
+      expect(d.glow).toBeLessThan(0.3);
+      expect(d.y).toBeLessThan(0.2);
+    }
     w.things.state[i] = THING_DONE;
     view.update(w, 3);
     const lit = eyesOf();
     expect(lit.length).toBe(6);
     for (const e of lit) {
       expect(e.glow).toBeCloseTo(GLOW_EYES);
-      expect(e.rgb.map((v) => v.toFixed(4))).toEqual(linear(PALETTE.threat).map((v) => v.toFixed(4)));
+      expect(brightness(e.rgb)).toBeGreaterThan(brightness(linear(PALETTE.threat)));
     }
+    expect(view.markCount[i]).toBe(0);
     view.update(w, 3.13);
     const moved = eyesOf();
     expect(moved.some((e, k) => Math.abs(e.x - lit[k].x) + Math.abs(e.z - lit[k].z) > 0.01)).toBe(true);
@@ -432,47 +611,128 @@ describe('ThingsView', () => {
     expect(boxesOf(view, i).length).toBe(1);
   });
 
-  it("draws a dashed line from gate to gate, lit into the next gate, and lowers a cleared gate's banner", () => {
+  it('draws a dotted line from gate to gate: marching before it is started, and the leg into the next gate its clock', () => {
     const w = makeWorld(1);
     const gates = [0, 1, 2, 3, 4].map((k) => put(w, THING_GATE, 0, 20 * k, 0, 1));
     const view = new ThingsView();
-    for (const g of gates) w.things.state[g] = 2;
+    const legOf = (g: number): ReturnType<typeof markAt>[] => marksOf(view, g);
     view.update(w, 0);
-    const dashes = (g: number): ReturnType<typeof solid>[] => trimsOf(view, g).filter((b) => b.hi < 0.2);
-    // Every gate but the last has its leg's dashes between it and the next.
+    // Every gate but the last has its leg's dots between it and the next, in order along it.
     for (let k = 0; k < 4; k++) {
-      const d = dashes(gates[k]);
-      expect(d.length).toBe(DASHES_PER_LEG);
-      for (const b of d) expect(b.z).toBeGreaterThan(20 * k);
-      for (const b of d) expect(b.z).toBeLessThan(20 * (k + 1));
+      const d = legOf(gates[k]);
+      expect(d.length).toBe(DOTS_PER_LEG);
+      for (let j = 0; j < d.length; j++) {
+        expect(d[j].z).toBeGreaterThan(20 * k);
+        expect(d[j].z).toBeLessThan(20 * (k + 1));
+        if (j > 0) expect(d[j].z).toBeGreaterThan(d[j - 1].z);
+        expect(d[j].y).toBeLessThan(0.2);
+      }
     }
-    expect(dashes(gates[4]).length).toBe(0);
-    // The leg into gate 2 (from gate 1) is the lit one.
-    const lit = (g: number): number => Math.max(...dashes(g).map((b) => b.glow));
-    expect(lit(gates[1])).toBeGreaterThan(lit(gates[0]) * 2);
-    expect(lit(gates[1])).toBeGreaterThan(lit(gates[3]) * 2);
-    // The cleared gates' banners hang lower than the rest.
+    expect(legOf(gates[4]).length).toBe(0);
+    // Not started: a wave marches along the whole line, away from the first gate.
+    const crest = (): number => {
+      const all = gates.slice(0, 4).flatMap((g) => legOf(g));
+      let best = 0;
+      for (let j = 0; j < 12; j++) if (all[j].glow > all[best].glow) best = j;
+      return best;
+    };
+    const c0 = crest();
+    view.update(w, 0.08);
+    const c1 = crest();
+    expect(c1).toBeGreaterThan(c0);
+    expect(c1 - c0).toBeLessThan(4);
+
+    // Started, two taken, the clock full: the legs behind lit, the leg into gate 2 lit, the rest dim.
+    for (const g of gates) {
+      w.things.state[g] = 2;
+      w.things.timer[g] = THINGS.slalomTicks;
+    }
+    view.update(w, 1);
+    expect(litOf(legOf(gates[0]))).toEqual(new Array(DOTS_PER_LEG).fill(true));
+    expect(litOf(legOf(gates[1]))).toEqual(new Array(DOTS_PER_LEG).fill(true));
+    expect(litOf(legOf(gates[2]))).toEqual(new Array(DOTS_PER_LEG).fill(false));
+    expect(litOf(legOf(gates[3]))).toEqual(new Array(DOTS_PER_LEG).fill(false));
+    // As the clock runs the leg's dots go out from the rider's end (the gate just taken) toward the next gate.
+    const litCount = (): number => litOf(legOf(gates[1])).filter(Boolean).length;
+    let before = litCount();
+    for (let left = THINGS.slalomTicks; left > 0; left -= 15) {
+      for (const g of gates) w.things.timer[g] = left;
+      view.update(w, 1);
+      const lit = litOf(legOf(gates[1]));
+      const n = lit.filter(Boolean).length;
+      expect(n).toBeLessThanOrEqual(before);
+      expect(n).toBeGreaterThan(0);
+      // The lit ones are the ones nearest the next gate.
+      expect(lit).toEqual(lit.map((_, j) => j >= DOTS_PER_LEG - n));
+      before = n;
+    }
+    for (const g of gates) w.things.timer[g] = THINGS.slalomTicks / 2;
+    view.update(w, 1);
+    expect(litCount()).toBe(DOTS_PER_LEG / 2);
+    expect(before).toBe(1);
+    // The taken gates' banners hang lower than the rest.
     const banner = (g: number): number => boxesOf(view, g)[2].top;
     expect(banner(gates[0])).toBeLessThan(POST_HIGH * 0.6);
     expect(banner(gates[3])).toBeCloseTo(POST_HIGH, 5);
+
+    // The clock ran out: back at the start. The lowered banners rise again and the line marches.
+    for (const g of gates) {
+      w.things.state[g] = 0;
+      w.things.timer[g] = 0;
+    }
+    view.update(w, 2);
+    expect(banner(gates[0])).toBeLessThan(POST_HIGH * 0.6);
+    view.update(w, 2 + RAISE_TIME / 2);
+    expect(banner(gates[0])).toBeGreaterThan(POST_HIGH * 0.6);
+    expect(banner(gates[0])).toBeLessThan(POST_HIGH);
+    expect(banner(gates[3])).toBeCloseTo(POST_HIGH, 5);
+    view.update(w, 2 + RAISE_TIME + 0.1);
+    expect(banner(gates[0])).toBeCloseTo(POST_HIGH, 5);
+    const m0 = crest();
+    view.update(w, 2 + RAISE_TIME + 0.18);
+    expect(crest()).toBeGreaterThan(m0);
   });
 
-  it("holds a hoop up on two poles from the ground and marks its kicker's run-in with a chevron", () => {
+  it('holds a hoop up on two poles from the ground, and draws its flight as a dotted arc up the ramp and through its middle', () => {
     const w = makeWorld(1);
-    const h = put(w, THING_HOOP, 0, 0, 0, 0, 6);
+    const y = THINGS.hoopGap + HOOP_RADIUS;
+    const h = put(w, THING_HOOP, 0, 0, 0, 0, y);
     const view = new ThingsView(flatTerrain());
     view.update(w, 0);
     const parts = trimsOf(view, h);
-    const poles = parts.filter((b) => b.hi - b.lo > 4);
+    const poles = parts.filter((b) => b.hi - b.lo > y);
     expect(poles.length).toBe(2);
     for (const p of poles) {
       expect(p.lo).toBeLessThanOrEqual(0);
-      expect(p.hi).toBeGreaterThan(6);
+      expect(p.hi).toBeGreaterThan(y);
       expect(Math.abs(p.x)).toBeGreaterThan(HOOP_RADIUS);
     }
-    // The chevron lies on the ground behind the hoop, along the way it is flown (yaw 0: +z).
-    const flat = parts.filter((b) => b.hi < 0.3);
-    expect(flat.length).toBe(2);
-    for (const b of flat) expect(b.z).toBeLessThan(-15);
+    const arc = marksOf(view, h);
+    expect(arc.length).toBe(ARC_DOTS);
+    // Along the way it is flown (yaw 0: +z), evenly, on its line.
+    arc.forEach((d, k) => {
+      expect(d.x).toBeCloseTo(0, 5);
+      expect(d.z).toBeCloseTo((k - ARC_MIDDLE) * ARC_STEP, 5);
+    });
+    // Up the ramp on the ground, then in the air, and through the ring's very middle.
+    for (let k = 0; k <= ARC_MIDDLE - ARC_TAKEOFF; k++) expect(arc[k].y, `dot ${k}`).toBeLessThan(0.2);
+    for (let k = ARC_MIDDLE - ARC_TAKEOFF + 1; k <= ARC_MIDDLE; k++) expect(arc[k].y).toBeGreaterThan(arc[k - 1].y);
+    expect(arc[ARC_MIDDLE].y).toBeCloseTo(y, 5);
+    expect(arc[ARC_MIDDLE + 1].y).toBeLessThan(y);
+    // Marching the way it is flown: the brightest dot moves on.
+    const crest = (): number => {
+      const d = marksOf(view, h);
+      let best = 0;
+      for (let k = 0; k < 7; k++) if (d[k].glow > d[best].glow) best = k;
+      return best;
+    };
+    view.update(w, 0.3);
+    const c0 = crest();
+    view.update(w, 0.4);
+    expect(crest()).toBeGreaterThan(c0);
+    // While it is gone: no arc.
+    w.things.state[h] = 1;
+    view.update(w, 1);
+    expect(view.markCount[h]).toBe(0);
   });
 });

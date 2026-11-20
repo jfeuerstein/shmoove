@@ -45,6 +45,7 @@ import {
   THING_GATE,
   THING_GOLD_CRATE,
   THING_HOOP,
+  THING_SHRINE,
   ZONE_LOB,
   ZONE_RING,
   ZONE_TAR,
@@ -184,7 +185,7 @@ export const BOARD = {
   /** Pads within this are a way out when pressed, m, and how much one is wanted. */
   padSight: 22,
   padWeight: 3,
-  /** Errands (a crate, a slalom, a rail, a hoop) are started only with nothing within this, m. */
+  /** Errands (a crate, a shrine, a slalom, a rail, a hoop) are started only with nothing within this, m. */
   calmNear: 8,
   /** ... and no more than this many within `sight`. */
   calmCount: 80,
@@ -203,8 +204,17 @@ export const BOARD = {
   /** A rail is hopped onto from this far behind its end, m, after a run-up from runUp m back. */
   railHop: 1.1,
   runUp: 16,
-  /** A hoop's kicker is ridden at from this far back, m. */
+  /** A hoop's kicker is ridden at from this far back, m, with an ollie this far before the hoop. */
   hoopRunUp: 16,
+  hoopHop: 5.5,
+  /** A shrine is circled this far out, m, aiming this far round ahead, rad. */
+  shrineOrbit: 6.5,
+  shrineLead: 0.8,
+  /** How much a shrine is worth going for, against a crate (6) or a rail (10). */
+  shrineWorth: 16,
+  /** A shrine is committed to within this of it, m, and left half circled below `shrineQuit` of health. */
+  shrineCommit: 25,
+  shrineQuit: 0.4,
   /** A slalom's first gate is ridden at from this far above it, m. */
   slalomRunUp: 12,
 };
@@ -255,14 +265,14 @@ function engageGap(w: World): number {
   return gap < 2.5 ? 2.5 : gap;
 }
 
-type ErrandKind = 'none' | 'crate' | 'slalom' | 'rail' | 'hoop';
+type ErrandKind = 'none' | 'crate' | 'shrine' | 'slalom' | 'rail' | 'hoop';
 
 /** The careful player. */
 export function makeKiter(): Bot {
   return makeFighter(null);
 }
 
-/** The careful player who also rides: slopes, pads, ollies, rails, crates, slaloms and hoops. */
+/** The careful player who also rides: slopes, pads, ollies, rails, crates, shrines, slaloms and hoops. */
 export function makeRider(bowl: Bowl): Bot {
   return makeFighter(bowl);
 }
@@ -301,6 +311,10 @@ function makeFighter(bowl: Bowl | null): Bot {
   let errandIdx = -1;
   let errandTicks = 0;
   let errandStep = 0;
+  /** A slalom's gates taken when last looked (fewer means its clock ran out and it is back at the start). */
+  let errandPassed = 0;
+  /** The way round a shrine: +1 the way atan2(x, z) about it grows, -1 the other. */
+  let errandDir = 1;
   let cooldown = 0;
   /** Things given up on lately, not tried again for a while. */
   const skipUntil = new Int32Array(256);
@@ -312,6 +326,7 @@ function makeFighter(bowl: Bowl | null): Bot {
     errandIdx = -1;
     errandTicks = 0;
     errandStep = 0;
+    errandPassed = 0;
     cooldown = 90;
   }
 
@@ -342,9 +357,11 @@ function makeFighter(bowl: Bowl | null): Bot {
       const kind = t.kind[i];
       if (kind === THING_CRATE || kind === THING_GOLD_CRATE) {
         if (t.state[i] !== THING_DONE) consider('crate', i, t.x[i], t.z[i], kind === THING_GOLD_CRATE ? 12 : 6);
+      } else if (kind === THING_SHRINE) {
+        if (t.state[i] !== THING_DONE) consider('shrine', i, t.x[i], t.z[i], BOARD.shrineWorth);
       } else if (kind === THING_GATE) {
-        // The first gate of a slalom not yet finished, sought at the gate that is next (a slalom keeps
-        // the gates already taken).
+        // The first gate of a slalom not yet finished, sought at the gate that is next (within its
+        // clock a slalom keeps the gates already taken).
         if ((i === 0 || t.kind[i - 1] !== THING_GATE || t.group[i - 1] !== t.group[i]) && t.state[i] !== THING_DONE) {
           const g = i + t.state[i];
           if (g < t.count && t.kind[g] === THING_GATE && t.group[g] === t.group[i]) {
@@ -366,10 +383,13 @@ function makeFighter(bowl: Bowl | null): Bot {
       consider('rail', r, rs.x0 - ux * BOARD.runUp, rs.z0 - uz * BOARD.runUp, 10);
     }
     if (pick !== 'none') {
-        errand = pick;
+      errand = pick;
       errandIdx = pickIdx;
       errandTicks = 0;
       errandStep = 0;
+      errandPassed = t.state[pickIdx];
+      // Round a shrine the way the rider is already turning about it.
+      errandDir = m.vx * (t.z[pickIdx] - m.z) - m.vz * (t.x[pickIdx] - m.x) < 0 ? 1 : -1;
     }
   }
 
@@ -439,6 +459,26 @@ function makeFighter(bowl: Bowl | null): Bot {
       errandDist = Math.hypot(t.x[errandIdx] - m.x, t.z[errandIdx] - m.z);
       return yawTo(m, t.x[errandIdx], t.z[errandIdx]);
     }
+    if (errand === 'shrine') {
+      if (t.state[errandIdx] === THING_DONE) {
+        endErrand(false);
+        return NaN;
+      }
+      // Round it once at a few metres, any speed: aim at a point on the circle a little ahead. Once
+      // there, or part of its ring is lit, it is worth finishing (riding off loses it): committed.
+      if (t.progress[errandIdx] !== 0 || Math.hypot(m.x - t.x[errandIdx], m.z - t.z[errandIdx]) < BOARD.shrineCommit) errandStep = 2;
+      if (errandStep === 2 && w.player.hp < w.player.maxHp * BOARD.shrineQuit) {
+        endErrand(true);
+        return NaN;
+      }
+      const sxi = t.x[errandIdx];
+      const szi = t.z[errandIdx];
+      const a = datan2(m.x - sxi, m.z - szi) + errandDir * BOARD.shrineLead;
+      const px = sxi + dsin(a) * BOARD.shrineOrbit;
+      const pz = szi + dcos(a) * BOARD.shrineOrbit;
+      errandDist = Math.hypot(px - m.x, pz - m.z);
+      return yawTo(m, px, pz);
+    }
     if (errand === 'slalom') {
       const g = errandIdx + errandStep;
       const group = t.group[errandIdx];
@@ -446,6 +486,12 @@ function makeFighter(bowl: Bowl | null): Bot {
         endErrand(false);
         return NaN;
       }
+      // Its line ran out before the next gate: it is back at the start; try it again later.
+      if (t.state[errandIdx] < errandPassed) {
+        endErrand(true);
+        return NaN;
+      }
+      errandPassed = t.state[errandIdx];
       if (g >= t.count || t.kind[g] !== THING_GATE || t.group[g] !== group) {
         endErrand(true);
         return NaN;
@@ -492,7 +538,7 @@ function makeFighter(bowl: Bowl | null): Bot {
       }
       const fx = dsin(t.yaw[errandIdx]);
       const fz = dcos(t.yaw[errandIdx]);
-      // Ride the kicker straight along its line, through the hoop standing on its top.
+      // Ride the kicker straight along its line and ollie near the lip, through the hoop over its top.
       const kx = t.x[errandIdx];
       const kz = t.z[errandIdx];
       if (errandStep === 2) {
@@ -500,7 +546,7 @@ function makeFighter(bowl: Bowl | null): Bot {
         if (along > 12 || (m.grounded && along > 3)) endErrand(true);
         return datan2(fx, fz);
       }
-      return lineUp(sim, kx, kz, fx, fz, BOARD.hoopRunUp, 0, false);
+      return lineUp(sim, kx, kz, fx, fz, BOARD.hoopRunUp, BOARD.hoopHop, true);
     }
     return NaN;
   }
