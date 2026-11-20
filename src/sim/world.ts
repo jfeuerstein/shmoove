@@ -86,7 +86,7 @@ export const KINDS: readonly EnemyKind[] = [
   // and the horde's step only carries it along. `speed` is its walking speed, for the drawing.
   { name: 'bruiser', radius: 2.2, height: 2.6, speed: 3, accel: 0, hp: 1700, damage: 20, weight: WEIGHT_HEAVY, xp: 30, boss: true },
   { name: 'mortar', radius: 1.8, height: 2.8, speed: 2, accel: 0, hp: 2300, damage: 15, weight: WEIGHT_HEAVY, xp: 30, boss: true },
-  { name: 'standstill', radius: 3, height: 7, speed: 2.5, accel: 0, hp: 4000, damage: 30, weight: WEIGHT_HEAVY, xp: 30, boss: true },
+  { name: 'standstill', radius: 3, height: 7, speed: 2.5, accel: 0, hp: 4500, damage: 38, weight: WEIGHT_HEAVY, xp: 30, boss: true },
 ];
 
 /** `Tally.hits` and `.hurt` indices past the enemy kinds: a lobbed shot landing, a boss's ring, anything else. */
