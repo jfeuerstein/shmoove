@@ -1,77 +1,23 @@
-# SKITCH
+# Shmoove
 
-Portrait-mode, one-thumb skating game set in Santa Rampa. TypeScript + Three.js + Vite, shipped as an
-installable PWA. Spec: `docs/DESIGN.md`. Progress: `docs/PLAN.md`. Decisions: `docs/DECISIONS.md`.
-Human-only tuning list: `docs/PLAYTEST.md`. Task briefs: `docs/briefs/`.
-
-## Commands
-
-| Command | What it does |
-| --- | --- |
-| `npm run dev` | Draws the icons, then the Vite dev server (add `?debug` for the feel panel, `?slice` for the M1 feel slice; every URL parameter is in `README.md`) |
-| `npm run build` | Typecheck, icons, production build to `dist/`, service worker |
-| `npm run preview` | Serve `dist/` |
-| `npm run typecheck` | `tsc --noEmit` |
-| `npm run lint` | ESLint (includes the sim purity rules) |
-| `npm test` | Vitest: unit tests + deterministic sim tests (headless, no browser) |
-| `npm run e2e` | Playwright at 390x844 with touch: plays every route in `tests/e2e/routes/`, fails on a console error or warning, saves `artifacts/screens/*.png` |
-| `npm run e2e:pwa` | The built app installs, works offline and updates through the "new timetable" ticket |
-| `npm run perf` | Headless Chrome, 4x CPU throttle: frame work and game step on the `perfcity` route, draw calls and triangles there and on a viewpoint tour, bundle size, vs. `tests/perf/budgets.json`; writes `artifacts/perf.json` |
-| `npm run gate` | typecheck, lint, test, build, e2e, e2e:pwa, perf in order, stopping at the first failure. A milestone is done only when this is green |
+Portrait mobile 3D platformer. Static site, no build step, no package manager. Open `index.html`.
 
 ## Layout
 
-- `src/sim/` deterministic simulation. Pure TypeScript. Fixed 60 Hz step, seeded RNG.
-- `src/input/` touch gestures -> `InputFrame`.
-- `src/render/` Three.js. Reads sim state, never writes it.
-- `src/audio/` Web Audio synthesis and the stem mixer.
-- `src/ui/` DOM overlay: destination boards, ticket stubs, line map, menus.
-- `src/app/` boot, main loop, saves, settings, haptics, debug panel, PWA glue, test hook.
-- `scripts/` the gate, the icon generator, the service-worker generator.
-- `public/` the manifest and host headers (icons are generated there at build time).
-- `tests/unit`, `tests/sim` (bots in `tests/sim/bot/`), `tests/e2e`, `tests/perf`.
+- `index.html` holds all markup and CSS. Scripts load in order: `vendor/three.min.js`, `js/sim.js`, `js/world.js`, `js/game.js`.
+- `js/sim.js` is the character controller. Pure logic, no DOM, runs in Node. `Sim.step(player, world, cfg, input, dt)` advances one fixed step. `cfg.m` switches moves on and off, `cfg.t` holds tuning numbers.
+- `js/world.js` generates the spire. `World.Tower(seed)` returns `{ solids, sides, gen(untilY), cull(belowY), start() }`. Solids are axis-aligned boxes `{x0,x1,z0,z1,y0,y1,c}`.
+- `js/game.js` is everything the player sees and touches.
+- `tests/` has Node scripts. Run them after touching `sim.js` or `world.js`.
+- `sw.js` only exists to remove the previous game's service worker. Do not turn it into a cache without changing its name.
+- `.github/workflows/pages.yml` copies the static files to GitHub Pages on a push to the default branch. A new top-level file the game loads must be added to its `cp` line.
 
-## Conventions
+## Rules for changes
 
-- **Sim purity.** `src/sim/**` imports nothing from `three`, the DOM, `src/render`, `src/ui`,
-  `src/audio` or `src/app`. No `Date`, `performance`, `Math.random`. No `Math.sin/cos/tan/atan2/
-  asin/acos/pow/exp/log` (engine-dependent results): use `dsin/dcos/datan2/...` from
-  `src/sim/math.ts`. `Math.sqrt/abs/floor/ceil/round/min/max/sign/trunc/fround/imul` are fine.
-  ESLint enforces this.
-- **One clock.** The sim advances only through `Sim.step(input)`; one step = 1/60 s. Rides are a pure
-  function of the tick. Rendering interpolates between the last two sim states.
-- **Feel constants** live in `src/sim/constants.ts` (`FEEL`). Nothing feel-related is hard-coded
-  elsewhere. Every constant appears in the debug panel and, if only a thumb can judge it, in
-  `docs/PLAYTEST.md`.
-- **No assets.** Geometry, textures, shaders, fonts-as-shapes and audio are generated in code.
-- **Strict TypeScript.** No `any`, no non-null `!` on things that can be null at runtime.
-- **Allocation.** No per-tick or per-frame allocation in sim or render hot paths; use `out` params
-  and scratch objects.
-- **Tests assert behaviour** (what the player would observe), not implementation. Never weaken a test
-  to make it pass; fix the code or flag it.
-- **Commits** are small and say why. Each milestone ends with a green `npm run gate` and a tag `mN`.
-- **Docs stay current.** `docs/PLAN.md` is updated in the same commit that changes status. Anything
-  cut or decided without the owner goes in `docs/DECISIONS.md`.
-
-## Who does what (model rules)
-
-Fable is the scarce resource; Opus does the bulk of the work.
-
-- **Fable (lead):** architecture and plan, interface contracts, the movement controller
-  (`src/sim/player.ts`), hitch / slingshot / chain logic (`src/sim/hitch.ts`), the camera
-  (`src/render/camera.ts`), the core look (`src/render/look.ts`), integration, and debugging anything
-  Opus has failed at twice.
-- **Opus subagents:** everything with a clear contract: scaffolding, build config, test harness, city
-  generation, ride and timetable data, UI screens, audio sequencing, errands, saves, PWA setup, docs,
-  refactors, and all independent verification.
-
-Delegation rules:
-
-- Agents are defined in `.claude/agents/implementer.md` and `.claude/agents/verifier.md`
-  (`model: opus`). Pass the model explicitly on every spawn as well.
-- Every brief states: the goal, the files the agent owns, the interfaces to match, the acceptance
-  tests, and what to return (a short summary and the list of changed files, never file contents).
-- Independent tasks run in parallel in separate git worktrees and are merged by the lead.
-- The verifier checks each result against its brief with fresh context. The lead reviews only
-  interfaces, feel-critical code, and whatever the verifier flags.
-- Do not spawn an agent for a task smaller than its brief.
+- Units are metres and seconds. y is up. The player position is the feet.
+- The generator must stay climbable with the starting kit: run, jump, ledge grab, wall kick. `node tests/bot.js 200 240` must report `fails 0`.
+- Keep a clear 5 m of headroom over any ledge the path uses. The lap above is at least 9.6 m higher by construction (minimum 2.4 m rise per side).
+- A tall step must be a solid block down to the lower ledge, or the player walks under it.
+- The controller is fixed-step. Never scale `dt` inside `Sim.step`; call it more or fewer times.
+- No new buttons without a strong reason. New verbs come from state plus an existing button.
+- Touch first. Anything added to the HUD must respect the safe-area insets and stay out of the bottom third, where the thumbs are.
