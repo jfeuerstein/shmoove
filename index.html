@@ -1,58 +1,166 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta
-      name="viewport"
-      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
-    />
-    <meta name="theme-color" content="#1B1A2E" />
-    <meta name="description" content="Skate the hills of Santa Rampa by hitching rides. One thumb, no pushing." />
-    <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="SKITCH" />
-    <link rel="manifest" href="/manifest.webmanifest" />
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='13' fill='%231B1A2E'/%3E%3Cg transform='rotate(-34 30 36)'%3E%3Crect x='7.5' y='29.5' width='42' height='16' rx='8' fill='%231F3FBF'/%3E%3Crect x='9' y='28' width='42' height='16' rx='8' fill='%23FFAE1A'/%3E%3Crect x='18' y='31' width='3.5' height='10' fill='%231B1A2E'/%3E%3Crect x='38.5' y='31' width='3.5' height='10' fill='%231B1A2E'/%3E%3C/g%3E%3Cpath d='M46 25 C52 19 54 11 47 9 C41 7 39 14 44 16 C49 18 54 14 57 10' stroke='%23FF2E88' stroke-width='5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E" />
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-    <title>SKITCH</title>
-    <style>
-      html,
-      body {
-        margin: 0;
-        padding: 0;
-        width: 100%;
-        height: 100%;
-        overflow: hidden;
-      }
-      body {
-        background: #1b1a2e;
-        touch-action: none;
-        overscroll-behavior: none;
-        user-select: none;
-        -webkit-user-select: none;
-        -webkit-touch-callout: none;
-        -webkit-tap-highlight-color: transparent;
-      }
-      #game {
-        position: fixed;
-        inset: 0;
-        width: 100%;
-        height: 100%;
-        display: block;
-        touch-action: none;
-      }
-      #ui {
-        position: fixed;
-        inset: 0;
-        pointer-events: none;
-        z-index: 1;
-      }
-    </style>
-  </head>
-  <body>
-    <canvas id="game"></canvas>
-    <div id="ui"></div>
-    <script type="module" src="/src/app/main.ts"></script>
-  </body>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#14161c">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Shmoove</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&display=swap" rel="stylesheet">
+<style>
+/* One visual world: a blockout spire at changing hours. Chalk-white UI on the scene, hot orange for what you act on, magenta for the tide. */
+:root{
+  --ink:#14161c; --chalk:#f6f4ee; --dim:rgba(246,244,238,.72); --hot:#ff6a1a; --tide:#ff2f7d; --glass:rgba(20,22,28,.62);
+  --display:"Barlow Condensed","Avenir Next Condensed","AvenirNextCondensed-Bold","Roboto Condensed","Arial Narrow",sans-serif;
+  --st:env(safe-area-inset-top,0px); --sb:env(safe-area-inset-bottom,0px); --sl:env(safe-area-inset-left,0px); --sr:env(safe-area-inset-right,0px);
+  color-scheme:dark;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;margin:0;background:var(--ink);color:var(--chalk);overflow:hidden;overscroll-behavior:none;touch-action:none;
+  font:600 16px/1.3 var(--display);-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+#app{position:fixed;inset:0;max-width:560px;margin:0 auto;overflow:hidden;background:#14161c}
+#gl{position:absolute;inset:0;width:100%;height:100%;display:block}
+button{font:inherit;color:inherit;border:0;background:none;padding:0;cursor:pointer}
+:focus-visible{outline:2px solid var(--chalk);outline-offset:2px}
+
+/* HUD */
+#hud{position:absolute;inset:0;pointer-events:none;opacity:0;transition:opacity .25s;z-index:3}
+#app.play #hud,#app.pick #hud,#app.dead #hud{opacity:1}
+.top{position:absolute;left:0;right:0;top:calc(var(--st) + 10px);display:grid;justify-items:center;gap:2px;text-shadow:0 2px 0 rgba(20,22,28,.35)}
+#h-height{font:800 4.2rem/.86 var(--display);letter-spacing:-.01em;font-variant-numeric:tabular-nums}
+#h-height small{font-size:1.5rem;font-weight:700;margin-left:3px;letter-spacing:.04em}
+#h-best{font:600 .95rem/1 var(--display);letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
+.corner{position:absolute;top:calc(var(--st) + 12px);display:flex;gap:7px;align-items:center;font:700 1.25rem/1 var(--display);font-variant-numeric:tabular-nums;background:var(--glass);padding:7px 10px 6px;border-radius:3px}
+#h-shards{left:calc(var(--sl) + 12px)}
+#h-shards i{width:11px;height:11px;background:#ffe45c;transform:rotate(45deg);display:block}
+#h-menu{right:calc(var(--sr) + 12px);pointer-events:auto;padding:0;background:none;gap:6px}
+#h-menu button{width:40px;height:36px;background:var(--glass);border-radius:3px;font:700 .85rem/1 var(--display);letter-spacing:.06em}
+#h-tide{position:absolute;left:50%;transform:translateX(-50%);top:calc(var(--st) + 104px);font:700 .95rem/1 var(--display);letter-spacing:.12em;text-transform:uppercase;padding:6px 10px 5px;border-radius:3px;background:var(--glass);white-space:nowrap}
+#h-tide.near{background:var(--tide);color:#fff}
+#h-tide.held{background:#ffe45c;color:var(--ink)}
+#h-pips{position:absolute;left:50%;transform:translateX(-50%);top:calc(var(--st) + 138px);display:flex;gap:5px}
+#h-pips i{width:11px;height:11px;border-radius:50%;border:2px solid var(--chalk);box-shadow:0 1px 0 rgba(20,22,28,.4)}
+#h-pips i.f{background:var(--hot);border-color:var(--hot)}
+#toast{position:absolute;left:50%;transform:translateX(-50%);max-width:calc(100% - 40px);width:max-content;top:30%;text-align:center;font:700 1.35rem/1.12 var(--display);letter-spacing:.03em;text-transform:uppercase;background:var(--glass);padding:9px 14px 8px;border-radius:3px;opacity:0;transition:opacity .3s;text-wrap:balance}
+#toast.on{opacity:1}
+#vig{position:absolute;inset:0;pointer-events:none;opacity:0;background:radial-gradient(ellipse at 50% 40%,transparent 45%,rgba(255,47,125,.55) 100%)}
+
+/* controls */
+#ctl{position:absolute;inset:0;display:none;z-index:2}
+#app.play #ctl{display:block}
+.tb{position:absolute;border-radius:50%;border:2.5px solid rgba(246,244,238,.9);background:rgba(20,22,28,.28);font:800 1.05rem/1 var(--display);letter-spacing:.06em;text-transform:uppercase;display:flex;align-items:center;justify-content:center;pointer-events:none}
+.tb.down{background:var(--hot);border-color:var(--hot)}
+.tb[hidden]{display:none}
+#b-jump{right:calc(var(--sr) + 18px);bottom:calc(var(--sb) + 34px);width:104px;height:104px;font-size:1.35rem}
+#b-dive{right:calc(var(--sr) + 134px);bottom:calc(var(--sb) + 24px);width:76px;height:76px}
+#b-crouch{right:calc(var(--sr) + 30px);bottom:calc(var(--sb) + 152px);width:76px;height:76px;font-size:.95rem}
+#joy{position:absolute;width:116px;height:116px;margin:-58px 0 0 -58px;border-radius:50%;border:2.5px solid rgba(246,244,238,.55);pointer-events:none;left:calc(var(--sl) + 86px);top:calc(100% - var(--sb) - 100px)}
+#joy i{position:absolute;left:50%;top:50%;width:50px;height:50px;margin:-25px 0 0 -25px;border-radius:50%;background:rgba(246,244,238,.85)}
+#joy.idle{opacity:.45}
+
+/* overlays */
+.ov{position:absolute;inset:0;z-index:5;display:none;flex-direction:column;padding:calc(var(--st) + 24px) 22px calc(var(--sb) + 28px)}
+#app.title #title,#app.dead #dead,#app.pick #pick,#app.paused #paused{display:flex}
+#title{justify-content:space-between;background:linear-gradient(180deg,rgba(20,22,28,.0) 0%,rgba(20,22,28,.0) 38%,rgba(20,22,28,.82) 100%)}
+.word{font:800 min(22vw,7.4rem)/.8 var(--display);white-space:nowrap;display:inline-block;max-width:100%;letter-spacing:-.02em;text-transform:uppercase;margin:6vh 0 0;text-shadow:0 4px 0 rgba(20,22,28,.4)}
+.word b{color:var(--hot);font-weight:800}
+.tag{font:700 1.5rem/1.05 var(--display);text-transform:uppercase;letter-spacing:.03em;margin-top:10px;text-shadow:0 2px 0 rgba(20,22,28,.5)}
+.how{list-style:none;margin:0 0 16px;padding:0;display:grid;gap:7px;font:600 1.08rem/1.2 var(--display);letter-spacing:.02em;color:var(--dim)}
+.how b{color:var(--chalk);font-weight:700}
+.go{display:block;width:100%;background:var(--hot);color:#fff;font:800 1.9rem/1 var(--display);letter-spacing:.06em;text-transform:uppercase;padding:18px 16px 16px;border-radius:4px;box-shadow:0 5px 0 #a33c06}
+.go:active{transform:translateY(3px);box-shadow:0 2px 0 #a33c06}
+.sub{margin-top:12px;text-align:center;font:600 .95rem/1 var(--display);letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
+#dead{justify-content:flex-end;background:linear-gradient(180deg,rgba(255,47,125,.25),rgba(20,22,28,.9) 62%)}
+#dead h2,#pick h2,#paused h2{margin:0;font:800 min(12vw,3rem)/.9 var(--display);text-transform:uppercase;letter-spacing:0;white-space:nowrap}
+#d-line{font:700 1.3rem/1.15 var(--display);text-transform:uppercase;letter-spacing:.03em;color:var(--dim);margin:8px 0 16px}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px}
+.stats div{background:var(--glass);border-radius:3px;padding:10px 10px 8px}
+.stats b{display:block;font:800 2rem/1 var(--display);font-variant-numeric:tabular-nums}
+.stats span{font:600 .8rem/1 var(--display);letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
+#d-kit{font:600 1rem/1.25 var(--display);letter-spacing:.03em;color:var(--dim);margin-bottom:16px;min-height:1.25em}
+#pick{justify-content:flex-end;background:linear-gradient(180deg,rgba(20,22,28,.15),rgba(20,22,28,.88) 45%)}
+#pick p{margin:6px 0 14px;font:600 1.1rem/1.2 var(--display);letter-spacing:.03em;color:var(--dim);text-transform:uppercase}
+.cards{display:grid;gap:10px}
+.card{display:grid;grid-template-columns:1fr auto;gap:2px 10px;text-align:left;background:var(--chalk);color:var(--ink);border-radius:4px;padding:13px 14px 12px;box-shadow:0 5px 0 rgba(0,0,0,.45);border-left:8px solid var(--hot)}
+.card:active{transform:translateY(3px);box-shadow:0 2px 0 rgba(0,0,0,.45)}
+.card b{font:800 1.6rem/1 var(--display);text-transform:uppercase;letter-spacing:.01em}
+.card em{font:700 .8rem/1 var(--display);font-style:normal;letter-spacing:.12em;text-transform:uppercase;align-self:center;color:#a33c06}
+.card span{grid-column:1/-1;font:600 1.05rem/1.2 var(--display);letter-spacing:.01em;color:#3b3f4a}
+.card.stat{border-left-color:#2b6fe0}.card.stat em{color:#1f55b3}
+#paused{justify-content:center;align-items:stretch;gap:14px;background:rgba(20,22,28,.8)}
+#nogl{display:none;position:absolute;inset:0;place-items:center;text-align:center;padding:30px;font:600 1.2rem/1.3 var(--display)}
+#app.nogl #nogl{display:grid}
+@media (prefers-reduced-motion:reduce){#hud,#toast{transition:none}}
+</style>
+</head>
+<body>
+<div id="app" class="title">
+  <canvas id="gl"></canvas>
+  <div id="vig"></div>
+  <div id="nogl">Shmoove needs WebGL, and this browser has it turned off.</div>
+
+  <div id="hud">
+    <div class="corner" id="h-shards"><i></i><span id="h-shardn">0</span></div>
+    <div class="corner" id="h-menu"><button type="button" id="b-mute" aria-label="Sound on or off">SND</button><button type="button" id="b-pause" aria-label="Pause">II</button></div>
+    <div class="top"><div id="h-height">0<small>m</small></div><div id="h-best">Best 0 m</div></div>
+    <div id="h-tide">Tide 12 m below</div>
+    <div id="h-pips"></div>
+    <div id="toast"></div>
+  </div>
+
+  <div id="ctl">
+    <div id="joy" class="idle"><i></i></div>
+    <div class="tb" id="b-crouch" hidden>Crouch</div>
+    <div class="tb" id="b-dive" hidden>Dive</div>
+    <div class="tb" id="b-jump">Jump</div>
+  </div>
+
+  <div class="ov" id="title">
+    <div><h1 class="word">Shm<b>oo</b>ve</h1><div class="tag">Climb the spire.<br>Outrun the tide.</div></div>
+    <div>
+      <ul class="how">
+        <li><b>Left thumb</b> runs. The path always leads right.</li>
+        <li><b>Right thumb</b> jumps. Hold it for height.</li>
+        <li><b>Push into a ledge</b> to pull yourself up.</li>
+        <li><b>Jump into a wall, jump again</b> to kick off it.</li>
+        <li>Every 30 m you pick a new move.</li>
+      </ul>
+      <button type="button" class="go" id="b-start">Start climbing</button>
+      <div class="sub" id="t-best">No best yet</div>
+    </div>
+  </div>
+
+  <div class="ov" id="pick">
+    <h2 id="p-title">Rest pad, 30 m</h2>
+    <p>Pick one. The tide waits while you choose.</p>
+    <div class="cards" id="p-cards"></div>
+  </div>
+
+  <div class="ov" id="dead">
+    <h2 id="d-title">The tide took you</h2>
+    <div id="d-line"></div>
+    <div class="stats"><div><b id="d-h">0</b><span>Metres</span></div><div><b id="d-s">0</b><span>Shards</span></div><div><b id="d-t">0:00</b><span>Time</span></div></div>
+    <div id="d-kit"></div>
+    <button type="button" class="go" id="b-again">Go again</button>
+    <div class="sub" id="d-best"></div>
+  </div>
+
+  <div class="ov" id="paused">
+    <h2>Paused</h2>
+    <button type="button" class="go" id="b-resume">Keep climbing</button>
+    <button type="button" class="go" id="b-restart" style="background:#3b3f4a;box-shadow:0 5px 0 #14161c">Start over</button>
+  </div>
+</div>
+<script src="vendor/three.min.js"></script>
+<script src="js/sim.js"></script>
+<script src="js/world.js"></script>
+<script src="js/game.js"></script>
+</body>
 </html>

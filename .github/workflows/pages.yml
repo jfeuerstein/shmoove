@@ -1,8 +1,5 @@
-# Builds the game and deploys dist/ to GitHub Pages on every push to develop.
-# Needs: Settings → Pages → Build and deployment → Source: GitHub Actions, and the branch allowed
-# under Settings → Environments → github-pages → Deployment branches (GitHub only allows the
-# default branch there until others are added). The working branch is listed as well because it
-# is the repository's default branch and so may already be allowed.
+# Deploys the repository root to GitHub Pages. There is no build step: the game is static files.
+# Needs: Settings → Pages → Build and deployment → Source: GitHub Actions.
 name: Pages
 on:
   push:
@@ -23,18 +20,13 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      - run: npm run build
+      - run: mkdir _site && cp -r index.html sw.js manifest.webmanifest icon.svg icon-*.png js vendor _site/
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: dist
+          path: _site
       - id: deployment
         uses: actions/deploy-pages@v4
-  # Reports on the build being tested; does not hold the deploy back.
+  # Reports on the controller and the generator; does not hold the deploy back.
   checks:
     runs-on: ubuntu-latest
     steps:
@@ -42,8 +34,5 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
-      - run: npm ci
-      - run: npm run typecheck
-      - run: npm run lint
-      - run: npm test
+      - run: node tests/bot.js 200 240
+      - run: node tests/chim.js
